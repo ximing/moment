@@ -49,7 +49,7 @@
 |---|---|---|
 | 后端 | Express + routing-controllers + TypeDI + Drizzle ORM | 沿用 aimo 架构（controllers / services / models / middlewares 分层） |
 | 数据库 | MySQL | Drizzle 管理 schema 与迁移 |
-| 对象存储 | S3 兼容（云厂商） | 媒体直传，见 §5 |
+| 对象存储 | S3 兼容服务，**私有桶**（`is_public=false`） | 沿用 aimo 的 unified-storage-adapter；所有读取走预签名 URL，见 §5.3 |
 | Web | React 19 + Vite + TanStack Query | SPA，与 aimo 一致 |
 | App | Expo (React Native) + TanStack Query | EAS Build；媒体选择/压缩/推送用 Expo 生态 |
 | 认证 | 邮箱 + 密码（bcrypt，无单独盐字段）+ JWT 双 token | 见 §6 |
@@ -97,8 +97,9 @@ moment/
 - **索引：`(chain_id, happened_at, id)`** —— feed 与链内时间线的核心索引。
 - 软删级联规则：详情页返回 410；评论/表情随之不可见；media 由 sweeper 延迟物理清理；已发出通知的 payload 存标题快照，跳转时优雅降级。
 
-**media**：id, moment_id（可空，上传完成绑定前为空）, uploader_id, s3_key, mime, size, width, height, duration, poster_media_id（视频封面，预留）, sort_order, status enum(`uploading`,`ready`,`orphaned`), created_at
+**media**：id, moment_id（可空，上传完成绑定前为空）, uploader_id, s3_key, mime, size, width, height, duration, poster_media_id（视频封面，预留）, sort_order, status enum(`uploading`,`ready`,`orphaned`), storage_meta(json), created_at
 - 多 part 上传会话信息：`upload_id`（S3 multipart id，可空）。
+- `storage_meta` 沿用 aimo 的 `StorageMetadata`（bucket / prefix / endpoint / region / isPublicBucket）：**按行记录写入时的存储配置**，日后换桶/换后端/换 endpoint 时旧媒体仍可访问。
 
 **tags**：id, chain_id, name, created_at — `UNIQUE(chain_id, name)`；硬删除（删时先清 `moment_tags` 关联）。每链上限 100 个。
 
@@ -173,12 +174,21 @@ moment/
 - `chainPolicy` 单测覆盖全矩阵（3 角色 × 全部操作）。
 - controller 内禁止手写角色判断。读接口（moment 详情等）同样必须过校验——只验登录不验成员身份是最常见越权漏法。
 
-### 5.3 媒体读取：稳定 URL + 鉴权外移
+### 5.3 存储抽象与媒体读取（私有桶）
 
-- **禁止** feed 返回时逐 media 现场生成预签名 GET（URL 不稳定 → CDN/客户端缓存全失效、全部回源 S3、payload 膨胀）。
-- 方案：统一入口 `GET /media/:id`，服务端校验「用户对 media 所属链的读权限（或有效 share_link token）」后 **302 到预签名 URL**，响应带 `Cache-Control: private`；客户端缓存 `/media/:id` 这个稳定 URL。
-- 规模化后可无缝切换到 CDN 签名 cookie（一次鉴权、媒体 URL 完全稳定），接口形态不变。
-- 「私密媒体不出永久链接」的目标保留，实现手段是鉴权在服务端/cookie，而不是每次现签。
+**桶为私有（`ATTACHMENT_S3_IS_PUBLIC=false`），所有读取必须生成预签名 URL——这是已确认的产品决策。** 在此前提下做缓存友好设计：
+
+**存储抽象（沿用 aimo `sources/unified-storage-adapter/`）**：
+- `base.adapter.ts` 定义 `UnifiedStorageAdapter` 接口（upload/download/delete/list/fileExists/getFileMetadata/**generateAccessUrl**），`s3.adapter.ts` 实现，`factory.ts` 按配置创建。本地开发可挂 local adapter。
+- `generateAccessUrl(key, metadata, expiresIn)`：私有桶走 `getSignedUrl(GetObjectCommand)`；**按 media 行上的 `storage_meta` 生成**，而非当前全局配置——换桶/换 endpoint 后旧媒体仍可访问（aimo 已验证此模式）。
+- Content-Type 安全：对 `text/html`、`javascript` 等危险类型强制 `application/octet-stream`（沿用 aimo `getContentType`），防止存储被滥用为静态站托管。
+
+**读取路径（缓存友好）**：
+- feed/详情接口返回的媒体 URL 是稳定入口 **`/media/:id`**（而非 feed 里内嵌预签名 URL——那会随请求变化，客户端图片缓存全失效）。
+- `GET /media/:id`：服务端校验「用户对 media 所属链的读权限（或有效 share_link token）」→ **302 到预签名 GET URL**。302 响应带 `Cache-Control: private, max-age=300`，客户端 5 分钟内复用重定向目标，不重复打 server。
+- 预签名 **TTL 按固定时间窗取整**（如对齐到整点过期，TTL 1h）：同一窗口内同一 media 签出的 URL 相同，客户端/网关缓存可命中；窗口外由 `/media/:id` 重新 302。
+- 签名开销：HMAC 微秒级，且经上述两级缓存后实际签名次数远低于媒体展示次数。
+- 规模化演进：切 CDN 签名 cookie（一次鉴权、媒体 URL 完全稳定），`/media/:id` 接口形态不变。
 
 ### 5.4 异步副作用：outbox + worker
 
@@ -193,7 +203,10 @@ moment/
 2. 限制：**图 ≤10MB ×9**；**视频 ≤500MB / ≤5 分钟**（3 分钟 4K 轻松超 300MB，原 100MB/3min 不可行）。
 3. 图片：单次预签名 PUT。视频：**S3 multipart**（每 part 5–20MB，逐 part 预签名，按 part 重试 = 断点续传）。
 4. `complete` 回调：HeadObject 校验（存在、size、mime 与申请一致）+ 幂等（重复回调返回相同结果）。发布 moment 拒绝引用 `status != ready` 的 media。
-5. 防孤儿：
+5. Key 布局（前缀来自 `ATTACHMENT_S3_PREFIX`，按环境隔离）：
+   - 上传中：`{prefix}/tmp/{mediaId}.{ext}`
+   - complete 时服务端同桶 copy 到 `{prefix}/chains/{chainId}/{momentId}/{mediaId}.{ext}` 并删 tmp 对象（同桶 copy 为服务端操作，不经客户端）；`storage_meta` 记录最终位置。
+6. 防孤儿：
    - S3 lifecycle：`tmp/` 前缀 7 天未 complete 自动删；`AbortIncompleteMultipartUpload` 清理未完成分片（隐藏账单）。
    - sweeper（复用 worker）：清 `uploading` 超 24h 的 media 行 + S3 对象；清软删超期 moment 的媒体。
 6. media 模型预留视频封面字段（poster_media_id），服务端抽帧二期做。
@@ -237,7 +250,20 @@ moment/
 
 - docker-compose services：`server`、`worker`、`mysql`、`backup`（每日 mysqldump → S3）。
 - MySQL 数据卷备份与恢复演练流程写入 README。
-- 环境变量：`.env.example`（JWT_SECRET、S3 credentials、MySQL 等，参考 aimo）。
+- 环境变量（`apps/server/.env`，已 gitignore；仓库内提供 `.env.example` 占位模板，**真实凭据不进 git**）：
+
+| 变量 | 说明 |
+|---|---|
+| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` | MySQL 连接；测试/生产用不同库与账号（已配置于 .env，本文件不记录真实值） |
+| `ATTACHMENT_S3_BUCKET` | 桶名（沿用 aimo 的 `ATTACHMENT_S3_*` 命名约定） |
+| `ATTACHMENT_S3_PREFIX` | key 前缀，按环境隔离（如 `dev/attachments`、`prod/attachments`） |
+| `ATTACHMENT_S3_ENDPOINT` | S3 兼容服务地址（自建 endpoint，`forcePathStyle` 行为沿用 aimo 适配器逻辑：非阿里云 endpoint 用 path-style） |
+| `ATTACHMENT_S3_REGION` | region（如 `cn-beijing`） |
+| `ATTACHMENT_S3_ACCESS_KEY_ID` / `ATTACHMENT_S3_SECRET_ACCESS_KEY` | 访问凭据 |
+| `ATTACHMENT_S3_IS_PUBLIC` | **`false`（私有桶，产品决策）**；所有读取走 §5.3 预签名 |
+| `JWT_SECRET` | ≥32 字符随机串 |
+| `PRESIGN_GET_TTL_SECONDS` | 预签名 GET 有效期（默认 3600，按整点时间窗对齐） |
+| `PRESIGN_PUT_TTL_SECONDS` | 预签名 PUT/part 有效期（默认 900） |
 
 ## 10. 实施阶段
 
