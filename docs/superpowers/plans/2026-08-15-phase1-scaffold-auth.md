@@ -22,6 +22,9 @@
 - 测试打**真实 MySQL 测试库**（`apps/server/.env` 里已配置 `moment_test_db`，严禁指向生产库）；jest globalSetup 跑迁移，`beforeEach` 清表。
 - 每个 Task 结束 commit，conventional commits（如 `feat(server): ...`）。
 - zod ^3.22（不要用 zod v4 API）。
+- 业务错误约定：抛 `HttpError` 系错误时 `message` 承载 UPPER_SNAKE 机器码（如 `UnauthorizedError('INVALID_CREDENTIALS')`），错误中间件据此产出 `error.code`。
+- refresh token 阶段 1 统一走 JSON body 传输（App 友好）；web 端 httpOnly cookie 化的取舍留到 web 阶段决策（spec §6 的备选方案之一，不算偏离）。
+- `PATCH /me`（改昵称/头像）不在本计划，归属后续「用户资料」阶段，防止沉没。
 
 ---
 
@@ -141,7 +144,15 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   { ignores: ['**/dist/**', '**/node_modules/**', '**/drizzle/**'] },
   js.configs.recommended,
-  ...tseslint.configs.recommended
+  ...tseslint.configs.recommended,
+  {
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
+  }
 );
 ```
 
@@ -189,7 +200,7 @@ git commit -m "chore: monorepo 根脚手架与共享 config 包"
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsx --test src/",
+    "test": "tsx --test src/*.test.ts",
     "lint": "eslint src/",
     "clean": "rm -rf dist"
   },
@@ -349,7 +360,7 @@ git commit -m "feat(dto): auth zod schema 与共享类型"
   - `logger`（`debug/info/warn/error(msg, meta?)`，JSON 行）
   - `db`（drizzle mysql2 实例）、`pool`
   - `createApp(): express.Express`（helmet + cors + json + routing-controllers，`routePrefix:'/api'`，defaultErrorHandler:false，after 错误中间件）
-  - `ErrorHandlerMiddleware`：ZodError→400 `VALIDATION_ERROR`；HttpError→透传 status，`code=error.name`；其余→500 `INTERNAL_ERROR`
+  - `ErrorHandlerMiddleware`：ZodError（instanceof 或 name 匹配）→400 `VALIDATION_ERROR`；HttpError→透传 status，message 为 UPPER_SNAKE 机器码时作 `code`、否则退回 `error.name`；其余→500 `INTERNAL_ERROR`
 
 - [ ] **Step 1: 包与工具配置**
 
@@ -374,6 +385,8 @@ git commit -m "feat(dto): auth zod schema 与共享类型"
   "dependencies": {
     "@moment/dto": "workspace:*",
     "bcrypt": "^5.1.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.1",
@@ -592,14 +605,20 @@ import { logger } from '../utils/logger.js';
 @Service()
 export class ErrorHandlerMiddleware implements ExpressErrorMiddlewareInterface {
   error(error: unknown, _req: Request, res: Response, _next: NextFunction): void {
-    if (error instanceof ZodError) {
+    // instanceof + name 双保险：dto 包与 server 的 zod 若发生版本漂移，instanceof 会失效
+    if (error instanceof ZodError || (error as Error)?.name === 'ZodError') {
       res.status(400).json({
-        error: { code: 'VALIDATION_ERROR', message: '请求参数不合法', details: error.issues },
+        error: { code: 'VALIDATION_ERROR', message: '请求参数不合法', details: (error as ZodError).issues },
       });
       return;
     }
     if (error instanceof HttpError) {
-      res.status(error.httpCode).json({ error: { code: error.name, message: error.message } });
+      // 约定：业务代码抛 HttpError 系错误时，message 承载 UPPER_SNAKE 机器码；
+      // 框架自带错误（如 AuthorizationRequiredError）message 是自然语言，退回用 name 做 code。
+      const isMachineCode = /^[A-Z0-9_]+$/.test(error.message);
+      res.status(error.httpCode).json({
+        error: { code: isMachineCode ? error.message : error.name, message: error.message },
+      });
       return;
     }
     logger.error('unhandled error', error);
@@ -700,7 +719,7 @@ git commit -m "feat(server): 骨架（config/logger/db/health/错误中间件）
 
 - [ ] **Step 1: 写表定义**
 
-`apps/server/src/db/schema/users.ts`：
+`apps/server/src/db/schema/users.ts`（注：spec §3 的 `avatar_media_id` 本阶段不建——它引用尚不存在的 media 表，随媒体阶段迁移补列）：
 ```ts
 import { char, mysqlTable, timestamp, varchar } from 'drizzle-orm/mysql-core';
 
@@ -747,6 +766,16 @@ export * from './schema/users.js';
 export * from './schema/refresh-tokens.js';
 ```
 
+- [ ] **Step 1.5: 确认 .env 含 JWT_SECRET（阻塞前置）**
+
+`src/config.ts` 在模块加载时强校验 `JWT_SECRET`（≥32 字符），`migrate`/测试/dev 全部经过它。检查 `apps/server/.env`：
+
+```bash
+grep -q '^JWT_SECRET=.\{32,\}' apps/server/.env || echo "JWT_SECRET=$(openssl rand -base64 48)" >> apps/server/.env
+```
+
+Expected: 执行后 `apps/server/.env` 含有效 `JWT_SECRET` 行。
+
 - [ ] **Step 2: 生成迁移并跑通**
 
 `apps/server/src/db/migrate.ts`：
@@ -779,13 +808,18 @@ export default async function globalSetup(): Promise<void> {
 
 `apps/server/tests/helpers/db.ts`：
 ```ts
-import { db } from '../../src/db/index.js';
+import { db, pool } from '../../src/db/index.js';
 import { refreshTokens, users } from '../../src/db/schema.js';
 
 /** 每个用例前清表：先子表后父表。仅允许对测试库使用。 */
 export async function resetDb(): Promise<void> {
   await db.delete(refreshTokens);
   await db.delete(users);
+}
+
+/** 测试文件收尾关闭连接池（不关闭 jest 进程会因 open handle 挂住不退出）。 */
+export async function closeDb(): Promise<void> {
+  await pool.end();
 }
 ```
 
@@ -865,7 +899,7 @@ import { Container } from 'typedi';
 import { TokenService } from '../../src/auth/token.service.js';
 import { db } from '../../src/db/index.js';
 import { refreshTokens, users } from '../../src/db/schema.js';
-import { resetDb } from '../helpers/db.js';
+import { closeDb, resetDb } from '../helpers/db.js';
 
 const service = () => Container.get(TokenService);
 
@@ -875,6 +909,7 @@ async function insertUser(id = 'user-1'): Promise<string> {
 }
 
 beforeEach(resetDb);
+afterAll(closeDb);
 
 describe('TokenService access token', () => {
   it('签发并可验证，返回 userId 与 iat', () => {
@@ -1089,13 +1124,14 @@ git commit -m "feat(server): bcrypt 密码服务与双 token 服务（旋转+复
 ```ts
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
-import { resetDb } from '../helpers/db.js';
+import { closeDb, resetDb } from '../helpers/db.js';
 
 const app = createApp();
 
 const alice = { email: 'Alice@Example.com', password: 'secret123', nickname: 'Alice' };
 
 beforeEach(resetDb);
+afterAll(closeDb);
 
 describe('auth 全流程', () => {
   it('register → me → refresh → logout', async () => {
@@ -1390,6 +1426,11 @@ export function createApp(): express.Express {
     authorizationChecker,
     currentUserChecker,
   });
+
+  // 统一 404（useExpressServer 之后注册，兜底未匹配路由）——Task 3 已引入，替换时必须保留
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: '资源不存在' } });
+  });
   return app;
 }
 ```
@@ -1417,7 +1458,7 @@ git commit -m "feat(server): auth 注册/登录/刷新/登出/me 端到端流程
 - Create: `docker-compose.yml`、`apps/server/.env.example`、根 `README.md`
 
 **Interfaces:**
-- Produces: `authRateLimiter`（60s 窗口，test 环境 1000 次、其他环境 10 次）；本地依赖一键 `docker compose up -d mysql`。
+- Produces: `authRateLimiter`（注册用，IP 维度，60s/10 次）与 `loginRateLimiter`（登录用，IP+email 双维度，60s/5 次；test 环境均放宽到 1000 次）；本地依赖一键 `docker compose up -d mysql`。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1453,24 +1494,40 @@ Expected: PASS（该用例直接验证第三方中间件行为，属「特性测
 import rateLimit from 'express-rate-limit';
 import { config } from '../config.js';
 
-/** 登录/注册/邀请类敏感端点限流：60s 窗口。测试环境放宽避免用例互踩。 */
+const isTest = config.NODE_ENV === 'test';
+const message = { error: { code: 'RATE_LIMITED', message: '请求过于频繁，请稍后再试' } };
+
+/** 注册等敏感端点：IP 维度，60s/10 次。测试环境放宽避免用例互踩。 */
 export const authRateLimiter = rateLimit({
   windowMs: 60_000,
-  limit: config.NODE_ENV === 'test' ? 1000 : 10,
+  limit: isTest ? 1000 : 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: { code: 'RATE_LIMITED', message: '请求过于频繁，请稍后再试' } },
+  message,
+});
+
+/** 登录：IP + 账号双维度（spec §4/§6），60s/5 次，防分布式 IP 爆破同一账号。 */
+export const loginRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: isTest ? 1000 : 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase() : '';
+    return `${req.ip}:${email}`;
+  },
+  message,
 });
 ```
 
-`apps/server/src/app.ts` 中 `useExpressServer(...)` 之前插入：
+`apps/server/src/app.ts` 中 `useExpressServer(...)` 之前插入（注意必须在 `express.json()` 之后，`loginRateLimiter` 的 keyGenerator 要读 `req.body`）：
 ```ts
-  app.use('/api/auth/login', authRateLimiter);
+  app.use('/api/auth/login', loginRateLimiter);
   app.use('/api/auth/register', authRateLimiter);
 ```
 并在文件顶部 import：
 ```ts
-import { authRateLimiter } from './middlewares/rate-limit.js';
+import { authRateLimiter, loginRateLimiter } from './middlewares/rate-limit.js';
 ```
 
 - [ ] **Step 4: docker-compose 与环境模板**
@@ -1519,8 +1576,9 @@ ACCESS_TOKEN_TTL_SECONDS=900
 REFRESH_TOKEN_TTL_DAYS=30
 ```
 
-根 `README.md`：
-```markdown
+根 `README.md`（注意：本计划在 markdown 中用四反引号包裹以保留内层代码块；写入文件时去掉最外层围栏）：
+
+````markdown
 # 时刻 Moment
 
 多用户时光链记录应用。Spec: docs/superpowers/specs/2026-08-15-moment-design.md
@@ -1529,26 +1587,35 @@ REFRESH_TOKEN_TTL_DAYS=30
 
 ```bash
 pnpm install
-cp apps/server/.env.example apps/server/.env   # 修改 JWT_SECRET 与数据库连接
-docker compose up -d mysql                      # 本地 MySQL（或改用远程测试库）
+# 若 apps/server/.env 已存在（含真实凭据）请跳过本步，切勿覆盖
+[ -f apps/server/.env ] || cp apps/server/.env.example apps/server/.env
+# 确保 .env 含 JWT_SECRET（≥32 字符），缺失则：
+# echo "JWT_SECRET=$(openssl rand -base64 48)" >> apps/server/.env
 pnpm build                                      # 先构建 dto 等依赖包
 pnpm --filter @moment/server migrate            # 跑数据库迁移
 pnpm dev                                        # 启动全部 dev 服务
 ```
 
+## 数据库说明
+
+- 当前团队的测试库是远程 MySQL（已配置在 `apps/server/.env`，测试/开发都用它）。
+- `docker compose up -d mysql` 起的是**本地开发库**（`moment_dev`），供无远程库访问权时使用；
+  使用时把 `.env` 的 `MYSQL_HOST/PORT/USER/PASSWORD/DATABASE` 改为 `.env.example` 中的本地值。
+
 ## 测试
 
 ```bash
-pnpm --filter @moment/server test   # 打 .env 指向的库（必须是测试库！）
+pnpm --filter @moment/server test   # 打 .env 指向的库（必须是测试库，严禁生产库！）
 ```
+
+- 测试配置隔离：可建 `apps/server/.env.test`（已 gitignore），优先级高于 `.env`。
 
 ## 结构
 
 - apps/server — Express API（routing-controllers + TypeDI + Drizzle）
 - packages/dto — 共享 zod schema 与类型
 - config/ — 共享 tsconfig / eslint
-```
-（注意：README 代码块嵌套，写文件时外层用四个反引号或缩进处理。）
+````
 
 - [ ] **Step 5: 全量验证**
 
