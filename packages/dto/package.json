@@ -1,0 +1,22 @@
+{
+  "name": "@moment/dto",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test src/*.test.ts",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": { "zod": "^3.22.0" },
+  "devDependencies": {
+    "@moment/eslint-config": "workspace:*",
+    "@moment/typescript-config": "workspace:*",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
