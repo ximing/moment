@@ -716,6 +716,7 @@ git commit -m "feat(server): 骨架（config/logger/db/health/错误中间件）
   - `users` 表对象（列：`id/email/passwordHash/nickname/passwordChangedAt/createdAt`）
   - `refreshTokens` 表对象（列：`id/userId/tokenHash/deviceInfo/expiresAt/revokedAt/createdAt`）
   - `resetDb(): Promise<void>`（tests/helpers/db.ts，先清 refresh_tokens 再清 users）
+  - `closeDb(): Promise<void>`（tests/helpers/db.ts，测试文件 afterAll 关池，防 jest open handle 挂住）
 
 - [ ] **Step 1: 写表定义**
 
@@ -1485,7 +1486,7 @@ describe('rate limit 行为', () => {
 - [ ] **Step 2: 运行验证测试本身**
 
 Run: `pnpm --filter @moment/server test -- rate-limit`
-Expected: PASS（该用例直接验证第三方中间件行为，属「特性测试」；真正的接线验证在 Step 5 全量回归中体现——`authRateLimiter` 挂载后 test 环境 limit=1000 不影响既有用例）
+Expected: PASS（该用例直接验证第三方中间件行为，属「特性测试」；真正的接线验证在 Step 5 全量回归中体现——两个 limiter 挂载后 test 环境 limit 均为 1000，不影响既有用例）
 
 - [ ] **Step 3: 实现限流并挂载**
 
@@ -1589,6 +1590,8 @@ REFRESH_TOKEN_TTL_DAYS=30
 pnpm install
 # 若 apps/server/.env 已存在（含真实凭据）请跳过本步，切勿覆盖
 [ -f apps/server/.env ] || cp apps/server/.env.example apps/server/.env
+# 若上一步刚新建 .env（指向本地库），先起本地 MySQL：
+# docker compose up -d mysql
 # 确保 .env 含 JWT_SECRET（≥32 字符），缺失则：
 # echo "JWT_SECRET=$(openssl rand -base64 48)" >> apps/server/.env
 pnpm build                                      # 先构建 dto 等依赖包
