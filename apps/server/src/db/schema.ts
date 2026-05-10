@@ -1,2 +1,2 @@
-// Drizzle schema barrel. Tables are added in later tasks/phases.
-export {};
+export * from './schema/users.js';
+export * from './schema/refresh-tokens.js';
