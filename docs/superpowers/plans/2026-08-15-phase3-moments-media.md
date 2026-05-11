@@ -15,7 +15,7 @@
 - 存储接口方法名严格按 CONVENTIONS §3.3：`uploadFile / deleteFile / fileExists / headObject / copyObject / generateAccessUrl / presignPut / initMultipart / presignPart / completeMultipart / abortMultipart`，不得增删改名。
 - `media.s3_key` 存**相对 key**（不含 `ATTACHMENT_S3_PREFIX`，adapter 内部拼接前缀）：上传期 `tmp/{mediaId}.{ext}`，发布时服务端 copy 到 `chains/{chainId}/{momentId}/{mediaId}.{ext}` 并删 tmp 对象。
 - **偏离声明（CONVENTIONS §3.3 / spec §5.5 字面）**：tmp→final 的 copy 发生在 `POST /api/chains/:chainId/moments` 的 moment 创建事务内，**而非** CONVENTIONS §3.3 / spec §5.5 第 5 点所写的「complete 时 copy」——原因是 final key 需要 momentId，而 complete 时 moment 尚不存在；complete 仅做 HeadObject 校验与状态推进，不改 key。后果：`status='ready'` 且未绑定的 media 的 tmp 对象在 complete 后仍须保留至发布（或超时清理），Phase 8 sweeper **不得**按「complete 后即应搬走」的 spec 字面语义把它当垃圾清掉，只能按 24h 超时规则清理。
-- **存储迁移限制**：`copyObject/deleteFile/generateAccessUrl` 均接受行上 `storage_meta`，读与 copy/delete 按行快照解析位置；因此换桶/换 prefix 前，所有未发布（tmp）对象必须先迁移或强制发布，否则发布事务会按新配置找源对象（NoSuchKey）。
+- **存储迁移限制**：`copyObject/deleteFile/generateAccessUrl` 均接受行上 `storage_meta`，读与 copy/delete 按行快照解析位置；因此换桶/换 prefix 前，所有未发布（tmp）对象必须先迁移或强制发布，否则发布事务会按新配置找源对象（NoSuchKey）。**进行中的上传会话（multipart/HeadObject 校验）不跨迁移**：`presignPut/initMultipart/presignPart/completeMultipart/abortMultipart/headObject` 均按**当前 config**（而非行快照）解析桶与前缀——若 presign 与 complete 之间换桶/换 prefix，complete 的 HeadObject/合片会按新配置找不到对象或会话（422/404）。取舍：换桶窗口期内进行中的上传允许失败，客户端重新 presign 即按新配置从头来；运维上换桶应选低峰并预告。
 - **取舍声明（spec §1 media 类型语义）**：spec §1 字面为「media（图/视频宫格+文）」，本计划按字面实现**混排宫格**：`type=media` 允许 image/* 与 video/* 媒体混用（1–9 个，mime 以 dto 白名单为界），`type=video` 仍为恰好 1 条视频。不引入「宫格仅图片」的额外收紧；Task 7 的归属校验与此一致。
 - **代价声明（发布事务内 S3 copy 的并发预算）**：tmp→final 的服务端 copy（视频可达 500MB，秒级）在 DB 事务内执行，期间占住一条 mysql2 池连接（`connectionLimit: 10`）与该批 media 行的 `for update` 行锁。最坏情况下 ≈10 路并发发布即可耗尽连接池——MVP 量级（链内低频发布）属可接受取舍，**显式声明**；若线上出现池耗尽，优先调大 `connectionLimit`，或后续把 copy 移到事务提交之后（失败则补偿性软删 moment 并返回 5xx），本计划不实现后者。
 - `media.status` 状态机：`uploading → ready`（complete 成功）或 `uploading → orphaned`（abort / sweeper）；`ready` 终态不可回退。
@@ -77,7 +77,7 @@ test('mediaPresignInputSchema：kind 与 mime 白名单必须匹配', () => {
   assert.ok(!mediaPresignInputSchema.safeParse({ mime: 'video/x-ms-wmv', size: 1000, kind: 'video' }).success);
 });
 
-test('mediaPresignInputSchema：image/svg+xml 一律拒绝（存储型 XSS 防线，M-5）', () => {
+test('mediaPresignInputSchema：image/svg+xml 一律拒绝（存储型 XSS 防线）', () => {
   // SVG 可内嵌 <script>：若放行，预签名 GET 会以 image/svg+xml 原样下发，viewer 浏览器打开即执行任意 JS
   assert.ok(!mediaPresignInputSchema.safeParse({ mime: 'image/svg+xml', size: 1000, kind: 'image' }).success);
 });
@@ -454,24 +454,9 @@ Expected: `pnpm install` 成功无 peer 报错。
 
 - [ ] **Step 2: 扩展 config（先于测试，因模块加载期强校验）**
 
-`apps/server/src/config.ts`（整体替换）：
+`apps/server/src/config.ts`：**不整体替换**。Phase 2 已在 `envSchema` 的 `REFRESH_TOKEN_TTL_DAYS` 行之后追加了 `INVITE_TTL_DAYS: z.coerce.number().default(7)`（`ChainService.createInvite` 消费）；整体替换会删掉它，导致 `config.INVITE_TTL_DAYS` 类型不存在、ts-jest 编译失败。正确做法：在既有 `envSchema`（含 Phase 2 的 `INVITE_TTL_DAYS`）的 `INVITE_TTL_DAYS` 行之后**插入**下列字段（`import`/`loadEnv`/`parse`/`export` 等其余内容一律保持现状；Phase 2 及之后新增的全部字段必须保留，仅追加不改）：
 ```ts
-import { config as loadEnv } from 'dotenv';
-import { z } from 'zod';
-
-loadEnv({ path: [`.env.${process.env.NODE_ENV ?? 'development'}`, '.env'] });
-
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().default(3000),
-  MYSQL_HOST: z.string(),
-  MYSQL_PORT: z.coerce.number().default(3306),
-  MYSQL_USER: z.string(),
-  MYSQL_PASSWORD: z.string(),
-  MYSQL_DATABASE: z.string(),
-  JWT_SECRET: z.string().min(32),
-  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().default(900),
-  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(30),
+// —— envSchema 内插入（INVITE_TTL_DAYS 行之后）——
   ATTACHMENT_S3_BUCKET: z.string().min(1),
   ATTACHMENT_S3_PREFIX: z.string().default('dev/attachments'),
   ATTACHMENT_S3_ENDPOINT: z.string().optional(),
@@ -488,10 +473,6 @@ const envSchema = z.object({
   // GET TTL 上限 3600：alignedGetPresign 的「过期时刻落在下一窗内」推导要求 TTL ≤ 一个窗长（3600s）
   PRESIGN_GET_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(3600),
   PRESIGN_PUT_TTL_SECONDS: z.coerce.number().int().min(1).default(900),
-});
-
-export const config = envSchema.parse(process.env);
-export type Config = z.infer<typeof envSchema>;
 ```
 
 `apps/server/.env.example` 在末尾追加：
@@ -1638,6 +1619,36 @@ describe('POST /api/media/:id/complete', () => {
     expect(storage.completeMultipart).not.toHaveBeenCalled();
   });
 
+  it('视频：S3 已合片但 HeadObject 校验 422 后，重试不再触合片（幂等覆盖中间态）', async () => {
+    const presigned = await presignVideo(alice.token);
+    // 合片成功、HeadObject size 不符 → 422，状态停留 uploading
+    storage.headObject.mockResolvedValue({ size: 1, contentType: 'video/mp4', lastModified: new Date() });
+    const first = await request(app)
+      .post(`/api/media/${presigned.body.mediaId}/complete`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ parts: [{ partNumber: 1, etag: '"a"' }] });
+    expect(first.status).toBe(422);
+    expect(first.body.error.code).toBe('MEDIA_MISMATCH');
+    expect(storage.completeMultipart).toHaveBeenCalledTimes(1);
+
+    // 客户端重试（同 parts）：uploadId 已在合片成功后被置空 → 跳过 completeMultipart
+    // （否则 S3 NoSuchUpload → 500），只做 HeadObject；对象一致 → ready
+    storage.headObject.mockResolvedValue({
+      size: 64 * 1024 * 1024,
+      contentType: 'video/mp4',
+      lastModified: new Date(),
+    });
+    const retry = await request(app)
+      .post(`/api/media/${presigned.body.mediaId}/complete`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ parts: [{ partNumber: 1, etag: '"a"' }] });
+    expect(retry.status).toBe(200);
+    expect(retry.body.status).toBe('ready');
+    expect(storage.completeMultipart).toHaveBeenCalledTimes(1);
+    const [row] = await db.select().from(media).where(eq(media.id, presigned.body.mediaId));
+    expect(row.status).toBe('ready');
+  });
+
   it('HeadObject size/mime 与申请不符 → 422 MEDIA_MISMATCH，状态仍 uploading', async () => {
     const presigned = await presignImage(alice.token);
     storage.headObject.mockResolvedValue({ size: 999, contentType: 'image/jpeg', lastModified: new Date() });
@@ -1837,7 +1848,9 @@ export class MediaService {
    * CompleteMultipartUpload 的硬性要求，契约钉在此处，不依赖 adapter 实现）；HeadObject
    * 校验存在 + size/mime 与申请一致；状态推进用条件更新抢占（`WHERE status='uploading'`），
    * 防与 abort/发布绑定的并发读-改-写竞态。幂等：ready 状态重复调用直接返回相同结果，
-   * 不再触达 S3（spec §5.5）。
+   * 不再触达 S3（spec §5.5）。「S3 已合片但 HeadObject 校验 422（状态停留 uploading）」的
+   * 中间态也在幂等声明覆盖内：合片成功即置 uploadId=null 持久化，重试跳过合片只做 HeadObject
+   * （否则再调 completeMultipart 会打出 S3 NoSuchUpload → 500）。
    */
   async complete(
     userId: string,
@@ -1858,7 +1871,12 @@ export class MediaService {
       // 请求原序可能是乱序（客户端并发上传），S3 要求严格升序；adapter 内仍保留排序作纵深防御
       const sortedParts = [...input.parts].sort((a, b) => a.partNumber - b.partNumber);
       await getStorage().completeMultipart(row.s3Key, row.uploadId, sortedParts);
-    } else if (input.parts.length > 0) {
+      // 合片成功即消费掉 S3 上传会话：立即持久化 uploadId=null。此后任何失败（HeadObject 422、
+      // DB 推进失败）留下的 uploading 行重入时走「无 uploadId」路径——跳过合片只做 HeadObject。
+      await db.update(media).set({ uploadId: null }).where(eq(media.id, mediaId));
+    } else if (input.parts.length > 0 && !row.mime.startsWith('video/')) {
+      // 图片行携带 parts → 拒绝；video 行的 uploadId 已因合片完成被置空，重试携带 parts
+      // 不再视为错误（parts 被忽略，仅做 HeadObject 校验——见上方幂等声明）。
       throw new HttpError(400, 'MEDIA_INVALID');
     }
 
@@ -1867,7 +1885,7 @@ export class MediaService {
       throw new HttpError(422, 'MEDIA_MISMATCH');
     }
 
-    // 条件更新抢占（M-3）：仅 uploading → ready 生效，避免与并发 abort/绑定的丢失更新。
+    // 条件更新抢占：仅 uploading → ready 生效，避免与并发 abort/绑定的丢失更新。
     // drizzle mysql2 的 update 返回 [ResultSetHeader]，affectedRows 可判断是否抢到。
     const [result] = await db
       .update(media)
@@ -1890,6 +1908,10 @@ export class MediaService {
    * abortMultipart 会打出 S3 NoSuchUpload（500）；图片无 uploadId 会被直接置 orphaned，
    * 把已上传可发布的媒体永久作废（complete 幂等分支只认 ready）。故 ready 一律 409。
    * 图片单 PUT 的 uploading 状态也允许 abort 作废记录。
+   * 状态推进与 complete() 对称地用**条件更新**抢占（`WHERE status='uploading'`）：
+   * 若本请求读到 stale 的 uploading 后、并发 complete() 已把行推进为 ready（甚至 create()
+   * 已绑定 moment），无条件的 UPDATE 会把它覆盖回 orphaned，破坏「ready 终态不可回退」。
+   * 抢不到（affectedRows=0）说明他方已推进，按幂等语义直接返回。
    */
   async abort(userId: string, mediaId: string): Promise<void> {
     const row = await getOwnedMediaOr404(userId, mediaId);
@@ -1898,7 +1920,11 @@ export class MediaService {
     if (row.uploadId) {
       await getStorage().abortMultipart(row.s3Key, row.uploadId);
     }
-    await db.update(media).set({ status: 'orphaned' }).where(eq(media.id, mediaId));
+    const [result] = await db
+      .update(media)
+      .set({ status: 'orphaned' })
+      .where(and(eq(media.id, mediaId), eq(media.status, 'uploading')));
+    if (result.affectedRows === 0) return;
   }
 }
 ```
@@ -1973,21 +1999,21 @@ export class MediaController {
 }
 ```
 
-`apps/server/src/app.ts` 两处修改（Phase 2 已注册的 ChainsController 保持不动）：
+`apps/server/src/app.ts` 两处修改（Phase 1/2 已注册的 AuthController/ChainsController/InvitesController 保持不动）：
 1) import 区新增：
 ```ts
 import { MediaController } from './media/media.controller.js';
 ```
-2) `controllers: [...]` 数组追加 `MediaController`：
+2) `controllers: [...]` 数组追加 `MediaController`（基线为 Phase 2 收尾后的数组 `[HealthController, AuthController, ChainsController, InvitesController]`）：
 ```ts
-    controllers: [HealthController, ChainsController, MediaController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController],
 ```
-（若 Phase 2 实际注册了多个 controller，保持原数组不动，仅追加 `MediaController` 一项。）
+（若 Phase 2 实际注册的数组与上述基线不同，保持原数组不动，仅追加 `MediaController` 一项——严禁照抄示例时丢掉既有项。）
 
 - [ ] **Step 6: 运行确认通过**
 
 Run: `pnpm --filter @moment/server test`
-Expected: media 18 个用例 PASS（presign 6 + parts 3 + complete 6 + abort 3）；既有全部保持 PASS。
+Expected: media 19 个用例 PASS（presign 6 + parts 3 + complete 7 + abort 3）；既有全部保持 PASS。
 
 - [ ] **Step 7: Commit**
 
@@ -2247,6 +2273,7 @@ export interface AlignedGetPresign {
  * 签名时刻每秒不同则 URL 字符串每秒不同，「同一窗口内 URL 相同」不成立。
  * 这里 signingDate = 窗口起点（常量）、expiresIn = TTL + 3600（常量）：
  * 窗内两次签名输入完全一致 → URL 字符串完全一致；过期时刻落在下一窗内且距窗内任意时刻 ≥ TTL。
+ * 前置假设：TTL ≤ 3600（一个窗长），由 config 对 PRESIGN_GET_TTL_SECONDS 的 .max(3600) 强制。
  */
 export function alignedGetPresign(
   nowMs = Date.now(),
@@ -2328,7 +2355,7 @@ import type { Response } from 'express';
 - [ ] **Step 5: 运行确认通过**
 
 Run: `pnpm --filter @moment/server test`
-Expected: presign-ttl 4 + media-access 7 个用例 PASS；Task 5 的 16 个保持 PASS。
+Expected: presign-ttl 4 + media-access 7 个用例 PASS；Task 5 的 19 个保持 PASS。
 
 - [ ] **Step 6: Commit**
 
@@ -2599,9 +2626,10 @@ describe('POST /api/chains/:chainId/moments', () => {
     expect(res.body.error.code).toBe('MEDIA_INVALID');
   });
 
-  it('type=media 引用视频 mime → 400 MEDIA_INVALID（三类型媒体归属校验）', async () => {
+  it('type=video 引用图片 mime → 400 MEDIA_INVALID；type=media 宫格允许图/视频混排（spec §1，见 Global Constraints）', async () => {
     const chainId = await createChainWithMembers(alice.id); // owner 角色已覆盖 editor（偏序），且 UNIQUE(chain_id,user_id) 不允许重复插 alice
-    // presign 一条 ready 的 video mime 媒体（走 image 通道但 mime 伪装由 dto 拦截，改直插）
+    const imageMediaId = await readyImage(alice.token, 'image/png');
+    // 直插一条 ready 的 video mime 媒体（multipart 通道造数成本高，归属校验只看行字段）
     const { randomUUID } = await import('node:crypto');
     const videoMediaId = randomUUID();
     await db.insert(media).values({
@@ -2614,15 +2642,29 @@ describe('POST /api/chains/:chainId/moments', () => {
       status: 'ready',
       storageMeta: {},
     });
-    const res = await postMoment(alice.token, chainId, {
+
+    // type=video 恰好 1 条且必须是 video/*：引用图片 mime → 400，moment 不落库
+    const bad = await postMoment(alice.token, chainId, {
+      type: 'video',
+      content: '',
+      happenedAt: '2026-08-15T11:00:00+08:00',
+      happenedTzOffset: -480,
+      mediaIds: [imageMediaId],
+    });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.code).toBe('MEDIA_INVALID');
+    expect(await db.select().from(moments)).toHaveLength(0);
+
+    // type=media 宫格混排图+视频 → 201（spec §1 字面语义，不收紧为「仅图片」）
+    const mixed = await postMoment(alice.token, chainId, {
       type: 'media',
       content: '',
       happenedAt: '2026-08-15T11:00:00+08:00',
       happenedTzOffset: -480,
-      mediaIds: [videoMediaId],
+      mediaIds: [imageMediaId, videoMediaId],
     });
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('MEDIA_INVALID');
+    expect(mixed.status).toBe(201);
+    expect(mixed.body.media.map((m: { id: string }) => m.id)).toEqual([imageMediaId, videoMediaId]);
   });
 
   it('dto 校验：type=text 携带 mediaIds → 400 VALIDATION_ERROR', async () => {
@@ -2785,8 +2827,15 @@ export class MomentService {
     const response = await db.transaction(async (tx) => {
       let mediaRows: Media[] = [];
       if (input.mediaIds.length > 0) {
-        mediaRows = await tx.select().from(media).where(inArray(media.id, input.mediaIds));
-        // 全部满足：数量一致（dto 已拒重复 id，此处防御）+ 属本人 + ready + 未绑定 + mime 类型匹配（video→video/*，其余→image/*）
+        // 行锁：并发两个 moment 引用同一 mediaId 时，读-改-写必须串行化——
+        // 后到者在锁上排队，提交后重读到的行 moment_id 非空 → 400 MEDIA_INVALID，杜绝「双发布各 copy 一半」
+        mediaRows = await tx
+          .select()
+          .from(media)
+          .where(inArray(media.id, input.mediaIds))
+          .for('update');
+        // 全部满足：数量一致（dto 已拒重复 id，此处防御）+ 属本人 + ready + 未绑定 + mime 类型匹配
+        // （type=video → 恰好 1 条 video/*；type=media 宫格允许图/视频**混排**，spec §1「media（图/视频宫格+文）」，见 Global Constraints）
         const valid =
           mediaRows.length === new Set(input.mediaIds).size &&
           mediaRows.every(
@@ -2794,7 +2843,9 @@ export class MomentService {
               r.uploaderId === userId &&
               r.status === 'ready' &&
               r.momentId === null &&
-              r.mime.startsWith(input.type === 'video' ? 'video/' : 'image/')
+              (input.type === 'video'
+                ? r.mime.startsWith('video/')
+                : r.mime.startsWith('image/') || r.mime.startsWith('video/'))
           );
         if (!valid) throw new HttpError(400, 'MEDIA_INVALID');
       }
@@ -2915,10 +2966,11 @@ export class MomentController {
 ```ts
 import { MomentController } from './moments/moment.controller.js';
 ```
-2) controllers 数组追加 `MomentController`：
+2) controllers 数组追加 `MomentController`（基线为 Task 5 收尾后的数组 `[HealthController, AuthController, ChainsController, InvitesController, MediaController]`）：
 ```ts
-    controllers: [HealthController, ChainsController, MediaController, MomentController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController],
 ```
+（仅追加 `MomentController` 一项，严禁照抄示例时丢掉既有项。）
 
 - [ ] **Step 7: 运行确认通过**
 
@@ -2939,11 +2991,13 @@ git commit -m "feat(server): moment 创建（三类型校验、媒体绑定事�
 **Files:**
 - Modify: `apps/server/src/moments/moment.service.ts`（追加 list/get/update/remove 与 `serializeMany`）
 - Modify: `apps/server/src/moments/moment.controller.ts`（追加 GET 列表 + `MomentItemController`）
+- Modify: `apps/server/src/chains/chain.service.ts`（`ChainService.remove` 补 media/moments 级联——兑现 Phase 2 Global Constraints 与事务注释锚点显式指派给 Phase 3 的承诺）
 - Test: `apps/server/tests/moments/moment-list-crud.test.ts`
 
 **Interfaces:**
-- Consumes: Task 7 全部 Produces、Task 5 媒体链路（fixture）、Phase 2 `ChainPolicy`。
+- Consumes: Task 7 全部 Produces、Task 5 媒体链路（fixture）、Phase 2 `ChainPolicy`、Phase 2 `ChainService.remove`（`DELETE /api/chains/:id`，owner → 204）。
 - Produces（Phase 4 feed、Phase 5 评论、Phase 6/8 客户端消费）:
+  - `ChainService.remove` 的级联语义（同事务硬删 media → moments → invites → members → chain；删链不补发 outbox 事件，S3 对象交 Phase 8）——Phase 4/5 的链删除相关行为以此为准。
   - `MomentService.list(userId, chainId, query: { cursor?: string; limit?: string }): Promise<MomentListResponse>`（默认 20、上限 50；`happened_at DESC, id DESC` 复合游标）
   - `MomentService.get(userId, momentId)`（软删 → 410 MOMENT_DELETED）
   - `MomentService.update(userId, momentId, input)` / `MomentService.remove(userId, momentId)`
@@ -2958,7 +3012,7 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
-import { moments, outbox } from '../../src/db/schema.js';
+import { chains, media, moments, outbox } from '../../src/db/schema.js';
 import { createUser } from '../helpers/auth.js';
 import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
@@ -3243,12 +3297,74 @@ describe('DELETE /api/moments/:id', () => {
     expect(ok.status).toBe(204);
   });
 });
+
+describe('DELETE /api/chains/:id（Phase 3 级联，兑现 Phase 2 事务锚点）', () => {
+  it('链内含 moments 时 owner 删链成功：绑定的 media/moments 级联硬删，未绑定 media 与 outbox 不受影响', async () => {
+    // 造一条带 media 的 moment（走真实 presign → complete → create 链路）
+    const presigned = await request(app)
+      .post('/api/media/presign')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ mime: 'image/jpeg', size: 1024, kind: 'image' });
+    storage.headObject.mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() });
+    await request(app)
+      .post(`/api/media/${presigned.body.mediaId}/complete`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({});
+    const created = await request(app)
+      .post(`/api/chains/${chainId}/moments`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({
+        type: 'media',
+        content: '',
+        happenedAt: '2026-08-15T12:00:00+08:00',
+        happenedTzOffset: -480,
+        mediaIds: [presigned.body.mediaId],
+      });
+    expect(created.status).toBe(201);
+    // 无 media 的 text moment（级联必须覆盖无 media 的行）
+    await db.insert(moments).values({
+      id: randomUUID(),
+      chainId,
+      authorId: bob.id,
+      type: 'text',
+      content: '纯文本',
+      happenedAt: new Date(Date.UTC(2026, 7, 15, 7)),
+      happenedTzOffset: -480,
+    });
+    // uploader 名下未绑定的 tmp media：不属任何链，不得被级联误删
+    const unboundId = randomUUID();
+    await db.insert(media).values({
+      id: unboundId,
+      momentId: null,
+      uploaderId: alice.id,
+      s3Key: `tmp/${unboundId}.jpeg`,
+      mime: 'image/jpeg',
+      size: 512,
+      status: 'ready',
+      storageMeta: {},
+    });
+
+    const res = await request(app)
+      .delete(`/api/chains/${chainId}`)
+      .set('Authorization', `Bearer ${alice.token}`); // owner
+    expect(res.status).toBe(204);
+    expect(await db.select().from(moments).where(eq(moments.chainId, chainId))).toHaveLength(0);
+    const mediaRows = await db.select().from(media);
+    expect(mediaRows.map((r) => r.id)).toEqual([unboundId]); // 绑定的已级联删，未绑定的保留
+    expect(await db.select().from(chains).where(eq(chains.id, chainId))).toHaveLength(0);
+    // 语义声明：删链不补发 moment.deleted、也不清理既有 outbox 行——
+    // pending 的 moment.created 由 Phase 5 worker 按链不存在幂等跳过（见「留给后续 Phase 的接缝」）
+    const events = await db.select().from(outbox);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'moment.created', status: 'pending' });
+  });
+});
 ```
 
 - [ ] **Step 2: 运行确认失败**
 
 Run: `pnpm --filter @moment/server test -- moment-list-crud`
-Expected: FAIL（GET 列表 404 / `momentService.list is not a function`）
+Expected: FAIL（GET 列表 404 / `momentService.list is not a function`；删链级联用例在 `tx.delete(chains)` 处因 FK 1451 抛 500——这正是本 Task 要补的级联缺口）
 
 - [ ] **Step 3: 实现 service 追加方法**
 
@@ -3318,7 +3434,9 @@ import { decodeCursor, encodeCursor } from './cursor.js';
     return serialized;
   }
 
-  /** 仅作者本人可改；媒体不可改（dto 层 .strict() 已拒绝 mediaIds/type 等未知键）。鉴权先于软删判断（同 get）。 */
+  /** 仅作者本人可改；媒体不可改（dto 层 .strict() 已拒绝 mediaIds/type 等未知键）。鉴权先于软删判断（同 get）。
+   * 取舍声明（spec 未定义）：原作者被移出链后成员资格失效，ChainPolicy.require 抛 404，
+   * 作者本人也无法再 update 自己的 moment——成员资格优先于作者身份，与读取侧一致。 */
   async update(userId: string, momentId: string, input: PatchMomentInput): Promise<MomentResponse> {
     const [m] = await db.select().from(moments).where(eq(moments.id, momentId)).limit(1);
     if (!m) throw new NotFoundError('MOMENT_NOT_FOUND');
@@ -3339,7 +3457,8 @@ import { decodeCursor, encodeCursor } from './cursor.js';
     return this.get(userId, momentId);
   }
 
-  /** 软删（幂等）：作者或链 owner；同事务 emitOutbox(moment.deleted)（sweeper 信号）。鉴权先于软删判断（同 get）。 */
+  /** 软删（幂等）：作者或链 owner；同事务 emitOutbox(moment.deleted)（sweeper 信号）。鉴权先于软删判断（同 get）。
+   * 取舍声明（spec 未定义）：同 update——原作者退链后成员资格失效，对自己 moment 的删除亦不可用（404）。 */
   async remove(userId: string, momentId: string): Promise<void> {
     const [m] = await db.select().from(moments).where(eq(moments.id, momentId)).limit(1);
     if (!m) throw new NotFoundError('MOMENT_NOT_FOUND');
@@ -3396,7 +3515,47 @@ import { decodeCursor, encodeCursor } from './cursor.js';
   }
 ```
 
-- [ ] **Step 4: 实现 controller 追加**
+- [ ] **Step 4: ChainService.remove 补 media/moments 级联（兑现 Phase 2 事务注释锚点）**
+
+Phase 2 Global Constraints 与 `ChainService.remove` 的事务注释锚点均写明「Phase 3 在本事务最前面追加 moments/media 级联」。Task 3 建 `moments` 并加 FK（`moments.chain_id → chains.id`、`media.moment_id → moments.id`）后，若不补级联，链内存在 moments 时 owner 删链会在 `tx.delete(chains)` 触发 FK 1451 → 500。本步骤修改 Phase 2 落地的 `apps/server/src/chains/chain.service.ts`：
+
+1) import 区两处补充（合并进既有行，不替换整个 import 块）：
+```ts
+import { and, desc, eq, inArray } from 'drizzle-orm'; // Phase 2 原为 and, desc, eq，仅追加 inArray
+import { chainInvites, chainMembers, chains, media, moments, users, type Chain } from '../db/schema.js'; // Phase 2 原为 { chainInvites, chainMembers, chains, users, type Chain }（路径 ../db/schema.js），仅追加 media, moments
+```
+（若 Phase 2 的 schema import 写法与上述不同，保持原样、仅追加 `media` 与 `moments` 两个具名导入。）
+
+2) `remove` 方法整体替换为——既有 `policy.require` 与 invites/members/chains 三条删除的顺序保持 Phase 2 原样，仅在**事务最前面**（即 Phase 2 注释锚点所指位置）插入 media/moments 两条删除：
+```ts
+  /**
+   * owner 删链：同事务硬删 media → moments → invites → members → chain。
+   * （Phase 3 兑现级联锚点）media.moment_id → moments、moments.chain_id → chains 的外键
+   * 要求子表先清：先删绑定在该链 moments 上的 media（未绑定的 tmp media 不属任何链，保留），
+   * 再删 moments。
+   * 语义取舍：不为级联硬删补发 moment.deleted outbox 事件——链已整体消失，向链成员扇出
+   * 「单条 moment 删除」无意义；删链前已入队的 pending moment.created 事件由 Phase 5 worker
+   * 按链不存在幂等跳过（接缝声明见本计划末尾）。S3 对象（chains/{chainId}/… 前缀）不在
+   * 事务内删除（不可靠且拖长事务），由 Phase 8 lifecycle 按 prefix 清理。
+   */
+  async remove(userId: string, chainId: string): Promise<void> {
+    await this.policy.require(userId, chainId, 'owner');
+    await db.transaction(async (tx) => {
+      const chainMomentIds = tx
+        .select({ id: moments.id })
+        .from(moments)
+        .where(eq(moments.chainId, chainId));
+      await tx.delete(media).where(inArray(media.momentId, chainMomentIds));
+      await tx.delete(moments).where(eq(moments.chainId, chainId));
+      await tx.delete(chainInvites).where(eq(chainInvites.chainId, chainId));
+      await tx.delete(chainMembers).where(eq(chainMembers.chainId, chainId));
+      await tx.delete(chains).where(eq(chains.id, chainId));
+    });
+  }
+```
+（`tx.delete(media)` 触发 `users.avatar_media_id`/`chains.cover_media_id` 的 `ON DELETE SET NULL` 自动置空引用列，无需手工处理；drizzle 的 `inArray` 接受上述 select 子查询。）
+
+- [ ] **Step 5: 实现 controller 追加**
 
 `apps/server/src/moments/moment.controller.ts` 追加 import 与第二个 controller 类（import 区在 Task 7 基础上补充 `Get / Delete / Patch / HttpCode / OnUndefined / patchMomentInputSchema / MomentListResponse`）：
 ```ts
@@ -3452,26 +3611,27 @@ export class MomentItemController {
   }
 }
 ```
-`apps/server/src/app.ts` 的 controllers 数组追加 `MomentItemController`：
+`apps/server/src/app.ts` 的 controllers 数组追加 `MomentItemController`（基线为 Task 7 收尾后的数组 `[HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController]`）：
 ```ts
-    controllers: [HealthController, ChainsController, MediaController, MomentController, MomentItemController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController],
 ```
+（仅追加 `MomentItemController` 一项，严禁照抄示例时丢掉既有项。）
 import 区相应补充：
 ```ts
 import { MomentController, MomentItemController } from './moments/moment.controller.js';
 ```
 （Task 7 已注册的 `MomentController` import 行改为上面这条具名双导出形式。）
 
-- [ ] **Step 5: 运行确认通过**
+- [ ] **Step 6: 运行确认通过**
 
 Run: `pnpm --filter @moment/server test`
-Expected: moment-list-crud 9 个用例 PASS（列表 4 + 详情 1 + PATCH 2 + DELETE 2）；全部既有测试保持 PASS。
+Expected: moment-list-crud 10 个用例 PASS（列表 4 + 详情 1 + PATCH 2 + DELETE 2 + 删链级联 1）；全部既有测试保持 PASS（含 Phase 2 的 chains 套件——`remove` 级联只增删表，不改既有行为）。
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add apps/server/src/moments apps/server/src/app.ts apps/server/tests/moments
-git commit -m "feat(server): moments 列表复合游标分页与详情/PATCH/DELETE（软删+outbox）"
+git add apps/server/src/moments apps/server/src/chains apps/server/src/app.ts apps/server/tests/moments
+git commit -m "feat(server): moments 列表复合游标分页与详情/PATCH/DELETE（软删+outbox）+ 删链级联"
 ```
 
 ---
@@ -3491,6 +3651,7 @@ git commit -m "feat(server): moments 列表复合游标分页与详情/PATCH/DEL
 ```ts
 import { randomUUID } from 'node:crypto';
 import { getStorage, currentStorageMeta } from '../../src/storage/factory.js';
+import { alignedGetPresign } from '../../src/media/presign-ttl.js';
 
 // CONVENTIONS §3.3：默认跳过，严禁默认测试依赖外部桶状态。
 // 运行方式：在 .env 配好真实桶凭据后 `RUN_S3_IT=1 pnpm --filter @moment/server test -- s3-it`
@@ -3520,7 +3681,9 @@ d('S3 真实桶 smoke（RUN_S3_IT=1）', () => {
     await storage.copyObject(src, dest);
     expect(await storage.fileExists(dest)).toBe(true);
 
-    const access = await storage.generateAccessUrl(dest, currentStorageMeta(), 60);
+    // 与生产路径（resolveAccessUrl）同参：整点对齐的 signingDate + TTL+3600，而非裸 60s
+    const { signingDate, expiresIn } = alignedGetPresign();
+    const access = await storage.generateAccessUrl(dest, currentStorageMeta(), expiresIn, signingDate);
     const got = await fetch(access);
     expect(got.status).toBe(200);
     expect(Buffer.from(await got.arrayBuffer()).length).toBe(png.length);
@@ -3601,12 +3764,13 @@ git commit -m "test(server): S3 真实桶 smoke（RUN_S3_IT=1 门控）"
   2. `POST /api/chains/:chainId/moments`（type=media, mediaIds=[...]）→ 201，媒体 s3_key 已变为 `chains/{chainId}/{momentId}/...`；
   3. `GET /api/media/:id` → 302 且 `curl -L` 能取回图片字节；同一小时窗内重复请求 302 目标一致；
   4. `GET /api/chains/:chainId/moments?limit=5` 翻页至 nextCursor=null，无丢失。
-- 数据库存在 `media`、`moments`、`outbox` 三表；moment 创建/软删在 outbox 各留一条 pending 事件（Phase 5 worker 消费）。
+- 数据库存在 `media`、`moments`、`outbox` 三表，且 `users.avatar_media_id` 列与两处 media FK（users/chains）就位（兑现 Phase 1/Phase 2 的迁移承诺）；moment 创建/软删在 outbox 各留一条 pending 事件（Phase 5 worker 消费）。
 - 视频 multipart 手动验证（可选，真实桶）：presign(kind=video) → parts → 逐 part PUT → complete 200。
 
 ## 留给后续 Phase 的接缝（不在本计划实现）
 
 - Phase 4：feed 聚合复用 `decodeCursor/encodeCursor` 与 `momentSerializer`（`order=created_at` 的 `{c,i}` 游标已预留）。注意：CONVENTIONS §3.4 标注的「（Phase 4 建立，Phase 5 扩展）」实际提前至 Phase 3——cursor 与 serializer 均在本计划建立，Phase 4 只消费与扩展，不重复建设。
-- Phase 5：outbox worker 消费 `moment.created/moment.deleted`；serializer 上加批量计数。
-- Phase 8：`GET /api/media/:id?st=` 的 share token 免登录校验（当前 403 SHARE_NOT_SUPPORTED）；`tmp/` lifecycle 与 uploading 超 24h 的 sweeper——sweeper 注意：`status='ready'` 且未绑定的 media 的 tmp 对象是合法中间态（copy 推迟到发布事务，见 Global Constraints 偏离声明），只能按 24h 超时清理，不得按「complete 后即应已搬走」清掉；`media.width/height/duration` 的客户端元数据回填若需要，走 PATCH 扩展。
+- Phase 5：outbox worker 消费 `moment.created/moment.deleted`；serializer 上加批量计数。**容错要求（Phase 3 Task 8 删链级联的接缝）**：链被硬删后，其已入队的 pending `moment.created` 事件不会被动过（删链不清理 outbox、不补发 `moment.deleted`）——worker 处理时必须按「链/成员已不存在」幂等跳过而非报错重试。
+- 头像/封面的**业务 API**（上传头像、owner 改链封面）：本计划只落了 `users.avatar_media_id` 列与 `chains.cover_media_id` 的 FK（schema 层兑现 Phase 1/Phase 2 迁移承诺），读写端点未建——由首个需要该功能的 Phase（客户端头像/链封面设置）补，消费 `POST /api/media/presign` + complete + 绑定更新即可。
+- Phase 8：`GET /api/media/:id?st=` 的 share token 免登录校验（当前 403 SHARE_NOT_SUPPORTED）；`tmp/` lifecycle 与 uploading 超 24h 的 sweeper——sweeper 注意：`status='ready'` 且未绑定的 media 的 tmp 对象是合法中间态（copy 推迟到发布事务，见 Global Constraints 偏离声明），只能按 24h 超时清理，不得按「complete 后即应已搬走」清掉；`media.width/height/duration` 的客户端元数据回填若需要，走 PATCH 扩展。**另**：删链级联（Task 8）只删 DB 行，`chains/{chainId}/…` 前缀的 S3 对象成为无主孤儿，由 Phase 8 lifecycle 按 prefix 兜底清理（本计划不做事务内 S3 删除，见 Task 8 Step 4 的取舍声明）。
 
