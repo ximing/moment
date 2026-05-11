@@ -1,10 +1,10 @@
-import type { ChainDto, CreateChainInput, UpdateChainInput } from '@moment/dto';
+import type { ChainDto, ChainMemberDto, CreateChainInput, InviteRole, UpdateChainInput } from '@moment/dto';
 import { randomUUID } from 'node:crypto';
-import { desc, eq } from 'drizzle-orm';
-import { NotFoundError } from 'routing-controllers';
+import { and, desc, eq } from 'drizzle-orm';
+import { BadRequestError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
 import { db } from '../db/index.js';
-import { chainInvites, chainMembers, chains, type Chain } from '../db/schema.js';
+import { chainInvites, chainMembers, chains, users, type Chain } from '../db/schema.js';
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
 
 @Service()
@@ -73,6 +73,92 @@ export class ChainService {
       await tx.delete(chainMembers).where(eq(chainMembers.chainId, chainId));
       await tx.delete(chains).where(eq(chains.id, chainId));
     });
+  }
+
+  /** 成员列表（viewer+），joinedAt 升序（owner 通常在最前）。 */
+  async listMembers(userId: string, chainId: string): Promise<ChainMemberDto[]> {
+    await this.policy.require(userId, chainId, 'viewer');
+    const rows = await db
+      .select({ member: chainMembers, nickname: users.nickname })
+      .from(chainMembers)
+      .innerJoin(users, eq(chainMembers.userId, users.id))
+      .where(eq(chainMembers.chainId, chainId))
+      .orderBy(chainMembers.joinedAt);
+    return rows.map((r) => ({
+      userId: r.member.userId,
+      nickname: r.nickname,
+      role: r.member.role,
+      joinedAt: r.member.joinedAt.toISOString(),
+    }));
+  }
+
+  /** owner 改他人角色（仅 editor/viewer——role=owner 已被 dto schema 拒绝；转让走 transfer）。 */
+  async updateMemberRole(
+    actorId: string,
+    chainId: string,
+    targetUserId: string,
+    role: InviteRole
+  ): Promise<ChainMemberDto> {
+    if (targetUserId === actorId) throw new BadRequestError('CANNOT_CHANGE_OWN_ROLE');
+    await this.policy.require(actorId, chainId, 'owner');
+    const [row] = await db
+      .select({ member: chainMembers, nickname: users.nickname })
+      .from(chainMembers)
+      .innerJoin(users, eq(chainMembers.userId, users.id))
+      .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, targetUserId)))
+      .limit(1);
+    if (!row) throw new NotFoundError('MEMBER_NOT_FOUND');
+    await db
+      .update(chainMembers)
+      .set({ role })
+      .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, targetUserId)));
+    return { userId: targetUserId, nickname: row.nickname, role, joinedAt: row.member.joinedAt.toISOString() };
+  }
+
+  /**
+   * 移除成员：owner 可移除他人；editor/viewer 可移除自己（退链）。
+   * owner 退链被拒——必须先 transfer 或删链（spec §5.7）。
+   */
+  async removeMember(actorId: string, chainId: string, targetUserId: string): Promise<void> {
+    const actorRole = await this.policy.require(actorId, chainId, 'viewer');
+    if (targetUserId === actorId) {
+      if (actorRole === 'owner') throw new HttpError(409, 'OWNER_MUST_TRANSFER');
+    } else {
+      await this.policy.require(actorId, chainId, 'owner');
+    }
+    const [target] = await db
+      .select({ userId: chainMembers.userId })
+      .from(chainMembers)
+      .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, targetUserId)))
+      .limit(1);
+    if (!target) throw new NotFoundError('MEMBER_NOT_FOUND');
+    await db
+      .delete(chainMembers)
+      .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, targetUserId)));
+  }
+
+  /** owner 转让：同事务改 chains.owner_id 与两边 members 角色（spec §3 事务边界）。 */
+  async transfer(actorId: string, chainId: string, targetUserId: string): Promise<ChainDto> {
+    if (targetUserId === actorId) throw new BadRequestError('CANNOT_TRANSFER_TO_SELF');
+    await this.policy.require(actorId, chainId, 'owner');
+    const [target] = await db
+      .select({ userId: chainMembers.userId })
+      .from(chainMembers)
+      .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, targetUserId)))
+      .limit(1);
+    if (!target) throw new NotFoundError('MEMBER_NOT_FOUND');
+    await db.transaction(async (tx) => {
+      await tx
+        .update(chainMembers)
+        .set({ role: 'editor' })
+        .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, actorId)));
+      await tx
+        .update(chainMembers)
+        .set({ role: 'owner' })
+        .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, targetUserId)));
+      await tx.update(chains).set({ ownerId: targetUserId, updatedAt: new Date() }).where(eq(chains.id, chainId));
+    });
+    return this.getById(actorId, chainId);
   }
 
   private toChainDto(chain: Chain, myRole?: ChainRole): ChainDto {

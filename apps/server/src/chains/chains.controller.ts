@@ -1,7 +1,10 @@
 import {
   createChainInputSchema,
+  transferChainInputSchema,
   updateChainInputSchema,
+  updateMemberRoleInputSchema,
   type ChainDto,
+  type ChainMemberDto,
   type UserProfile,
 } from '@moment/dto';
 import {
@@ -61,5 +64,50 @@ export class ChainsController {
   @UseBefore(requireChainRole('owner'))
   remove(@CurrentUser() user: UserProfile, @Param('chainId') chainId: string): Promise<void> {
     return this.chainService.remove(user.id, chainId);
+  }
+
+  @Get('/:chainId/members')
+  @UseBefore(requireChainRole('viewer'))
+  listMembers(@CurrentUser() user: UserProfile, @Param('chainId') chainId: string): Promise<ChainMemberDto[]> {
+    return this.chainService.listMembers(user.id, chainId);
+  }
+
+  @Patch('/:chainId/members/:userId')
+  @UseBefore(requireChainRole('owner'))
+  updateMemberRole(
+    @CurrentUser() user: UserProfile,
+    @Param('chainId') chainId: string,
+    @Param('userId') targetUserId: string,
+    @Body() body: unknown
+  ): Promise<ChainMemberDto> {
+    return this.chainService.updateMemberRole(
+      user.id,
+      chainId,
+      targetUserId,
+      updateMemberRoleInputSchema.parse(body).role
+    );
+  }
+
+  @Delete('/:chainId/members/:userId')
+  @HttpCode(204)
+  @OnUndefined(204)
+  @UseBefore(requireChainRole('viewer'))
+  removeMember(
+    @CurrentUser() user: UserProfile,
+    @Param('chainId') chainId: string,
+    @Param('userId') targetUserId: string
+  ): Promise<void> {
+    // viewer 中间件只挡非成员（404）；「本人退链 vs owner 移除他人」的分支裁决在 service 内经 ChainPolicy 完成
+    return this.chainService.removeMember(user.id, chainId, targetUserId);
+  }
+
+  @Post('/:chainId/transfer')
+  @UseBefore(requireChainRole('owner'))
+  transfer(
+    @CurrentUser() user: UserProfile,
+    @Param('chainId') chainId: string,
+    @Body() body: unknown
+  ): Promise<ChainDto> {
+    return this.chainService.transfer(user.id, chainId, transferChainInputSchema.parse(body).userId);
   }
 }
