@@ -25,7 +25,7 @@
 | 角色 | 权限 |
 |---|---|
 | owner | 链设置、邀请/移除成员、删除链内任何内容、转让 owner |
-| editor | 发布 moment；编辑/删除**自己的** moment；打 tag；评论/表情 |
+| editor | 发布 moment；编辑/删除**自己的** moment；打 tag；评论/表情；创建邀请 |
 | viewer | 只读 + 评论/表情（不可发布） |
 
 - moment 永远显示原作者头像/名字；不允许编辑他人 moment。
@@ -81,13 +81,13 @@ moment/
 
 **refresh_tokens**：id, user_id, token_hash, device_info, expires_at, revoked_at, created_at — 支持旋转与吊销
 
-**chains**：id, name, description, cover_media_id, owner_id, visibility enum(`private`,`link`,`public`) default `private`, created_at
+**chains**：id, name, description, cover_media_id, owner_id, visibility enum(`private`,`link`,`public`) default `private`, created_at, updated_at
 - 成员关系以 `chain_members` 为准；`owner_id` 冗余用于快速展示，转让时同事务更新两边。
 
 **chain_members**：chain_id, user_id, role enum(`owner`,`editor`,`viewer`), joined_at
 - `UNIQUE(chain_id, user_id)`。硬删除（退链/移除）。
 
-**chain_invites**：id, chain_id, token（唯一，不可猜测）, email（可空）, role, created_by, expires_at, accepted_at
+**chain_invites**：id, chain_id, token（唯一，不可猜测）, email（可空）, role, created_by, expires_at, accepted_at, created_at
 - 支持「未注册邮箱先收链接，注册后自动入链」。
 
 **share_links**：id, chain_id, token（唯一索引）, created_by, expires_at（可空）, revoked_at（可空）, created_at
@@ -133,8 +133,9 @@ moment/
 
 ### Chains
 - `POST /chains` `GET /chains`（我参与的） `GET /chains/:id` `PATCH /chains/:id` `DELETE /chains/:id`
-- `POST /chains/:id/invites`（生成邀请） `POST /invites/:token/accept`
-- `GET /chains/:id/members` `PATCH /chains/:id/members/:userId`（改角色/转让） `DELETE /chains/:id/members/:userId`
+- `POST /chains/:id/invites`（生成邀请，owner/editor） `GET /chains/:id/invites` `DELETE /invites/:id`（吊销） `POST /invites/:token/accept`
+- `GET /chains/:id/members` `PATCH /chains/:id/members/:userId`（改角色，不可改为 owner） `DELETE /chains/:id/members/:userId`
+- `POST /chains/:id/transfer`（owner 转让）
 - `POST /chains/:id/share-links` `GET /chains/:id/share-links` `DELETE /share-links/:id`（吊销）
 
 ### Moments & Feed
