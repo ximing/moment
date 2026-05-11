@@ -4,6 +4,8 @@ import express from 'express';
 import helmet from 'helmet';
 import { useContainer, useExpressServer } from 'routing-controllers';
 import { Container } from 'typedi';
+import { AuthController } from './auth/auth.controller.js';
+import { authorizationChecker, currentUserChecker } from './auth/authorization.js';
 import { HealthController } from './controllers/health.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
 
@@ -16,12 +18,14 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController],
+    controllers: [HealthController, AuthController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
+    authorizationChecker,
+    currentUserChecker,
   });
 
-  // 统一 404（useExpressServer 之后注册，兜底未匹配路由）
+  // 统一 404（useExpressServer 之后注册，兜底未匹配路由）——Task 3 已引入，替换时必须保留
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: { code: 'NOT_FOUND', message: '资源不存在' } });
   });
