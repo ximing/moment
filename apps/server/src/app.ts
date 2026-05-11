@@ -8,6 +8,7 @@ import { AuthController } from './auth/auth.controller.js';
 import { authorizationChecker, currentUserChecker } from './auth/authorization.js';
 import { HealthController } from './controllers/health.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
+import { authRateLimiter, loginRateLimiter } from './middlewares/rate-limit.js';
 
 export function createApp(): express.Express {
   useContainer(Container);
@@ -15,6 +16,9 @@ export function createApp(): express.Express {
   app.use(helmet());
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
+
+  app.use('/api/auth/login', loginRateLimiter);
+  app.use('/api/auth/register', authRateLimiter);
 
   useExpressServer(app, {
     routePrefix: '/api',
