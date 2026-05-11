@@ -6,6 +6,7 @@ import { useContainer, useExpressServer } from 'routing-controllers';
 import { Container } from 'typedi';
 import { AuthController } from './auth/auth.controller.js';
 import { authorizationChecker, currentUserChecker, populateUser } from './auth/authorization.js';
+import { ChainsController } from './chains/chains.controller.js';
 import { HealthController } from './controllers/health.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
 import { authRateLimiter, loginRateLimiter } from './middlewares/rate-limit.js';
@@ -27,7 +28,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController],
+    controllers: [HealthController, AuthController, ChainsController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,
