@@ -100,7 +100,7 @@ src/storage/factory.ts        → getStorage(): UnifiedStorageAdapter（按 conf
 |---|---|
 | Phase 2 | `/api/chains*`、`/api/invites/:token/accept` |
 | Phase 3 | `/api/chains/:chainId/moments*`、`/api/moments/:id`、`/api/media/*` |
-| Phase 4 | `/api/chains/:chainId/tags*`、`/api/feed` |
+| Phase 4 | `/api/chains/:chainId/tags*`、`/api/tags/:id`（仅 DELETE）、`/api/feed` |
 | Phase 5 | `/api/moments/:id/comments*`、`/api/moments/:id/reaction`、`/api/notifications*`、`/api/devices/push-token` |
 | Phase 8 | `/api/chains/:chainId/share-links*`、`/api/public/share/:token` |
 
