@@ -15,6 +15,22 @@ const envSchema = z.object({
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(30),
   INVITE_TTL_DAYS: z.coerce.number().default(7),
+  ATTACHMENT_S3_BUCKET: z.string().min(1),
+  ATTACHMENT_S3_PREFIX: z.string().default('dev/attachments'),
+  ATTACHMENT_S3_ENDPOINT: z.string().optional(),
+  ATTACHMENT_S3_REGION: z.string().default('us-east-1'),
+  ATTACHMENT_S3_ACCESS_KEY_ID: z.string().min(1),
+  ATTACHMENT_S3_SECRET_ACCESS_KEY: z.string().min(1),
+  // 注意：z.coerce.boolean() 会把字符串 'false' 判为 true，必须用 enum + transform。
+  // MVP 仅支持私有桶（spec §5.3）：公有桶分支是保留的死代码路径，config 层直接拒绝开启。
+  ATTACHMENT_S3_IS_PUBLIC: z
+    .enum(['true', 'false'])
+    .default('false')
+    .refine((v) => v === 'false', { message: 'PUBLIC_BUCKET_UNSUPPORTED: MVP 仅支持私有桶（spec §5.3）' })
+    .transform((v) => v === 'true'),
+  // GET TTL 上限 3600：alignedGetPresign 的「过期时刻落在下一窗内」推导要求 TTL ≤ 一个窗长（3600s）
+  PRESIGN_GET_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(3600),
+  PRESIGN_PUT_TTL_SECONDS: z.coerce.number().int().min(1).default(900),
 });
 
 export const config = envSchema.parse(process.env);
