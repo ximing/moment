@@ -25,3 +25,21 @@ export const loginRateLimiter = rateLimit({
   },
   message,
 });
+
+/**
+ * 邀请接受：IP + 账号（invitee）+ invite token 三维度（spec §4/§6），60s/5 次。
+ * 只挂在 `POST /api/invites/:token/accept` 上（populateUser 之后注册，req.user 可读），
+ * 不覆盖 DELETE /api/invites/:inviteId 的 owner 吊销操作。
+ */
+export const inviteAcceptRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: isTest ? 1000 : 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const userId = (req as unknown as { user?: { id: string } }).user?.id ?? 'anonymous';
+    const token = typeof req.params?.token === 'string' ? req.params.token : '';
+    return `${req.ip}:${userId}:${token}`;
+  },
+  message,
+});

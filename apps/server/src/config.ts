@@ -14,6 +14,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(30),
+  INVITE_TTL_DAYS: z.coerce.number().default(7),
 });
 
 export const config = envSchema.parse(process.env);

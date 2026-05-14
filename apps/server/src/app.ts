@@ -7,9 +7,10 @@ import { Container } from 'typedi';
 import { AuthController } from './auth/auth.controller.js';
 import { authorizationChecker, currentUserChecker, populateUser } from './auth/authorization.js';
 import { ChainsController } from './chains/chains.controller.js';
+import { InvitesController } from './chains/invites.controller.js';
 import { HealthController } from './controllers/health.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
-import { authRateLimiter, loginRateLimiter } from './middlewares/rate-limit.js';
+import { authRateLimiter, inviteAcceptRateLimiter, loginRateLimiter } from './middlewares/rate-limit.js';
 
 export function createApp(): express.Express {
   useContainer(Container);
@@ -26,9 +27,13 @@ export function createApp(): express.Express {
   // 角色中间件依赖 request.user，必须提前挂载。
   app.use(populateUser);
 
+  // 邀请接受限流（spec §4/§6：IP + 账号维度）——挂在 populateUser 之后，keyGenerator 可读 req.user。
+  // 命中后 next() 落入 routing-controllers 的同名 POST 路由，不影响其注册。
+  app.post('/api/invites/:token/accept', inviteAcceptRateLimiter);
+
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,

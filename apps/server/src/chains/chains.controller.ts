@@ -1,10 +1,12 @@
 import {
   createChainInputSchema,
+  createInviteInputSchema,
   transferChainInputSchema,
   updateChainInputSchema,
   updateMemberRoleInputSchema,
   type ChainDto,
   type ChainMemberDto,
+  type InviteDto,
   type UserProfile,
 } from '@moment/dto';
 import {
@@ -109,5 +111,22 @@ export class ChainsController {
     @Body() body: unknown
   ): Promise<ChainDto> {
     return this.chainService.transfer(user.id, chainId, transferChainInputSchema.parse(body).userId);
+  }
+
+  @Post('/:chainId/invites')
+  @HttpCode(201)
+  @UseBefore(requireChainRole('editor'))
+  createInvite(
+    @CurrentUser() user: UserProfile,
+    @Param('chainId') chainId: string,
+    @Body() body: unknown
+  ): Promise<InviteDto> {
+    return this.chainService.createInvite(user.id, chainId, createInviteInputSchema.parse(body));
+  }
+
+  @Get('/:chainId/invites')
+  @UseBefore(requireChainRole('owner'))
+  listInvites(@CurrentUser() user: UserProfile, @Param('chainId') chainId: string): Promise<InviteDto[]> {
+    return this.chainService.listInvites(user.id, chainId);
   }
 }

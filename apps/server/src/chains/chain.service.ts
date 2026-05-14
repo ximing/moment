@@ -1,10 +1,21 @@
-import type { ChainDto, ChainMemberDto, CreateChainInput, InviteRole, UpdateChainInput } from '@moment/dto';
-import { randomUUID } from 'node:crypto';
+import type {
+  AcceptInviteResponse,
+  ChainDto,
+  ChainMemberDto,
+  CreateChainInput,
+  CreateInviteInput,
+  InviteDto,
+  InviteRole,
+  UpdateChainInput,
+  UserProfile,
+} from '@moment/dto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
-import { BadRequestError, HttpError, NotFoundError } from 'routing-controllers';
+import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
+import { config } from '../config.js';
 import { db } from '../db/index.js';
-import { chainInvites, chainMembers, chains, users, type Chain } from '../db/schema.js';
+import { chainInvites, chainMembers, chains, users, type Chain, type ChainInvite } from '../db/schema.js';
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
 
 @Service()
@@ -161,6 +172,71 @@ export class ChainService {
     return this.getById(actorId, chainId);
   }
 
+  /** editor+ 生成邀请：token 为 48 字节随机 base64url（64 字符，不可猜测），默认 INVITE_TTL_DAYS 天过期。 */
+  async createInvite(userId: string, chainId: string, input: CreateInviteInput): Promise<InviteDto> {
+    await this.policy.require(userId, chainId, 'editor');
+    const id = randomUUID();
+    await db.insert(chainInvites).values({
+      id,
+      chainId,
+      token: randomBytes(48).toString('base64url'),
+      email: input.email ?? null,
+      role: input.role,
+      createdBy: userId,
+      expiresAt: new Date(Date.now() + config.INVITE_TTL_DAYS * 86_400_000),
+    });
+    const [invite] = await db.select().from(chainInvites).where(eq(chainInvites.id, id)).limit(1);
+    return this.toInviteDto(invite);
+  }
+
+  /** owner 查看本链全部邀请（含 token，用于复制分享）。 */
+  async listInvites(userId: string, chainId: string): Promise<InviteDto[]> {
+    await this.policy.require(userId, chainId, 'owner');
+    const rows = await db
+      .select()
+      .from(chainInvites)
+      .where(eq(chainInvites.chainId, chainId))
+      .orderBy(desc(chainInvites.createdAt));
+    return rows.map((r) => this.toInviteDto(r));
+  }
+
+  /** owner 吊销邀请：硬删除。 */
+  async revokeInvite(userId: string, inviteId: string): Promise<void> {
+    const [invite] = await db.select().from(chainInvites).where(eq(chainInvites.id, inviteId)).limit(1);
+    if (!invite) throw new NotFoundError('INVITE_NOT_FOUND');
+    await this.policy.require(userId, invite.chainId, 'owner');
+    await db.delete(chainInvites).where(eq(chainInvites.id, inviteId));
+  }
+
+  /**
+   * 接受邀请（登录用户）。判定顺序固定：
+   * 不存在 404 → 已是成员 200 幂等 → email 不匹配 403 → 已被接受 410 → 过期 410 → 同事务写 member + accepted_at。
+   */
+  async acceptInvite(user: UserProfile, token: string): Promise<AcceptInviteResponse> {
+    const [invite] = await db.select().from(chainInvites).where(eq(chainInvites.token, token)).limit(1);
+    if (!invite) throw new NotFoundError('INVITE_NOT_FOUND');
+
+    // 幂等：已是成员直接返回现有角色（不写库、不看邀请状态）
+    const [member] = await db
+      .select({ role: chainMembers.role })
+      .from(chainMembers)
+      .where(and(eq(chainMembers.chainId, invite.chainId), eq(chainMembers.userId, user.id)))
+      .limit(1);
+    if (member) return { chainId: invite.chainId, role: member.role, alreadyMember: true };
+
+    // 两侧 email 均已小写归一化（注册与创建邀请时的 zod schema）
+    if (invite.email && invite.email !== user.email) throw new ForbiddenError('INVITE_EMAIL_MISMATCH');
+    if (invite.acceptedAt) throw new HttpError(410, 'INVITE_ALREADY_ACCEPTED');
+    if (invite.expiresAt.getTime() < Date.now()) throw new HttpError(410, 'INVITE_EXPIRED');
+
+    await db.transaction(async (tx) => {
+      await tx.insert(chainMembers).values({ chainId: invite.chainId, userId: user.id, role: invite.role });
+      await tx.update(chainInvites).set({ acceptedAt: new Date() }).where(eq(chainInvites.id, invite.id));
+      // outbox 锚点：「被邀请入链」通知扇出属 Phase 5（outbox 表 Phase 3 才建立），此处不写。
+    });
+    return { chainId: invite.chainId, role: invite.role, alreadyMember: false };
+  }
+
   private toChainDto(chain: Chain, myRole?: ChainRole): ChainDto {
     return {
       id: chain.id,
@@ -172,6 +248,20 @@ export class ChainService {
       ...(myRole ? { myRole } : {}),
       createdAt: chain.createdAt.toISOString(),
       updatedAt: chain.updatedAt.toISOString(),
+    };
+  }
+
+  private toInviteDto(invite: ChainInvite): InviteDto {
+    return {
+      id: invite.id,
+      chainId: invite.chainId,
+      token: invite.token,
+      email: invite.email,
+      role: invite.role,
+      createdBy: invite.createdBy,
+      expiresAt: invite.expiresAt.toISOString(),
+      acceptedAt: invite.acceptedAt ? invite.acceptedAt.toISOString() : null,
+      createdAt: invite.createdAt.toISOString(),
     };
   }
 }
