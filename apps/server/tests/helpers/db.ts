@@ -1,8 +1,20 @@
 import { db, pool } from '../../src/db/index.js';
-import { chainInvites, chainMembers, chains, refreshTokens, users } from '../../src/db/schema.js';
+import {
+  chainInvites,
+  chainMembers,
+  chains,
+  media,
+  moments,
+  outbox,
+  refreshTokens,
+  users,
+} from '../../src/db/schema.js';
 
-/** 每个用例前清表：按外键依赖逆序（先子表后父表）。仅允许对测试库使用。 */
+/** 每个用例前清表：先子表后父表（外键逆序）。仅允许对测试库使用。 */
 export async function resetDb(): Promise<void> {
+  await db.delete(outbox);
+  await db.delete(media);
+  await db.delete(moments);
   await db.delete(chainInvites);
   await db.delete(chainMembers);
   await db.delete(chains);

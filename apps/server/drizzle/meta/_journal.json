@@ -15,6 +15,13 @@
       "when": 1786810124195,
       "tag": "0001_watery_epoch",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1786815148407,
+      "tag": "0002_wooden_cassandra_nova",
+      "breakpoints": true
     }
   ]
 }
