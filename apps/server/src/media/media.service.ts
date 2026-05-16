@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import mime from 'mime-types';
 import { and, eq } from 'drizzle-orm';
-import { HttpError, NotFoundError } from 'routing-controllers';
+import { ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
 import {
   MAX_IMAGE_BYTES,
@@ -13,11 +13,14 @@ import {
   type MediaPartsResponse,
   type MediaPresignInput,
   type MediaPresignResponse,
+  type UserProfile,
 } from '@moment/dto';
+import { ChainPolicy } from '../chains/chain-policy.js';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
-import { media, type Media } from '../db/schema.js';
+import { media, moments, type Media } from '../db/schema.js';
 import { currentStorageMeta, getStorage } from '../storage/factory.js';
+import { alignedGetPresign } from './presign-ttl.js';
 
 /** 读取「存在且属于该用户」的 media；不区分不存在与非本人，避免 mediaId 探测。 */
 async function getOwnedMediaOr404(userId: string, mediaId: string): Promise<Media> {
@@ -28,6 +31,8 @@ async function getOwnedMediaOr404(userId: string, mediaId: string): Promise<Medi
 
 @Service()
 export class MediaService {
+  constructor(private readonly policy: ChainPolicy) {}
+
   /**
    * 预签名申请（spec §3 事务边界：先插 media(status='uploading', tmp key) 行再返 URL）。
    * 取舍声明：「插行 → initMultipart → update」非单事务——update 失败会留下已开启但 uploadId
@@ -187,5 +192,33 @@ export class MediaService {
     if (row.uploadId) {
       await getStorage().abortMultipart(row.s3Key, row.uploadId);
     }
+  }
+
+  /**
+   * 鉴权后返回预签名 GET URL（302 目标）：
+   * - 已绑定 moment：moment 未软删时按所属链校验 viewer；
+   * - 未绑定：仅 uploader 本人；
+   * - ?st= share token 透传点：本阶段拒绝（Phase 8 实现免登录分享校验）。
+   */
+  async resolveAccessUrl(user: UserProfile, mediaId: string, st?: string): Promise<string> {
+    if (st !== undefined) throw new ForbiddenError('SHARE_NOT_SUPPORTED');
+
+    const [row] = await db.select().from(media).where(eq(media.id, mediaId)).limit(1);
+    if (!row || row.status !== 'ready') throw new NotFoundError('MEDIA_NOT_FOUND');
+
+    if (row.momentId) {
+      const [m] = await db
+        .select({ chainId: moments.chainId, deletedAt: moments.deletedAt })
+        .from(moments)
+        .where(eq(moments.id, row.momentId))
+        .limit(1);
+      if (!m || m.deletedAt) throw new NotFoundError('MEDIA_NOT_FOUND');
+      await this.policy.require(user.id, m.chainId, 'viewer');
+    } else if (row.uploaderId !== user.id) {
+      throw new NotFoundError('MEDIA_NOT_FOUND');
+    }
+
+    const { signingDate, expiresIn } = alignedGetPresign();
+    return getStorage().generateAccessUrl(row.s3Key, row.storageMeta, expiresIn, signingDate);
   }
 }
