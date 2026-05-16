@@ -9,6 +9,7 @@ import { authorizationChecker, currentUserChecker, populateUser } from './auth/a
 import { ChainsController } from './chains/chains.controller.js';
 import { InvitesController } from './chains/invites.controller.js';
 import { HealthController } from './controllers/health.controller.js';
+import { MediaController } from './media/media.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
 import { authRateLimiter, inviteAcceptRateLimiter, loginRateLimiter } from './middlewares/rate-limit.js';
 
@@ -33,7 +34,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,
