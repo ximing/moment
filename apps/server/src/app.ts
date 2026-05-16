@@ -11,7 +11,7 @@ import { InvitesController } from './chains/invites.controller.js';
 import { HealthController } from './controllers/health.controller.js';
 import { MediaController } from './media/media.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
-import { MomentController } from './moments/moment.controller.js';
+import { MomentController, MomentItemController } from './moments/moment.controller.js';
 import { authRateLimiter, inviteAcceptRateLimiter, loginRateLimiter } from './middlewares/rate-limit.js';
 
 export function createApp(): express.Express {
@@ -35,7 +35,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,

@@ -10,12 +10,12 @@ import type {
   UserProfile,
 } from '@moment/dto';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
-import { chainInvites, chainMembers, chains, users, type Chain, type ChainInvite } from '../db/schema.js';
+import { chainInvites, chainMembers, chains, media, moments, users, type Chain, type ChainInvite } from '../db/schema.js';
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
 
 @Service()
@@ -73,13 +73,19 @@ export class ChainService {
   }
 
   /**
-   * owner 删链：同事务硬删 invites → members → chain。
+   * owner 删链：同事务硬删 media → moments → invites → members → chain。
    * 级联锚点：moments/media/tags/comments 等链内内容属 Phase 3+，
    * 届时在本事务最前面追加对应删除/软删逻辑。
    */
   async remove(userId: string, chainId: string): Promise<void> {
     await this.policy.require(userId, chainId, 'owner');
     await db.transaction(async (tx) => {
+      const chainMomentIds = tx
+        .select({ id: moments.id })
+        .from(moments)
+        .where(eq(moments.chainId, chainId));
+      await tx.delete(media).where(inArray(media.momentId, chainMomentIds));
+      await tx.delete(moments).where(eq(moments.chainId, chainId));
       await tx.delete(chainInvites).where(eq(chainInvites.chainId, chainId));
       await tx.delete(chainMembers).where(eq(chainMembers.chainId, chainId));
       await tx.delete(chains).where(eq(chains.id, chainId));

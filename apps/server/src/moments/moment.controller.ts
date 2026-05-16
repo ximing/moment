@@ -1,13 +1,18 @@
-import type { MomentResponse, UserProfile } from '@moment/dto';
-import { createMomentInputSchema } from '@moment/dto';
+import type { MomentListResponse, MomentResponse, UserProfile } from '@moment/dto';
+import { createMomentInputSchema, patchMomentInputSchema } from '@moment/dto';
 import {
   Authorized,
   Body,
   CurrentUser,
+  Delete,
+  Get,
   HttpCode,
   JsonController,
+  OnUndefined,
   Param,
+  Patch,
   Post,
+  QueryParam,
   UseBefore,
 } from 'routing-controllers';
 import { Service } from 'typedi';
@@ -30,5 +35,48 @@ export class MomentController {
     @CurrentUser() user: UserProfile
   ): Promise<MomentResponse> {
     return this.momentService.create(user.id, chainId, createMomentInputSchema.parse(body));
+  }
+
+  @Get('/')
+  @Authorized()
+  @UseBefore(requireChainRole('viewer'))
+  list(
+    @Param('chainId') chainId: string,
+    @QueryParam('cursor', { required: false, type: String }) cursor: string | undefined,
+    @QueryParam('limit', { required: false, type: String }) limit: string | undefined,
+    @CurrentUser() user: UserProfile
+  ): Promise<MomentListResponse> {
+    return this.momentService.list(user.id, chainId, { cursor, limit });
+  }
+}
+
+/** 按资源 id 反查链的读/写接口：service 层调 ChainPolicy.require（CONVENTIONS §3.1） */
+@JsonController('/moments')
+@Service()
+export class MomentItemController {
+  constructor(private readonly momentService: MomentService) {}
+
+  @Get('/:id')
+  @Authorized()
+  get(@Param('id') id: string, @CurrentUser() user: UserProfile): Promise<MomentResponse> {
+    return this.momentService.get(user.id, id);
+  }
+
+  @Patch('/:id')
+  @Authorized()
+  patch(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUser() user: UserProfile
+  ): Promise<MomentResponse> {
+    return this.momentService.update(user.id, id, patchMomentInputSchema.parse(body));
+  }
+
+  @Delete('/:id')
+  @Authorized()
+  @HttpCode(204)
+  @OnUndefined(204)
+  remove(@Param('id') id: string, @CurrentUser() user: UserProfile): Promise<void> {
+    return this.momentService.remove(user.id, id);
   }
 }

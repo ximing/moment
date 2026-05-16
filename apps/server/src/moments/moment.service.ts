@@ -1,17 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import mime from 'mime-types';
-import { eq, inArray } from 'drizzle-orm';
-import { HttpError, NotFoundError } from 'routing-controllers';
+import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
+import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
-import type { CreateMomentInput, MomentResponse } from '@moment/dto';
+import type { CreateMomentInput, MomentListResponse, MomentResponse, PatchMomentInput } from '@moment/dto';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
-import { media, moments, users, type Media } from '../db/schema.js';
+import { media, moments, users, type Media, type Moment } from '../db/schema.js';
 import { emitOutbox } from '../outbox/outbox.js';
-import { OUTBOX_MOMENT_CREATED } from '../outbox/types.js';
+import { OUTBOX_MOMENT_CREATED, OUTBOX_MOMENT_DELETED } from '../outbox/types.js';
 import { getStorage } from '../storage/factory.js';
 import type { StorageMetadata } from '../storage/base.adapter.js';
 import { logger } from '../utils/logger.js';
+import { decodeCursor, encodeCursor } from './cursor.js';
 import { momentSerializer } from './moment-serializer.js';
 
 @Service()
@@ -124,5 +125,139 @@ export class MomentService {
       });
     }
     return response;
+  }
+
+  /** 链内时间线：viewer+，happened_at DESC, id DESC 复合游标（同时间戳跨页不丢不重）。 */
+  async list(
+    userId: string,
+    chainId: string,
+    query: { cursor?: string; limit?: string }
+  ): Promise<MomentListResponse> {
+    await this.policy.require(userId, chainId, 'viewer');
+
+    let limit = 20;
+    if (query.limit !== undefined) {
+      limit = Number(query.limit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+        throw new BadRequestError('INVALID_LIMIT');
+      }
+    }
+
+    const conditions = [eq(moments.chainId, chainId), isNull(moments.deletedAt)];
+    if (query.cursor !== undefined) {
+      const cur = decodeCursor(query.cursor);
+      if (cur.h === undefined) throw new BadRequestError('INVALID_CURSOR'); // 链内列表只认 happened_at 游标
+      const anchor = new Date(cur.h);
+      // (happened_at, id) < (cur.h, cur.i)：严格小于锚点，或时间相等但 id 更小
+      conditions.push(
+        or(lt(moments.happenedAt, anchor), and(eq(moments.happenedAt, anchor), lt(moments.id, cur.i)))!
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(moments)
+      .where(and(...conditions))
+      .orderBy(desc(moments.happenedAt), desc(moments.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+    return {
+      items: await this.serializeMany(page),
+      nextCursor: hasMore && last ? encodeCursor({ h: last.happenedAt.getTime(), i: last.id }) : null,
+    };
+  }
+
+  /** 详情：service 层反查 chainId 后走 ChainPolicy（CONVENTIONS §3.1）；软删 410。
+   * 先鉴权再判软删：非成员对已删/未删一律 404，410 只对有权者暴露（防 id 枚举探测）。 */
+  async get(userId: string, momentId: string): Promise<MomentResponse> {
+    const [m] = await db.select().from(moments).where(eq(moments.id, momentId)).limit(1);
+    if (!m) throw new NotFoundError('MOMENT_NOT_FOUND');
+    await this.policy.require(userId, m.chainId, 'viewer');
+    if (m.deletedAt) throw new HttpError(410, 'MOMENT_DELETED');
+    const [serialized] = await this.serializeMany([m]);
+    return serialized;
+  }
+
+  /** 仅作者本人可改；媒体不可改（dto 层 .strict() 已拒绝 mediaIds/type 等未知键）。鉴权先于软删判断（同 get）。
+   * 取舍声明（spec 未定义）：原作者被移出链后成员资格失效，ChainPolicy.require 抛 404，
+   * 作者本人也无法再 update 自己的 moment——成员资格优先于作者身份，与读取侧一致。 */
+  async update(userId: string, momentId: string, input: PatchMomentInput): Promise<MomentResponse> {
+    const [m] = await db.select().from(moments).where(eq(moments.id, momentId)).limit(1);
+    if (!m) throw new NotFoundError('MOMENT_NOT_FOUND');
+    await this.policy.require(userId, m.chainId, 'viewer');
+    if (m.deletedAt) throw new HttpError(410, 'MOMENT_DELETED');
+    if (m.authorId !== userId) throw new ForbiddenError('NOT_MOMENT_AUTHOR');
+
+    await db
+      .update(moments)
+      .set({
+        ...(input.content !== undefined ? { content: input.content } : {}),
+        ...(input.happenedAt !== undefined ? { happenedAt: new Date(input.happenedAt) } : {}),
+        ...(input.happenedTzOffset !== undefined ? { happenedTzOffset: input.happenedTzOffset } : {}),
+        ...(input.isBackfill !== undefined ? { isBackfill: input.isBackfill } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(moments.id, momentId));
+    return this.get(userId, momentId);
+  }
+
+  /** 软删（幂等）：作者或链 owner；同事务 emitOutbox(moment.deleted)（sweeper 信号）。鉴权先于软删判断（同 get）。
+   * 取舍声明（spec 未定义）：同 update——原作者退链后成员资格失效，对自己 moment 的删除亦不可用（404）。 */
+  async remove(userId: string, momentId: string): Promise<void> {
+    const [m] = await db.select().from(moments).where(eq(moments.id, momentId)).limit(1);
+    if (!m) throw new NotFoundError('MOMENT_NOT_FOUND');
+    const role = await this.policy.require(userId, m.chainId, 'viewer');
+    if (m.deletedAt) return;
+    if (role !== 'owner' && m.authorId !== userId) throw new ForbiddenError('NOT_MOMENT_AUTHOR');
+
+    await db.transaction(async (tx) => {
+      await tx.update(moments).set({ deletedAt: new Date() }).where(eq(moments.id, momentId));
+      await emitOutbox(
+        tx,
+        OUTBOX_MOMENT_DELETED,
+        { momentId, chainId: m.chainId, authorId: m.authorId }
+      );
+    });
+  }
+
+  /** 批量序列化：media 与 author 各一次 IN 查询，禁止 N+1（spec §5.1）。 */
+  private async serializeMany(rows: Moment[]): Promise<MomentResponse[]> {
+    if (rows.length === 0) return [];
+    const mediaRows = await db
+      .select()
+      .from(media)
+      .where(
+        inArray(
+          media.momentId,
+          rows.map((r) => r.id)
+        )
+      );
+    const mediaByMoment = new Map<string, Media[]>();
+    for (const m of mediaRows) {
+      if (!m.momentId) continue;
+      const list = mediaByMoment.get(m.momentId) ?? [];
+      list.push(m);
+      mediaByMoment.set(m.momentId, list);
+    }
+    const authorRows = await db
+      .select({ id: users.id, nickname: users.nickname })
+      .from(users)
+      .where(
+        inArray(
+          users.id,
+          [...new Set(rows.map((r) => r.authorId))]
+        )
+      );
+    const authorById = new Map(authorRows.map((a) => [a.id, a]));
+    return rows.map((r) =>
+      momentSerializer(
+        r,
+        mediaByMoment.get(r.id) ?? [],
+        authorById.get(r.authorId) ?? { id: r.authorId, nickname: '' }
+      )
+    );
   }
 }
