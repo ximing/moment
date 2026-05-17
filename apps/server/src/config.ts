@@ -27,7 +27,7 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .refine((v) => v === 'false', { message: 'PUBLIC_BUCKET_UNSUPPORTED: MVP 仅支持私有桶（spec §5.3）' })
-    .transform((v) => v === 'true'),
+    .transform((v) => (v as string) === 'true'),
   // GET TTL 上限 3600：alignedGetPresign 的「过期时刻落在下一窗内」推导要求 TTL ≤ 一个窗长（3600s）
   PRESIGN_GET_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(3600),
   PRESIGN_PUT_TTL_SECONDS: z.coerce.number().int().min(1).default(900),
