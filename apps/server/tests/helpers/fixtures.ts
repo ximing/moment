@@ -1,0 +1,70 @@
+import { randomUUID } from 'node:crypto';
+import request from 'supertest';
+import { createApp } from '../../src/app.js';
+import { db } from '../../src/db/index.js';
+import { chainMembers, chains, momentTags, moments } from '../../src/db/schema.js';
+
+export const app = createApp();
+
+let seq = 0;
+
+/** 走真实 API 注册，拿到 userId 与可用 access token。 */
+export async function registerUser(): Promise<{ id: string; token: string }> {
+  const email = `u${++seq}-${Date.now()}-${randomUUID().slice(0, 8)}@test.com`;
+  const res = await request(app)
+    .post('/api/auth/register')
+    .send({ email, password: 'secret123', nickname: `user${seq}` });
+  if (res.status !== 201) {
+    throw new Error(`register failed: ${res.status} ${JSON.stringify(res.body)}`);
+  }
+  return { id: res.body.user.id, token: res.body.tokens.accessToken };
+}
+
+/** 直插链 + owner 成员行（绕过邀请流程，测试只关心权限判定本身）。 */
+export async function createChain(ownerId: string, name = '测试链'): Promise<string> {
+  const id = randomUUID();
+  await db.insert(chains).values({ id, name, ownerId, visibility: 'private' });
+  await db.insert(chainMembers).values({ chainId: id, userId: ownerId, role: 'owner', joinedAt: new Date() });
+  return id;
+}
+
+export async function addMember(
+  chainId: string,
+  userId: string,
+  role: 'owner' | 'editor' | 'viewer',
+): Promise<void> {
+  await db.insert(chainMembers).values({ chainId, userId, role, joinedAt: new Date() });
+}
+
+/** 直插 moment（feed/标签测试需要精确控制 happenedAt/createdAt/deletedAt）。 */
+export async function insertMoment(opts: {
+  chainId: string;
+  authorId: string;
+  happenedAt: Date;
+  createdAt?: Date;
+  content?: string;
+  isBackfill?: boolean;
+  deletedAt?: Date;
+}): Promise<string> {
+  const id = randomUUID();
+  const at = opts.createdAt ?? new Date();
+  await db.insert(moments).values({
+    id,
+    chainId: opts.chainId,
+    authorId: opts.authorId,
+    type: 'text',
+    content: opts.content ?? '内容',
+    happenedAt: opts.happenedAt,
+    happenedTzOffset: 0,
+    isBackfill: opts.isBackfill ?? false,
+    createdAt: at,
+    updatedAt: at,
+    deletedAt: opts.deletedAt ?? null,
+  });
+  return id;
+}
+
+/** 直插 moment-tag 关联。 */
+export async function attachTag(momentId: string, tagId: string): Promise<void> {
+  await db.insert(momentTags).values({ momentId, tagId });
+}
