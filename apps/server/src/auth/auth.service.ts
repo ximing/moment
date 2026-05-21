@@ -23,6 +23,7 @@ export class AuthService {
       passwordHash: await hashPassword(input.password),
       nickname: input.nickname,
       passwordChangedAt: null,
+      avatarMediaId: null,
       createdAt: new Date(),
     };
     await db.insert(users).values(user);
