@@ -1,4 +1,5 @@
 import { index, mysqlEnum, mysqlTable, char, int, text, timestamp, boolean } from 'drizzle-orm/mysql-core';
+import type { AnyMySqlColumn } from 'drizzle-orm/mysql-core';
 import { chains } from './chains.js';
 import { users } from './users.js';
 
@@ -8,10 +9,10 @@ export const moments = mysqlTable(
     id: char('id', { length: 36 }).primaryKey(),
     chainId: char('chain_id', { length: 36 })
       .notNull()
-      .references(() => chains.id),
+      .references((): AnyMySqlColumn => chains.id),
     authorId: char('author_id', { length: 36 })
       .notNull()
-      .references(() => users.id),
+      .references((): AnyMySqlColumn => users.id),
     type: mysqlEnum('type', ['text', 'media', 'video']).notNull(),
     content: text('content').notNull(),
     /** 事件发生时间（UTC 存储的时间点，spec §5.6）。fsp=3 保留毫秒：MySQL timestamp 默认 fsp=0 会截断毫秒，

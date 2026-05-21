@@ -73,9 +73,9 @@ export class MediaController {
     @QueryParam('st', { required: false, type: String }) st: string | undefined,
     @CurrentUser() user: UserProfile,
     @Res() res: Response
-  ): Promise<Response> {
+  ): Promise<void> {
     const url = await this.mediaService.resolveAccessUrl(user, id, st);
     res.setHeader('Cache-Control', 'private, max-age=300');
-    return res.redirect(302, url);
+    res.redirect(302, url);
   }
 }

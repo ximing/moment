@@ -146,7 +146,7 @@ export class MomentService {
     const conditions = [eq(moments.chainId, chainId), isNull(moments.deletedAt)];
     if (query.cursor !== undefined) {
       const cur = decodeCursor(query.cursor);
-      if (cur.h === undefined) throw new BadRequestError('INVALID_CURSOR'); // 链内列表只认 happened_at 游标
+      if (!('h' in cur)) throw new BadRequestError('INVALID_CURSOR'); // 链内列表只认 happened_at 游标
       const anchor = new Date(cur.h);
       // (happened_at, id) < (cur.h, cur.i)：严格小于锚点，或时间相等但 id 更小
       conditions.push(

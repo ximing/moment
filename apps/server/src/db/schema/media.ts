@@ -1,4 +1,5 @@
 import { bigint, char, index, int, json, mysqlEnum, mysqlTable, timestamp, varchar } from 'drizzle-orm/mysql-core';
+import type { AnyMySqlColumn } from 'drizzle-orm/mysql-core';
 import type { StorageMetadata } from '../../storage/base.adapter.js';
 import { moments } from './moments.js';
 import { users } from './users.js';
@@ -8,7 +9,7 @@ export const media = mysqlTable(
   {
     id: char('id', { length: 36 }).primaryKey(),
     /** 上传完成绑定前为空（spec §3 media.moment_id 可空） */
-    momentId: char('moment_id', { length: 36 }).references(() => moments.id),
+    momentId: char('moment_id', { length: 36 }).references((): AnyMySqlColumn => moments.id),
     uploaderId: char('uploader_id', { length: 36 })
       .notNull()
       .references(() => users.id),
