@@ -6,3 +6,4 @@ export * from './schema/chain-invites.js';
 export * from './schema/moments.js';
 export * from './schema/media.js';
 export * from './schema/outbox.js';
+export * from './schema/tags.js';

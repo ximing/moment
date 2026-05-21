@@ -4,14 +4,18 @@ import {
   chainMembers,
   chains,
   media,
+  momentTags,
   moments,
   outbox,
   refreshTokens,
+  tags,
   users,
 } from '../../src/db/schema.js';
 
 /** 每个用例前清表：先子表后父表（外键逆序）。仅允许对测试库使用。 */
 export async function resetDb(): Promise<void> {
+  await db.delete(momentTags);
+  await db.delete(tags);
   await db.delete(outbox);
   await db.delete(media);
   await db.delete(moments);
