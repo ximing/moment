@@ -6,14 +6,15 @@ import { Service } from 'typedi';
 import type { CreateMomentInput, MomentListResponse, MomentResponse, PatchMomentInput } from '@moment/dto';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
-import { media, moments, users, type Media, type Moment } from '../db/schema.js';
+import { media, moments, type Media, type Moment } from '../db/schema.js';
 import { emitOutbox } from '../outbox/outbox.js';
 import { OUTBOX_MOMENT_CREATED, OUTBOX_MOMENT_DELETED } from '../outbox/types.js';
 import { getStorage } from '../storage/factory.js';
 import type { StorageMetadata } from '../storage/base.adapter.js';
+import { replaceMomentTags } from '../tags/replace-moment-tags.js';
 import { logger } from '../utils/logger.js';
 import { decodeCursor, encodeCursor } from './cursor.js';
-import { momentSerializer } from './moment-serializer.js';
+import { serializeMoments } from './moment-serializer.js';
 
 @Service()
 export class MomentService {
@@ -32,7 +33,7 @@ export class MomentService {
     const storage = getStorage();
     const copiedTmp: { key: string; metadata: StorageMetadata }[] = [];
 
-    const response = await db.transaction(async (tx) => {
+    const created = await db.transaction(async (tx) => {
       let mediaRows: Media[] = [];
       if (input.mediaIds.length > 0) {
         // 行锁：并发两个 moment 引用同一 mediaId 时，读-改-写必须串行化——
@@ -69,7 +70,6 @@ export class MomentService {
         isBackfill: input.isBackfill,
       });
 
-      const boundMedia: Media[] = [];
       for (const mediaId of input.mediaIds) {
         const row = mediaRows.find((r) => r.id === mediaId)!;
         // mime-types 的 extension() 对未知 mime 返回 false，必须用 || 兜底
@@ -84,8 +84,12 @@ export class MomentService {
           .update(media)
           .set({ s3Key: finalKey, momentId, sortOrder, storageMeta: row.storageMeta })
           .where(eq(media.id, row.id));
-        boundMedia.push({ ...row, s3Key: finalKey, momentId, sortOrder });
       }
+
+      const [inserted] = await tx.select().from(moments).where(eq(moments.id, momentId)).limit(1);
+      if (!inserted) throw new NotFoundError('MOMENT_NOT_FOUND');
+
+      await replaceMomentTags(tx, inserted.id, chainId, input.tagIds ?? []);
 
       await emitOutbox(
         tx,
@@ -93,29 +97,7 @@ export class MomentService {
         { momentId, chainId, authorId: userId, isBackfill: input.isBackfill }
       );
 
-      const [author] = await tx
-        .select({ id: users.id, nickname: users.nickname })
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1);
-      if (!author) throw new NotFoundError('USER_NOT_FOUND');
-
-      const now = new Date();
-      return momentSerializer(
-        {
-          id: momentId,
-          chainId,
-          authorId: userId,
-          type: input.type,
-          content: input.content,
-          happenedAt,
-          happenedTzOffset: input.happenedTzOffset,
-          isBackfill: input.isBackfill,
-          createdAt: now,
-        },
-        boundMedia,
-        author
-      );
+      return inserted;
     });
 
     // 事务已提交：此刻删 tmp 才安全。删除失败只留下 tmp 垃圾对象（tmp/ lifecycle 7 天兜底），无数据损失。
@@ -124,7 +106,7 @@ export class MomentService {
         logger.warn(`post-commit tmp cleanup failed (lifecycle will cover): ${t.key}`, err);
       });
     }
-    return response;
+    return (await serializeMoments([created]))[0];
   }
 
   /** 链内时间线：viewer+，happened_at DESC, id DESC 复合游标（同时间戳跨页不丢不重）。 */
@@ -177,8 +159,7 @@ export class MomentService {
     if (!m) throw new NotFoundError('MOMENT_NOT_FOUND');
     await this.policy.require(userId, m.chainId, 'viewer');
     if (m.deletedAt) throw new HttpError(410, 'MOMENT_DELETED');
-    const [serialized] = await this.serializeMany([m]);
-    return serialized;
+    return (await serializeMoments([m]))[0];
   }
 
   /** 仅作者本人可改；媒体不可改（dto 层 .strict() 已拒绝 mediaIds/type 等未知键）。鉴权先于软删判断（同 get）。
@@ -191,17 +172,25 @@ export class MomentService {
     if (m.deletedAt) throw new HttpError(410, 'MOMENT_DELETED');
     if (m.authorId !== userId) throw new ForbiddenError('NOT_MOMENT_AUTHOR');
 
-    await db
-      .update(moments)
-      .set({
-        ...(input.content !== undefined ? { content: input.content } : {}),
-        ...(input.happenedAt !== undefined ? { happenedAt: new Date(input.happenedAt) } : {}),
-        ...(input.happenedTzOffset !== undefined ? { happenedTzOffset: input.happenedTzOffset } : {}),
-        ...(input.isBackfill !== undefined ? { isBackfill: input.isBackfill } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(moments.id, momentId));
-    return this.get(userId, momentId);
+    const updatedRow = await db.transaction(async (tx) => {
+      await tx
+        .update(moments)
+        .set({
+          ...(input.content !== undefined ? { content: input.content } : {}),
+          ...(input.happenedAt !== undefined ? { happenedAt: new Date(input.happenedAt) } : {}),
+          ...(input.happenedTzOffset !== undefined ? { happenedTzOffset: input.happenedTzOffset } : {}),
+          ...(input.isBackfill !== undefined ? { isBackfill: input.isBackfill } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(moments.id, momentId));
+      const [row] = await tx.select().from(moments).where(eq(moments.id, momentId)).limit(1);
+      if (!row) throw new NotFoundError('MOMENT_NOT_FOUND');
+      if (input.tagIds !== undefined) {
+        await replaceMomentTags(tx, row.id, row.chainId, input.tagIds);
+      }
+      return row;
+    });
+    return (await serializeMoments([updatedRow]))[0];
   }
 
   /** 软删（幂等）：作者或链 owner；同事务 emitOutbox(moment.deleted)（sweeper 信号）。鉴权先于软删判断（同 get）。
@@ -223,41 +212,8 @@ export class MomentService {
     });
   }
 
-  /** 批量序列化：media 与 author 各一次 IN 查询，禁止 N+1（spec §5.1）。 */
+  /** 批量序列化：media / author / tags 各一次 IN 查询，禁止 N+1（spec §5.1）。 */
   private async serializeMany(rows: Moment[]): Promise<MomentResponse[]> {
-    if (rows.length === 0) return [];
-    const mediaRows = await db
-      .select()
-      .from(media)
-      .where(
-        inArray(
-          media.momentId,
-          rows.map((r) => r.id)
-        )
-      );
-    const mediaByMoment = new Map<string, Media[]>();
-    for (const m of mediaRows) {
-      if (!m.momentId) continue;
-      const list = mediaByMoment.get(m.momentId) ?? [];
-      list.push(m);
-      mediaByMoment.set(m.momentId, list);
-    }
-    const authorRows = await db
-      .select({ id: users.id, nickname: users.nickname })
-      .from(users)
-      .where(
-        inArray(
-          users.id,
-          [...new Set(rows.map((r) => r.authorId))]
-        )
-      );
-    const authorById = new Map(authorRows.map((a) => [a.id, a]));
-    return rows.map((r) =>
-      momentSerializer(
-        r,
-        mediaByMoment.get(r.id) ?? [],
-        authorById.get(r.authorId) ?? { id: r.authorId, nickname: '' }
-      )
-    );
+    return serializeMoments(rows);
   }
 }

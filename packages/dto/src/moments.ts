@@ -1,7 +1,11 @@
 import { z } from 'zod';
+import type { TagBrief } from './tags.js';
 
 export const momentTypeSchema = z.enum(['text', 'media', 'video']);
 export type MomentType = z.infer<typeof momentTypeSchema>;
+
+const uuidSchema = z.string().uuid();
+export const momentTagIdsSchema = z.array(uuidSchema).max(20);
 
 const isoTimestampSchema = z
   .string()
@@ -17,6 +21,7 @@ export const createMomentInputSchema = z
     happenedTzOffset: z.number().int().min(-840).max(840),
     isBackfill: z.boolean().default(false),
     mediaIds: z.array(z.string().min(1)).default([]),
+    tagIds: momentTagIdsSchema.optional(),
   })
   .superRefine((val, ctx) => {
     if (val.type === 'text') {
@@ -46,10 +51,13 @@ export const patchMomentInputSchema = z
     happenedAt: isoTimestampSchema.optional(),
     happenedTzOffset: z.number().int().min(-840).max(840).optional(),
     isBackfill: z.boolean().optional(),
+    tagIds: momentTagIdsSchema.optional(),
   })
   .strict() // 未知键（含 mediaIds/type）直接 VALIDATION_ERROR，而非静默剥离
   .refine((val) => Object.values(val).some((v) => v !== undefined), { message: 'EMPTY_PATCH' });
 export type PatchMomentInput = z.infer<typeof patchMomentInputSchema>;
+export const updateMomentInputSchema = patchMomentInputSchema;
+export type UpdateMomentInput = PatchMomentInput;
 
 /** moment 响应中的媒体：只出稳定入口相对路径，不内嵌预签名 URL（CONVENTIONS §3.4） */
 export interface MomentMedia {
@@ -78,6 +86,8 @@ export interface MomentResponse {
   isBackfill: boolean;
   createdAt: string;
   media: MomentMedia[];
+  /** moment 上的标签（同一 moment 内按 tagId 升序——确定性排序，非插入顺序） */
+  tags: TagBrief[];
 }
 
 export interface MomentListResponse {
