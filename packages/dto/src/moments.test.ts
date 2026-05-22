@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createMomentInputSchema, patchMomentInputSchema } from './moments.js';
+import { createMomentInputSchema, listMomentsQuerySchema, patchMomentInputSchema } from './moments.js';
 
 const base = {
   type: 'text' as const,
@@ -79,4 +79,11 @@ test('patchMomentInputSchema：仅四个字段、全 optional、.strict() 拒绝
   assert.ok(!patchMomentInputSchema.safeParse({}).success); // 空补丁 → EMPTY_PATCH
   assert.ok(!patchMomentInputSchema.safeParse({ mediaIds: ['m-1'] }).success);
   assert.ok(!patchMomentInputSchema.safeParse({ type: 'text' }).success);
+});
+
+test('listMomentsQuerySchema：cursor 空串/超长拒绝，缺省与合法串通过', () => {
+  assert.ok(listMomentsQuerySchema.safeParse({}).success);
+  assert.ok(listMomentsQuerySchema.safeParse({ cursor: 'abc', limit: '20' }).success);
+  assert.ok(!listMomentsQuerySchema.safeParse({ cursor: '' }).success);
+  assert.ok(!listMomentsQuerySchema.safeParse({ cursor: 'x'.repeat(1025) }).success);
 });

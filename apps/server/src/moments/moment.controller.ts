@@ -1,5 +1,5 @@
 import type { MomentListResponse, MomentResponse, UserProfile } from '@moment/dto';
-import { createMomentInputSchema, patchMomentInputSchema } from '@moment/dto';
+import { createMomentInputSchema, listMomentsQuerySchema, patchMomentInputSchema } from '@moment/dto';
 import {
   Authorized,
   Body,
@@ -46,7 +46,8 @@ export class MomentController {
     @QueryParam('limit', { required: false, type: String }) limit: string | undefined,
     @CurrentUser() user: UserProfile
   ): Promise<MomentListResponse> {
-    return this.momentService.list(user.id, chainId, { cursor, limit });
+    const query = listMomentsQuerySchema.parse({ cursor, limit });
+    return this.momentService.list(user.id, chainId, query);
   }
 }
 

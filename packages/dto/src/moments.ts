@@ -94,3 +94,10 @@ export interface MomentListResponse {
   items: MomentResponse[];
   nextCursor: string | null;
 }
+
+/** 链内列表 query：cursor 空串/超长走 VALIDATION_ERROR；limit 仍由 service 解析为 INVALID_LIMIT。 */
+export const listMomentsQuerySchema = z.object({
+  cursor: z.string().min(1).max(1024).optional(),
+  limit: z.string().optional(),
+});
+export type ListMomentsQuery = z.infer<typeof listMomentsQuerySchema>;

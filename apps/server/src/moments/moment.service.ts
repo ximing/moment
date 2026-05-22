@@ -1,19 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import mime from 'mime-types';
-import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
 import type { CreateMomentInput, MomentListResponse, MomentResponse, PatchMomentInput } from '@moment/dto';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
-import { media, moments, type Media, type Moment } from '../db/schema.js';
+import { media, moments, type Media } from '../db/schema.js';
+import { queryMomentPage } from '../feed/moment-query.js';
 import { emitOutbox } from '../outbox/outbox.js';
 import { OUTBOX_MOMENT_CREATED, OUTBOX_MOMENT_DELETED } from '../outbox/types.js';
 import { getStorage } from '../storage/factory.js';
 import type { StorageMetadata } from '../storage/base.adapter.js';
 import { replaceMomentTags } from '../tags/replace-moment-tags.js';
 import { logger } from '../utils/logger.js';
-import { decodeCursor, encodeCursor } from './cursor.js';
 import { serializeMoments } from './moment-serializer.js';
 
 @Service()
@@ -109,7 +109,7 @@ export class MomentService {
     return (await serializeMoments([created]))[0];
   }
 
-  /** 链内时间线：viewer+，happened_at DESC, id DESC 复合游标（同时间戳跨页不丢不重）。 */
+  /** 链内时间线：与 feed 共用 queryMomentPage（order 固定 happened_at，游标同格式）。 */
   async list(
     userId: string,
     chainId: string,
@@ -125,31 +125,13 @@ export class MomentService {
       }
     }
 
-    const conditions = [eq(moments.chainId, chainId), isNull(moments.deletedAt)];
-    if (query.cursor !== undefined) {
-      const cur = decodeCursor(query.cursor);
-      if (!('h' in cur)) throw new BadRequestError('INVALID_CURSOR'); // 链内列表只认 happened_at 游标
-      const anchor = new Date(cur.h);
-      // (happened_at, id) < (cur.h, cur.i)：严格小于锚点，或时间相等但 id 更小
-      conditions.push(
-        or(lt(moments.happenedAt, anchor), and(eq(moments.happenedAt, anchor), lt(moments.id, cur.i)))!
-      );
-    }
-
-    const rows = await db
-      .select()
-      .from(moments)
-      .where(and(...conditions))
-      .orderBy(desc(moments.happenedAt), desc(moments.id))
-      .limit(limit + 1);
-
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
-    const last = page[page.length - 1];
-    return {
-      items: await this.serializeMany(page),
-      nextCursor: hasMore && last ? encodeCursor({ h: last.happenedAt.getTime(), i: last.id }) : null,
-    };
+    const page = await queryMomentPage({
+      chainIds: [chainId],
+      order: 'happened_at',
+      limit,
+      cursor: query.cursor,
+    });
+    return { items: await serializeMoments(page.rows), nextCursor: page.nextCursor };
   }
 
   /** 详情：service 层反查 chainId 后走 ChainPolicy（CONVENTIONS §3.1）；软删 410。
@@ -210,10 +192,5 @@ export class MomentService {
         { momentId, chainId: m.chainId, authorId: m.authorId }
       );
     });
-  }
-
-  /** 批量序列化：media / author / tags 各一次 IN 查询，禁止 N+1（spec §5.1）。 */
-  private async serializeMany(rows: Moment[]): Promise<MomentResponse[]> {
-    return serializeMoments(rows);
   }
 }
