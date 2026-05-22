@@ -15,7 +15,7 @@ import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routi
 import { Service } from 'typedi';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
-import { chainInvites, chainMembers, chains, media, moments, users, type Chain, type ChainInvite } from '../db/schema.js';
+import { chainInvites, chainMembers, chains, media, momentTags, moments, tags, users, type Chain, type ChainInvite } from '../db/schema.js';
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
 
 @Service()
@@ -73,9 +73,8 @@ export class ChainService {
   }
 
   /**
-   * owner 删链：同事务硬删 media → moments → invites → members → chain。
-   * 级联锚点：moments/media/tags/comments 等链内内容属 Phase 3+，
-   * 届时在本事务最前面追加对应删除/软删逻辑。
+   * owner 删链：同事务硬删 moment_tags → tags → media → moments → invites → members → chain。
+   * 级联锚点：comments 等链内内容属后续 Phase，届时在本事务最前面追加。
    */
   async remove(userId: string, chainId: string): Promise<void> {
     await this.policy.require(userId, chainId, 'owner');
@@ -84,6 +83,8 @@ export class ChainService {
         .select({ id: moments.id })
         .from(moments)
         .where(eq(moments.chainId, chainId));
+      await tx.delete(momentTags).where(inArray(momentTags.momentId, chainMomentIds));
+      await tx.delete(tags).where(eq(tags.chainId, chainId));
       await tx.delete(media).where(inArray(media.momentId, chainMomentIds));
       await tx.delete(moments).where(eq(moments.chainId, chainId));
       await tx.delete(chainInvites).where(eq(chainInvites.chainId, chainId));

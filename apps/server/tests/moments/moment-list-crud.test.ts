@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
-import { chains, media, moments, outbox } from '../../src/db/schema.js';
+import { chains, media, momentTags, moments, outbox, tags } from '../../src/db/schema.js';
 import { createUser } from '../helpers/auth.js';
 import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
@@ -348,5 +348,35 @@ describe('DELETE /api/chains/:id（Phase 3 级联，兑现 Phase 2 事务锚点�
     const events = await db.select().from(outbox);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ type: 'moment.created', status: 'pending' });
+  });
+
+  it('链内有 tag 且 moment 已打标时 owner 删链 204：moment_tags 与 tags 一并级联硬删', async () => {
+    const tagRes = await request(app)
+      .post(`/api/chains/${chainId}/tags`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ name: '周岁' });
+    expect(tagRes.status).toBe(201);
+    const tagId = tagRes.body.id as string;
+
+    const momentId = randomUUID();
+    await db.insert(moments).values({
+      id: momentId,
+      chainId,
+      authorId: alice.id,
+      type: 'text',
+      content: '打标瞬间',
+      happenedAt: new Date(Date.UTC(2026, 7, 15, 8)),
+      happenedTzOffset: -480,
+    });
+    await db.insert(momentTags).values({ momentId, tagId });
+
+    const res = await request(app)
+      .delete(`/api/chains/${chainId}`)
+      .set('Authorization', `Bearer ${alice.token}`);
+    expect(res.status).toBe(204);
+    expect(await db.select().from(momentTags).where(eq(momentTags.momentId, momentId))).toHaveLength(0);
+    expect(await db.select().from(tags).where(eq(tags.chainId, chainId))).toHaveLength(0);
+    expect(await db.select().from(moments).where(eq(moments.chainId, chainId))).toHaveLength(0);
+    expect(await db.select().from(chains).where(eq(chains.id, chainId))).toHaveLength(0);
   });
 });
