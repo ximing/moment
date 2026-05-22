@@ -12,7 +12,8 @@
     "lint": "eslint src/ tests/",
     "migrate": "tsx src/db/migrate.ts",
     "migrate:generate": "drizzle-kit generate",
-    "migrate:studio": "drizzle-kit studio"
+    "migrate:studio": "drizzle-kit studio",
+    "worker": "tsx watch src/worker/index.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",
@@ -24,6 +25,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.1",
+    "expo-server-sdk": "^3.15.0",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",

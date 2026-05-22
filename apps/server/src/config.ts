@@ -31,6 +31,9 @@ const envSchema = z.object({
   // GET TTL 上限 3600：alignedGetPresign 的「过期时刻落在下一窗内」推导要求 TTL ≤ 一个窗长（3600s）
   PRESIGN_GET_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(3600),
   PRESIGN_PUT_TTL_SECONDS: z.coerce.number().int().min(1).default(900),
+  EXPO_ACCESS_TOKEN: z.string().default(''),
+  WORKER_POLL_INTERVAL_MS: z.coerce.number().default(2000),
+  WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export const config = envSchema.parse(process.env);
