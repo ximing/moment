@@ -17,6 +17,8 @@ import { MomentController, MomentItemController } from './moments/moment.control
 import { authRateLimiter, inviteAcceptRateLimiter, loginRateLimiter } from './middlewares/rate-limit.js';
 import { TagController } from './tags/tag.controller.js';
 import { FeedController } from './feed/feed.controller.js';
+import { NotificationsController } from './notifications/notifications.controller.js';
+import { DevicesController } from './devices/devices.controller.js';
 
 export function createApp(): express.Express {
   useContainer(Container);
@@ -39,7 +41,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, CommentsController, ReactionsController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, CommentsController, ReactionsController, NotificationsController, DevicesController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,
