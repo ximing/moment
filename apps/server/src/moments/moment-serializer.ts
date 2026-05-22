@@ -55,6 +55,9 @@ export function momentSerializer(
     createdAt: m.createdAt.toISOString(),
     media: [...(extras.media ?? [])].sort((a, b) => a.sortOrder - b.sortOrder).map(serializeMedia),
     tags: extras.tags ?? [],
+    commentCount: 0,
+    reactions: [],
+    myReaction: null,
   };
 }
 

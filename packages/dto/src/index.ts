@@ -4,3 +4,5 @@ export * from './media.js';
 export * from './moments.js';
 export * from './tags.js';
 export * from './feed.js';
+export * from './comments.js';
+export * from './notifications.js';

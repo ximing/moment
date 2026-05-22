@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ReactionSummary } from './comments.js';
 import type { TagBrief } from './tags.js';
 
 export const momentTypeSchema = z.enum(['text', 'media', 'video']);
@@ -88,6 +89,12 @@ export interface MomentResponse {
   media: MomentMedia[];
   /** moment 上的标签（同一 moment 内按 tagId 升序——确定性排序，非插入顺序） */
   tags: TagBrief[];
+  /** 未软删评论数（批量 GROUP BY 产出） */
+  commentCount: number;
+  /** 按 emoji 分组的表情计数 */
+  reactions: ReactionSummary[];
+  /** 当前请求用户在本 moment 上点的 emoji；未点/无 viewer 上下文为 null */
+  myReaction: string | null;
 }
 
 export interface MomentListResponse {
