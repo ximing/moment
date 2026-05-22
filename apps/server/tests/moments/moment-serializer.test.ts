@@ -27,6 +27,10 @@ describe('momentSerializer（moment → API 响应唯一出口）', () => {
     expect(res.happenedAt).toBe('2026-08-15T02:00:00.000Z');
     expect(res.author).toEqual({ id: 'u-1', nickname: 'Alice' });
     expect(res.tags).toEqual([]);
+    // 不传 counts / tags 时走默认值
+    expect(res.commentCount).toBe(0);
+    expect(res.reactions).toEqual([]);
+    expect(res.myReaction).toBeNull();
   });
 
   it('text 类型 media 为空数组', () => {

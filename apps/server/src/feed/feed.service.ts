@@ -32,6 +32,6 @@ export class FeedService {
       cursor: query.cursor,
       tagId: query.tagId,
     });
-    return { moments: await serializeMoments(page.rows), nextCursor: page.nextCursor };
+    return { moments: await serializeMoments(page.rows, userId), nextCursor: page.nextCursor };
   }
 }

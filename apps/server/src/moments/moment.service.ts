@@ -106,7 +106,7 @@ export class MomentService {
         logger.warn(`post-commit tmp cleanup failed (lifecycle will cover): ${t.key}`, err);
       });
     }
-    return (await serializeMoments([created]))[0];
+    return (await serializeMoments([created], userId))[0];
   }
 
   /** 链内时间线：与 feed 共用 queryMomentPage（order 固定 happened_at，游标同格式）。 */
@@ -131,7 +131,7 @@ export class MomentService {
       limit,
       cursor: query.cursor,
     });
-    return { items: await serializeMoments(page.rows), nextCursor: page.nextCursor };
+    return { items: await serializeMoments(page.rows, userId), nextCursor: page.nextCursor };
   }
 
   /** 详情：service 层反查 chainId 后走 ChainPolicy（CONVENTIONS §3.1）；软删 410。
@@ -141,7 +141,7 @@ export class MomentService {
     if (!m) throw new NotFoundError('MOMENT_NOT_FOUND');
     await this.policy.require(userId, m.chainId, 'viewer');
     if (m.deletedAt) throw new HttpError(410, 'MOMENT_DELETED');
-    return (await serializeMoments([m]))[0];
+    return (await serializeMoments([m], userId))[0];
   }
 
   /** 仅作者本人可改；媒体不可改（dto 层 .strict() 已拒绝 mediaIds/type 等未知键）。鉴权先于软删判断（同 get）。
@@ -172,7 +172,7 @@ export class MomentService {
       }
       return row;
     });
-    return (await serializeMoments([updatedRow]))[0];
+    return (await serializeMoments([updatedRow], userId))[0];
   }
 
   /** 软删（幂等）：作者或链 owner；同事务 emitOutbox(moment.deleted)（sweeper 信号）。鉴权先于软删判断（同 get）。
