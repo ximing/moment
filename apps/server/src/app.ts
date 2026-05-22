@@ -10,6 +10,7 @@ import { ChainsController } from './chains/chains.controller.js';
 import { InvitesController } from './chains/invites.controller.js';
 import { CommentsController } from './comments/comments.controller.js';
 import { HealthController } from './controllers/health.controller.js';
+import { ReactionsController } from './reactions/reactions.controller.js';
 import { MediaController } from './media/media.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
 import { MomentController, MomentItemController } from './moments/moment.controller.js';
@@ -38,7 +39,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, CommentsController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, CommentsController, ReactionsController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,
