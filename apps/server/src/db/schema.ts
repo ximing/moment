@@ -7,3 +7,7 @@ export * from './schema/moments.js';
 export * from './schema/media.js';
 export * from './schema/outbox.js';
 export * from './schema/tags.js';
+export * from './schema/comments.js';
+export * from './schema/reactions.js';
+export * from './schema/notifications.js';
+export * from './schema/push-tokens.js';

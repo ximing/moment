@@ -3,10 +3,14 @@ import {
   chainInvites,
   chainMembers,
   chains,
+  comments,
   media,
   momentTags,
   moments,
+  notifications,
   outbox,
+  pushTokens,
+  reactions,
   refreshTokens,
   tags,
   users,
@@ -14,6 +18,10 @@ import {
 
 /** 每个用例前清表：先子表后父表（外键逆序）。仅允许对测试库使用。 */
 export async function resetDb(): Promise<void> {
+  await db.delete(pushTokens);
+  await db.delete(notifications);
+  await db.delete(reactions);
+  await db.delete(comments);
   await db.delete(momentTags);
   await db.delete(tags);
   await db.delete(outbox);
