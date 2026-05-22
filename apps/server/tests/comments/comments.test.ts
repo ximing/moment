@@ -164,7 +164,7 @@ describe('DELETE /api/comments/:id', () => {
 
 describe('outbox 原子性', () => {
   it('评论事务与 outbox 同生共死（回滚后两表皆空）', async () => {
-    const { owner, momentId } = await setup();
+    const { momentId } = await setup();
     // 走真实接口成功路径建立对照后，直接验证表级原子性：用事务回滚 emitOutbox
     const { emitOutbox } = await import('../../src/outbox/outbox.js');
     const { OUTBOX_COMMENT_CREATED } = await import('../../src/outbox/types.js');
