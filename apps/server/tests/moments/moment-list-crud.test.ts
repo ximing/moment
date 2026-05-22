@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
-import { chains, media, momentTags, moments, outbox, tags } from '../../src/db/schema.js';
+import { chains, comments, media, momentTags, moments, outbox, reactions, tags } from '../../src/db/schema.js';
 import { createUser } from '../helpers/auth.js';
 import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
@@ -376,6 +376,40 @@ describe('DELETE /api/chains/:id（Phase 3 级联，兑现 Phase 2 事务锚点�
     expect(res.status).toBe(204);
     expect(await db.select().from(momentTags).where(eq(momentTags.momentId, momentId))).toHaveLength(0);
     expect(await db.select().from(tags).where(eq(tags.chainId, chainId))).toHaveLength(0);
+    expect(await db.select().from(moments).where(eq(moments.chainId, chainId))).toHaveLength(0);
+    expect(await db.select().from(chains).where(eq(chains.id, chainId))).toHaveLength(0);
+  });
+
+  it('链内 moment 有 comment + reaction 时 owner 删链 204：comments 与 reactions 一并级联硬删', async () => {
+    const momentId = randomUUID();
+    await db.insert(moments).values({
+      id: momentId,
+      chainId,
+      authorId: alice.id,
+      type: 'text',
+      content: '有互动',
+      happenedAt: new Date(Date.UTC(2026, 7, 15, 9)),
+      happenedTzOffset: -480,
+    });
+
+    const commentRes = await request(app)
+      .post(`/api/moments/${momentId}/comments`)
+      .set('Authorization', `Bearer ${bob.token}`)
+      .send({ content: '好棒' });
+    expect(commentRes.status).toBe(201);
+
+    const reactionRes = await request(app)
+      .put(`/api/moments/${momentId}/reaction`)
+      .set('Authorization', `Bearer ${carol.token}`)
+      .send({ emoji: '👍' });
+    expect(reactionRes.status).toBe(204);
+
+    const res = await request(app)
+      .delete(`/api/chains/${chainId}`)
+      .set('Authorization', `Bearer ${alice.token}`);
+    expect(res.status).toBe(204);
+    expect(await db.select().from(comments).where(eq(comments.momentId, momentId))).toHaveLength(0);
+    expect(await db.select().from(reactions).where(eq(reactions.momentId, momentId))).toHaveLength(0);
     expect(await db.select().from(moments).where(eq(moments.chainId, chainId))).toHaveLength(0);
     expect(await db.select().from(chains).where(eq(chains.id, chainId))).toHaveLength(0);
   });
