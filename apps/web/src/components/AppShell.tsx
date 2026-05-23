@@ -34,7 +34,7 @@ export function AppShell() {
             <Users size={16} />
             链
           </NavLink>
-          <NavLink to="/notifications" className={`${navClass} relative`}>
+          <NavLink to="/notifications" className={(p) => `${navClass(p)} relative`}>
             <Bell size={16} />
             通知
             {unread > 0 && (
