@@ -29,6 +29,7 @@ import { createMomentInputSchema } from '@moment/dto';
 import type { ZodInput } from './zod-input.js';
 import { Http } from './http.js';
 import type { MomentClientOptions } from './types.js';
+import { uploadMediaImpl, type UploadMediaInput } from './upload.js';
 
 /** feed 查询（web 端 camelCase，序列化时转 snake_case 查询参数，Phase 4 dto 约定） */
 export interface FeedQuery {
@@ -94,6 +95,7 @@ export interface MomentClient {
   /** Phase 5 schema：ids 必填 1–100 个 uuid（无「空=全部」语义，分批由调用方负责） */
   markNotificationsRead(ids: string[]): Promise<void>;
   registerPushToken(input: RegisterPushTokenInput): Promise<void>;
+  uploadMedia(input: UploadMediaInput): Promise<MediaCompleteResponse>;
 }
 
 export function createMomentClient(options: MomentClientOptions): MomentClient {
@@ -177,5 +179,6 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
       }),
     markNotificationsRead: (ids) => http.request('/api/notifications/read', { method: 'POST', body: { ids } }),
     registerPushToken: (input) => http.request('/api/devices/push-token', { method: 'POST', body: input }),
+    uploadMedia: (input) => uploadMediaImpl(http, options, input),
   };
 }
