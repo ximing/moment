@@ -150,6 +150,34 @@ importers:
         specifier: ^8.22.0
         version: 8.67.0(eslint@9.39.5)(typescript@5.9.3)
 
+  packages/api-client:
+    dependencies:
+      '@moment/dto':
+        specifier: workspace:*
+        version: link:../dto
+      zod:
+        specifier: ^3.22.0
+        version: 3.25.76
+    devDependencies:
+      '@moment/eslint-config':
+        specifier: workspace:*
+        version: link:../../config/eslint-config
+      '@moment/typescript-config':
+        specifier: workspace:*
+        version: link:../../config/config-typescript
+      '@types/node':
+        specifier: ^22.13.4
+        version: 22.20.1
+      eslint:
+        specifier: ^9.19.0
+        version: 9.39.5
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.12
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   packages/dto:
     dependencies:
       zod:
