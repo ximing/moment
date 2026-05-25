@@ -8,12 +8,15 @@ import { ChainsPage } from '@/pages/ChainsPage';
 import { ChainDetailPage } from '@/pages/ChainDetailPage';
 import { ComposePage } from '@/pages/ComposePage';
 import { MomentDetailPage } from '@/pages/MomentDetailPage';
+import { NotificationsPage } from '@/pages/NotificationsPage';
+import { AcceptInvitePage } from '@/pages/AcceptInvitePage';
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/invites/:token" element={<AcceptInvitePage />} />
       <Route element={<RequireAuth><AppShell /></RequireAuth>}>
         {/* 功能子路由由 Task 5–10 依次加入（feed / chains / compose / moments / notifications） */}
         <Route path="/" element={<FeedPage />} />
@@ -21,6 +24,7 @@ export function App() {
         <Route path="/chains/:chainId" element={<ChainDetailPage />} />
         <Route path="/chains/:chainId/compose" element={<ComposePage />} />
         <Route path="/moments/:momentId" element={<MomentDetailPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
       </Route>
       <Route path="*" element={<div className="p-8 text-center text-gray-500">页面不存在</div>} />
     </Routes>
