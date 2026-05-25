@@ -4,6 +4,7 @@ import { RequireAuth } from '@/auth/RequireAuth';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { FeedPage } from '@/pages/FeedPage';
+import { ChainsPage } from '@/pages/ChainsPage';
 
 export function App() {
   return (
@@ -13,6 +14,7 @@ export function App() {
       <Route element={<RequireAuth><AppShell /></RequireAuth>}>
         {/* 功能子路由由 Task 5–10 依次加入（feed / chains / compose / moments / notifications） */}
         <Route path="/" element={<FeedPage />} />
+        <Route path="/chains" element={<ChainsPage />} />
       </Route>
       <Route path="*" element={<div className="p-8 text-center text-gray-500">页面不存在</div>} />
     </Routes>
