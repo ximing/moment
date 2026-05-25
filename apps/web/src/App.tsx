@@ -7,6 +7,7 @@ import { FeedPage } from '@/pages/FeedPage';
 import { ChainsPage } from '@/pages/ChainsPage';
 import { ChainDetailPage } from '@/pages/ChainDetailPage';
 import { ComposePage } from '@/pages/ComposePage';
+import { MomentDetailPage } from '@/pages/MomentDetailPage';
 
 export function App() {
   return (
@@ -19,6 +20,7 @@ export function App() {
         <Route path="/chains" element={<ChainsPage />} />
         <Route path="/chains/:chainId" element={<ChainDetailPage />} />
         <Route path="/chains/:chainId/compose" element={<ComposePage />} />
+        <Route path="/moments/:momentId" element={<MomentDetailPage />} />
       </Route>
       <Route path="*" element={<div className="p-8 text-center text-gray-500">页面不存在</div>} />
     </Routes>
