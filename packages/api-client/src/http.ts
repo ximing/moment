@@ -57,7 +57,8 @@ export class Http {
   constructor(options: MomentClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.tokenStore = options.tokenStore;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    // bind: 裸取 window.fetch 后作 this.fetchImpl(...) 会丢 this，Chrome 抛 Illegal invocation
+    this.fetchImpl = options.fetchImpl ?? fetch.bind(globalThis);
   }
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
