@@ -131,8 +131,15 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
 
     createMoment: (chainId, input) =>
       http.request(`/api/chains/${chainId}/moments`, { method: 'POST', body: parseMomentInput(input) }),
-    listChainMoments: (chainId, query) =>
-      http.request(`/api/chains/${chainId}/moments`, { query: { cursor: query?.cursor, limit: query?.limit } }),
+    // 等价映射 dto MomentListResponse.items → FeedResponse.moments，禁止改 server
+    listChainMoments: async (chainId, query) => {
+      const res = await http.request<{
+        items?: import('@moment/dto').MomentResponse[];
+        moments?: import('@moment/dto').MomentResponse[];
+        nextCursor: string | null;
+      }>(`/api/chains/${chainId}/moments`, { query: { cursor: query?.cursor, limit: query?.limit } });
+      return { moments: res.moments ?? res.items ?? [], nextCursor: res.nextCursor ?? null };
+    },
     getMoment: (momentId) => http.request(`/api/moments/${momentId}`),
     updateMoment: (momentId, input) => http.request(`/api/moments/${momentId}`, { method: 'PATCH', body: input }),
     deleteMoment: (momentId) => http.request(`/api/moments/${momentId}`, { method: 'DELETE' }),

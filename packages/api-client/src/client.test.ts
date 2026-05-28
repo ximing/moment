@@ -166,3 +166,26 @@ test('fetchMediaBlob 走稳定入口；listNotifications 带 cursor/limit 分页
     'GET http://x/api/notifications?unread=true&cursor=cur&limit=50',
   ]);
 });
+
+test('listChainMoments 将 dto items 映射为 moments', async () => {
+  const client = createMomentClient({
+    baseUrl: 'http://x',
+    tokenStore: {
+      getAccessToken: () => null,
+      getRefreshToken: () => null,
+      setTokens: () => {},
+      clear: () => {},
+    },
+    fetchImpl: async (url) => {
+      assert.match(String(url), /\/api\/chains\/c1\/moments$/);
+      return new Response(JSON.stringify({ items: [{ id: 'm1' }], nextCursor: null }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+  const res = await client.listChainMoments('c1');
+  assert.equal(res.moments[0]!.id, 'm1');
+  assert.equal(res.nextCursor, null);
+  assert.equal('items' in res, false);
+});
