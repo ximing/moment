@@ -6,3 +6,4 @@ export * from './tags.js';
 export * from './feed.js';
 export * from './comments.js';
 export * from './notifications.js';
+export * from './share.js';
