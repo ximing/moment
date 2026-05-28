@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
@@ -20,6 +20,37 @@ export default function NotificationsScreen() {
     });
 
   const queryClient = useQueryClient();
+
+  // 依赖 []：每次进入通知页执行一次
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        // 1) 循环翻页（limit=50 逐页取 nextCursor）收集全部未读 id
+        const unreadIds: string[] = [];
+        let cursor: string | undefined;
+        do {
+          const page = await client.listNotifications(false, { cursor, limit: 50 });
+          unreadIds.push(...page.notifications.filter((n) => n.readAt === null).map((n) => n.id));
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor);
+        // 2) schema 限每批 1–100 个：分批串行提交；空 ids 跳过 POST（schema 拒空数组）
+        for (let i = 0; i < unreadIds.length; i += 100) {
+          const chunk = unreadIds.slice(i, i + 100);
+          if (chunk.length === 0) continue;
+          await client.markNotificationsRead(chunk);
+        }
+        if (!cancelled) {
+          await queryClient.invalidateQueries({ queryKey: qk.notifications() });
+        }
+      } catch {
+        // 网络失败静默：下次进入页面重试，列表本身仍可浏览
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [queryClient]);
 
   const onOpen = useCallback(
     (n: NotificationDto) => {
