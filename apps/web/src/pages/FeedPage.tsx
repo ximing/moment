@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
 import { MomentCard } from '@/components/MomentCard';
+import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
 
 const ORDERS = [
   { value: 'happened_at', label: '事件时间' },
@@ -50,18 +51,12 @@ export function FeedPage() {
     enabled: singleChainId !== undefined,
   });
 
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
-        void fetchNextPage();
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const sentinelRef = useLoadMoreSentinel(
+    !isPending && !isError,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  );
 
   const toggleChain = (id: string) => {
     setTagId(undefined);
@@ -146,6 +141,15 @@ export function FeedPage() {
       </div>
       <div ref={sentinelRef} className="h-8" />
       {isFetchingNextPage && <p className="text-center text-sm text-gray-400">加载更多…</p>}
+      {hasNextPage && !isFetchingNextPage && (
+        <button
+          type="button"
+          onClick={() => void fetchNextPage()}
+          className="w-full rounded border border-gray-200 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
+        >
+          加载更多
+        </button>
+      )}
     </div>
   );
 }

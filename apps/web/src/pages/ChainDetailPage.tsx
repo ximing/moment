@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Camera } from 'lucide-react';
@@ -8,6 +8,7 @@ import { MomentCard } from '@/components/MomentCard';
 import { MembersPanel } from '@/components/chain/MembersPanel';
 import { InvitesPanel } from '@/components/chain/InvitesPanel';
 import { TagsPanel } from '@/components/chain/TagsPanel';
+import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
 
 const TABS = [
   { key: 'timeline', label: '时间线' },
@@ -37,18 +38,12 @@ export function ChainDetailPage() {
   });
   const moments = timeline.data?.pages.flatMap((p) => p.moments) ?? [];
 
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting && timeline.hasNextPage && !timeline.isFetchingNextPage) {
-        void timeline.fetchNextPage();
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [timeline.hasNextPage, timeline.isFetchingNextPage, timeline.fetchNextPage, tab]);
+  const sentinelRef = useLoadMoreSentinel(
+    tab === 'timeline' && !isPending && !!chain,
+    timeline.hasNextPage,
+    timeline.isFetchingNextPage,
+    timeline.fetchNextPage,
+  );
 
   if (isPending) return <p className="py-10 text-center text-gray-400">加载中…</p>;
   if (isError || !chain) {
@@ -102,6 +97,15 @@ export function ChainDetailPage() {
           ))}
           <div ref={sentinelRef} className="h-8" />
           {timeline.isFetchingNextPage && <p className="text-center text-sm text-gray-400">加载更多…</p>}
+          {timeline.hasNextPage && !timeline.isFetchingNextPage && (
+            <button
+              type="button"
+              onClick={() => void timeline.fetchNextPage()}
+              className="w-full rounded border border-gray-200 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
+            >
+              加载更多
+            </button>
+          )}
         </div>
       )}
       {tab === 'members' && <MembersPanel chain={chain} />}
