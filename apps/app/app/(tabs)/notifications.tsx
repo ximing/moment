@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { router } from 'expo-router';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import type { NotificationDto } from '@moment/dto';
 import { client } from '../../src/lib/api';
 import { qk } from '../../src/lib/keys';
@@ -18,14 +19,20 @@ export default function NotificationsScreen() {
       getNextPageParam: (last) => last.nextCursor ?? undefined,
     });
 
+  const queryClient = useQueryClient();
+
   const onOpen = useCallback(
     (n: NotificationDto) => {
-      // Task 6 扩展：追加深跳 moment 详情
+      const payload = n.payload as { data?: { momentId?: string } };
       if (n.readAt == null) {
-        void client.markNotificationsRead([n.id]).then(() => void refetch());
+        void client.markNotificationsRead([n.id]).then(() => {
+          void queryClient.invalidateQueries({ queryKey: qk.notifications() });
+        });
       }
+      const momentId = payload.data?.momentId;
+      if (momentId) router.push(`/moments/${momentId}`);
     },
-    [refetch]
+    [queryClient, router]
   );
 
   if (isPending) return <Loading />;
