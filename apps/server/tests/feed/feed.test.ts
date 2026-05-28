@@ -1,6 +1,5 @@
 import request from 'supertest';
 import type { Response } from 'supertest';
-import { db } from '../../src/db/index.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { addMember, app, attachTag, createChain, insertMoment, registerUser } from '../helpers/fixtures.js';
 
