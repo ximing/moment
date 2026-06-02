@@ -13,7 +13,8 @@
     "migrate": "tsx src/db/migrate.ts",
     "migrate:generate": "drizzle-kit generate",
     "migrate:studio": "drizzle-kit studio",
-    "worker": "tsx watch src/worker/index.ts"
+    "worker": "tsx watch src/worker/index.ts",
+    "setup:s3-lifecycle": "tsx scripts/setup-s3-lifecycle.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",
