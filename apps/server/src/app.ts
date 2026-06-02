@@ -19,6 +19,7 @@ import { TagController } from './tags/tag.controller.js';
 import { FeedController } from './feed/feed.controller.js';
 import { NotificationsController } from './notifications/notifications.controller.js';
 import { DevicesController } from './devices/devices.controller.js';
+import { ShareLinkItemController, ShareLinksController } from './share/share-links.controller.js';
 
 export function createApp(): express.Express {
   useContainer(Container);
@@ -41,7 +42,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, CommentsController, ReactionsController, NotificationsController, DevicesController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,
