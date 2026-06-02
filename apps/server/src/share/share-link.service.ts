@@ -1,11 +1,19 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import type { CreateShareLinkInput, ShareLinkDto, ShareLinkListResponse } from '@moment/dto';
+import type {
+  CreateShareLinkInput,
+  PublicShareQuery,
+  PublicShareResponse,
+  ShareLinkDto,
+  ShareLinkListResponse,
+} from '@moment/dto';
 import { desc, eq } from 'drizzle-orm';
 import { NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
-import { shareLinks, type ShareLink } from '../db/schema.js';
+import { chains, shareLinks, type ShareLink } from '../db/schema.js';
+import { queryMomentPage } from '../feed/moment-query.js';
+import { serializeMoments } from '../moments/moment-serializer.js';
 
 function toDto(row: ShareLink): ShareLinkDto {
   return {
@@ -66,5 +74,34 @@ export class ShareLinkService {
     if (!row || row.revokedAt) return null;
     if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return null;
     return row;
+  }
+
+  /**
+   * 匿名只读视图（spec §4 Public）：token 无效/过期/吊销一律 404 SHARE_NOT_FOUND；
+   * 固定 happened_at 排序，复用 feed 查询 builder（自带 deleted_at IS NULL，CONVENTIONS §3.4）；
+   * serializeMoments 不传 viewerId → myReaction 恒 null（计数只读，见计划 Global Constraints 决策）。
+   */
+  async getSharedChain(token: string, query: PublicShareQuery): Promise<PublicShareResponse> {
+    const link = await this.findValidByToken(token);
+    if (!link) throw new NotFoundError('SHARE_NOT_FOUND');
+
+    const [chain] = await db
+      .select({ name: chains.name, description: chains.description })
+      .from(chains)
+      .where(eq(chains.id, link.chainId))
+      .limit(1);
+    if (!chain) throw new NotFoundError('SHARE_NOT_FOUND');
+
+    const page = await queryMomentPage({
+      chainIds: [link.chainId],
+      order: 'happened_at',
+      limit: query.limit,
+      cursor: query.cursor,
+    });
+    return {
+      chain: { name: chain.name, description: chain.description },
+      moments: await serializeMoments(page.rows),
+      nextCursor: page.nextCursor,
+    };
   }
 }

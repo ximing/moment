@@ -43,3 +43,12 @@ export const inviteAcceptRateLimiter = rateLimit({
   },
   message,
 });
+
+/** 匿名公开端点：IP 维度 60s/60 次（公开页一次浏览 = 1 次 API + N 次 media 302，媒体不走本 limiter）。 */
+export const publicShareRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: isTest ? 1000 : 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message,
+});

@@ -14,11 +14,12 @@ import { ReactionsController } from './reactions/reactions.controller.js';
 import { MediaController } from './media/media.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
 import { MomentController, MomentItemController } from './moments/moment.controller.js';
-import { authRateLimiter, inviteAcceptRateLimiter, loginRateLimiter } from './middlewares/rate-limit.js';
+import { authRateLimiter, inviteAcceptRateLimiter, loginRateLimiter, publicShareRateLimiter } from './middlewares/rate-limit.js';
 import { TagController } from './tags/tag.controller.js';
 import { FeedController } from './feed/feed.controller.js';
 import { NotificationsController } from './notifications/notifications.controller.js';
 import { DevicesController } from './devices/devices.controller.js';
+import { PublicShareController } from './share/public-share.controller.js';
 import { ShareLinkItemController, ShareLinksController } from './share/share-links.controller.js';
 
 export function createApp(): express.Express {
@@ -30,6 +31,7 @@ export function createApp(): express.Express {
 
   app.use('/api/auth/login', loginRateLimiter);
   app.use('/api/auth/register', authRateLimiter);
+  app.use('/api/public', publicShareRateLimiter);
 
   // 在 routing-controllers 路由前解析 Bearer token 并填充 request.user：
   // @UseBefore 中间件（requireChainRole 等）先于 @Authorized 的 authorizationChecker 执行，
@@ -42,7 +44,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,
