@@ -127,16 +127,16 @@ describe('GET /api/media/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('带 ?st= share token → 403 SHARE_NOT_SUPPORTED（Phase 8 实现透传）', async () => {
+  it('带 ?st= 未知 share token → 404 SHARE_NOT_FOUND（Phase 8 已落地透传，完整矩阵见 tests/share/share-media.test.ts）', async () => {
     const chainId = await createChainWithMembers(alice.id);
     const momentId = await insertMoment(chainId, alice.id);
     const mediaId = await insertReadyMedia({ uploaderId: alice.id, momentId });
 
     const res = await request(app)
-      .get(`/api/media/${mediaId}?st=some-token`)
+      .get(`/api/media/${mediaId}?st=${'0'.repeat(64)}`)
       .set('Authorization', `Bearer ${alice.token}`);
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('SHARE_NOT_SUPPORTED');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('SHARE_NOT_FOUND');
   });
 
   it('未登录 → 401（用真实存在的 mediaId，只考察鉴权这一个维度）', async () => {

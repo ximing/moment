@@ -67,15 +67,14 @@ export class MediaController {
   }
 
   @Get('/:id')
-  @Authorized()
   async access(
     @Param('id') id: string,
     @QueryParam('st', { required: false, type: String }) st: string | undefined,
-    @CurrentUser() user: UserProfile,
+    @CurrentUser() user: UserProfile | null,
     @Res() res: Response
-  ): Promise<void> {
+  ): Promise<Response> {
     const url = await this.mediaService.resolveAccessUrl(user, id, st);
     res.setHeader('Cache-Control', 'private, max-age=300');
-    res.redirect(302, url);
+    return res.redirect(302, url);
   }
 }

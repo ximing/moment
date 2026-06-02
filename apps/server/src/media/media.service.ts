@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import mime from 'mime-types';
 import { and, eq } from 'drizzle-orm';
-import { ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
+import { HttpError, NotFoundError, UnauthorizedError } from 'routing-controllers';
 import { Service } from 'typedi';
 import {
   MAX_IMAGE_BYTES,
@@ -19,6 +19,7 @@ import { ChainPolicy } from '../chains/chain-policy.js';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { media, moments, type Media } from '../db/schema.js';
+import { ShareLinkService } from '../share/share-link.service.js';
 import { currentStorageMeta, getStorage } from '../storage/factory.js';
 import { alignedGetPresign } from './presign-ttl.js';
 
@@ -31,7 +32,10 @@ async function getOwnedMediaOr404(userId: string, mediaId: string): Promise<Medi
 
 @Service()
 export class MediaService {
-  constructor(private readonly policy: ChainPolicy) {}
+  constructor(
+    private readonly policy: ChainPolicy,
+    private readonly shareLinks: ShareLinkService
+  ) {}
 
   /**
    * 预签名申请（spec §3 事务边界：先插 media(status='uploading', tmp key) 行再返 URL）。
@@ -196,29 +200,47 @@ export class MediaService {
 
   /**
    * 鉴权后返回预签名 GET URL（302 目标）：
-   * - 已绑定 moment：moment 未软删时按所属链校验 viewer；
-   * - 未绑定：仅 uploader 本人；
-   * - ?st= share token 透传点：本阶段拒绝（Phase 8 实现免登录分享校验）。
+   * - st !== undefined：share token 透传路径（spec §5.3），忽略登录态；
+   * - 无 st：登录 + 成员/uploader 校验（Phase 3 原语义）；
+   * - 已绑定 moment：moment 未软删时校验所属链 viewer；未绑定：仅 uploader 本人。
    */
-  async resolveAccessUrl(user: UserProfile, mediaId: string, st?: string): Promise<string> {
-    if (st !== undefined) throw new ForbiddenError('SHARE_NOT_SUPPORTED');
-
+  async resolveAccessUrl(user: UserProfile | null, mediaId: string, st?: string): Promise<string> {
     const [row] = await db.select().from(media).where(eq(media.id, mediaId)).limit(1);
     if (!row || row.status !== 'ready') throw new NotFoundError('MEDIA_NOT_FOUND');
 
-    if (row.momentId) {
-      const [m] = await db
-        .select({ chainId: moments.chainId, deletedAt: moments.deletedAt })
-        .from(moments)
-        .where(eq(moments.id, row.momentId))
-        .limit(1);
-      if (!m || m.deletedAt) throw new NotFoundError('MEDIA_NOT_FOUND');
-      await this.policy.require(user.id, m.chainId, 'viewer');
-    } else if (row.uploaderId !== user.id) {
-      throw new NotFoundError('MEDIA_NOT_FOUND');
+    if (st !== undefined) {
+      await this.assertShareAccess(st, row);
+    } else {
+      if (!user) throw new UnauthorizedError('UNAUTHORIZED');
+      if (row.momentId) {
+        const [m] = await db
+          .select({ chainId: moments.chainId, deletedAt: moments.deletedAt })
+          .from(moments)
+          .where(eq(moments.id, row.momentId))
+          .limit(1);
+        if (!m || m.deletedAt) throw new NotFoundError('MEDIA_NOT_FOUND');
+        await this.policy.require(user.id, m.chainId, 'viewer');
+      } else if (row.uploaderId !== user.id) {
+        throw new NotFoundError('MEDIA_NOT_FOUND');
+      }
     }
 
     const { signingDate, expiresIn } = alignedGetPresign();
     return getStorage().generateAccessUrl(row.s3Key, row.storageMeta, expiresIn, signingDate);
+  }
+
+  /** share token 透传：token 有效 + media 绑定该链未软删 moment → 放行；其余一律 404，不泄露存在性。 */
+  private async assertShareAccess(token: string, row: Media): Promise<void> {
+    const link = await this.shareLinks.findValidByToken(token);
+    if (!link) throw new NotFoundError('SHARE_NOT_FOUND');
+    if (!row.momentId) throw new NotFoundError('MEDIA_NOT_FOUND');
+    const [m] = await db
+      .select({ chainId: moments.chainId, deletedAt: moments.deletedAt })
+      .from(moments)
+      .where(eq(moments.id, row.momentId))
+      .limit(1);
+    if (!m || m.deletedAt || m.chainId !== link.chainId) {
+      throw new NotFoundError('MEDIA_NOT_FOUND'); // 跨链媒体拒绝
+    }
   }
 }
