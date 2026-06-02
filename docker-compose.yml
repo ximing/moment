@@ -17,5 +17,48 @@ services:
       timeout: 3s
       retries: 20
 
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    env_file: apps/server/.env
+    environment:
+      NODE_ENV: production
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+    ports:
+      - '3000:3000'
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    command: ['node', 'dist/worker/index.js']
+    env_file: apps/server/.env
+    environment:
+      NODE_ENV: production
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  backup:
+    build:
+      context: ./backup
+    restart: unless-stopped
+    env_file: apps/server/.env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+    depends_on:
+      mysql:
+        condition: service_healthy
+
 volumes:
   moment-mysql: {}
