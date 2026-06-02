@@ -1,8 +1,27 @@
-import rateLimit from 'express-rate-limit';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
+import type { Request } from 'express';
 import { config } from '../config.js';
 
 const isTest = config.NODE_ENV === 'test';
 const message = { error: { code: 'RATE_LIMITED', message: '请求过于频繁，请稍后再试' } };
+
+/** IPv6 /56 归一化（v8 安全修复：防子网内轮换 IP 绕过限流）；IPv4 原样返回。导出供回归测试断言。 */
+export function ipKey(req: Request): string {
+  return ipKeyGenerator(req.ip ?? '', 56);
+}
+
+/** 登录限流 key：归一化 IP + email（小写）。导出供回归测试断言确实走 ipKeyGenerator。 */
+export function loginKeyGenerator(req: Request): string {
+  const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase() : '';
+  return `${ipKey(req)}:${email}`;
+}
+
+/** 邀请接受限流 key：归一化 IP + invitee userId + invite token。导出供回归测试断言。 */
+export function inviteAcceptKeyGenerator(req: Request): string {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id ?? 'anonymous';
+  const token = typeof req.params?.token === 'string' ? req.params.token : '';
+  return `${ipKey(req)}:${userId}:${token}`;
+}
 
 /** 注册等敏感端点：IP 维度，60s/10 次。测试环境放宽避免用例互踩。 */
 export const authRateLimiter = rateLimit({
@@ -19,10 +38,7 @@ export const loginRateLimiter = rateLimit({
   limit: isTest ? 1000 : 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase() : '';
-    return `${req.ip}:${email}`;
-  },
+  keyGenerator: loginKeyGenerator,
   message,
 });
 
@@ -36,11 +52,7 @@ export const inviteAcceptRateLimiter = rateLimit({
   limit: isTest ? 1000 : 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    const userId = (req as unknown as { user?: { id: string } }).user?.id ?? 'anonymous';
-    const token = typeof req.params?.token === 'string' ? req.params.token : '';
-    return `${req.ip}:${userId}:${token}`;
-  },
+  keyGenerator: inviteAcceptKeyGenerator,
   message,
 });
 
