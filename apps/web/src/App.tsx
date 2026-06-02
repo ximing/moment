@@ -10,12 +10,14 @@ import { ComposePage } from '@/pages/ComposePage';
 import { MomentDetailPage } from '@/pages/MomentDetailPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { AcceptInvitePage } from '@/pages/AcceptInvitePage';
+import { SharePage } from '@/pages/SharePage';
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/share/:token" element={<SharePage />} />
       <Route path="/invites/:token" element={<AcceptInvitePage />} />
       <Route element={<RequireAuth><AppShell /></RequireAuth>}>
         {/* 功能子路由由 Task 5–10 依次加入（feed / chains / compose / moments / notifications） */}

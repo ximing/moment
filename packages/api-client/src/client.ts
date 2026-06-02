@@ -7,6 +7,7 @@ import type {
   CommentListResponse,
   CreateChainInput,
   CreateInviteInput,
+  CreateShareLinkInput,
   FeedResponse,
   InviteDto,
   InviteRole,
@@ -18,8 +19,11 @@ import type {
   MomentResponse,
   NotificationListResponse,
   PatchMomentInput, // 等价映射（依赖契约段免责条款）：Phase 3 计划名 PatchMomentInput / Phase 4 计划名 UpdateMomentInput——若 dto 实际导出为 UpdateMomentInput，改为 `UpdateMomentInput as PatchMomentInput`，禁止反向改 dto
+  PublicShareResponse,
   RegisterInput,
   RegisterPushTokenInput,
+  ShareLinkDto,
+  ShareLinkListResponse,
   TagListResponse,
   TagResponse,
   UpdateChainInput,
@@ -82,6 +86,12 @@ export interface MomentClient {
   mediaUrl(mediaId: string): string;
   /** Web `<img>/<video>` 渲染的唯一来源：Blob → URL.createObjectURL（见 Global Constraints 媒体条目） */
   fetchMediaBlob(mediaId: string): Promise<Blob>;
+
+  // share links & public
+  createShareLink(chainId: string, input: CreateShareLinkInput): Promise<ShareLinkDto>;
+  listShareLinks(chainId: string): Promise<ShareLinkListResponse>;
+  revokeShareLink(shareLinkId: string): Promise<void>;
+  getPublicShare(token: string, cursor?: string): Promise<PublicShareResponse>;
 
   listComments(momentId: string, query?: { cursor?: string; limit?: number }): Promise<CommentListResponse>;
   createComment(momentId: string, content: string): Promise<CommentDto>;
@@ -187,5 +197,15 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
     markNotificationsRead: (ids) => http.request('/api/notifications/read', { method: 'POST', body: { ids } }),
     registerPushToken: (input) => http.request('/api/devices/push-token', { method: 'POST', body: input }),
     uploadMedia: (input) => uploadMediaImpl(http, options, input),
+    createShareLink: (chainId, input) =>
+      http.request<ShareLinkDto>(`/api/chains/${chainId}/share-links`, { method: 'POST', body: input }),
+    listShareLinks: (chainId) => http.request<ShareLinkListResponse>(`/api/chains/${chainId}/share-links`),
+    revokeShareLink: (shareLinkId) =>
+      http.request<void>(`/api/share-links/${shareLinkId}`, { method: 'DELETE' }),
+    getPublicShare: (token, cursor) =>
+      http.request<PublicShareResponse>(`/api/public/share/${token}`, {
+        query: { cursor },
+        skipAuth: true, // 匿名可用；永不触发 refresh
+      }),
   };
 }

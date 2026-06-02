@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { describe, it, test } from 'node:test';
 import { createMomentClient } from './client.js';
 
 /** 记录全部 fetch 调用并按需应答的 harness。 */
@@ -188,4 +188,70 @@ test('listChainMoments 将 dto items 映射为 moments', async () => {
   assert.equal(res.moments[0]!.id, 'm1');
   assert.equal(res.nextCursor, null);
   assert.equal('items' in res, false);
+});
+
+describe('share 方法', () => {
+  const anonTokenStore = {
+    getAccessToken: () => null,
+    getRefreshToken: () => null,
+    setTokens: () => undefined,
+    clear: () => undefined,
+  };
+
+  function capture(status: number, body: unknown) {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fetchImpl = (async (url: unknown, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return new Response(body === undefined ? null : JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+    return { calls, fetchImpl };
+  }
+
+  it('createShareLink：POST /api/chains/:chainId/share-links', async () => {
+    const dto = {
+      id: 'sl-1',
+      chainId: 'c-1',
+      token: 'a'.repeat(64),
+      expiresAt: null,
+      revokedAt: null,
+      createdAt: '2026-08-16T00:00:00.000Z',
+    };
+    const { calls, fetchImpl } = capture(201, dto);
+    const client = createMomentClient({ baseUrl: 'http://test.local', tokenStore: anonTokenStore, fetchImpl });
+    const res = await client.createShareLink('c-1', {});
+    assert.equal(res.token, dto.token);
+    assert.equal(calls[0]!.url, 'http://test.local/api/chains/c-1/share-links');
+    assert.equal(calls[0]!.init?.method, 'POST');
+    assert.deepEqual(JSON.parse(String(calls[0]!.init?.body)), {});
+  });
+
+  it('listShareLinks / revokeShareLink：GET 与 DELETE（204 → undefined）', async () => {
+    const { calls, fetchImpl } = capture(200, { items: [] });
+    const client = createMomentClient({ baseUrl: 'http://test.local', tokenStore: anonTokenStore, fetchImpl });
+    const res = await client.listShareLinks('c-1');
+    assert.deepEqual(res.items, []);
+    assert.equal(calls[0]!.url, 'http://test.local/api/chains/c-1/share-links');
+    assert.equal(calls[0]!.init?.method ?? 'GET', 'GET');
+
+    const del = capture(204, undefined);
+    const client2 = createMomentClient({ baseUrl: 'http://test.local', tokenStore: anonTokenStore, fetchImpl: del.fetchImpl });
+    await assert.doesNotReject(() => client2.revokeShareLink('sl-1'));
+    assert.equal(del.calls[0]!.url, 'http://test.local/api/share-links/sl-1');
+    assert.equal(del.calls[0]!.init?.method, 'DELETE');
+  });
+
+  it('getPublicShare：skipAuth（无 Authorization），cursor 进 query', async () => {
+    const body = { chain: { name: 'c', description: null }, moments: [], nextCursor: null };
+    const { calls, fetchImpl } = capture(200, body);
+    const client = createMomentClient({ baseUrl: 'http://test.local', tokenStore: anonTokenStore, fetchImpl });
+    await client.getPublicShare('tok-1');
+    assert.equal(calls[0]!.url, 'http://test.local/api/public/share/tok-1');
+    assert.equal((calls[0]!.init?.headers as Record<string, string>).Authorization, undefined);
+
+    await client.getPublicShare('tok-1', 'cur/sor+1');
+    assert.equal(calls[1]!.url, `http://test.local/api/public/share/tok-1?cursor=${encodeURIComponent('cur/sor+1')}`);
+  });
 });
