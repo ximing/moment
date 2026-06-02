@@ -155,7 +155,7 @@ describe('handlers 注册表', () => {
     expect(Object.keys(handlers)).toHaveLength(4);
   });
 
-  it('moment.deleted no-op：直接成功、不产生任何通知（Phase 8 替换为 sweeper）', async () => {
+  it('moment.deleted：无匹配 media 行时静默成功、不产生通知（Phase 8 已替换为 orphaned 标记实现）', async () => {
     await expect(
       handleMomentDeleted({ momentId: 'm-x', chainId: 'c-x' }, { push: new MockPushService() })
     ).resolves.toBeUndefined();

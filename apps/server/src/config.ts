@@ -34,6 +34,15 @@ const envSchema = z.object({
   EXPO_ACCESS_TOKEN: z.string().default(''),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().default(2000),
   WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(20),
+  // Sweeper（worker 进程；spec §5.5 防孤儿）
+  SWEEPER_INTERVAL_MS: z.coerce.number().int().min(60_000).default(3_600_000),
+  // dry-run 先行：true 时只打日志不删行/对象（生产首轮观察用）
+  SWEEPER_DRY_RUN: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  MEDIA_UPLOADING_TTL_HOURS: z.coerce.number().int().min(1).default(24),
+  MOMENT_SOFT_DELETE_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
 });
 
 export const config = envSchema.parse(process.env);

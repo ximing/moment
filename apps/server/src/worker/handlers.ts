@@ -1,7 +1,7 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { Container } from 'typedi';
 import { db } from '../db/index.js';
-import { chainMembers, chains, comments, moments, users } from '../db/schema.js';
+import { chainMembers, chains, comments, media, moments, users } from '../db/schema.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import {
   NOTIFICATION_COMMENT_CREATED,
@@ -142,10 +142,17 @@ export const handleReactionCreated: OutboxHandler = async (payload, deps) => {
 };
 
 /**
- * moment.deleted：Phase 5 为 no-op——Phase 3 软删路径持续产生该事件，不注册的话每次软删都会被
- * processor 标 failed、污染 spec §7 失败指标。Phase 8 替换为媒体清理 sweeper。
+ * moment.deleted：只把该 moment 的 ready media 标记为 orphaned（幂等），不物理删——
+ * 物理清理由 sweeper 按 30 天保留期执行（spec §5.5「sweeper 延迟物理清理」）。
  */
-export const handleMomentDeleted: OutboxHandler = async () => {};
+export const handleMomentDeleted: OutboxHandler = async (payload) => {
+  const momentId = str(payload.momentId);
+  if (!momentId) return;
+  await db
+    .update(media)
+    .set({ status: 'orphaned' })
+    .where(and(eq(media.momentId, momentId), eq(media.status, 'ready')));
+};
 
 /** 注册表：processor 按 outbox.type 分发。 */
 export const handlers: Record<string, OutboxHandler> = {

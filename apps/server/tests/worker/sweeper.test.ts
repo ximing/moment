@@ -1,0 +1,166 @@
+import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
+import { db } from '../../src/db/index.js';
+import { media, moments, users } from '../../src/db/schema.js';
+import { closeDb, resetDb } from '../helpers/db.js';
+import { installMockStorage } from '../helpers/storage.js';
+import { setStorageAdapter } from '../../src/storage/factory.js';
+import { handleMomentDeleted, handlers } from '../../src/worker/handlers.js';
+import { sweepSoftDeletedMomentMedia, sweepStaleUploadingMedia } from '../../src/worker/sweeper.js';
+
+let storage: Record<string, jest.Mock>;
+
+const TEST_META = {
+  bucket: 'moment-test-placeholder',
+  prefix: 'test/attachments',
+  region: 'us-east-1',
+  isPublicBucket: 'false' as const,
+};
+
+/** 直插最小链 + moment（sweeper 只关心 moments.deletedAt 与 media 行）。 */
+async function insertMomentWithMedia(opts: {
+  momentDeletedAt?: Date | null;
+  mediaStatus?: 'uploading' | 'ready' | 'orphaned';
+  mediaCreatedAt?: Date;
+  uploadId?: string | null;
+}): Promise<{ momentId: string; mediaId: string }> {
+  const userId = randomUUID();
+  await db.insert(users).values({ id: userId, email: `${userId}@test.com`, passwordHash: 'x', nickname: 'u' });
+  const chainId = randomUUID();
+  const { chains } = await import('../../src/db/schema.js');
+  await db.insert(chains).values({ id: chainId, name: 'c', ownerId: userId, visibility: 'private' });
+  const momentId = randomUUID();
+  await db.insert(moments).values({
+    id: momentId,
+    chainId,
+    authorId: userId,
+    type: 'media',
+    content: 'x',
+    happenedAt: new Date(),
+    happenedTzOffset: 0,
+    deletedAt: opts.momentDeletedAt ?? null,
+  });
+  const mediaId = randomUUID();
+  await db.insert(media).values({
+    id: mediaId,
+    momentId,
+    uploaderId: userId,
+    s3Key: `chains/${chainId}/${momentId}/${mediaId}.jpeg`,
+    mime: 'image/jpeg',
+    size: 1024,
+    status: opts.mediaStatus ?? 'ready',
+    storageMeta: TEST_META,
+    uploadId: opts.uploadId ?? null,
+    createdAt: opts.mediaCreatedAt ?? new Date(),
+  });
+  return { momentId, mediaId };
+}
+
+beforeEach(async () => {
+  await resetDb();
+  storage = installMockStorage();
+});
+afterEach(() => setStorageAdapter(null));
+afterAll(closeDb);
+
+describe('sweepStaleUploadingMedia（uploading 超 24h，spec §5.5）', () => {
+  it('超期 uploading：abort multipart + deleteFile + 硬删行；未超期与 ready 不动', async () => {
+    const stale = await insertMomentWithMedia({
+      mediaStatus: 'uploading',
+      mediaCreatedAt: new Date(Date.now() - 25 * 3_600_000),
+      uploadId: 'upload-123',
+    });
+    const fresh = await insertMomentWithMedia({ mediaStatus: 'uploading' });
+    const ready = await insertMomentWithMedia({
+      mediaStatus: 'ready',
+      mediaCreatedAt: new Date(Date.now() - 48 * 3_600_000),
+    });
+
+    const result = await sweepStaleUploadingMedia();
+
+    expect(result.scanned).toBe(1);
+    expect(result.abortedUploads).toBe(1);
+    expect(result.deletedObjects).toBe(1);
+    expect(result.deletedRows).toBe(1);
+    expect(storage.abortMultipart).toHaveBeenCalledWith(
+      expect.stringContaining(stale.mediaId),
+      'upload-123'
+    );
+    expect(storage.deleteFile).toHaveBeenCalledWith(expect.stringContaining(stale.mediaId), TEST_META);
+    expect(await db.select().from(media).where(eq(media.id, stale.mediaId))).toHaveLength(0);
+    expect(await db.select().from(media).where(eq(media.id, fresh.mediaId))).toHaveLength(1);
+    expect(await db.select().from(media).where(eq(media.id, ready.mediaId))).toHaveLength(1);
+  });
+
+  it('dry-run：只日志不删行不调存储', async () => {
+    const stale = await insertMomentWithMedia({
+      mediaStatus: 'uploading',
+      mediaCreatedAt: new Date(Date.now() - 25 * 3_600_000),
+    });
+    const result = await sweepStaleUploadingMedia(new Date(), { dryRun: true });
+    expect(result.dryRun).toBe(true);
+    expect(result.deletedRows).toBe(0);
+    expect(storage.deleteFile).not.toHaveBeenCalled();
+    expect(await db.select().from(media).where(eq(media.id, stale.mediaId))).toHaveLength(1);
+  });
+});
+
+describe('sweepSoftDeletedMomentMedia（软删超 30 天 moment 的媒体）', () => {
+  it('超期：S3 对象 + media 行硬删；未超期与活 moment 的媒体不动', async () => {
+    const old = await insertMomentWithMedia({
+      momentDeletedAt: new Date(Date.now() - 31 * 86_400_000),
+    });
+    const recent = await insertMomentWithMedia({
+      momentDeletedAt: new Date(Date.now() - 86_400_000),
+    });
+    const alive = await insertMomentWithMedia({});
+
+    const result = await sweepSoftDeletedMomentMedia();
+
+    expect(result.scanned).toBe(1);
+    expect(result.deletedRows).toBe(1);
+    expect(storage.deleteFile).toHaveBeenCalledWith(expect.stringContaining(old.mediaId), TEST_META);
+    expect(await db.select().from(media).where(eq(media.id, old.mediaId))).toHaveLength(0);
+    expect(await db.select().from(media).where(eq(media.id, recent.mediaId))).toHaveLength(1);
+    expect(await db.select().from(media).where(eq(media.id, alive.mediaId))).toHaveLength(1);
+  });
+
+  it('deleteFile 失败：行保留、下轮重试（正式对象无 lifecycle 兜底，删行即永久孤儿）', async () => {
+    const old = await insertMomentWithMedia({
+      momentDeletedAt: new Date(Date.now() - 31 * 86_400_000),
+    });
+    storage.deleteFile.mockRejectedValueOnce(new Error('S3 down'));
+
+    const result = await sweepSoftDeletedMomentMedia();
+    expect(result.scanned).toBe(1);
+    expect(result.deletedObjects).toBe(0);
+    expect(result.deletedRows).toBe(0);
+    expect(await db.select().from(media).where(eq(media.id, old.mediaId))).toHaveLength(1);
+
+    // 下轮重试成功 → 行正常删除
+    const retry = await sweepSoftDeletedMomentMedia();
+    expect(retry.deletedRows).toBe(1);
+    expect(await db.select().from(media).where(eq(media.id, old.mediaId))).toHaveLength(0);
+  });
+});
+
+describe('handleMomentDeleted（outbox moment.deleted → 标记 orphaned，幂等）', () => {
+  it('ready → orphaned；重复调用不报错不再变', async () => {
+    const { momentId, mediaId } = await insertMomentWithMedia({
+      momentDeletedAt: new Date(),
+      mediaStatus: 'ready',
+    });
+    await handleMomentDeleted({ momentId, chainId: 'ignored' }, { push: undefined as never });
+    let [row] = await db.select().from(media).where(eq(media.id, mediaId));
+    expect(row.status).toBe('orphaned');
+
+    await handleMomentDeleted({ momentId, chainId: 'ignored' }, { push: undefined as never });
+    [row] = await db.select().from(media).where(eq(media.id, mediaId));
+    expect(row.status).toBe('orphaned');
+  });
+
+  it('handlers 注册表含 moment.deleted', () => {
+    expect(handlers['moment.deleted']).toBe(handleMomentDeleted);
+    expect(Object.keys(handlers)).toHaveLength(4);
+  });
+});
