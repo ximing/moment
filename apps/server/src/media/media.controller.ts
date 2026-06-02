@@ -75,6 +75,7 @@ export class MediaController {
   ): Promise<Response> {
     const url = await this.mediaService.resolveAccessUrl(user, id, st);
     res.setHeader('Cache-Control', 'private, max-age=300');
-    return res.redirect(302, url);
+    res.redirect(302, url);
+    return res;
   }
 }
