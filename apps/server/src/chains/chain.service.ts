@@ -15,7 +15,7 @@ import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routi
 import { Service } from 'typedi';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
-import { chainInvites, chainMembers, chains, comments, media, momentTags, moments, reactions, tags, users, type Chain, type ChainInvite } from '../db/schema.js';
+import { chainInvites, chainMembers, chains, comments, media, momentTags, moments, reactions, shareLinks, tags, users, type Chain, type ChainInvite } from '../db/schema.js';
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
 
 @Service()
@@ -83,6 +83,7 @@ export class ChainService {
         .select({ id: moments.id })
         .from(moments)
         .where(eq(moments.chainId, chainId));
+      await tx.delete(shareLinks).where(eq(shareLinks.chainId, chainId));
       await tx.delete(reactions).where(inArray(reactions.momentId, chainMomentIds));
       await tx.delete(comments).where(inArray(comments.momentId, chainMomentIds));
       await tx.delete(momentTags).where(inArray(momentTags.momentId, chainMomentIds));

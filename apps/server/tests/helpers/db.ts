@@ -12,6 +12,7 @@ import {
   pushTokens,
   reactions,
   refreshTokens,
+  shareLinks,
   tags,
   users,
 } from '../../src/db/schema.js';
@@ -29,6 +30,7 @@ export async function resetDb(): Promise<void> {
   await db.delete(moments);
   await db.delete(chainInvites);
   await db.delete(chainMembers);
+  await db.delete(shareLinks);
   await db.delete(chains);
   await db.delete(refreshTokens);
   await db.delete(users);

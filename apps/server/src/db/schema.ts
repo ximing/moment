@@ -11,3 +11,4 @@ export * from './schema/comments.js';
 export * from './schema/reactions.js';
 export * from './schema/notifications.js';
 export * from './schema/push-tokens.js';
+export * from './schema/share-links.js';
