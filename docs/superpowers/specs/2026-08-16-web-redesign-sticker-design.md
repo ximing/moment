@@ -104,7 +104,7 @@
 - 入参:`chain_ids`(可选,逗号分隔 uuid,语义同 feed——仅用于在我的链范围内收窄,非成员链静默忽略)、`tag_id`(可选)、`tz_offset`(**必填**,整数分钟,语义同 `getTimezoneOffset`:东八区 = -480)。
 - 归桶时区 = **查看者时区**(对抗审查 blocker #1 的定稿):SQL 按 `happened_at − INTERVAL tz_offset MINUTE` 取 `DATE_FORMAT '%Y-%m'` 聚合 count;排除软删。
 - 返回 `{ months: [{ month: "2026-08", count: 12 }, ...] }`,按月倒序;空范围返回空数组。
-- dto:`monthIndexQuerySchema`(tz_offset 用 `z.coerce.number().int().min(-840).max(840)`,缺省拒绝 → VALIDATION_ERROR);`feedQuerySchema` 不变。
+- dto:`monthIndexQuerySchema`(tz_offset 用 `z.coerce.number().int().min(-840).max(840)`,缺省拒绝 → VALIDATION_ERROR);`feedQuerySchema` 的既有字段不动(`before` 的新增见 §4.2)。
 
 **刻意保留的不一致**:索引归桶用查看者时区,卡片与日期贴纸展示用作者本地(§3.2)。跨时区家庭在月首/月末可能看到「索引计数」与「分组贴纸」差一两条——索引是导航辅助不是账本,接受并在代码注释中说明。
 
