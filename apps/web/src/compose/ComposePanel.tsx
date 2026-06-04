@@ -36,11 +36,8 @@ function ComposeBody({
   const { data: chains } = useQuery({ queryKey: qk.chains, queryFn: () => client.listChains() });
   const writable = (chains ?? []).filter((c) => canCompose(c));
 
-  const firstWritableId = writable[0]?.id;
-  const [chainId, setChainId] = useState(request.chainId ?? edit?.chainId ?? '');
-  useEffect(() => {
-    if (!chainId && firstWritableId) setChainId(firstWritableId);
-  }, [chainId, firstWritableId]);
+  const [pickedChainId, setPickedChainId] = useState(request.chainId ?? edit?.chainId ?? '');
+  const chainId = pickedChainId || writable[0]?.id || '';
   const [content, setContent] = useState(edit?.content ?? '');
   const [images, setImages] = useState<PickedImage[]>([]);
   const [video, setVideo] = useState<{ file: File; previewUrl: string; durationSeconds: number } | null>(null);
@@ -269,7 +266,7 @@ function ComposeBody({
               <button
                 key={c.id}
                 type="button"
-                onClick={() => setChainId(c.id)}
+                onClick={() => setPickedChainId(c.id)}
                 className={`rounded-paper border px-3 py-2 text-left text-sm ${
                   chainId === c.id ? 'border-accent bg-accent/10' : 'border-line'
                 }`}
