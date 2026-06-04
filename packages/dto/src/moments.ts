@@ -106,5 +106,7 @@ export interface MomentListResponse {
 export const listMomentsQuerySchema = z.object({
   cursor: z.string().min(1).max(1024).optional(),
   limit: z.string().optional(),
+  /** 日期锚定（spec §4.2）：happened_at < before；链内列表恒 happened_at 语义，天然可用 */
+  before: isoTimestampSchema.optional(),
 });
 export type ListMomentsQuery = z.infer<typeof listMomentsQuerySchema>;

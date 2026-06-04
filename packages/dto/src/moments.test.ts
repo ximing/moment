@@ -87,3 +87,19 @@ test('listMomentsQuerySchema：cursor 空串/超长拒绝，缺省与合法串�
   assert.ok(!listMomentsQuerySchema.safeParse({ cursor: '' }).success);
   assert.ok(!listMomentsQuerySchema.safeParse({ cursor: 'x'.repeat(1025) }).success);
 });
+
+test('listMomentsQuerySchema before 可选且必须是合法 datetime', () => {
+  assert.equal(listMomentsQuerySchema.parse({}).before, undefined);
+  assert.equal(
+    listMomentsQuerySchema.parse({ before: '2026-08-01T00:00:00.000Z' }).before,
+    '2026-08-01T00:00:00.000Z',
+  );
+  assert.throws(() => listMomentsQuerySchema.parse({ before: 'garbage' }));
+});
+
+test('listMomentsQuerySchema 既有行为不回退：cursor/limit 原样', () => {
+  const q = listMomentsQuerySchema.parse({ cursor: 'abc', limit: '50' });
+  assert.equal(q.cursor, 'abc');
+  assert.equal(q.limit, '50'); // limit 仍是 string，service 层解析（INVALID_LIMIT 语义不动）
+  assert.throws(() => listMomentsQuerySchema.parse({ cursor: '' }));
+});
