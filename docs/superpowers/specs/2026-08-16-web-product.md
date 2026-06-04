@@ -1,7 +1,7 @@
 # 时刻 Moment — Web 产品 Spec
 
 > 日期：2026-08-16
-> 状态：已通过对话评审，待实现计划
+> 状态：已实现（feat/web-product）
 > 范围：重写 `apps/web`，做成真实家庭能日常使用的平板/电脑产品
 > 权威边界：数据模型、API、权限、媒体、分享语义以 `docs/superpowers/specs/2026-08-15-moment-design.md` 为准。本文只定义 **Web 产品面**。禁止为本文改 dto 字段名或既有 HTTP 契约。
 

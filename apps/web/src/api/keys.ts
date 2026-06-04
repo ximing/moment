@@ -11,4 +11,6 @@ export const qk = {
   moment: (momentId: string) => ['moments', momentId] as const,
   comments: (momentId: string) => ['moments', momentId, 'comments'] as const,
   notifications: (unread: boolean) => ['notifications', unread] as const,
+  shareLinks: (chainId: string) => ['chains', chainId, 'share-links'] as const,
+  publicShare: (token: string) => ['public-share', token] as const,
 };
