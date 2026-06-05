@@ -10,6 +10,8 @@ export interface MomentPageQuery {
   limit: number;
   cursor?: string;
   tagId?: string;
+  /** 日期锚定：happened_at < before（严格小于）。仅 happened_at 语义下由调用方传入。 */
+  before?: string;
 }
 
 export interface MomentPage {
@@ -43,6 +45,13 @@ export async function queryMomentPage(query: MomentPageQuery): Promise<MomentPag
         and(eq(timeCol, cursorTime), lt(moments.id, cursor.id)),
       ) as SQL,
     );
+  }
+
+  // before 与 cursor 共存：两个条件都进 conditions，AND 取更严上界（spec §4.2）。
+  // order=created_at + before 已在 feedQuerySchema 层拒绝；链内列表恒 happened_at。
+  // 防御：万一未来出现 created_at + before 的调用方，宁可忽略 before 也不对错列做锚定。
+  if (query.before && query.order === 'happened_at') {
+    conditions.push(lt(moments.happenedAt, new Date(query.before)));
   }
 
   if (query.tagId) {

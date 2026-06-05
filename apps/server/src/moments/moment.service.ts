@@ -113,7 +113,7 @@ export class MomentService {
   async list(
     userId: string,
     chainId: string,
-    query: { cursor?: string; limit?: string }
+    query: { cursor?: string; limit?: string; before?: string }
   ): Promise<MomentListResponse> {
     await this.policy.require(userId, chainId, 'viewer');
 
@@ -130,6 +130,7 @@ export class MomentService {
       order: 'happened_at',
       limit,
       cursor: query.cursor,
+      before: query.before,
     });
     return { items: await serializeMoments(page.rows, userId), nextCursor: page.nextCursor };
   }

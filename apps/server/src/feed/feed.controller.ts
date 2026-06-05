@@ -25,6 +25,7 @@ export class FeedController {
       tagId: query.tag_id,
       order: query.order,
       limit: query.limit,
+      before: query.before,
     });
   }
 

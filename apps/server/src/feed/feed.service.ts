@@ -13,6 +13,7 @@ export interface FeedQueryParsed {
   tagId?: string;
   order: MomentOrder;
   limit: number;
+  before?: string;
 }
 
 @Service()
@@ -32,6 +33,7 @@ export class FeedService {
       limit: query.limit,
       cursor: query.cursor,
       tagId: query.tagId,
+      before: query.before,
     });
     return { moments: await serializeMoments(page.rows, userId), nextCursor: page.nextCursor };
   }

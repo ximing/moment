@@ -44,9 +44,10 @@ export class MomentController {
     @Param('chainId') chainId: string,
     @QueryParam('cursor', { required: false, type: String }) cursor: string | undefined,
     @QueryParam('limit', { required: false, type: String }) limit: string | undefined,
+    @QueryParam('before', { required: false, type: String }) before: string | undefined,
     @CurrentUser() user: UserProfile
   ): Promise<MomentListResponse> {
-    const query = listMomentsQuerySchema.parse({ cursor, limit });
+    const query = listMomentsQuerySchema.parse({ cursor, limit, before });
     return this.momentService.list(user.id, chainId, query);
   }
 }
