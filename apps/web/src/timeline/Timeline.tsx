@@ -50,6 +50,7 @@ export function Timeline({
       chainName={chainNameById?.get(m.chainId)}
       shareToken={shareToken}
       readOnly={readOnly}
+      hideKnot={hideSignature}
     />
   );
 

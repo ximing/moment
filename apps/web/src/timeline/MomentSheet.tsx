@@ -19,11 +19,14 @@ export function MomentSheet({
   chainName,
   shareToken,
   readOnly,
+  hideKnot,
 }: {
   moment: MomentResponse;
   chainName?: string;
   shareToken?: string;
   readOnly?: boolean;
+  /** 无链条上下文时传 true（如 Timeline hideSignature 降级）：不渲染链节圆环，避免无依托悬浮 */
+  hideKnot?: boolean;
 }) {
   const { user } = useAuth();
   const { openCompose } = useCompose();
@@ -58,7 +61,9 @@ export function MomentSheet({
   return (
     <article className="relative rounded-card border-2 border-line bg-surface p-5 shadow-card">
       {/* 链节圆环：卡片左上角外侧，中心对齐时间线虚线（容器缩进 26px - 左偏 24px + 环半径 8px ≈ 线中心 x10，spec §3.1） */}
-      <span aria-hidden className="absolute -left-6 top-6 h-4 w-4 rounded-full border-2 border-line bg-surface" />
+      {!hideKnot && (
+        <span aria-hidden className="absolute -left-6 top-6 h-4 w-4 rounded-full border-2 border-line bg-surface" />
+      )}
       <header className="flex items-center gap-2.5">
         <Avatar name={moment.author.nickname} />
         <div className="min-w-0 flex-1">
