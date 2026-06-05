@@ -22,3 +22,19 @@ export function localDateKey(iso: string, tzOffsetMinutes: number): string {
 export function currentTzOffset(): number {
   return new Date().getTimezoneOffset();
 }
+
+/** 跳到月份 M 的 before 参数（spec §4.3）：M 的下一月月初 00:00（查看者本地）换算 UTC ISO。 */
+export function monthBeforeParam(month: string): string {
+  const [y, m] = month.split('-').map((s) => Number(s));
+  return new Date(y!, m!, 1).toISOString(); // m 为 1-based 月 → Date 的 0-based 恰好是「下一月」
+}
+
+/** 从 before 反推锚定月 YYYY-MM（before 恒为「锚定月下一月」1 日本地 00:00 的 ISO，见 monthBeforeParam）。 */
+export function monthFromBefore(before: string): string {
+  const d = new Date(before);
+  // 回退一月得锚定月（setMonth 自动处理跨年：1 月回退到上年 12 月；
+  // 直接取 getMonth() 的 0-based 巧合写法在 12 月锚定时会得到 'YYYY-00'，不可用）
+  d.setMonth(d.getMonth() - 1);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
