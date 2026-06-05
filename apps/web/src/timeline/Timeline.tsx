@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { MomentResponse } from '@moment/dto';
+import { useCompose } from '@/compose/ComposeContext';
 import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
 import { Banner } from '@/ui/Banner';
 import { MomentSheet } from './MomentSheet';
@@ -26,6 +27,7 @@ export function Timeline({
   fetchNextPage,
   empty,
   hideSignature,
+  entry,
 }: {
   moments: MomentResponse[];
   chainNameById?: Map<string, string>;
@@ -40,18 +42,24 @@ export function Timeline({
   empty: ReactNode;
   /** order=created_at 时传 true：链条与日期贴纸整体隐藏（spec §3.2 降级） */
   hideSignature?: boolean;
+  /** composer 入口占位卡（spec §5）：渲染在签名容器最顶部，与链条对齐；骨架/空态/签名降级时不渲染 */
+  entry?: ReactNode;
 }) {
   const sentinelRef = useLoadMoreSentinel(!isPending && !isError, hasNextPage, isFetchingNextPage, fetchNextPage);
+  // 发布成功「长出来」微动效（spec §1.6）：lastCreatedId 是响应式 state，渲染期直读；
+  // invalidate 重取后新卡挂载时动画播放一次，下一次 openCompose 自清
+  const { lastCreatedId } = useCompose();
 
   const renderSheet = (m: MomentResponse) => (
-    <MomentSheet
-      key={m.id}
-      moment={m}
-      chainName={chainNameById?.get(m.chainId)}
-      shareToken={shareToken}
-      readOnly={readOnly}
-      hideKnot={hideSignature}
-    />
+    <div key={m.id} className={m.id === lastCreatedId ? 'animate-[grow-in_200ms_ease-out]' : undefined}>
+      <MomentSheet
+        moment={m}
+        chainName={chainNameById?.get(m.chainId)}
+        shareToken={shareToken}
+        readOnly={readOnly}
+        hideKnot={hideSignature}
+      />
+    </div>
   );
 
   const tail = (
@@ -100,6 +108,9 @@ export function Timeline({
         aria-hidden
         className="absolute bottom-2 left-[9px] top-2 border-l-[2.5px] border-dashed border-[color:color-mix(in_srgb,var(--muted)_40%,transparent)]"
       />
+      {/* composer 入口挂链首（spec §5）：占位卡左侧圆点落在虚线中心；仅签名分支渲染，
+          降级/骨架/空态下左侧缩进不存在，-left-6 挂点会溢出 */}
+      {entry}
       {groups.map((g) => (
         <section key={g.date} className="mb-6">
           {/* 日期分组头 = 链上贴纸节点：左侧圆点(--select) + 日期贴纸（颜色全走 token） */}

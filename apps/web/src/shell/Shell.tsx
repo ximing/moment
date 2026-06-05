@@ -5,10 +5,10 @@ import { client } from '@/api/client';
 import { qk } from '@/api/keys';
 import { useAuth } from '@/auth/AuthProvider';
 import { useCompose } from '@/compose/ComposeContext';
+import { ComposeFab } from '@/compose/ComposeFab';
 import { ComposePanel } from '@/compose/ComposePanel';
 import { canCompose } from '@/lib/roles';
 import { chainColor, stickerClasses } from '@/lib/chain-color';
-import { Button } from '@/ui/Button';
 import { CreateChainDialog } from './CreateChainDialog';
 
 export function Shell() {
@@ -92,18 +92,14 @@ export function Shell() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* 90% 不透明顶栏：token 是 var() 色值，Tailwind 的 /90 修饰符对其不生效，用 color-mix 实现 */}
-        <header className="sticky top-0 z-10 flex items-center justify-end border-b border-line bg-[color-mix(in_srgb,var(--bg)_90%,transparent)] px-6 py-3 backdrop-blur-sm">
-          {showCompose && (
-            <Button onClick={() => openCompose({ chainId })}>记下此刻</Button>
-          )}
-        </header>
+        {/* 顶栏已随「记下此刻」按钮一起移除：发布入口移交时间线占位卡 + FAB（spec §5） */}
         <main className="mx-auto w-full max-w-content flex-1 px-6 py-8">
           <Outlet />
         </main>
       </div>
 
       <ComposePanel />
+      {showCompose && <ComposeFab />}
       {creating && <CreateChainDialog onClose={() => setCreating(false)} />}
     </div>
   );

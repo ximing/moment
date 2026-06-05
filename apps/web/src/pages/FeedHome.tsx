@@ -3,6 +3,8 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
 import { useCompose } from '@/compose/ComposeContext';
+import { ComposerEntry } from '@/compose/ComposerEntry';
+import { canCompose } from '@/lib/roles';
 import { Timeline } from '@/timeline/Timeline';
 import { Button } from '@/ui/Button';
 
@@ -10,6 +12,8 @@ export function FeedHome() {
   const { openCompose } = useCompose();
   const { data: chains } = useQuery({ queryKey: qk.chains, queryFn: () => client.listChains() });
   const names = useMemo(() => new Map((chains ?? []).map((c) => [c.id, c.name])), [chains]);
+  // 占位卡抑制：viewer（任何链都不可写）全程不见（spec §5）
+  const entry = (chains ?? []).some(canCompose) ? <ComposerEntry /> : undefined;
   const filter = { order: 'happened_at' as const };
   const q = useInfiniteQuery({
     queryKey: qk.feed(filter),
@@ -32,6 +36,7 @@ export function FeedHome() {
         hasNextPage={Boolean(q.hasNextPage)}
         isFetchingNextPage={q.isFetchingNextPage}
         fetchNextPage={q.fetchNextPage}
+        entry={entry}
         empty={
           noChains ? (
             <Empty title="建第一条时光链，比如「宝宝成长」" hint="左栏点「新的链」就可以。" />

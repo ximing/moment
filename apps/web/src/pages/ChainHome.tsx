@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
 import { useCompose } from '@/compose/ComposeContext';
+import { ComposerEntry } from '@/compose/ComposerEntry';
 import { canCompose, roleLabel } from '@/lib/roles';
 import { Timeline } from '@/timeline/Timeline';
 import { Avatar } from '@/ui/Avatar';
@@ -99,6 +100,7 @@ export function ChainHome() {
         hasNextPage={Boolean(q.hasNextPage)}
         isFetchingNextPage={q.isFetchingNextPage}
         fetchNextPage={q.fetchNextPage}
+        entry={canCompose(chain) ? <ComposerEntry chainId={chain.id} /> : undefined}
         empty={
           tagId || order === 'created_at' ? (
             <Empty title="没有符合条件的时刻" action={<Button variant="ghost" onClick={() => { setTagId(undefined); setOrder('happened_at'); }}>清除筛选</Button>} />

@@ -7,6 +7,7 @@ import { compressImage } from '@/lib/compress';
 import { humanError } from '@/lib/errors';
 import { formatBytes, nowLocalInput, probeVideo } from '@/lib/media';
 import { canCompose } from '@/lib/roles';
+import { chainColor, stickerClasses } from '@/lib/chain-color';
 import { currentTzOffset } from '@/lib/time';
 import { Banner } from '@/ui/Banner';
 import { Button } from '@/ui/Button';
@@ -32,6 +33,7 @@ function ComposeBody({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { markCreated } = useCompose();
   const edit = request.edit;
   const { data: chains } = useQuery({ queryKey: qk.chains, queryFn: () => client.listChains() });
   const writable = (chains ?? []).filter((c) => canCompose(c));
@@ -225,7 +227,7 @@ function ComposeBody({
           mediaIds.push(res.mediaId);
         }
         setProgress('记下…');
-        await client.createMoment(chainId, {
+        const res = await client.createMoment(chainId, {
           type,
           content,
           happenedAt: new Date(happenedAtMs).toISOString(),
@@ -234,6 +236,8 @@ function ComposeBody({
           mediaIds,
           tagIds: selectedTags,
         });
+        // 「从链节长出来」微动效（spec §1.6）：显式记录新 moment id，Timeline 渲染期直读比对
+        markCreated(res.id);
       }
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
       void queryClient.invalidateQueries({ queryKey: qk.chainMoments(chainId) });
@@ -250,9 +254,10 @@ function ComposeBody({
 
   const title = edit ? '改这条时刻' : '记下此刻';
 
+  // 遮罩 30% 墨：var() 色值的 /30 修饰静默不生成 CSS，用 color-mix（硬约束）
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-ink/30 p-6 pt-16">
-      <div className="w-full max-w-content rounded-paper bg-paper p-6 shadow-paper">
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-[color-mix(in_srgb,var(--ink)_30%,transparent)] p-6 pt-16">
+      <div className="w-full max-w-content rounded-card border-2 border-line bg-surface p-6 shadow-card">
         <div className="flex items-baseline justify-between">
           <h2 className="font-display text-xl">{title}</h2>
           <button type="button" className="text-sm text-muted" disabled={busy} onClick={onClose}>
@@ -267,10 +272,15 @@ function ComposeBody({
                 key={c.id}
                 type="button"
                 onClick={() => setPickedChainId(c.id)}
-                className={`rounded-paper border px-3 py-2 text-left text-sm ${
-                  chainId === c.id ? 'border-accent bg-accent/10' : 'border-line'
+                className={`flex items-center rounded-card border-2 border-line px-3 py-2 text-left text-sm ${
+                  chainId === c.id ? 'bg-select shadow-sticker' : ''
                 }`}
               >
+                {/* 链颜色点：同 Shell 侧栏圆点写法（chainColor 确定性推导） */}
+                <span
+                  aria-hidden
+                  className={`mr-1.5 inline-block h-2.5 w-2.5 rounded-full border ${stickerClasses[chainColor(c.id)]}`}
+                />
                 {c.name}
               </button>
             ))}
@@ -284,7 +294,7 @@ function ComposeBody({
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="这一刻…"
-          className="mt-4 min-h-[8rem] w-full resize-y rounded-paper border border-line bg-white/70 px-3 py-3 text-[17px] leading-relaxed"
+          className="mt-4 min-h-[8rem] w-full resize-y rounded-card border border-line bg-bg px-3 py-3 text-[17px] leading-relaxed"
         />
 
         {!edit && (
@@ -293,10 +303,10 @@ function ComposeBody({
               <div className="mb-2 grid grid-cols-4 gap-1">
                 {images.map((img, i) => (
                   <div key={img.previewUrl} className="relative">
-                    <img src={img.previewUrl} alt="" className="aspect-square w-full rounded object-cover" />
+                    <img src={img.previewUrl} alt="" className="aspect-square w-full rounded-[12px] border-2 border-line object-cover" />
                     <button
                       type="button"
-                      className="absolute right-1 top-1 rounded-full bg-ink/60 px-1 text-xs text-paper"
+                      className="absolute right-1 top-1 rounded-full bg-action px-1 text-xs text-action-fg"
                       onClick={() =>
                         setImages((prev) => {
                           URL.revokeObjectURL(prev[i]!.previewUrl);
@@ -335,7 +345,7 @@ function ComposeBody({
               type="datetime-local"
               value={happenedAt}
               onChange={(e) => setHappenedAt(e.target.value)}
-              className="mt-2 block rounded-paper border border-line bg-white/70 px-3 py-2"
+              className="mt-2 block rounded-card border border-line bg-bg px-3 py-2"
             />
           )}
         </div>
@@ -350,7 +360,7 @@ function ComposeBody({
                   setSelectedTags((prev) => (prev.includes(t.id) ? prev.filter((x) => x !== t.id) : [...prev, t.id]))
                 }
                 className={`rounded-full px-2 py-0.5 text-xs ${
-                  selectedTags.includes(t.id) ? 'bg-accent text-accent-fg' : 'bg-line text-ink'
+                  selectedTags.includes(t.id) ? 'bg-select text-ink' : 'border-2 border-line bg-surface text-ink'
                 }`}
               >
                 #{t.name}
@@ -367,7 +377,7 @@ function ComposeBody({
                 value={newTag}
                 onChange={(e) => setNewTag(e.target.value)}
                 placeholder="新标签"
-                className="w-24 rounded-full border border-line px-2 py-0.5 text-xs"
+                className="w-24 rounded-card border border-line bg-bg px-2 py-0.5 text-xs"
               />
             </form>
           </div>
