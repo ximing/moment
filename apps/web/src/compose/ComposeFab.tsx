@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
 import { useCompose } from './ComposeContext';
 
-/** 向下滚动后接力 composer 入口的橙色 FAB（spec §5）。滚动监听是事件源，非 effect 链式 setState。 */
-export function ComposeFab() {
+/** 向下滚动后接力 composer 入口的橙色 FAB（spec §5）。滚动监听是事件源，非 effect 链式 setState。
+    chainId 由 Shell 经 useMatch 提供——path-less 布局路由里 useParams 拿不到子路由参数（审查修正）。 */
+export function ComposeFab({ chainId }: { chainId?: string }) {
   const { openCompose } = useCompose();
-  const { chainId } = useParams<{ chainId: string }>();
   const [show, setShow] = useState(false);
 
   useEffect(() => {

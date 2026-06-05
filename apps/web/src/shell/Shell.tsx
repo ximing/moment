@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router';
+import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
@@ -16,7 +16,9 @@ export function Shell() {
   const { openCompose } = useCompose();
   const navigate = useNavigate();
   const location = useLocation();
-  const { chainId } = useParams<{ chainId: string }>();
+  // Shell 是 path-less 布局路由，useParams 只取 match 数组末位，拿不到子路由 /chains/:chainId 的参数
+  // （审查修正：旧顶栏按钮/?compose=1 深链/FAB 的 chainId 曾恒为 undefined，统一改用 useMatch 来源）
+  const chainId = useMatch('/chains/:chainId')?.params.chainId;
   const [creating, setCreating] = useState(false);
 
   const { data: chains } = useQuery({ queryKey: qk.chains, queryFn: () => client.listChains() });
@@ -99,7 +101,7 @@ export function Shell() {
       </div>
 
       <ComposePanel />
-      {showCompose && <ComposeFab />}
+      {showCompose && <ComposeFab chainId={chainId} />}
       {creating && <CreateChainDialog onClose={() => setCreating(false)} />}
     </div>
   );
