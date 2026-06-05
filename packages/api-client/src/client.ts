@@ -17,6 +17,7 @@ import type {
   MediaPresignInput,
   MediaPresignResponse,
   MomentResponse,
+  MonthIndexResponse,
   NotificationListResponse,
   PatchMomentInput, // 等价映射（依赖契约段免责条款）：Phase 3 计划名 PatchMomentInput / Phase 4 计划名 UpdateMomentInput——若 dto 实际导出为 UpdateMomentInput，改为 `UpdateMomentInput as PatchMomentInput`，禁止反向改 dto
   PublicShareResponse,
@@ -42,6 +43,8 @@ export interface FeedQuery {
   tagId?: string;
   order?: 'happened_at' | 'created_at';
   limit?: number;
+  /** 日期锚定（spec §4.2）：ISO datetime，服务端按 happened_at < before 严格小于过滤 */
+  before?: string;
 }
 
 /** moment 创建入参：z.input 形态（isBackfill/mediaIds/tagIds 可省略，dto schema 补默认值） */
@@ -69,11 +72,12 @@ export interface MomentClient {
 
   createMoment(chainId: string, input: CreateMomentInput): Promise<MomentResponse>;
   /** Phase 5 后 service 返回 {moments, nextCursor}，但 dto 的 MomentListResponse 仍是 Phase 3 的 items 键——统一用 Pick<FeedResponse>（见依赖契约段） */
-  listChainMoments(chainId: string, query?: { cursor?: string; limit?: number }): Promise<Pick<FeedResponse, 'moments' | 'nextCursor'>>;
+  listChainMoments(chainId: string, query?: { cursor?: string; limit?: number; before?: string }): Promise<Pick<FeedResponse, 'moments' | 'nextCursor'>>;
   getMoment(momentId: string): Promise<MomentResponse>;
   updateMoment(momentId: string, input: PatchMomentInput): Promise<MomentResponse>;
   deleteMoment(momentId: string): Promise<void>;
   getFeed(query?: FeedQuery): Promise<FeedResponse>;
+  getMonthIndex(query: { chainIds?: string[]; tagId?: string; tzOffset: number }): Promise<MonthIndexResponse>;
 
   listTags(chainId: string): Promise<TagListResponse>;
   createTag(chainId: string, name: string): Promise<TagResponse>;
@@ -147,7 +151,7 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
         items?: import('@moment/dto').MomentResponse[];
         moments?: import('@moment/dto').MomentResponse[];
         nextCursor: string | null;
-      }>(`/api/chains/${chainId}/moments`, { query: { cursor: query?.cursor, limit: query?.limit } });
+      }>(`/api/chains/${chainId}/moments`, { query: { cursor: query?.cursor, limit: query?.limit, before: query?.before } });
       return { moments: res.moments ?? res.items ?? [], nextCursor: res.nextCursor ?? null };
     },
     getMoment: (momentId) => http.request(`/api/moments/${momentId}`),
@@ -161,6 +165,15 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
           tag_id: query?.tagId,
           order: query?.order,
           limit: query?.limit,
+          before: query?.before,
+        },
+      }),
+    getMonthIndex: (query) =>
+      http.request('/api/feed/month-index', {
+        query: {
+          chain_ids: query.chainIds?.join(','),
+          tag_id: query.tagId,
+          tz_offset: query.tzOffset,
         },
       }),
 

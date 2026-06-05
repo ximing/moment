@@ -190,6 +190,23 @@ test('listChainMoments 将 dto items 映射为 moments', async () => {
   assert.equal('items' in res, false);
 });
 
+test('feed before 与 month-index 路径/查询参数', async () => {
+  const { client, calls } = harness();
+  await client.getFeed({ before: '2026-09-01T00:00:00.000Z', order: 'happened_at', limit: 50 });
+  await client.listChainMoments('c1', { before: '2026-09-01T00:00:00.000Z' });
+  await client.getMonthIndex({ chainIds: ['c1', 'c2'], tagId: 't1', tzOffset: -480 });
+  await client.getMonthIndex({ tzOffset: 0 });
+  assert.deepEqual(
+    calls.map((c) => `${c.method} ${c.url}`),
+    [
+      'GET http://x/api/feed?order=happened_at&limit=50&before=2026-09-01T00%3A00%3A00.000Z',
+      'GET http://x/api/chains/c1/moments?before=2026-09-01T00%3A00%3A00.000Z',
+      'GET http://x/api/feed/month-index?chain_ids=c1%2Cc2&tag_id=t1&tz_offset=-480',
+      'GET http://x/api/feed/month-index?tz_offset=0',
+    ],
+  );
+});
+
 describe('share 方法', () => {
   const anonTokenStore = {
     getAccessToken: () => null,
