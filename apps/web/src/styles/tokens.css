@@ -1,15 +1,47 @@
 :root {
-  --paper: #f6f1e8;
-  --ink: #1c1916;
-  --ink-muted: #6b635b;
-  --accent: #2f4f4a;
-  --accent-fg: #f6f1e8;
-  --line: #e4dcd0;
-  --danger: #8f2d2d;
-  --shadow: 0 1px 2px rgba(28, 25, 22, 0.06);
-  --radius: 10px;
-  --content: 720px;
+  --bg: #fdf0d9;
+  --surface: #fffdf8;
+  --ink: #241a0b;
+  --muted: #a68d5f;
+  --line: #241a0b;
+  --shadow: rgba(36, 26, 11, 0.1);
+  --action: #f4552f;
+  --action-fg: #ffffff;
+  --select: #ffc94d;
+  --danger: #c93a2e;
+  /* 贴纸四色：仅装饰，由 chainColor(chainId) 轮换，永不表意（spec §1.1/§1.4） */
+  --sticker-pink: #ffd9e6;
+  --sticker-blue: #cfe8ff;
+  --sticker-mint: #bfe8d0;
+  --sticker-purple: #e6dbff;
+  /* 浅色下贴纸描边同 --line（深墨） */
+  --sticker-pink-line: var(--line);
+  --sticker-blue-line: var(--line);
+  --sticker-mint-line: var(--line);
+  --sticker-purple-line: var(--line);
+  --content: 680px; /* spec §2：由 720 微调，配合链条缩进 */
   --ease: 180ms ease;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #171208;
+  --surface: #221b10;
+  --ink: #f2e8d5;
+  --muted: #99855f;
+  --line: #4d4231; /* 深色结构线主动后退、低对比 */
+  --shadow: rgba(0, 0, 0, 0.45);
+  --danger: #ff8a66;
+  /* --action/--action-fg/--select 两主题同值，不重定义 */
+  --sticker-pink: #3a2831;
+  --sticker-blue: #233244;
+  --sticker-mint: #22392f;
+  --sticker-purple: #2e2842;
+  --sticker-pink-line: #8a5a70;
+  --sticker-blue-line: #56759c;
+  --sticker-mint-line: #4d7a67;
+  --sticker-purple-line: #6a5f94;
+  color-scheme: dark;
 }
 
 @media (prefers-reduced-motion: reduce) {

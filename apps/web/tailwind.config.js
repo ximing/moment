@@ -4,19 +4,37 @@ export default {
   theme: {
     extend: {
       colors: {
-        paper: 'var(--paper)',
+        bg: 'var(--bg)',
+        surface: 'var(--surface)',
         ink: 'var(--ink)',
-        muted: 'var(--ink-muted)',
-        accent: 'var(--accent)',
-        'accent-fg': 'var(--accent-fg)',
+        muted: 'var(--muted)',
         line: 'var(--line)',
+        action: 'var(--action)',
+        'action-fg': 'var(--action-fg)',
+        select: 'var(--select)',
         danger: 'var(--danger)',
+        'sticker-pink': 'var(--sticker-pink)',
+        'sticker-blue': 'var(--sticker-blue)',
+        'sticker-mint': 'var(--sticker-mint)',
+        'sticker-purple': 'var(--sticker-purple)',
+        'sticker-pink-line': 'var(--sticker-pink-line)',
+        'sticker-blue-line': 'var(--sticker-blue-line)',
+        'sticker-mint-line': 'var(--sticker-mint-line)',
+        'sticker-purple-line': 'var(--sticker-purple-line)',
+        // —— 过渡别名（换肤任务逐个迁走，Task 12 删除）——
+        paper: 'var(--bg)',
+        accent: 'var(--action)',
+        'accent-fg': 'var(--action-fg)',
       },
       boxShadow: {
-        paper: 'var(--shadow)',
+        card: '4px 4px 0 var(--shadow)',
+        sticker: '2px 2px 0 var(--shadow)',
+        paper: '4px 4px 0 var(--shadow)', // 过渡别名
       },
       borderRadius: {
-        paper: 'var(--radius)',
+        card: '16px',
+        sticker: '99px',
+        paper: '16px', // 过渡别名
       },
       maxWidth: {
         content: 'var(--content)',
