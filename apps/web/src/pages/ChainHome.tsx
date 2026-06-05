@@ -92,6 +92,7 @@ export function ChainHome() {
 
       <Timeline
         moments={moments}
+        hideSignature={order === 'created_at'}
         isPending={q.isPending}
         isError={q.isError}
         onRetry={() => void q.refetch()}

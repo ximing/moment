@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { REACTION_EMOJIS, type MomentMedia, type MomentResponse } from '@moment/dto';
+import { type MomentMedia, type MomentResponse } from '@moment/dto';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
 import { useAuth } from '@/auth/AuthProvider';
@@ -10,7 +10,9 @@ import { formatHappenedAt } from '@/lib/time';
 import { MediaBlock } from '@/media/MediaBlock';
 import { Avatar } from '@/ui/Avatar';
 import { Confirm } from '@/ui/Confirm';
+import { Menu } from '@/ui/Menu';
 import { Lightbox } from './Lightbox';
+import { ReactionBar } from './ReactionBar';
 
 export function MomentSheet({
   moment,
@@ -54,14 +56,16 @@ export function MomentSheet({
   });
 
   return (
-    <article className="rounded-paper bg-white/70 p-5 shadow-paper">
+    <article className="relative rounded-card border-2 border-line bg-surface p-5 shadow-card">
+      {/* 链节圆环：卡片左上角外侧，中心对齐时间线虚线（容器缩进 26px - 左偏 24px + 环半径 8px ≈ 线中心 x10，spec §3.1） */}
+      <span aria-hidden className="absolute -left-6 top-6 h-4 w-4 rounded-full border-2 border-line bg-surface" />
       <header className="flex items-center gap-2.5">
         <Avatar name={moment.author.nickname} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2">
             <span className="font-medium text-ink">{moment.author.nickname}</span>
             {chainName && !shareToken && (
-              <Link to={`/chains/${moment.chainId}`} className="text-sm text-muted hover:text-accent">
+              <Link to={`/chains/${moment.chainId}`} className="text-sm text-muted hover:text-action">
                 {chainName}
               </Link>
             )}
@@ -71,15 +75,44 @@ export function MomentSheet({
             {moment.isBackfill && ' · 补记'}
           </p>
         </div>
+        {/* 本人时刻操作收进 kebab；他人时刻（含 owner 视角）无 kebab 无操作入口（spec §0/§6 非目标，backlog） */}
         {!readOnly && mine && (
-          <div className="flex gap-1 text-xs">
-            <button type="button" className="text-muted hover:text-ink" onClick={() => openCompose({ chainId: moment.chainId, edit: moment })}>
-              编辑
-            </button>
-            <button type="button" className="text-muted hover:text-danger" onClick={() => setConfirmDel(true)}>
-              删除
-            </button>
-          </div>
+          <Menu
+            trigger={
+              <button
+                type="button"
+                aria-label="更多操作"
+                className="rounded-sticker border-2 border-line bg-surface px-2 py-0.5 text-muted shadow-sticker"
+              >
+                ···
+              </button>
+            }
+          >
+            {(close) => (
+              <span className="flex flex-col">
+                <button
+                  type="button"
+                  className="rounded px-3 py-1.5 text-left text-sm hover:bg-select"
+                  onClick={() => {
+                    close();
+                    openCompose({ chainId: moment.chainId, edit: moment });
+                  }}
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  className="rounded px-3 py-1.5 text-left text-sm text-danger hover:bg-select"
+                  onClick={() => {
+                    close();
+                    setConfirmDel(true);
+                  }}
+                >
+                  删除
+                </button>
+              </span>
+            )}
+          </Menu>
         )}
       </header>
 
@@ -90,7 +123,10 @@ export function MomentSheet({
       {moment.tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {moment.tags.map((t) => (
-            <span key={t.id} className="text-xs text-muted">
+            <span
+              key={t.id}
+              className="rounded-sticker border-2 border-line bg-surface px-2 py-0.5 text-xs text-muted shadow-sticker"
+            >
               #{t.name}
             </span>
           ))}
@@ -98,35 +134,8 @@ export function MomentSheet({
       )}
 
       {!readOnly && (
-        <div className="mt-4 flex flex-wrap items-center gap-1">
-          {REACTION_EMOJIS.map((emoji) => {
-            const count = moment.reactions.find((r) => r.emoji === emoji)?.count ?? 0;
-            const mineR = moment.myReaction === emoji;
-            if (!mineR && count === 0) {
-              return (
-                <button
-                  key={emoji}
-                  type="button"
-                  className="rounded-full px-1.5 py-0.5 text-sm opacity-40 hover:opacity-100"
-                  onClick={() => react.mutate(emoji)}
-                  aria-label={emoji}
-                >
-                  {emoji}
-                </button>
-              );
-            }
-            return (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => react.mutate(emoji)}
-                className={`rounded-full px-2 py-0.5 text-sm ${mineR ? 'bg-accent/15' : 'bg-line/60'}`}
-              >
-                {emoji}
-                {count > 0 ? ` ${count}` : ''}
-              </button>
-            );
-          })}
+        <div className="mt-4 flex flex-wrap items-center gap-1.5">
+          <ReactionBar moment={moment} onReact={(emoji) => react.mutate(emoji)} />
           <button
             type="button"
             className="ml-auto text-sm text-muted hover:text-ink"
@@ -138,9 +147,16 @@ export function MomentSheet({
       )}
 
       {readOnly && (moment.commentCount > 0 || moment.reactions.length > 0) && (
-        <p className="mt-3 text-xs text-muted">
-          {moment.reactions.map((r) => `${r.emoji} ${r.count}`).join('  ')}
-          {moment.commentCount > 0 && `  ·  ${moment.commentCount} 条评论`}
+        <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+          {moment.reactions.map((r) => (
+            <span
+              key={r.emoji}
+              className="rounded-sticker border-2 border-line bg-surface px-2 py-0.5 text-xs"
+            >
+              {r.emoji} {r.count}
+            </span>
+          ))}
+          {moment.commentCount > 0 && <span>· {moment.commentCount} 条评论</span>}
         </p>
       )}
 
@@ -185,7 +201,7 @@ function CommentPreview({ momentId }: { momentId: string }) {
           <span className="ml-2 text-ink">{c.content}</span>
         </p>
       ))}
-      <Link to={`/moments/${momentId}`} className="inline-block text-sm text-accent">
+      <Link to={`/moments/${momentId}`} className="inline-block text-sm text-action">
         查看全部评论
       </Link>
     </div>

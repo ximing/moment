@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 /** 通用弹出小菜单：trigger 始终渲染；children 拿 close() 渲染菜单项。纯 UI，无业务。 */
 export function Menu({
@@ -12,6 +12,17 @@ export function Menu({
 }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
+  // 打开时挂 Escape 关闭（最小键盘支持，不做全套焦点陷阱）
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
   return (
     <span className="relative inline-block">
       <span onClick={() => setOpen((v) => !v)}>{trigger}</span>

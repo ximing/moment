@@ -19,6 +19,10 @@
   --sticker-blue-line: var(--line);
   --sticker-mint-line: var(--line);
   --sticker-purple-line: var(--line);
+  /* 日期贴纸（时间线分组头，spec §3.1）：浅色紫底墨字；深浅差异只落 token，组件层不判主题 */
+  --date-sticker-bg: var(--sticker-purple);
+  --date-sticker-line: var(--sticker-purple-line);
+  --date-sticker-fg: var(--ink);
   --content: 680px; /* spec §2：由 720 微调，配合链条缩进 */
   --ease: 180ms ease;
   color-scheme: light;
@@ -41,6 +45,10 @@
   --sticker-blue-line: #56759c;
   --sticker-mint-line: #4d7a67;
   --sticker-purple-line: #6a5f94;
+  /* 日期贴纸深色：透明底、琥珀边黄字 */
+  --date-sticker-bg: transparent;
+  --date-sticker-line: var(--select);
+  --date-sticker-fg: var(--select);
   color-scheme: dark;
 }
 
