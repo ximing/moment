@@ -26,7 +26,7 @@ export function Confirm({
   const blocked = prompt ? promptValue !== prompt.expect : false;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" role="dialog" aria-modal>
-      <div className="w-full max-w-md rounded-paper bg-paper p-5 shadow-paper">
+      <div className="w-full max-w-md rounded-card border-2 border-line bg-surface p-5 shadow-card">
         <h2 className="font-display text-lg text-ink">{title}</h2>
         <p className="mt-2 text-sm text-muted">{body}</p>
         {prompt && (
@@ -34,7 +34,7 @@ export function Confirm({
             value={promptValue ?? ''}
             onChange={(e) => onPromptChange?.(e.target.value)}
             placeholder={prompt.label}
-            className="mt-3 w-full rounded-paper border border-line bg-white/70 px-3 py-2"
+            className="mt-3 w-full rounded-card border border-line bg-surface px-3 py-2 text-ink"
           />
         )}
         <div className="mt-4 flex justify-end gap-2">

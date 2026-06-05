@@ -7,9 +7,11 @@ export function Banner({
   tone?: 'error' | 'info';
   action?: { label: string; onClick: () => void };
 }) {
-  const cls = tone === 'error' ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent';
+  const cls = tone === 'error' ? 'text-danger' : 'text-action';
   return (
-    <div className={`flex items-center gap-3 rounded-paper px-3 py-2 text-sm ${cls}`}>
+    <div
+      className={`flex items-center gap-3 rounded-card border-2 border-line bg-surface px-3 py-2 text-sm shadow-card ${cls}`}
+    >
       <p className="flex-1">{children}</p>
       {action && (
         <button type="button" onClick={action.onClick} className="shrink-0 underline">

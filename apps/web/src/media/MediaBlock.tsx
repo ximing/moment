@@ -22,7 +22,7 @@ export function MediaBlock({
   }
   const cols = media.length === 1 ? 'grid-cols-1' : media.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
   return (
-    <div className={`mt-3 grid ${cols} gap-1`}>
+    <div className={`mt-3 grid ${cols} gap-1.5`}>
       {media.map((m, i) => (
         <ImageOne
           key={m.id}
@@ -49,9 +49,10 @@ function ImageOne({
 }) {
   const blobUrl = useMediaObjectUrl(shareToken ? null : media.id);
   const url = shareToken ? srcOf(media, shareToken) : blobUrl;
-  if (!url) return <div className={`animate-pulse rounded-paper bg-line ${single ? 'aspect-[4/3]' : 'aspect-square'}`} />;
+  if (!url)
+    return <div className={`animate-pulse rounded-[12px] bg-line ${single ? 'aspect-[4/3]' : 'aspect-square'}`} />;
   return (
-    <button type="button" onClick={onClick} className="block overflow-hidden rounded-paper">
+    <button type="button" onClick={onClick} className="block overflow-hidden rounded-[12px] border-2 border-line">
       <img
         src={url}
         alt=""
@@ -70,12 +71,12 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
       <button
         type="button"
         onClick={() => setOn(true)}
-        className="mt-3 flex aspect-video w-full items-center justify-center rounded-paper bg-ink text-sm text-paper"
+        className="mt-3 flex aspect-video w-full items-center justify-center rounded-[12px] border-2 border-line bg-ink text-sm text-bg"
       >
         播放视频
       </button>
     );
   }
-  if (!url) return <div className="mt-3 aspect-video w-full animate-pulse rounded-paper bg-line" />;
-  return <video controls src={url} className="mt-3 w-full rounded-paper bg-ink" />;
+  if (!url) return <div className="mt-3 aspect-video w-full animate-pulse rounded-[12px] bg-line" />;
+  return <video controls src={url} className="mt-3 w-full rounded-[12px] border-2 border-line bg-ink" />;
 }

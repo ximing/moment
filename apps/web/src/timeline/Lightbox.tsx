@@ -28,23 +28,33 @@ export function Lightbox({
 
   if (!current) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/90" role="dialog" aria-modal>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85" role="dialog" aria-modal>
       <button type="button" className="absolute inset-0 cursor-default" aria-label="关闭" onClick={onClose} />
       <div className="relative z-10 max-h-[90vh] max-w-[90vw]">
         <LightboxMedia media={current} shareToken={shareToken} />
       </div>
+      <button
+        type="button"
+        aria-label="关闭"
+        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-sticker border-2 border-line bg-surface text-xl text-ink shadow-sticker"
+        onClick={onClose}
+      >
+        ✕
+      </button>
       {items.length > 1 && (
         <>
           <button
             type="button"
-            className="absolute left-4 z-10 text-2xl text-paper"
+            aria-label="上一张"
+            className="absolute left-4 z-10 flex h-10 w-10 items-center justify-center rounded-sticker border-2 border-line bg-surface text-2xl text-ink shadow-sticker"
             onClick={() => onIndex((index - 1 + items.length) % items.length)}
           >
             ‹
           </button>
           <button
             type="button"
-            className="absolute right-4 z-10 text-2xl text-paper"
+            aria-label="下一张"
+            className="absolute right-4 z-10 flex h-10 w-10 items-center justify-center rounded-sticker border-2 border-line bg-surface text-2xl text-ink shadow-sticker"
             onClick={() => onIndex((index + 1) % items.length)}
           >
             ›
