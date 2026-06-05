@@ -111,6 +111,6 @@ function sideLink({ isActive }: { isActive: boolean }) {
   return `flex items-center px-2 py-1.5 text-sm ${
     isActive
       ? 'rounded-sticker border-2 border-line bg-select text-ink shadow-sticker'
-      : 'rounded-paper text-ink hover:bg-surface'
+      : 'rounded-card text-ink hover:bg-surface'
   }`;
 }

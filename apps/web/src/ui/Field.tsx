@@ -22,7 +22,7 @@ export function Field({
 }
 
 const inputClass =
-  'w-full rounded-card border border-line bg-surface px-3 py-2 text-ink placeholder:text-muted/70 focus:border-action';
+  'w-full rounded-card border border-line bg-surface px-3 py-2 text-ink placeholder:text-[color-mix(in_srgb,var(--muted)_70%,transparent)] focus:border-action';
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${inputClass} ${props.className ?? ''}`} />;

@@ -34,7 +34,7 @@ export function ChainHome() {
   });
   const moments = q.data?.pages.flatMap((p) => p.moments) ?? [];
 
-  if (chainPending) return <div className="h-32 animate-pulse rounded-paper bg-white/50" />;
+  if (chainPending) return <div className="h-32 animate-pulse rounded-card bg-white/50" />;
   if (isError || !chain) {
     return (
       <Banner action={{ label: '重试', onClick: () => void refetch() }}>
@@ -51,7 +51,7 @@ export function ChainHome() {
           <Avatar name={chain.name} size={48} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-2">
-              <h1 className="font-display text-2xl">{chain.name}</h1>
+              <h1 className="text-2xl">{chain.name}</h1>
               <span className="text-sm text-muted">{roleLabel(chain.myRole)}</span>
             </div>
             {chain.description && <p className="mt-1 text-sm text-muted">{chain.description}</p>}

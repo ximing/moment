@@ -35,8 +35,8 @@ export function CreateChainDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/30 p-4">
-      <form onSubmit={onSubmit} className="w-full max-w-md space-y-3 rounded-paper bg-paper p-5 shadow-paper">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[color-mix(in_srgb,var(--ink)_30%,transparent)] p-4">
+      <form onSubmit={onSubmit} className="w-full max-w-md space-y-3 rounded-card bg-bg p-5 shadow-card">
         <h2 className="font-display text-lg">建一条时光链</h2>
         <Field label="名字">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="比如「宝宝成长」" autoFocus />

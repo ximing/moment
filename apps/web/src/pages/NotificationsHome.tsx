@@ -79,11 +79,11 @@ export function NotificationsHome() {
           return (
             <li key={n.id} className="rounded-card border-2 border-line bg-surface p-3 text-sm shadow-sticker">
               {href ? (
-                <Link to={href} className="flex items-center">
+                <Link to={href} className="flex items-center gap-2">
                   {inner}
                 </Link>
               ) : (
-                <div className="flex items-center">{inner}</div>
+                <div className="flex items-center gap-2">{inner}</div>
               )}
             </li>
           );
