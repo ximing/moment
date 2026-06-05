@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Navigate, Route, Routes, useParams } from 'react-router';
 import { RequireAuth } from '@/auth/RequireAuth';
 import { ComposeProvider } from '@/compose/ComposeContext';
@@ -12,8 +13,12 @@ import { NotificationsHome } from '@/pages/NotificationsHome';
 import { ShareAlbumPage } from '@/pages/ShareAlbumPage';
 import { Shell } from '@/shell/Shell';
 import { useAuth } from '@/auth/AuthProvider';
+import { subscribeSystemTheme } from '@/lib/theme';
 
 export function App() {
+  // 系统主题跟随：挂在 App 而非 MePage——订阅需覆盖所有页面，MePage 卸载后仍要生效。
+  // effect 内只做订阅/解绑，不做 setState 链（applyTheme 直接写 data-theme）。
+  useEffect(() => subscribeSystemTheme(), []);
   return (
     <ComposeProvider>
       <Routes>
