@@ -57,6 +57,16 @@ export function FeedHome() {
           empty={
             noChains ? (
               <Empty title="建第一条时光链，比如「宝宝成长」" hint="左栏点「新的链」就可以。" />
+            ) : filter.tagId || filter.chainIds?.length || filter.order === 'created_at' || filter.before ? (
+              // 筛选/锚定筛空（web-product §4 空态表第三行）：「没有符合条件的时刻」+ 一键清除
+              <Empty
+                title="没有符合条件的时刻"
+                action={
+                  <Button variant="ghost" onClick={() => setFilter({ order: 'happened_at' })}>
+                    清除筛选
+                  </Button>
+                }
+              />
             ) : (
               <Empty
                 title="还没有记下任何一刻"
