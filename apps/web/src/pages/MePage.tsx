@@ -7,7 +7,7 @@ export function MePage() {
   return (
     <div>
       <h1 className="font-display text-2xl">我</h1>
-      <dl className="mt-6 space-y-3 text-sm">
+      <dl className="mt-6 space-y-3 rounded-card border-2 border-line bg-surface p-4 text-sm shadow-card">
         <div>
           <dt className="text-muted">名字</dt>
           <dd className="text-lg">{user.nickname}</dd>
@@ -19,7 +19,7 @@ export function MePage() {
       </dl>
       <div className="mt-8">
         <h2 className="text-sm text-muted">主题</h2>
-        <div className="mt-2">
+        <div className="mt-2 rounded-card border-2 border-line bg-surface p-4 shadow-card">
           <ThemeToggle />
         </div>
       </div>

@@ -71,14 +71,20 @@ export function NotificationsHome() {
           const href = hrefOf(n.payload);
           const inner = (
             <>
+              {n.readAt === null && <span className="h-2 w-2 shrink-0 rounded-full bg-action" aria-label="未读" />}
               <span className="text-muted">{TYPE_LABEL[n.type] ?? n.type}</span>
               <span className="ml-2">{payloadTitle(n.payload)}</span>
-              {n.readAt === null && <span className="ml-2 text-xs text-accent">未读</span>}
             </>
           );
           return (
-            <li key={n.id} className={`rounded-paper px-3 py-2 text-sm ${n.readAt ? '' : 'bg-white/60'}`}>
-              {href ? <Link to={href}>{inner}</Link> : inner}
+            <li key={n.id} className="rounded-card border-2 border-line bg-surface p-3 text-sm shadow-sticker">
+              {href ? (
+                <Link to={href} className="flex items-center">
+                  {inner}
+                </Link>
+              ) : (
+                <div className="flex items-center">{inner}</div>
+              )}
             </li>
           );
         })}

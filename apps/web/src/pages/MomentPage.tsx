@@ -59,7 +59,8 @@ export function MomentPage() {
     add.mutate(text.trim());
   }
 
-  if (isPending) return <div className="h-40 animate-pulse rounded-paper bg-white/50" />;
+  // 骨架 60% surface：var() 色值的 /60 修饰静默不生成，用 color-mix（硬约束）
+  if (isPending) return <div className="h-40 animate-pulse rounded-card bg-[color-mix(in_srgb,var(--surface)_60%,transparent)]" />;
   if (isError || !moment) {
     return <Banner action={{ label: '重试', onClick: () => void refetch() }}>看不到这条时刻</Banner>;
   }
@@ -79,14 +80,15 @@ export function MomentPage() {
         empty={null}
       />
       <section>
-        <h2 className="mb-3 font-display text-lg">评论</h2>
+        {/* 「评论」不在得意黑字形子集内，不用 font-display */}
+        <h2 className="mb-3 text-lg font-medium">评论</h2>
         <ul className="space-y-3">
           {comments.map((c) => (
-            <li key={c.id} className="text-sm">
+            <li key={c.id} className="rounded-card border-2 border-line bg-surface p-3 text-sm shadow-sticker">
               <span className="font-medium">{c.author.nickname}</span>
               <span className="ml-2">{c.content}</span>
               {user?.id === c.author.id && (
-                <button type="button" className="ml-2 text-xs text-muted" onClick={() => del.mutate(c.id)}>
+                <button type="button" className="ml-2 text-xs text-danger" onClick={() => del.mutate(c.id)}>
                   删除
                 </button>
               )}

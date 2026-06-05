@@ -12,7 +12,8 @@ export function ChainSettingsPage() {
     queryFn: () => client.getChain(chainId),
     enabled: Boolean(chainId),
   });
-  if (isPending) return <div className="h-32 animate-pulse rounded-paper bg-white/50" />;
+  // 骨架 60% surface：var() 色值的 /60 修饰静默不生成，用 color-mix（硬约束）
+  if (isPending) return <div className="h-32 animate-pulse rounded-card bg-[color-mix(in_srgb,var(--surface)_60%,transparent)]" />;
   if (isError || !chain) {
     return <Banner action={{ label: '重试', onClick: () => void refetch() }}>看不到这条链，或它已经不在了</Banner>;
   }

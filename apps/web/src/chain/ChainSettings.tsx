@@ -35,8 +35,10 @@ export function ChainSettings({ chain }: { chain: ChainDto }) {
               key={i.key}
               type="button"
               onClick={() => setSection(i.key)}
-              className={`block w-full rounded-paper px-2 py-1.5 text-left text-sm ${
-                section === i.key ? 'bg-accent text-accent-fg' : 'text-muted hover:text-ink'
+              className={`block w-full px-3 py-1.5 text-left text-sm ${
+                section === i.key
+                  ? 'rounded-sticker border-2 border-line bg-select text-ink shadow-sticker'
+                  : 'text-muted hover:text-ink'
               }`}
             >
               {i.label}
@@ -99,12 +101,13 @@ function ShareSection({ chainId }: { chainId: string }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="font-display text-lg">给长辈的相册链接</h2>
+      {/* 标题文字不在得意黑字形子集（scripts/font-glyphs.txt）内，不用 font-display */}
+      <h2 className="text-lg font-medium">给长辈的相册链接</h2>
       <div className="flex flex-wrap items-end gap-2">
         <select
           value={expire}
           onChange={(e) => setExpire(e.target.value as typeof expire)}
-          className="rounded-paper border border-line bg-white/70 px-2 py-2 text-sm"
+          className="rounded-card border border-line bg-surface px-2 py-2 text-sm text-ink focus:border-action"
         >
           <option value="never">永不过期</option>
           <option value="7">7 天</option>
@@ -112,7 +115,7 @@ function ShareSection({ chainId }: { chainId: string }) {
           <option value="date">指定日期</option>
         </select>
         {expire === 'date' && (
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-paper border border-line px-2 py-2 text-sm" />
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-card border border-line bg-surface px-2 py-2 text-sm text-ink focus:border-action" />
         )}
         <Button disabled={create.isPending} onClick={() => create.mutate()}>
           生成分享链接
@@ -123,7 +126,7 @@ function ShareSection({ chainId }: { chainId: string }) {
         {(data?.items ?? []).map((link) => {
           const status = linkStatus(link);
           return (
-            <li key={link.id} className="flex flex-wrap items-center gap-2 rounded-paper border border-line bg-white/50 px-3 py-2 text-sm">
+            <li key={link.id} className={`flex flex-wrap items-center gap-2 rounded-card border-2 p-3 text-sm shadow-sticker ${SHARE_STATUS_CLASS[status]}`}>
               <span className="text-muted">{new Date(link.createdAt).toLocaleString()}</span>
               <span>{status}</span>
               {link.expiresAt && <span className="text-muted">到期 {new Date(link.expiresAt).toLocaleDateString()}</span>}
@@ -161,6 +164,14 @@ function linkStatus(link: ShareLinkDto): string {
   if (link.expiresAt && Date.parse(link.expiresAt) <= Date.now()) return '已过期';
   return '有效';
 }
+
+/** 分享链接贴纸卡三态色（spec §7：有效=薄荷、已过期=黄、已吊销=灰）。 */
+const SHARE_STATUS_CLASS: Record<string, string> = {
+  有效: 'bg-sticker-mint border-sticker-mint-line',
+  已过期: 'bg-select border-line',
+  // 灰系：spec 无灰 token，用 --line 低饱和表达；color-mix arbitrary（var() 色值的 /40 修饰静默不生成，硬约束）
+  已吊销: 'border-line bg-[color-mix(in_srgb,var(--line)_40%,transparent)] text-muted',
+};
 
 function MembersSection({ chain }: { chain: ChainDto }) {
   const { user } = useAuth();
@@ -233,7 +244,7 @@ function MembersSection({ chain }: { chain: ChainDto }) {
 
   return (
     <div className="space-y-5">
-      <h2 className="font-display text-lg">成员</h2>
+      <h2 className="text-lg font-medium">成员</h2>
       {error && <Banner>{error}</Banner>}
       <ul className="space-y-2">
         {(members ?? []).map((m) => (
@@ -246,7 +257,7 @@ function MembersSection({ chain }: { chain: ChainDto }) {
                 <select
                   value={m.role}
                   onChange={(e) => changeRole.mutate({ userId: m.userId, role: e.target.value as 'editor' | 'viewer' })}
-                  className="rounded border border-line bg-white px-1 py-0.5 text-xs"
+                  className="rounded-card border border-line bg-surface px-1 py-0.5 text-xs text-ink focus:border-action"
                 >
                   <option value="editor">可记录</option>
                   <option value="viewer">只看</option>
@@ -358,7 +369,7 @@ function ProfileSection({ chain }: { chain: ChainDto }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="font-display text-lg">资料</h2>
+      <h2 className="text-lg font-medium">资料</h2>
       <Field label="名字">
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
@@ -409,7 +420,7 @@ function DangerSection({ chain }: { chain: ChainDto }) {
 
   return (
     <div className="space-y-3">
-      <h2 className="font-display text-lg">删除这条链</h2>
+      <h2 className="text-lg font-medium">删除这条链</h2>
       <p className="text-sm text-muted">链里的时刻会一起消失。请输入链的名字确认。</p>
       {error && <Banner>{error}</Banner>}
       <Button variant="danger" onClick={() => setOpen(true)}>

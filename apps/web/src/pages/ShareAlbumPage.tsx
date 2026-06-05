@@ -18,10 +18,11 @@ export function ShareAlbumPage() {
 
   if (q.isPending) {
     return (
-      <div className="min-h-screen bg-paper px-6 py-16">
+      <div className="min-h-screen bg-bg px-6 py-16">
         <div className="mx-auto max-w-content space-y-4">
           {[0, 1].map((i) => (
-            <div key={i} className="h-40 animate-pulse rounded-paper bg-white/50" />
+            // 骨架 60% surface：var() 色值的 /60 修饰静默不生成，用 color-mix（硬约束）
+            <div key={i} className="h-40 animate-pulse rounded-card bg-[color-mix(in_srgb,var(--surface)_60%,transparent)]" />
           ))}
         </div>
       </div>
@@ -31,8 +32,10 @@ export function ShareAlbumPage() {
   if (q.isError) {
     const closed = q.error instanceof ApiError && (q.error.status === 404 || q.error.code === 'SHARE_NOT_FOUND');
     return (
-      <div className="flex min-h-screen items-center justify-center bg-paper px-6">
-        <p className="font-display text-xl text-ink">{closed ? '这本相册的分享已关闭' : '加载失败，请稍后重试'}</p>
+      <div className="flex min-h-screen items-center justify-center bg-bg px-6">
+        <p className="rounded-card border-2 border-line bg-surface px-8 py-6 font-display text-xl text-ink shadow-card">
+          {closed ? '这本相册的分享已关闭' : '加载失败，请稍后重试'}
+        </p>
       </div>
     );
   }
@@ -41,10 +44,11 @@ export function ShareAlbumPage() {
   const moments = q.data.pages.flatMap((p) => p.moments);
 
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="min-h-screen bg-bg">
       <header className="border-b border-line">
         <div className="mx-auto max-w-content px-6 py-8">
-          <h1 className="font-display text-3xl">{chain?.name}</h1>
+          {/* 链名为动态文案，不用 font-display：得意黑子集只含固定文案字形（硬约束） */}
+          <h1 className="text-3xl font-medium">{chain?.name}</h1>
           {chain?.description && <p className="mt-2 text-muted">{chain.description}</p>}
           <p className="mt-2 text-xs text-muted">只读分享 · 时刻</p>
         </div>
