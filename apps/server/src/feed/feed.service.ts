@@ -1,7 +1,8 @@
-import type { FeedResponse } from '@moment/dto';
+import type { FeedResponse, MonthIndexResponse } from '@moment/dto';
 import { Service } from 'typedi';
 import { serializeMoments } from '../moments/moment-serializer.js';
 import { getMyChains } from './membership.js';
+import { queryMonthIndex } from './month-index.js';
 import { queryMomentPage } from './moment-query.js';
 import type { MomentOrder } from './cursor.js';
 
@@ -33,5 +34,18 @@ export class FeedService {
       tagId: query.tagId,
     });
     return { moments: await serializeMoments(page.rows, userId), nextCursor: page.nextCursor };
+  }
+
+  /** 月份索引：与 feed 同一可见范围（我的链；chain_ids 收窄时静默过滤非成员链）。 */
+  async monthIndex(
+    userId: string,
+    query: { chainIds?: string[]; tagId?: string; tzOffset: number },
+  ): Promise<MonthIndexResponse> {
+    const myChains = await getMyChains(userId);
+    let scope = [...myChains.keys()];
+    if (query.chainIds) {
+      scope = query.chainIds.filter((id) => myChains.has(id));
+    }
+    return queryMonthIndex({ chainIds: scope, tagId: query.tagId, tzOffset: query.tzOffset });
   }
 }

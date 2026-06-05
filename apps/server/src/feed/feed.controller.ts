@@ -1,4 +1,10 @@
-import { feedQuerySchema, type FeedResponse, type UserProfile } from '@moment/dto';
+import {
+  feedQuerySchema,
+  monthIndexQuerySchema,
+  type FeedResponse,
+  type MonthIndexResponse,
+  type UserProfile,
+} from '@moment/dto';
 import type { Request } from 'express';
 import { Authorized, CurrentUser, Get, JsonController, Req } from 'routing-controllers';
 import { Service } from 'typedi';
@@ -19,6 +25,17 @@ export class FeedController {
       tagId: query.tag_id,
       order: query.order,
       limit: query.limit,
+    });
+  }
+
+  @Get('/feed/month-index')
+  @Authorized()
+  monthIndex(@Req() req: Request, @CurrentUser() user: UserProfile): Promise<MonthIndexResponse> {
+    const query = monthIndexQuerySchema.parse(req.query);
+    return this.feedService.monthIndex(user.id, {
+      chainIds: query.chain_ids?.split(','),
+      tagId: query.tag_id,
+      tzOffset: query.tz_offset,
     });
   }
 }
