@@ -87,6 +87,7 @@ src/storage/factory.ts        → getStorage(): UnifiedStorageAdapter（按 conf
 ### 3.4 Feed 游标与序列化器（Phase 4 建立，Phase 5 扩展）
 
 - 游标 = base64url(JSON)，`order=happened_at` 时 `{h: <epochMs>, i: <momentId>}`；`order=created_at` 时 `{c: <epochMs>, i: <momentId>}`。解析失败抛 `BadRequestError('INVALID_CURSOR')`。
+- 「全仓无第二份游标实现」仅约束 **moments 分页**；评论、通知等其他资源域可各自实现同风格游标（如 Phase 5 的 `comment-cursor.ts`），不算违反。
 - `momentSerializer`（`src/moments/moment-serializer.ts`）是 moment → API 响应的**唯一出口**；Phase 5 在其上加批量计数（一次 `GROUP BY`，禁止 N+1）。
 - 媒体 URL：响应中 media 只出稳定入口 `/api/media/:id`（相对路径），**不得**内嵌预签名 URL。
 
@@ -101,7 +102,7 @@ src/storage/factory.ts        → getStorage(): UnifiedStorageAdapter（按 conf
 | Phase 2 | `/api/chains*`、`/api/invites/:token/accept`、`/api/invites/:inviteId`（DELETE 吊销） |
 | Phase 3 | `/api/chains/:chainId/moments*`、`/api/moments/:id`、`/api/media/*` |
 | Phase 4 | `/api/chains/:chainId/tags*`、`/api/tags/:id`（仅 DELETE）、`/api/feed` |
-| Phase 5 | `/api/moments/:id/comments*`、`/api/moments/:id/reaction`、`/api/notifications*`、`/api/devices/push-token` |
+| Phase 5 | `/api/moments/:id/comments*`、`/api/comments/:id`、`/api/moments/:id/reaction`、`/api/notifications*`、`/api/devices/push-token` |
 | Phase 8 | `/api/chains/:chainId/share-links*`、`/api/share-links/:id`、`/api/public/share/:token` |
 
 ## 4. 各端测试策略

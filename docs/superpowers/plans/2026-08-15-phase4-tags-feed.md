@@ -704,6 +704,7 @@ git commit -m "feat(server): tag CRUD（每链上限/重名/级联硬删/链权�
 - Modify: `apps/server/src/moments/moment-serializer.ts`（签名加 extras；新增 `serializeMoments`）
 - Create: `apps/server/src/tags/replace-moment-tags.ts`
 - Modify: `apps/server/src/moments/moment.service.ts`（create/update 事务内调用；单条响应用 `serializeMoments`）
+- Modify: `apps/server/tests/moments/moment-serializer.test.ts`（Phase 3 的三参 `momentSerializer(m, media, author)` 调用同步迁移为 extras 形式，否则新签名下 tsc 编译失败）
 - Test: `packages/dto/src/moments-tags.test.ts`、`apps/server/tests/moments/moment-tags.test.ts`
 
 **Interfaces:**
@@ -711,7 +712,7 @@ git commit -m "feat(server): tag CRUD（每链上限/重名/级联硬删/链权�
 - Produces（Task 6/7 及 Phase 5 依赖，不得改名）:
   - `createMomentInputSchema`/`updateMomentInputSchema` 新增可选 `tagIds: string[]`（uuid，max 20）
   - `MomentResponse` 新增 `tags: TagBrief[]`
-  - `momentSerializer(moment: Moment, extras?: { tags?: TagBrief[] }): MomentResponse`（第二参可选，默认 `tags: []`，Phase 3 既有单参调用不受影响）
+  - `momentSerializer(moment: Moment, extras?: { tags?: TagBrief[] }): MomentResponse`（第二参可选，默认 `tags: []`。注意：Phase 3 终态是 `(m, media, author)` **三参**签名而非单参，本 Task 的签名变更是破坏性的——`tests/moments/moment-serializer.test.ts` 的三参调用必须同步迁移为 extras 形式（Files 已列入），`moment.service` 的直接调用则由本 Task 改走 `serializeMoments`）
   - `serializeMoments(rows: Moment[]): Promise<MomentResponse[]>`（`src/moments/moment-serializer.ts`；tag 一次 `inArray` 批量查，禁止 N+1）
   - `replaceMomentTags(tx: DbTx, momentId: string, chainId: string, tagIds: string[]): Promise<void>`（`src/tags/replace-moment-tags.ts`；全量校验属于该链，否则 `BadRequestError('TAG_NOT_IN_CHAIN')`，在调用方事务内执行）
 
@@ -1095,7 +1096,7 @@ import { serializeMoments } from './moment-serializer.js';
 - [ ] **Step 7: 运行确认通过**
 
 Run: `pnpm --filter @moment/server test && pnpm --filter @moment/dto test`
-Expected: moment-tags 6 个用例 PASS；Phase 3 既有 moments 测试全部 PASS（`momentSerializer` 单参调用兼容、响应多出 `tags: []` 不破坏既有断言——若 Phase 3 测试用了 `toEqual` 全量断言响应对象，把期望对象补上 `tags: [...]`，属预期小改）。
+Expected: moment-tags 6 个用例 PASS；Phase 3 既有 moments 测试全部 PASS（`tests/moments/moment-serializer.test.ts` 的三参调用已迁移为 extras 形式并 PASS、响应多出 `tags: []` 不破坏既有断言——若 Phase 3 测试用了 `toEqual` 全量断言响应对象，把期望对象补上 `tags: [...]`，属预期小改）。
 
 - [ ] **Step 8: Commit**
 

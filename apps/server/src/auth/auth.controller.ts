@@ -2,6 +2,7 @@ import {
   loginInputSchema,
   refreshInputSchema,
   registerInputSchema,
+  updateMeInputSchema,
   type AuthResponse,
   type UserProfile,
 } from '@moment/dto';
@@ -13,6 +14,7 @@ import {
   HttpCode,
   JsonController,
   OnUndefined,
+  Patch,
   Post,
 } from 'routing-controllers';
 import { Service } from 'typedi';
@@ -48,7 +50,13 @@ export class AuthController {
 
   @Get('/me')
   @Authorized()
-  me(@CurrentUser() user: UserProfile): UserProfile {
-    return user;
+  me(@CurrentUser() user: UserProfile): Promise<UserProfile> {
+    return this.auth.getProfile(user.id);
+  }
+
+  @Patch('/me')
+  @Authorized()
+  updateMe(@CurrentUser() user: UserProfile, @Body() body: unknown): Promise<UserProfile> {
+    return this.auth.updateMe(user.id, updateMeInputSchema.parse(body));
   }
 }

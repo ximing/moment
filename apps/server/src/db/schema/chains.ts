@@ -10,6 +10,10 @@ export const chains = mysqlTable('chains', {
   /** Phase 2 Global Constraints 注释「media 表属 Phase 3，本阶段不加外键，Phase 3 迁移时补 FK」，本计划兑现。
    *  与 media → moments → chains 构成 ESM 循环引用，安全同上（references 回调惰性求值）。 */
   coverMediaId: char('cover_media_id', { length: 36 }).references((): AnyMySqlColumn => media.id, { onDelete: 'set null' }),
+  /** 预设色板值（dto CHAIN_COLORS）；null = 客户端按 id 哈希回退 */
+  color: varchar('color', { length: 16 }),
+  /** 预设图标 emoji（dto CHAIN_ICONS）；null = 只画色点 */
+  icon: varchar('icon', { length: 16 }),
   visibility: mysqlEnum('visibility', ['private', 'link', 'public']).notNull().default('private'),
   ownerId: char('owner_id', { length: 36 })
     .notNull()

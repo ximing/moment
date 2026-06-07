@@ -19,7 +19,7 @@ export async function authorizationChecker(action: Action, _roles: string[]): Pr
     const auth = Container.get(AuthService);
     const user = await auth.getUserEntity(userId);
     if (user.passwordChangedAt && user.passwordChangedAt.getTime() > iat * 1000) return false;
-    (action.request as unknown as { user: UserProfile }).user = auth.toProfile(user);
+    (action.request as unknown as { user: UserProfile }).user = auth.toAuthPrincipal(user);
     return true;
   } catch {
     return false;
@@ -44,7 +44,7 @@ export async function populateUser(req: Request, _res: Response, next: NextFunct
       const auth = Container.get(AuthService);
       const user = await auth.getUserEntity(userId);
       if (!(user.passwordChangedAt && user.passwordChangedAt.getTime() > iat * 1000)) {
-        (req as unknown as { user: UserProfile }).user = auth.toProfile(user);
+        (req as unknown as { user: UserProfile }).user = auth.toAuthPrincipal(user);
       }
     } catch {
       // 缺失/无效 token：保持匿名

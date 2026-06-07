@@ -1,0 +1,904 @@
+<title>时刻纸感</title>
+<style>
+  :root {
+    --studio-bg: #eceae6;
+    --studio-ink: #1b1a18;
+    --studio-muted: #5f5a54;
+    --studio-line: #cfc9c0;
+    --studio-surface: #f7f5f1;
+    --studio-accent: #31473c;
+    --studio-accent-fg: #f4f1ea;
+    --font-studio: "Iowan Old Style", Palatino, "Palatino Linotype", "Songti SC", "Noto Serif SC", serif;
+    --font-app: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --studio-bg: #141312;
+      --studio-ink: #eeeae3;
+      --studio-muted: #a39c93;
+      --studio-line: #3a3732;
+      --studio-surface: #1d1c1a;
+      --studio-accent: #8fb39a;
+      --studio-accent-fg: #141312;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --studio-bg: #141312;
+    --studio-ink: #eeeae3;
+    --studio-muted: #a39c93;
+    --studio-line: #3a3732;
+    --studio-surface: #1d1c1a;
+    --studio-accent: #8fb39a;
+    --studio-accent-fg: #141312;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    background: var(--studio-bg);
+    color: var(--studio-ink);
+    font-family: var(--font-app);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible,
+  .seg button:focus-visible {
+    outline: 2px solid var(--studio-accent);
+    outline-offset: 2px;
+  }
+
+  .studio {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 16px 28px;
+    padding: 22px 28px 18px;
+    border-bottom: 1px solid var(--studio-line);
+    background: var(--studio-surface);
+  }
+
+  .bar h1 {
+    margin: 0;
+    font-family: var(--font-studio);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  .bar p {
+    margin: 4px 0 0;
+    color: var(--studio-muted);
+    max-width: 46ch;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-left: auto;
+  }
+
+  .seg {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .seg span {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--studio-muted);
+  }
+
+  .seg .pills {
+    display: flex;
+    border: 1px solid var(--studio-line);
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--studio-bg);
+  }
+
+  .seg button {
+    border: 0;
+    background: transparent;
+    padding: 6px 12px;
+    color: var(--studio-muted);
+  }
+
+  .seg button[aria-pressed="true"] {
+    background: var(--studio-accent);
+    color: var(--studio-accent-fg);
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 16px 20px 8px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .stage[data-view="current"] { grid-template-columns: 1fr; }
+  .stage[data-view="proposed"] { grid-template-columns: 1fr; }
+  .stage[data-view="current"] .pane.proposed,
+  .stage[data-view="proposed"] .pane.current { display: none; }
+
+  .pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 720px;
+  }
+
+  .pane-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 4px 8px;
+    font-size: 12px;
+    color: var(--studio-muted);
+  }
+
+  .pane-label strong {
+    font-family: var(--font-studio);
+    font-size: 16px;
+    color: var(--studio-ink);
+    font-weight: 600;
+  }
+
+  .frame {
+    flex: 1;
+    overflow: hidden;
+    border: 1px solid var(--studio-line);
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-app);
+  }
+
+  /* —— 当前 token —— */
+  .app[data-tokens="current"][data-scheme="light"] {
+    --bg: #fdf0d9;
+    --surface: #fffdf8;
+    --ink: #241a0b;
+    --muted: #a68d5f;
+    --line: #241a0b;
+    --stroke: #241a0b;
+    --shadow: rgba(36, 26, 11, 0.1);
+    --action: #f4552f;
+    --action-fg: #ffffff;
+    --select: #ffc94d;
+    --select-fg: #241a0b;
+    --sticker-pink: #ffd9e6;
+    --sticker-blue: #cfe8ff;
+    --sticker-mint: #bfe8d0;
+    --sticker-purple: #e6dbff;
+    --sticker-pink-line: #241a0b;
+    --sticker-blue-line: #241a0b;
+    --sticker-mint-line: #241a0b;
+    --sticker-purple-line: #241a0b;
+    --date-bg: #e6dbff;
+    --date-line: #241a0b;
+    --date-fg: #241a0b;
+    --card-border: 2px;
+    --side-border: 2px;
+    --card-shadow: 4px 4px 0 var(--shadow);
+    --sticker-shadow: 2px 2px 0 var(--shadow);
+    --group-gap: 24px;
+    --card-gap: 20px;
+    --header-gap: 12px;
+    --content: 680px;
+  }
+
+  .app[data-tokens="current"][data-scheme="dark"] {
+    --bg: #171208;
+    --surface: #221b10;
+    --ink: #f2e8d5;
+    --muted: #99855f;
+    --line: #4d4231;
+    --stroke: #4d4231;
+    --shadow: rgba(0, 0, 0, 0.45);
+    --action: #f4552f;
+    --action-fg: #ffffff;
+    --select: #ffc94d;
+    --select-fg: #241a0b;
+    --sticker-pink: #3a2831;
+    --sticker-blue: #233244;
+    --sticker-mint: #22392f;
+    --sticker-purple: #2e2842;
+    --sticker-pink-line: #8a5a70;
+    --sticker-blue-line: #56759c;
+    --sticker-mint-line: #4d7a67;
+    --sticker-purple-line: #6a5f94;
+    --date-bg: transparent;
+    --date-line: #ffc94d;
+    --date-fg: #ffc94d;
+    --card-border: 2px;
+    --side-border: 2px;
+    --card-shadow: 4px 4px 0 var(--shadow);
+    --sticker-shadow: 2px 2px 0 var(--shadow);
+    --group-gap: 24px;
+    --card-gap: 20px;
+    --header-gap: 12px;
+    --content: 680px;
+  }
+
+  /* —— 新方案 token —— */
+  .app[data-tokens="proposed"][data-scheme="light"] {
+    --bg: #f7f4ef;
+    --surface: #fffcf8;
+    --ink: #1c1917;
+    --muted: #6b645c;
+    --line: #e4ddd4;
+    --stroke: #2a241c;
+    --shadow: rgba(28, 25, 23, 0.08);
+    --action: #de4a28;
+    --action-fg: #ffffff;
+    --select: #f0b84a;
+    --select-fg: #241a0b;
+    --sticker-pink: #ffd9e6;
+    --sticker-blue: #cfe8ff;
+    --sticker-mint: #bfe8d0;
+    --sticker-purple: #e6dbff;
+    --sticker-pink-line: #2a241c;
+    --sticker-blue-line: #2a241c;
+    --sticker-mint-line: #2a241c;
+    --sticker-purple-line: #2a241c;
+    --date-bg: #e6dbff;
+    --date-line: #2a241c;
+    --date-fg: #1c1917;
+    --card-border: 1px;
+    --side-border: 1px;
+    --card-shadow: 3px 3px 0 var(--shadow);
+    --sticker-shadow: 2px 2px 0 var(--shadow);
+    --group-gap: 32px;
+    --card-gap: 16px;
+    --header-gap: 16px;
+    --content: 640px;
+  }
+
+  .app[data-tokens="proposed"][data-scheme="dark"] {
+    --bg: #1a1816;
+    --surface: #26221d;
+    --ink: #f3eee6;
+    --muted: #b0a89d;
+    --line: #3d3832;
+    --stroke: #b8b0a4;
+    --shadow: rgba(0, 0, 0, 0.4);
+    --action: #fb6a45;
+    --action-fg: #1a1816;
+    --select: #f0b84a;
+    --select-fg: #241a0b;
+    --sticker-pink: #3f2c34;
+    --sticker-blue: #27364a;
+    --sticker-mint: #264036;
+    --sticker-purple: #332c48;
+    --sticker-pink-line: #c08497;
+    --sticker-blue-line: #7aa0c8;
+    --sticker-mint-line: #6eae93;
+    --sticker-purple-line: #9b8fd0;
+    --date-bg: transparent;
+    --date-line: #f0b84a;
+    --date-fg: #f0b84a;
+    --card-border: 1px;
+    --side-border: 1px;
+    --card-shadow: 3px 3px 0 var(--shadow);
+    --sticker-shadow: 2px 2px 0 var(--shadow);
+    --group-gap: 32px;
+    --card-gap: 16px;
+    --header-gap: 16px;
+    --content: 640px;
+  }
+
+  .app {
+    display: flex;
+    height: 100%;
+    min-height: 680px;
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  .side {
+    width: 176px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 18px 10px;
+    border-right: var(--side-border) solid var(--stroke);
+    background: var(--bg);
+  }
+
+  .mark {
+    padding: 0 8px 14px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .mark em {
+    font-style: normal;
+    color: var(--action);
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--ink);
+    background: transparent;
+    border: 2px solid transparent;
+  }
+
+  .nav.active {
+    border-color: var(--stroke);
+    background: var(--select);
+    color: var(--select-fg);
+    border-radius: 99px;
+    box-shadow: var(--sticker-shadow);
+  }
+
+  .side-label {
+    margin: 14px 8px 4px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 99px;
+    border: 1px solid var(--stroke);
+    flex-shrink: 0;
+  }
+
+  .dot.pink { background: var(--sticker-pink); border-color: var(--sticker-pink-line); }
+  .dot.blue { background: var(--sticker-blue); border-color: var(--sticker-blue-line); }
+  .dot.mint { background: var(--sticker-mint); border-color: var(--sticker-mint-line); }
+
+  .side-foot {
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .badge {
+    margin-left: auto;
+    background: var(--action);
+    color: var(--action-fg);
+    border-radius: 99px;
+    padding: 0 6px;
+    font-size: 11px;
+  }
+
+  .main {
+    flex: 1;
+    min-width: 0;
+    padding: 28px 22px 40px;
+    overflow: auto;
+  }
+
+  .col {
+    max-width: var(--content);
+    margin: 0 auto;
+  }
+
+  .chain {
+    position: relative;
+    padding-left: 26px;
+  }
+
+  .chain::before {
+    content: "";
+    position: absolute;
+    left: 9px;
+    top: 8px;
+    bottom: 8px;
+    border-left: 2.5px dashed color-mix(in srgb, var(--muted) 40%, transparent);
+  }
+
+  .entry {
+    position: relative;
+    margin-bottom: 18px;
+    padding: 14px 16px;
+    border: var(--card-border) dashed var(--stroke);
+    border-radius: 16px;
+    background: var(--surface);
+    color: var(--muted);
+    box-shadow: var(--card-shadow);
+  }
+
+  .entry::before {
+    content: "";
+    position: absolute;
+    left: -24px;
+    top: 18px;
+    width: 16px;
+    height: 16px;
+    border-radius: 99px;
+    border: 2px solid var(--stroke);
+    background: var(--surface);
+  }
+
+  .group { margin-bottom: var(--group-gap); }
+  .cards { display: flex; flex-direction: column; gap: var(--card-gap); }
+
+  .date {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--header-gap);
+  }
+
+  .date::before {
+    content: "";
+    position: absolute;
+    left: -22px;
+    width: 12px;
+    height: 12px;
+    border-radius: 99px;
+    border: 2px solid var(--stroke);
+    background: var(--select);
+  }
+
+  .date span {
+    border: 2px solid var(--date-line);
+    background: var(--date-bg);
+    color: var(--date-fg);
+    border-radius: 99px;
+    padding: 2px 12px;
+    font-size: 13px;
+    box-shadow: var(--sticker-shadow);
+  }
+
+  .card {
+    position: relative;
+    padding: 18px 20px;
+    border: var(--card-border) solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--card-shadow);
+  }
+
+  .card::before {
+    content: "";
+    position: absolute;
+    left: -24px;
+    top: 24px;
+    width: 16px;
+    height: 16px;
+    border-radius: 99px;
+    border: 2px solid var(--stroke);
+    background: var(--surface);
+  }
+
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .av {
+    width: 32px;
+    height: 32px;
+    border-radius: 99px;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    border: 2px solid var(--stroke);
+    background: var(--sticker-mint);
+    color: var(--select-fg);
+    flex-shrink: 0;
+  }
+
+  .av.b { background: var(--sticker-blue); }
+  .av.p { background: var(--sticker-pink); }
+
+  .name { font-weight: 600; font-size: 14px; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .chain-name { color: var(--muted); font-size: 13px; margin-left: 6px; font-weight: 400; }
+
+  .body {
+    margin: 12px 0 0;
+    font-size: 16px;
+    line-height: 1.65;
+    max-width: 42em;
+  }
+
+  .media {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .ph {
+    height: 92px;
+    border-radius: 12px;
+    border: 2px solid var(--stroke);
+    background:
+      linear-gradient(135deg, var(--sticker-blue), var(--sticker-mint) 60%, var(--sticker-purple));
+  }
+
+  .ph.wide {
+    grid-column: 1 / -1;
+    height: 120px;
+    background: linear-gradient(120deg, var(--sticker-pink), var(--sticker-purple));
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .chip {
+    border: 2px solid var(--stroke);
+    background: var(--surface);
+    color: var(--muted);
+    border-radius: 99px;
+    padding: 1px 8px;
+    font-size: 12px;
+    box-shadow: var(--sticker-shadow);
+  }
+
+  .react {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .react button {
+    border: 2px solid var(--stroke);
+    background: var(--surface);
+    color: var(--ink);
+    border-radius: 99px;
+    padding: 1px 8px;
+    font-size: 13px;
+    box-shadow: var(--sticker-shadow);
+  }
+
+  .react button.hot {
+    background: var(--select);
+    color: var(--select-fg);
+  }
+
+  .comments {
+    margin-left: auto;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font-size: 13px;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .fab {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    width: 48px;
+    height: 48px;
+    border-radius: 99px;
+    border: 2px solid var(--stroke);
+    background: var(--action);
+    color: var(--action-fg);
+    font-size: 22px;
+    line-height: 1;
+    box-shadow: var(--sticker-shadow);
+  }
+
+  .frame { position: relative; }
+
+  .notes {
+    padding: 8px 28px 36px;
+  }
+
+  .notes h2 {
+    margin: 18px 0 8px;
+    font-family: var(--font-studio);
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  .notes p {
+    margin: 0 0 12px;
+    color: var(--studio-muted);
+    max-width: 72ch;
+  }
+
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--studio-line);
+    vertical-align: middle;
+  }
+
+  th { color: var(--studio-muted); font-weight: 500; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .sw {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    border: 1px solid var(--studio-line);
+    vertical-align: -1px;
+    margin-right: 6px;
+  }
+
+  @media (max-width: 1100px) {
+    .stage[data-view="compare"] { grid-template-columns: 1fr; }
+    .pane { min-height: 640px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="studio">
+  <header class="bar">
+    <div>
+      <h1>时刻纸感</h1>
+      <p>中性纸感 + 描边降权。卡片用浅结构线，贴纸/链条保留墨描边。组间松、组内紧。</p>
+    </div>
+    <div class="controls">
+      <div class="seg">
+        <span>主题</span>
+        <div class="pills" role="group" aria-label="主题">
+          <button type="button" id="scheme-light" aria-pressed="true">浅色</button>
+          <button type="button" id="scheme-dark" aria-pressed="false">深色</button>
+        </div>
+      </div>
+      <div class="seg">
+        <span>对照</span>
+        <div class="pills" role="group" aria-label="对照">
+          <button type="button" id="view-compare" aria-pressed="true">并排</button>
+          <button type="button" id="view-current" aria-pressed="false">当前</button>
+          <button type="button" id="view-proposed" aria-pressed="false">新方案</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="stage" id="stage" data-view="compare">
+    <section class="pane current">
+      <div class="pane-label"><strong>当前</strong><span>奶油黄底 · 全员 2px 墨线 · 组距 24 / 卡距 20</span></div>
+      <div class="frame" id="frame-current"></div>
+    </section>
+    <section class="pane proposed">
+      <div class="pane-label"><strong>新方案</strong><span>中性纸 · 卡 1px / 贴纸 2px · 组距 32 / 卡距 16</span></div>
+      <div class="frame" id="frame-proposed"></div>
+    </section>
+  </div>
+
+  <section class="notes">
+    <h2>改了什么</h2>
+    <p>性格还在：橙动作、黄热态、贴纸四色、虚线链、偏移影。变的是可读性——底不再发闷，次要字够对比，卡片不再每张都喊。</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Token / 规则</th><th>当前浅 / 深</th><th>新方案浅 / 深</th><th>原因</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>--bg</td>
+            <td><i class="sw" style="background:#fdf0d9"></i>#fdf0d9 / <i class="sw" style="background:#171208"></i>#171208</td>
+            <td><i class="sw" style="background:#f7f4ef"></i>#f7f4ef / <i class="sw" style="background:#1a1816"></i>#1a1816</td>
+            <td>去掉大面积奶油黄和酱油黑，保留一点暖</td>
+          </tr>
+          <tr>
+            <td>--muted</td>
+            <td>#a68d5f / #99855f</td>
+            <td>#6b645c / #b0a89d</td>
+            <td>次要字对比提到 AA（约 5.4 / 6.9）</td>
+          </tr>
+          <tr>
+            <td>--line vs --stroke</td>
+            <td>浅色里两者都是墨，深色一起糊</td>
+            <td>line=结构浅线；stroke=贴纸/链/按钮墨线</td>
+            <td>卡片降权，签名元素保留手账感</td>
+          </tr>
+          <tr>
+            <td>--action</td>
+            <td>两主题同 #f4552f</td>
+            <td>#de4a28 / #fb6a45</td>
+            <td>浅色略压饱和，深色提亮保证按钮可读</td>
+          </tr>
+          <tr>
+            <td>卡片描边 / 影</td>
+            <td>2px + 4px 硬偏移</td>
+            <td>1px + 3px 更淡偏移</td>
+            <td>时间线不再是一排黑框</td>
+          </tr>
+          <tr>
+            <td>间距</td>
+            <td>组 24 · 卡 20 · 日期下 12</td>
+            <td>组 32 · 卡 16 · 日期下 16</td>
+            <td>同一天贴紧，换日拉开</td>
+          </tr>
+          <tr>
+            <td>--content</td>
+            <td>680px</td>
+            <td>640px</td>
+            <td>17px 正文行长更稳</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+  const APP_HTML = `
+    <div class="app" data-tokens="TOKEN" data-scheme="SCHEME">
+      <aside class="side">
+        <div class="mark">时<em>刻</em></div>
+        <div class="nav active">我的时间线</div>
+        <div class="side-label">链</div>
+        <div class="nav"><i class="dot mint"></i>家里的饭</div>
+        <div class="nav"><i class="dot blue"></i>周末出走</div>
+        <div class="nav"><i class="dot pink"></i>爷爷的花园</div>
+        <div class="nav" style="color:var(--muted);font-size:13px">+ 新的链</div>
+        <div class="side-foot">
+          <div class="nav">通知<span class="badge">3</span></div>
+          <div class="nav">阿明</div>
+          <div class="nav" style="color:var(--muted)">退出</div>
+        </div>
+      </aside>
+      <main class="main">
+        <div class="col">
+          <div class="chain">
+            <div class="entry">这一刻，记点什么…</div>
+            <section class="group">
+              <header class="date"><span>8月17日</span></header>
+              <div class="cards">
+                <article class="card">
+                  <div class="who">
+                    <div class="av">梅</div>
+                    <div>
+                      <div class="name">阿梅 <span class="chain-name">家里的饭</span></div>
+                      <div class="meta">今天 18:24</div>
+                    </div>
+                  </div>
+                  <p class="body">晚饭是番茄炒蛋和冬瓜汤。小宝把蛋黄挑出来，说只要蛋白。汤还是要再淡一点。</p>
+                  <div class="media"><div class="ph"></div><div class="ph"></div></div>
+                  <div class="tags">
+                    <span class="chip">#晚饭</span>
+                    <span class="chip">#小宝</span>
+                  </div>
+                  <div class="react">
+                    <button class="hot" type="button">💛 3</button>
+                    <button type="button">😄 1</button>
+                    <button type="button">＋</button>
+                    <button class="comments" type="button">2 条评论</button>
+                  </div>
+                </article>
+                <article class="card">
+                  <div class="who">
+                    <div class="av b">明</div>
+                    <div>
+                      <div class="name">阿明 <span class="chain-name">家里的饭</span></div>
+                      <div class="meta">今天 12:08</div>
+                    </div>
+                  </div>
+                  <p class="body">中午剩下的排骨，热过以后比刚出锅还入味。下次记得多炖二十分钟。</p>
+                  <div class="react">
+                    <button type="button">＋</button>
+                    <button class="comments" type="button">0 条评论</button>
+                  </div>
+                </article>
+              </div>
+            </section>
+            <section class="group">
+              <header class="date"><span>8月15日</span></header>
+              <div class="cards">
+                <article class="card">
+                  <div class="who">
+                    <div class="av p">爷</div>
+                    <div>
+                      <div class="name">爷爷 <span class="chain-name">爷爷的花园</span></div>
+                      <div class="meta">周六 09:40 · 补记</div>
+                    </div>
+                  </div>
+                  <p class="body">茉莉开了。早上浇过水，叶子上还有露。下午如果下雨就不用再浇。</p>
+                  <div class="media"><div class="ph wide"></div></div>
+                  <div class="tags"><span class="chip">#花开了</span></div>
+                  <div class="react">
+                    <button class="hot" type="button">🌸 4</button>
+                    <button type="button">＋</button>
+                    <button class="comments" type="button">1 条评论</button>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+      <button class="fab" type="button" aria-label="记下此刻">＋</button>
+    </div>
+  `;
+
+  const current = document.getElementById("frame-current");
+  const proposed = document.getElementById("frame-proposed");
+  const stage = document.getElementById("stage");
+
+  let scheme = "light";
+  let view = "compare";
+
+  function render() {
+    current.innerHTML = APP_HTML.replace("TOKEN", "current").replace("SCHEME", scheme);
+    proposed.innerHTML = APP_HTML.replace("TOKEN", "proposed").replace("SCHEME", scheme);
+    stage.dataset.view = view;
+  }
+
+  function press(group, activeId) {
+    group.forEach((id) => {
+      const el = document.getElementById(id);
+      el.setAttribute("aria-pressed", id === activeId ? "true" : "false");
+    });
+  }
+
+  document.getElementById("scheme-light").onclick = () => {
+    scheme = "light";
+    press(["scheme-light", "scheme-dark"], "scheme-light");
+    render();
+  };
+  document.getElementById("scheme-dark").onclick = () => {
+    scheme = "dark";
+    press(["scheme-light", "scheme-dark"], "scheme-dark");
+    render();
+  };
+  document.getElementById("view-compare").onclick = () => {
+    view = "compare";
+    press(["view-compare", "view-current", "view-proposed"], "view-compare");
+    render();
+  };
+  document.getElementById("view-current").onclick = () => {
+    view = "current";
+    press(["view-compare", "view-current", "view-proposed"], "view-current");
+    render();
+  };
+  document.getElementById("view-proposed").onclick = () => {
+    view = "proposed";
+    press(["view-compare", "view-current", "view-proposed"], "view-proposed");
+    render();
+  };
+
+  render();
+</script>

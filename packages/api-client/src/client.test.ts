@@ -32,11 +32,13 @@ test('auth：register/login 走 skipAuthRefresh；logout 传 refreshToken', asyn
   await client.login({ email: 'a@b.c', password: 'secret123' });
   await client.logout('r1');
   await client.me();
+  await client.updateMe({ avatarColor: 'mint' });
   assert.deepEqual(calls.map((c) => `${c.method} ${c.url}`), [
     'POST http://x/api/auth/register',
     'POST http://x/api/auth/login',
     'POST http://x/api/auth/logout',
     'GET http://x/api/auth/me',
+    'PATCH http://x/api/auth/me',
   ]);
   assert.deepEqual(calls[0]!.body, { email: 'a@b.c', password: 'secret123', nickname: 'a' });
   assert.deepEqual(calls[2]!.body, { refreshToken: 'r1' });

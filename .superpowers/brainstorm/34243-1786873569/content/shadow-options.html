@@ -1,0 +1,69 @@
+<h2>浅色卡片阴影:三选一</h2>
+<p class="subtitle">同一张卡,三种投影。描边都保留(贴纸感的骨架),只动阴影。点一个</p>
+
+<style>
+  .sh { font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif; }
+  .sh-row { display:flex; gap:22px; flex-wrap:wrap; margin-top:6px; }
+  .sh-opt { width:300px; cursor:pointer; border:3px solid transparent; border-radius:16px; padding:10px; transition:border-color .15s; }
+  .sh-opt.selected { border-color:#4f7cff; }
+  .sh-stage { background:#fdf0d9; border-radius:12px; padding:26px 22px; }
+  .sh-card { background:#fffdf8; border:2px solid #241a0b; border-radius:16px; padding:12px 14px; }
+  .sh-hd { display:flex; align-items:center; gap:8px; }
+  .sh-ava { width:26px; height:26px; border-radius:50%; background:#ffd9e6; border:2px solid #241a0b; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .sh-name { font-size:12px; font-weight:800; color:#241a0b; }
+  .sh-meta { font-size:10px; color:#a68d5f; }
+  .sh-text { font-size:12.5px; color:#241a0b; margin:8px 0 9px; line-height:1.55; }
+  .sh-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; border-radius:10px; overflow:hidden; border:2px solid #241a0b; }
+  .sh-ph { aspect-ratio:1; }
+  .ph1{background:linear-gradient(135deg,#f9c5d1,#f7e7b4)} .ph2{background:linear-gradient(135deg,#a8d8ea,#dff5e1)} .ph3{background:linear-gradient(135deg,#ffd8a8,#fcb7b7)}
+  .sh-cap { margin-top:10px; font-size:12.5px; line-height:1.5; color:#444; }
+  .sh-cap b { display:block; font-size:13.5px; }
+
+  /* A: 偏移淡影——几何不变,墨色变淡 */
+  .shA .sh-card, .shA .sh-grid { box-shadow:4px 4px 0 rgba(36,26,11,.10); }
+  /* B: 描边 + 柔和弥散——放弃偏移几何 */
+  .shB .sh-card { box-shadow:0 8px 24px -6px rgba(36,26,11,.16); }
+  .shB .sh-grid { box-shadow:none; }
+  /* C: 淡描边 + 弥散——最接近主流现代 */
+  .shC .sh-card { border-color:rgba(36,26,11,.14); box-shadow:0 10px 28px -8px rgba(36,26,11,.14); }
+  .shC .sh-grid, .shC .sh-ava { border-color:rgba(36,26,11,.14); }
+</style>
+
+<div class="sh">
+  <div class="sh-row">
+
+    <div class="sh-opt" data-choice="a" onclick="toggleSelect(this)">
+      <div class="sh-stage shA">
+        <div class="sh-card">
+          <div class="sh-hd"><div class="sh-ava">妈</div><div><div class="sh-name">妈妈</div><div class="sh-meta">下午 3:24 · 宝宝成长</div></div></div>
+          <div class="sh-text">第一次自己站起来走了三步!🎉</div>
+          <div class="sh-grid"><div class="sh-ph ph1"></div><div class="sh-ph ph2"></div><div class="sh-ph ph3"></div></div>
+        </div>
+      </div>
+      <div class="sh-cap"><b>A · 偏移淡影(推荐)</b>保留「贴纸厚度」的签名几何,墨色降到 10%——风格还在,刺眼没了。</div>
+    </div>
+
+    <div class="sh-opt" data-choice="b" onclick="toggleSelect(this)">
+      <div class="sh-stage shB">
+        <div class="sh-card">
+          <div class="sh-hd"><div class="sh-ava">妈</div><div><div class="sh-name">妈妈</div><div class="sh-meta">下午 3:24 · 宝宝成长</div></div></div>
+          <div class="sh-text">第一次自己站起来走了三步!🎉</div>
+          <div class="sh-grid"><div class="sh-ph ph1"></div><div class="sh-ph ph2"></div><div class="sh-ph ph3"></div></div>
+        </div>
+      </div>
+      <div class="sh-cap"><b>B · 描边 + 弥散</b>墨描边保留,阴影改成柔和弥散。像「描边插画 + 现代投影」的混血。</div>
+    </div>
+
+    <div class="sh-opt" data-choice="c" onclick="toggleSelect(this)">
+      <div class="sh-stage shC">
+        <div class="sh-card">
+          <div class="sh-hd"><div class="sh-ava">妈</div><div><div class="sh-name">妈妈</div><div class="sh-meta">下午 3:24 · 宝宝成长</div></div></div>
+          <div class="sh-text">第一次自己站起来走了三步!🎉</div>
+          <div class="sh-grid"><div class="sh-ph ph1"></div><div class="sh-ph ph2"></div><div class="sh-ph ph3"></div></div>
+        </div>
+      </div>
+      <div class="sh-cap"><b>C · 全面柔和</b>描边也变淡(14% 墨)+ 弥散影。最干净主流,但贴纸感基本退场,和深色版的性格会拉开差距。</div>
+    </div>
+
+  </div>
+</div>

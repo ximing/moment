@@ -36,6 +36,13 @@ body {
   min-height: 100vh;
 }
 
+.elev {
+  box-shadow: var(--elev);
+}
+.elev-sm {
+  box-shadow: var(--elev-sm);
+}
+
 .font-display {
   /* 得意黑子集只含固定文案字形（scripts/font-glyphs.txt）；动态内容禁用此类，走系统黑体 */
   font-family: 'Smiley Sans', system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;

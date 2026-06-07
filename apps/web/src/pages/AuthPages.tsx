@@ -126,7 +126,7 @@ export function RegisterPage() {
 function AuthFrame({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-6">
-      <div className="w-full max-w-sm rounded-card border-2 border-line bg-surface p-8 shadow-card">
+      <div className="w-full max-w-sm rounded-card bg-surface p-8 shadow-card">
         <p className="text-center font-display text-3xl">
           时<span className="text-action">刻</span>
         </p>

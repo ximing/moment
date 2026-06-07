@@ -34,11 +34,23 @@ describe('POST /api/chains', () => {
     expect(chain.ownerId).toBe(owner.id);
     expect(chain.myRole).toBe('owner');
     expect(chain.coverMediaId).toBeNull();
+    expect(chain.color).toBeNull();
+    expect(chain.icon).toBeNull();
 
     const members = await db.select().from(chainMembers).where(eq(chainMembers.chainId, chain.id));
     expect(members).toHaveLength(1);
     expect(members[0].userId).toBe(owner.id);
     expect(members[0].role).toBe('owner');
+  });
+
+  it('201：可带预设色与图标', async () => {
+    const res = await request(app)
+      .post('/api/chains')
+      .set('Authorization', auth(owner))
+      .send({ name: '旅行', color: 'sky', icon: '✈️' });
+    expect(res.status).toBe(201);
+    expect(res.body.color).toBe('sky');
+    expect(res.body.icon).toBe('✈️');
   });
 
   it('未登录 401；空 name 400 VALIDATION_ERROR', async () => {
@@ -106,6 +118,22 @@ describe('PATCH /api/chains/:chainId', () => {
     expect(res.body.name).toBe('新名字');
     expect(res.body.visibility).toBe('link');
     expect(res.body.description).toBeNull();
+
+    const look = await request(app)
+      .patch(`/api/chains/${chain.id}`)
+      .set('Authorization', auth(owner))
+      .send({ color: 'mint', icon: '👶' });
+    expect(look.status).toBe(200);
+    expect(look.body.color).toBe('mint');
+    expect(look.body.icon).toBe('👶');
+
+    const clearIcon = await request(app)
+      .patch(`/api/chains/${chain.id}`)
+      .set('Authorization', auth(owner))
+      .send({ icon: null });
+    expect(clearIcon.status).toBe(200);
+    expect(clearIcon.body.icon).toBeNull();
+    expect(clearIcon.body.color).toBe('mint');
 
     const forbidden = await request(app)
       .patch(`/api/chains/${chain.id}`)

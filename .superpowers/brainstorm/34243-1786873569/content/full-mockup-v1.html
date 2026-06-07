@@ -1,0 +1,167 @@
+<h2>完整界面 mockup · v1</h2>
+<p class="subtitle">C 方向深化:签名元素是「时光链」——时间线是一条真实的链,时刻卡挂在链节上。上浅色 / 下深色。看完在终端说哪里要改</p>
+
+<style>
+  @font-face { font-family:"Smiley Sans"; src:url("https://cdn.jsdelivr.net/npm/smiley-sans@2.0.1/dist/SmileySans-Oblique.ttf.woff2") format("woff2"); font-display:swap; }
+  .v1 { font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif; }
+  .v1 .disp { font-family:"Smiley Sans","PingFang SC",sans-serif; font-weight:800; }
+
+  .v1-shell { display:flex; height:560px; border-radius:16px; overflow:hidden; border:2px solid rgba(0,0,0,.15); margin-top:14px; }
+
+  /* ============ 浅色 ============ */
+  .L { --bg:#fdf0d9; --surface:#fffdf8; --ink:#241a0b; --muted:#a68d5f; --line:#241a0b;
+       --accent:#ffc94d; --coral:#ff7a59; --pink:#ffd9e6; --blue:#cfe8ff; --mint:#bfe8d0; --lav:#e6dbff; }
+  .D { --bg:#171208; --surface:#231b0e; --ink:#f6ecd7; --muted:#9d8a68; --line:#f6ecd7;
+       --accent:#ffc94d; --coral:#ff8a66; --pink:#4d2f3d; --blue:#2b3d55; --mint:#26453a; --lav:#3a3355; }
+
+  .v1-side { width:196px; flex:none; background:var(--bg); border-right:2px solid var(--line); padding:18px 12px; display:flex; flex-direction:column; gap:3px; font-size:12.5px; color:var(--ink); }
+  .v1-logo { font-size:22px; margin:0 6px 14px; letter-spacing:.04em; }
+  .v1-logo em { font-style:normal; color:var(--coral); }
+  .v1-nav { display:flex; align-items:center; gap:7px; padding:6px 10px; border-radius:12px; border:2px solid transparent; color:var(--ink); white-space:nowrap; }
+  .v1-nav.on { background:var(--accent); border-color:var(--line); font-weight:800; box-shadow:2.5px 2.5px 0 var(--line); }
+  .v1-sec { font-size:10px; letter-spacing:.14em; color:var(--muted); margin:12px 10px 4px; font-weight:700; }
+  .v1-dot { width:9px; height:9px; border-radius:50%; border:1.5px solid var(--line); flex:none; }
+  .v1-new { color:var(--muted); padding:6px 10px; font-size:12px; }
+  .v1-badge { margin-left:auto; background:var(--coral); color:#fff; font-size:9.5px; font-weight:800; border-radius:99px; padding:1px 6px; border:1.5px solid var(--line); }
+
+  .v1-main { flex:1; background:var(--bg); overflow:hidden; position:relative; padding:18px 26px; color:var(--ink); }
+  .v1-col { max-width:520px; margin:0 auto; position:relative; }
+  /* 链条:竖直虚线 spine */
+  .v1-spine { position:absolute; left:9px; top:0; bottom:0; width:0; border-left:2.5px dashed var(--muted); opacity:.55; }
+  .v1-date { position:relative; margin:14px 0 10px 26px; display:inline-flex; }
+  .v1-date span { background:var(--lav); border:2px solid var(--line); border-radius:99px; padding:2px 12px; font-size:11px; font-weight:800; box-shadow:2px 2px 0 var(--line); }
+  .v1-date::before { content:""; position:absolute; left:-22px; top:50%; width:9px; height:9px; border-radius:50%; background:var(--accent); border:2px solid var(--line); transform:translateY(-50%); }
+  .v1-knot { position:absolute; left:5.5px; width:10px; height:10px; border-radius:50%; background:var(--surface); border:2.5px solid var(--line); }
+
+  .v1-composer { position:relative; margin-left:26px; background:var(--surface); border:2px solid var(--line); border-radius:16px; box-shadow:4px 4px 0 var(--line); padding:11px 13px; }
+  .v1-cph { color:var(--muted); font-size:13.5px; }
+  .v1-crow { display:flex; align-items:center; gap:8px; margin-top:9px; }
+  .v1-cico { font-size:13px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1.5px solid var(--line); border-radius:9px; background:var(--bg); }
+  .v1-cbtn { margin-left:auto; background:var(--ink); color:var(--bg); font-size:11.5px; font-weight:800; padding:6px 14px; border-radius:99px; border:2px solid var(--line); }
+  .D .v1-cbtn { background:var(--accent); color:#241a0b; }
+
+  .v1-card { position:relative; margin-left:26px; background:var(--surface); border:2px solid var(--line); border-radius:18px; box-shadow:4px 4px 0 var(--line); padding:13px 15px; margin-bottom:14px; }
+  .v1-hd { display:flex; align-items:center; gap:9px; }
+  .v1-ava { width:30px; height:30px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex:none; }
+  .v1-name { font-size:13px; font-weight:800; }
+  .v1-meta { font-size:10.5px; color:var(--muted); }
+  .v1-kebab { margin-left:auto; color:var(--muted); font-weight:800; letter-spacing:1px; }
+  .v1-text { font-size:13.5px; line-height:1.6; margin:9px 0 10px; }
+  .v1-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; border-radius:12px; overflow:hidden; border:2px solid var(--line); }
+  .v1-ph { aspect-ratio:1; }
+  .v1-tags { display:flex; gap:6px; margin-top:10px; }
+  .v1-tag { font-size:10.5px; font-weight:800; padding:2.5px 10px; border-radius:99px; border:1.5px solid var(--line); }
+  .v1-react { display:flex; gap:6px; align-items:center; margin-top:11px; font-size:11.5px; }
+  .v1-pill { padding:3px 10px; border-radius:99px; border:1.5px solid var(--line); background:var(--bg); }
+  .v1-pill.hot { background:var(--accent); font-weight:800; box-shadow:2px 2px 0 var(--line); }
+  .v1-cmt { margin-left:auto; color:var(--muted); font-weight:700; }
+
+  .v1-fab { position:absolute; right:22px; bottom:18px; background:var(--ink); color:var(--bg); border:2px solid var(--line); font-size:12px; font-weight:800; padding:10px 18px; border-radius:99px; box-shadow:3px 3px 0 rgba(0,0,0,.25); }
+  .D .v1-fab { background:var(--accent); color:#241a0b; box-shadow:3px 3px 0 rgba(0,0,0,.5); }
+
+  .ph1{background:linear-gradient(135deg,#f9c5d1,#f7e7b4)} .ph2{background:linear-gradient(135deg,#a8d8ea,#dff5e1)} .ph3{background:linear-gradient(135deg,#ffd8a8,#fcb7b7)}
+
+  .v1-notes { margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:10px 26px; font-size:13.5px; line-height:1.65; }
+  .v1-notes b { display:block; margin-bottom:2px; }
+  .skinlabel { font-size:12px; font-weight:700; letter-spacing:.1em; opacity:.6; margin:16px 0 0; }
+</style>
+
+<div class="v1">
+  <p class="skinlabel">浅色 · LIGHT</p>
+  <div class="v1-shell L">
+    <div class="v1-side">
+      <div class="v1-logo disp">时<em>刻</em></div>
+      <div class="v1-nav on">⌘&nbsp;我的时间线</div>
+      <div class="v1-sec">链</div>
+      <div class="v1-nav"><span class="v1-dot" style="background:var(--pink)"></span>宝宝成长</div>
+      <div class="v1-nav"><span class="v1-dot" style="background:var(--blue)"></span>家庭日常</div>
+      <div class="v1-new">＋ 新的链</div>
+      <div style="flex:1"></div>
+      <div class="v1-nav">通知<span class="v1-badge">3</span></div>
+      <div class="v1-nav">我的</div>
+    </div>
+    <div class="v1-main">
+      <div class="v1-col">
+        <div class="v1-spine"></div>
+        <div class="v1-composer">
+          <div class="v1-knot" style="top:16px"></div>
+          <div class="v1-cph">这一刻,记点什么…</div>
+          <div class="v1-crow"><span class="v1-cico">🖼</span><span class="v1-cico">🎬</span><span class="v1-cico">🏷</span><span class="v1-cico">🕐</span><span class="v1-cbtn">记下此刻</span></div>
+        </div>
+        <div class="v1-date"><span>今天</span></div>
+        <div class="v1-card">
+          <div class="v1-knot" style="top:18px"></div>
+          <div class="v1-hd">
+            <div class="v1-ava" style="background:var(--pink)">妈</div>
+            <div><div class="v1-name">妈妈</div><div class="v1-meta">下午 3:24 · 宝宝成长</div></div>
+            <div class="v1-kebab">···</div>
+          </div>
+          <div class="v1-text">第一次自己站起来走了三步!全家都沸腾了 🎉</div>
+          <div class="v1-grid"><div class="v1-ph ph1"></div><div class="v1-ph ph2"></div><div class="v1-ph ph3"></div></div>
+          <div class="v1-tags"><span class="v1-tag" style="background:var(--pink)">#第一次</span><span class="v1-tag" style="background:var(--blue)">#学步</span></div>
+          <div class="v1-react"><span class="v1-pill hot">❤️ 2</span><span class="v1-pill">👏 1</span><span class="v1-pill">＋</span><span class="v1-cmt">💬 3</span></div>
+        </div>
+        <div class="v1-date"><span>8月12日</span></div>
+        <div class="v1-card">
+          <div class="v1-knot" style="top:18px"></div>
+          <div class="v1-hd">
+            <div class="v1-ava" style="background:var(--mint)">爸</div>
+            <div><div class="v1-name">爸爸</div><div class="v1-meta">晚上 9:07 · 补记</div></div>
+            <div class="v1-kebab">···</div>
+          </div>
+          <div class="v1-text">翻到他满月时的视频,那时候一只手就能托起来。</div>
+          <div class="v1-react"><span class="v1-pill hot">🥹 1</span><span class="v1-pill">＋</span><span class="v1-cmt">💬 1</span></div>
+        </div>
+      </div>
+      <div class="v1-fab">✏️ 记下此刻</div>
+    </div>
+  </div>
+
+  <p class="skinlabel">深色 · DARK</p>
+  <div class="v1-shell D">
+    <div class="v1-side">
+      <div class="v1-logo disp">时<em>刻</em></div>
+      <div class="v1-nav on">⌘&nbsp;我的时间线</div>
+      <div class="v1-sec">链</div>
+      <div class="v1-nav"><span class="v1-dot" style="background:#e08aa5"></span>宝宝成长</div>
+      <div class="v1-nav"><span class="v1-dot" style="background:#7ba7d9"></span>家庭日常</div>
+      <div class="v1-new">＋ 新的链</div>
+      <div style="flex:1"></div>
+      <div class="v1-nav">通知<span class="v1-badge">3</span></div>
+      <div class="v1-nav">我的</div>
+    </div>
+    <div class="v1-main">
+      <div class="v1-col">
+        <div class="v1-spine"></div>
+        <div class="v1-composer">
+          <div class="v1-knot" style="top:16px"></div>
+          <div class="v1-cph">这一刻,记点什么…</div>
+          <div class="v1-crow"><span class="v1-cico">🖼</span><span class="v1-cico">🎬</span><span class="v1-cico">🏷</span><span class="v1-cico">🕐</span><span class="v1-cbtn">记下此刻</span></div>
+        </div>
+        <div class="v1-date"><span>今天</span></div>
+        <div class="v1-card">
+          <div class="v1-knot" style="top:18px"></div>
+          <div class="v1-hd">
+            <div class="v1-ava" style="background:#e08aa5;color:#241a0b">妈</div>
+            <div><div class="v1-name">妈妈</div><div class="v1-meta">下午 3:24 · 宝宝成长</div></div>
+            <div class="v1-kebab">···</div>
+          </div>
+          <div class="v1-text">第一次自己站起来走了三步!全家都沸腾了 🎉</div>
+          <div class="v1-grid"><div class="v1-ph ph1"></div><div class="v1-ph ph2"></div><div class="v1-ph ph3"></div></div>
+          <div class="v1-tags"><span class="v1-tag" style="background:var(--pink);color:#f6ecd7;border-color:#f6ecd7">#第一次</span><span class="v1-tag" style="background:var(--blue);color:#f6ecd7;border-color:#f6ecd7">#学步</span></div>
+          <div class="v1-react"><span class="v1-pill hot" style="color:#241a0b">❤️ 2</span><span class="v1-pill">👏 1</span><span class="v1-pill">＋</span><span class="v1-cmt">💬 3</span></div>
+        </div>
+      </div>
+      <div class="v1-fab">✏️ 记下此刻</div>
+    </div>
+  </div>
+
+  <div class="v1-notes">
+    <div><b>⛓ 签名:时光链</b>左侧一条虚线「链」贯穿时间线,日期是链上的贴纸节点,卡片挂在链节(圆环)上——产品名直接变成视觉语言。</div>
+    <div><b>✏️ 发布入口改版</b>顶部常驻「这一刻,记点什么…」composer(点开成完整面板),滚动后右下角 FAB 接力。不再只有右上角一个小按钮。</div>
+    <div><b>🏷 贴纸体系</b>标签/表情/日期全是描边贴纸,每枚贴纸色固定(粉/蓝/薄荷/紫),链也有自己的颜色点——全家一眼认出「这是宝宝成长的内容」。</div>
+    <div><b>🖥 宽屏策略</b>≥1400px 时右侧多出「时间索引」栏(年月跳转+标签筛选,图中未画);平板/桌面同一套组件,只是栏数变化。</div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px">在终端说感受:整体行不行?哪里要收/要放?(比如边框粗细、硬阴影、链条密度、深色贴纸配色)</p>

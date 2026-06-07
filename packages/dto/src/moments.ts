@@ -74,6 +74,8 @@ export interface MomentMedia {
 export interface AuthorSummary {
   id: string;
   nickname: string;
+  /** 头像预签名 URL；无头像为 null。与 UserProfile.avatarUrl 同语义 */
+  avatarUrl: string | null;
 }
 
 export interface MomentResponse {

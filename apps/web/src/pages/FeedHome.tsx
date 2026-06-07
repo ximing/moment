@@ -7,12 +7,17 @@ import { ComposerEntry } from '@/compose/ComposerEntry';
 import { canCompose } from '@/lib/roles';
 import { Timeline } from '@/timeline/Timeline';
 import { TimelineRail, type RailFilter } from '@/timeline/TimelineRail';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/ui/Button';
+import { Icon } from '@/ui/Icon';
 
 export function FeedHome() {
   const { openCompose } = useCompose();
   const { data: chains } = useQuery({ queryKey: qk.chains, queryFn: () => client.listChains() });
-  const names = useMemo(() => new Map((chains ?? []).map((c) => [c.id, c.name])), [chains]);
+  const looks = useMemo(
+    () => new Map((chains ?? []).map((c) => [c.id, { name: c.name, color: c.color, icon: c.icon }])),
+    [chains],
+  );
   // 占位卡抑制：viewer（任何链都不可写）全程不见（spec §5）
   const entry = (chains ?? []).some(canCompose) ? <ComposerEntry /> : undefined;
   const [filter, setFilter] = useState<RailFilter>({ order: 'happened_at' });
@@ -26,26 +31,24 @@ export function FeedHome() {
   const moments = q.data?.pages.flatMap((p) => p.moments) ?? [];
   const noChains = !q.isPending && (chains ?? []).length === 0;
 
-  // flex-wrap：rail 的 <1400px 触发按钮 order-first + w-full 落在主列顶部
   return (
-    <div className="flex flex-wrap gap-x-8">
-      <div className="min-w-0 flex-1">
-        <h1 className="mb-6 font-display text-2xl">我的时间线</h1>
-        {/* 锚定态「回到最新」：时间线顶部固定一枚（spec §4.3），清 before 回第一页 */}
-        {filter.before && (
-          <div className="sticky top-2 z-10 mb-3">
-            <button
-              type="button"
-              onClick={() => setFilter((f) => ({ ...f, before: undefined }))}
-              className="rounded-sticker border-2 border-line bg-select px-3 py-1 text-sm text-ink shadow-sticker"
-            >
-              ← 回到最新
-            </button>
-          </div>
-        )}
-        <Timeline
+    <div>
+      <TimelineRail chains={chains ?? []} value={filter} onChange={setFilter} />
+      {filter.before && (
+        <div className="sticky top-2 z-10 mb-3">
+          <button
+            type="button"
+            onClick={() => setFilter((f) => ({ ...f, before: undefined }))}
+            className="inline-flex items-center gap-1 rounded-sticker bg-select px-3 py-1 text-sm text-select-fg"
+          >
+            <Icon icon={ArrowLeft} size={14} />
+            回到今天
+          </button>
+        </div>
+      )}
+      <Timeline
           moments={moments}
-          chainNameById={names}
+          chainLookById={looks}
           hideSignature={filter.order === 'created_at'}
           isPending={q.isPending}
           isError={q.isError}
@@ -56,7 +59,7 @@ export function FeedHome() {
           entry={entry}
           empty={
             noChains ? (
-              <Empty title="建第一条时光链，比如「宝宝成长」" hint="左栏点「新的链」就可以。" />
+              <Empty title="建第一条时光链，比如「宝宝成长」" hint="点「开一条新的链」就可以。" />
             ) : filter.tagId || filter.chainIds?.length || filter.order === 'created_at' || filter.before ? (
               // 筛选/锚定筛空（web-product §4 空态表第三行）：「没有符合条件的时刻」+ 一键清除
               <Empty
@@ -75,8 +78,6 @@ export function FeedHome() {
             )
           }
         />
-      </div>
-      <TimelineRail chains={chains ?? []} value={filter} onChange={setFilter} />
     </div>
   );
 }

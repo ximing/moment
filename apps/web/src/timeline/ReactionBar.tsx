@@ -1,4 +1,6 @@
+import { Plus } from 'lucide-react';
 import { REACTION_EMOJIS, type MomentResponse } from '@moment/dto';
+import { Icon } from '@/ui/Icon';
 import { Menu } from '@/ui/Menu';
 
 /**
@@ -26,8 +28,8 @@ export function ReactionBar({
             key={emoji}
             type="button"
             onClick={() => onReact(emoji)}
-            className={`rounded-sticker border-2 px-2 py-0.5 text-sm shadow-sticker ${
-              mine ? 'border-line bg-select text-ink' : 'border-line bg-surface text-ink'
+            className={`rounded-sticker px-2 py-0.5 text-sm ${
+              mine ? 'bg-select text-select-fg' : 'bg-surface text-ink shadow-sticker'
             }`}
           >
             {emoji}
@@ -40,9 +42,9 @@ export function ReactionBar({
           <button
             type="button"
             aria-label="加个表情"
-            className="rounded-sticker border-2 border-line bg-surface px-2 py-0.5 text-sm text-muted shadow-sticker hover:text-ink"
+            className="grid h-8 w-8 place-items-center rounded-full bg-surface text-muted shadow-sticker hover:text-ink"
           >
-            ＋
+            <Icon icon={Plus} size={14} />
           </button>
         }
       >

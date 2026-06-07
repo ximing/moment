@@ -1,22 +1,19 @@
 import type { ReactNode } from 'react';
-import type { MomentResponse } from '@moment/dto';
+import type { ChainColor, ChainIcon, MomentResponse } from '@moment/dto';
 import { useCompose } from '@/compose/ComposeContext';
+import { dayHeading } from '@/lib/time';
 import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
 import { Banner } from '@/ui/Banner';
 import { MomentSheet } from './MomentSheet';
 import { groupMomentsByDate } from './group-by-date';
 
 /**
- * 时间线（spec §3）：happened_at 序下带「时光链签名」——贯穿虚线链 + 日期贴纸节点 + 卡片链节环。
- * hideSignature（order=created_at，happened_at 非单调）时整体降级为纯卡片列表（spec §3.2，非 bug）。
- *
- * 链条对齐基准：容器 pl-[26px]，虚线 left-[9px]、宽 2.5px，线中心 ≈ x10.25；
- * 日期圆点 12px 用 -left-[22px]、卡片链节环 16px 用 -left-6，中心均落在 x10（微调自 brief 初值，对齐虚线）。
- * 虚线色用 color-mix：Tailwind v3 对 var() 色值的 /40 透明度修饰静默不生效（硬约束）。
+ * 日子线：虚线贯穿 + 日期结 + 按内容变形的时刻。
+ * hideSignature（order=created_at）时日期结收起，线仍在（发生日非单调，不是把线拆掉）。
  */
 export function Timeline({
   moments,
-  chainNameById,
+  chainLookById,
   shareToken,
   readOnly,
   isPending,
@@ -30,7 +27,7 @@ export function Timeline({
   entry,
 }: {
   moments: MomentResponse[];
-  chainNameById?: Map<string, string>;
+  chainLookById?: Map<string, { name: string; color: ChainColor | null; icon: ChainIcon | null }>;
   shareToken?: string;
   readOnly?: boolean;
   isPending: boolean;
@@ -40,24 +37,22 @@ export function Timeline({
   isFetchingNextPage: boolean;
   fetchNextPage: () => unknown;
   empty: ReactNode;
-  /** order=created_at 时传 true：链条与日期贴纸整体隐藏（spec §3.2 降级） */
   hideSignature?: boolean;
-  /** composer 入口占位卡（spec §5）：渲染在签名容器最顶部，与链条对齐；骨架/空态/签名降级时不渲染 */
   entry?: ReactNode;
 }) {
   const sentinelRef = useLoadMoreSentinel(!isPending && !isError, hasNextPage, isFetchingNextPage, fetchNextPage);
-  // 发布成功「长出来」微动效（spec §1.6）：lastCreatedId 是响应式 state，渲染期直读；
-  // invalidate 重取后新卡挂载时动画播放一次，下一次 openCompose 自清
   const { lastCreatedId } = useCompose();
 
   const renderSheet = (m: MomentResponse) => (
     <div key={m.id} className={m.id === lastCreatedId ? 'animate-[grow-in_200ms_ease-out]' : undefined}>
       <MomentSheet
         moment={m}
-        chainName={chainNameById?.get(m.chainId)}
+        chainName={chainLookById?.get(m.chainId)?.name}
+        chainColor={chainLookById?.get(m.chainId)?.color}
+        chainIcon={chainLookById?.get(m.chainId)?.icon}
         shareToken={shareToken}
         readOnly={readOnly}
-        hideKnot={hideSignature}
+        hideKnot
       />
     </div>
   );
@@ -71,17 +66,12 @@ export function Timeline({
 
   if (isPending) {
     const skeletons = [0, 1, 2].map((i) => (
-      <div key={i} className="h-40 animate-pulse rounded-card border-2 border-line bg-surface" />
+      <div key={i} className="h-40 animate-pulse rounded-card bg-surface shadow-card" />
     ));
-    // 骨架卡也挂链条（spec §3.3）；hideSignature 时退化为纯列表，与终态一致
-    if (hideSignature) return <div className="space-y-4">{skeletons}</div>;
     return (
-      <div className="relative pl-[26px]">
-        <div
-          aria-hidden
-          className="absolute bottom-2 left-[9px] top-2 border-l-[2.5px] border-dashed border-[color:color-mix(in_srgb,var(--muted)_40%,transparent)]"
-        />
-        <div className="space-y-5">{skeletons}</div>
+      <div className="relative pl-9">
+        <Line />
+        <div className="space-y-4">{skeletons}</div>
       </div>
     );
   }
@@ -91,40 +81,57 @@ export function Timeline({
   if (moments.length === 0) return <>{empty}</>;
 
   if (hideSignature) {
-    // order=created_at：happened_at 非单调，签名降级隐藏（spec §3.2）
     return (
-      <div className="space-y-5">
-        {moments.map(renderSheet)}
-        {tail}
+      <div className="relative pl-9">
+        <Line />
+        {entry}
+        <div className="space-y-5">
+          {moments.map(renderSheet)}
+          {tail}
+        </div>
       </div>
     );
   }
 
   const groups = groupMomentsByDate(moments);
   return (
-    <div className="relative pl-[26px]">
-      {/* 贯穿虚线链：26px 缩进区，2.5px dashed，~0.4 透明度（spec §3.1） */}
-      <div
-        aria-hidden
-        className="absolute bottom-2 left-[9px] top-2 border-l-[2.5px] border-dashed border-[color:color-mix(in_srgb,var(--muted)_40%,transparent)]"
-      />
-      {/* composer 入口挂链首（spec §5）：占位卡左侧圆点落在虚线中心；仅签名分支渲染，
-          降级/骨架/空态下左侧缩进不存在，-left-6 挂点会溢出 */}
+    <div className="relative pl-9">
+      <Line />
       {entry}
-      {groups.map((g) => (
-        <section key={g.date} className="mb-6">
-          {/* 日期分组头 = 链上贴纸节点：左侧圆点(--select) + 日期贴纸（颜色全走 token） */}
-          <header className="relative mb-3 flex items-center">
-            <span aria-hidden className="absolute -left-[22px] h-3 w-3 rounded-full border-2 border-line bg-select" />
-            {/* 动态日期文字不用 font-display：得意黑子集不含数字/月/日字形（scripts/font-glyphs.txt） */}
-            <span className="rounded-sticker border-2 border-[color:var(--date-sticker-line)] bg-[var(--date-sticker-bg)] px-3 py-0.5 text-sm text-[var(--date-sticker-fg)] shadow-sticker">
-              {g.date}
-            </span>
-          </header>
-          <div className="space-y-5">{g.moments.map(renderSheet)}</div>
-        </section>
-      ))}
+      {groups.map((g) => {
+        const day = dayHeading(g.date);
+        return (
+          <section key={g.date} className="relative mb-2">
+            <span
+              aria-hidden
+              className={
+                day.kind === 'today'
+                  ? 'absolute -left-[30px] top-2 h-5 w-5 rounded-full bg-[var(--today)] shadow-[0_6px_16px_color-mix(in_srgb,var(--today)_45%,transparent)]'
+                  : day.kind === 'yesterday'
+                    ? 'absolute -left-[27px] top-2.5 h-3.5 w-3.5 rounded-full bg-[var(--knot-yesterday)]'
+                    : 'absolute -left-[25px] top-3 h-2.5 w-2.5 rounded-full bg-[var(--knot-older)]'
+              }
+            />
+            <h2 className="mb-4 leading-[1.1]">
+              <span className={day.kind === 'other' ? 'text-[28px] font-medium text-ink' : 'font-display text-[28px] text-ink'}>
+                {day.title}
+              </span>
+              <small className="ml-2 align-[4px] text-[13px] font-normal tracking-normal text-muted">{day.sub}</small>
+            </h2>
+            <div className="space-y-5 pb-8">{g.moments.map(renderSheet)}</div>
+          </section>
+        );
+      })}
       {tail}
     </div>
+  );
+}
+
+function Line() {
+  return (
+    <div
+      aria-hidden
+      className="absolute bottom-2 left-[15px] top-2 border-l-2 border-dashed border-[color:color-mix(in_srgb,var(--line)_90%,transparent)]"
+    />
   );
 }

@@ -10,10 +10,22 @@ export type ChainRole = z.infer<typeof chainRoleSchema>;
 export const inviteRoleSchema = z.enum(['editor', 'viewer']);
 export type InviteRole = z.infer<typeof inviteRoleSchema>;
 
+/** 链标记默认色板；未设置时客户端按 chainId 哈希回退。 */
+export const CHAIN_COLORS = ['coral', 'orange', 'pink', 'mint', 'sky', 'purple', 'cocoa', 'gold'] as const;
+export const chainColorSchema = z.enum(CHAIN_COLORS);
+export type ChainColor = z.infer<typeof chainColorSchema>;
+
+/** 链标记预设图标；null = 只用色点。 */
+export const CHAIN_ICONS = ['🌱', '👶', '✈️', '🏠', '💛', '📷', '🐾', '🎓', '🎵', '⭐'] as const;
+export const chainIconSchema = z.enum(CHAIN_ICONS);
+export type ChainIcon = z.infer<typeof chainIconSchema>;
+
 export const createChainInputSchema = z.object({
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().max(2000).nullish(),
   visibility: chainVisibilitySchema.default('private'),
+  color: chainColorSchema.optional(),
+  icon: chainIconSchema.nullish(),
 });
 export type CreateChainInput = z.infer<typeof createChainInputSchema>;
 
@@ -22,6 +34,8 @@ export const updateChainInputSchema = z
     name: z.string().trim().min(1).max(100).optional(),
     description: z.string().trim().max(2000).nullable().optional(),
     visibility: chainVisibilitySchema.optional(),
+    color: chainColorSchema.optional(),
+    icon: chainIconSchema.nullable().optional(),
     // coverMediaId 的校验依赖 media 归属判断，属 Phase 3，本阶段不支持改封面。
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
@@ -50,6 +64,10 @@ export interface ChainDto {
   name: string;
   description: string | null;
   coverMediaId: string | null;
+  /** 未选色时为 null，客户端按 id 哈希回退 */
+  color: ChainColor | null;
+  /** 未选图标时为 null，只画色点 */
+  icon: ChainIcon | null;
   visibility: ChainVisibility;
   ownerId: string;
   /** 当前请求用户在该链中的角色；仅在「我参与的链」语境下返回 */
@@ -63,6 +81,7 @@ export interface ChainDto {
 export interface ChainMemberDto {
   userId: string;
   nickname: string;
+  avatarUrl: string | null;
   role: ChainRole;
   /** ISO 8601 */
   joinedAt: string;

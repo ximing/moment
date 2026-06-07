@@ -1,5 +1,6 @@
 import type { AuthorSummary, MomentResponse, ReactionSummary, TagBrief } from '@moment/dto';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { avatarUrlsByUserIds } from '../auth/avatar.js';
 import { db } from '../db/index.js';
 import { comments, media, momentTags, reactions, tags, users, type Moment } from '../db/schema.js';
 
@@ -120,7 +121,10 @@ export async function serializeMoments(
     list.push(m);
     mediaBy.set(m.momentId, list);
   }
-  const authorBy = new Map(authorRows.map((a) => [a.id, a]));
+  const avatarBy = await avatarUrlsByUserIds(authorRows.map((a) => a.id));
+  const authorBy = new Map(
+    authorRows.map((a) => [a.id, { id: a.id, nickname: a.nickname, avatarUrl: avatarBy.get(a.id) ?? null }])
+  );
   const tagsBy = new Map<string, TagBrief[]>();
   for (const t of tagRows) {
     const list = tagsBy.get(t.momentId) ?? [];
@@ -139,7 +143,7 @@ export async function serializeMoments(
   return rows.map((r) =>
     momentSerializer(r, {
       media: mediaBy.get(r.id) ?? [],
-      author: authorBy.get(r.authorId) ?? { id: r.authorId, nickname: '' },
+      author: authorBy.get(r.authorId) ?? { id: r.authorId, nickname: '', avatarUrl: null },
       tags: tagsBy.get(r.id) ?? [],
       counts: {
         commentCount: commentCountBy.get(r.id) ?? 0,

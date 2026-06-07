@@ -1,13 +1,36 @@
 import { randomUUID } from 'node:crypto';
-import type { AuthResponse, LoginInput, RegisterInput, UserProfile } from '@moment/dto';
+import mime from 'mime-types';
+import {
+  CHAIN_COLORS,
+  CHAIN_ICONS,
+  IMAGE_MIME_TYPES,
+  type AuthResponse,
+  type ChainColor,
+  type ChainIcon,
+  type LoginInput,
+  type RegisterInput,
+  type UpdateMeInput,
+  type UserProfile,
+} from '@moment/dto';
 import { eq } from 'drizzle-orm';
-import { HttpError, NotFoundError, UnauthorizedError } from 'routing-controllers';
+import { BadRequestError, HttpError, NotFoundError, UnauthorizedError } from 'routing-controllers';
 import { Service } from 'typedi';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
-import { users, type User } from '../db/schema.js';
+import { media, users, type User } from '../db/schema.js';
+import { getStorage } from '../storage/factory.js';
+import { logger } from '../utils/logger.js';
+import { avatarExpiresAt, signAvatarGetUrl } from './avatar.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { TokenService } from './token.service.js';
+
+function isChainColor(v: string | null): v is ChainColor {
+  return v !== null && (CHAIN_COLORS as readonly string[]).includes(v);
+}
+
+function isChainIcon(v: string | null): v is ChainIcon {
+  return v !== null && (CHAIN_ICONS as readonly string[]).includes(v);
+}
 
 @Service()
 export class AuthService {
@@ -24,6 +47,8 @@ export class AuthService {
       nickname: input.nickname,
       passwordChangedAt: null,
       avatarMediaId: null,
+      avatarColor: null,
+      avatarIcon: null,
       createdAt: new Date(),
     };
     await db.insert(users).values(user);
@@ -42,7 +67,7 @@ export class AuthService {
     const { userId, refreshToken } = await this.tokens.rotateRefreshToken(raw);
     const user = await this.getUserEntity(userId);
     return {
-      user: this.toProfile(user),
+      user: await this.toProfile(user),
       tokens: {
         accessToken: this.tokens.signAccessToken(user.id),
         refreshToken,
@@ -61,18 +86,86 @@ export class AuthService {
     return user;
   }
 
-  toProfile(user: User): UserProfile {
+  async getProfile(userId: string): Promise<UserProfile> {
+    return this.toProfile(await this.getUserEntity(userId));
+  }
+
+  async updateMe(userId: string, input: UpdateMeInput): Promise<UserProfile> {
+    const user = await this.getUserEntity(userId);
+    if (input.avatarMediaId !== undefined) {
+      await this.bindAvatar(user, input.avatarMediaId);
+    }
+    const patch = {
+      ...(input.nickname !== undefined ? { nickname: input.nickname } : {}),
+      ...(input.avatarColor !== undefined ? { avatarColor: input.avatarColor } : {}),
+      ...(input.avatarIcon !== undefined ? { avatarIcon: input.avatarIcon } : {}),
+    };
+    if (Object.keys(patch).length > 0) {
+      await db.update(users).set(patch).where(eq(users.id, user.id));
+    }
+    return this.toProfile(await this.getUserEntity(userId));
+  }
+
+  /** 请求上下文用：不签发 S3 链接。 */
+  toAuthPrincipal(user: User): UserProfile {
     return {
       id: user.id,
       email: user.email,
       nickname: user.nickname,
+      avatarColor: isChainColor(user.avatarColor) ? user.avatarColor : null,
+      avatarIcon: isChainIcon(user.avatarIcon) ? user.avatarIcon : null,
+      avatarUrl: null,
+      avatarExpiresAt: null,
       createdAt: user.createdAt.toISOString(),
     };
   }
 
+  /** API 下发：每次重新签发 6 天头像链接。 */
+  async toProfile(user: User): Promise<UserProfile> {
+    const base = this.toAuthPrincipal(user);
+    if (!user.avatarMediaId) return base;
+    const [row] = await db.select().from(media).where(eq(media.id, user.avatarMediaId)).limit(1);
+    if (!row || row.status !== 'ready') return base;
+    const url = await signAvatarGetUrl(row.s3Key, row.storageMeta);
+    return { ...base, avatarUrl: url, avatarExpiresAt: avatarExpiresAt().toISOString() };
+  }
+
+  private async bindAvatar(user: User, avatarMediaId: string | null): Promise<void> {
+    if (avatarMediaId === null) {
+      await db.update(users).set({ avatarMediaId: null }).where(eq(users.id, user.id));
+      return;
+    }
+    const [row] = await db.select().from(media).where(eq(media.id, avatarMediaId)).limit(1);
+    if (!row || row.uploaderId !== user.id || row.status !== 'ready') {
+      throw new NotFoundError('MEDIA_NOT_FOUND');
+    }
+    if (!(IMAGE_MIME_TYPES as readonly string[]).includes(row.mime)) {
+      throw new BadRequestError('MEDIA_INVALID');
+    }
+    if (row.momentId) throw new BadRequestError('MEDIA_ALREADY_BOUND');
+
+    const ext = mime.extension(row.mime) || 'bin';
+    const finalKey = `users/${user.id}/avatar/${row.id}.${ext}`;
+    if (row.s3Key !== finalKey) {
+      await getStorage().copyObject(row.s3Key, finalKey, row.storageMeta);
+      await db.update(media).set({ s3Key: finalKey }).where(eq(media.id, row.id));
+      await getStorage()
+        .deleteFile(row.s3Key, row.storageMeta)
+        .catch((err: unknown) => {
+          logger.warn(`avatar tmp cleanup failed: ${row.s3Key}`, err);
+        });
+    }
+
+    const prev = user.avatarMediaId;
+    await db.update(users).set({ avatarMediaId: row.id }).where(eq(users.id, user.id));
+    if (prev && prev !== row.id) {
+      await db.update(media).set({ status: 'orphaned' }).where(eq(media.id, prev));
+    }
+  }
+
   private async buildAuthResponse(user: User): Promise<AuthResponse> {
     return {
-      user: this.toProfile(user),
+      user: await this.toProfile(user),
       tokens: {
         accessToken: this.tokens.signAccessToken(user.id),
         refreshToken: await this.tokens.issueRefreshToken(user.id),

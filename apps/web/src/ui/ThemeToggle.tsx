@@ -24,10 +24,8 @@ export function ThemeToggle() {
               setThemeChoice(o.value);
               setChoice(o.value);
             }}
-            className={`px-3 py-1.5 text-sm ${
-              active
-                ? 'rounded-sticker border-2 border-line bg-select text-ink'
-                : 'border-2 border-transparent text-muted hover:text-ink'
+            className={`rounded-sticker px-3 py-1.5 text-sm ${
+              active ? 'bg-select text-select-fg' : 'text-muted hover:text-ink'
             }`}
           >
             {o.label}

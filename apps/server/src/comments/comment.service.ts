@@ -3,6 +3,7 @@ import { and, asc, eq, gt, isNull, or, type SQL } from 'drizzle-orm';
 import type { CommentDto, CommentListResponse, CreateCommentInput } from '@moment/dto';
 import { HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
+import { avatarUrlsByUserIds } from '../auth/avatar.js';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
 import { comments, moments, users, type Comment, type Moment } from '../db/schema.js';
@@ -60,8 +61,11 @@ export class CommentService {
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const last = page[page.length - 1];
+    const avatarBy = await avatarUrlsByUserIds(page.map((r) => r.author.id));
     return {
-      comments: page.map((r) => this.toDto(r.comment, r.author)),
+      comments: page.map((r) =>
+        this.toDto(r.comment, { ...r.author, avatarUrl: avatarBy.get(r.author.id) ?? null })
+      ),
       nextCursor:
         hasMore && last
           ? encodeCommentCursor(last.comment.createdAt.getTime(), last.comment.id)
@@ -88,7 +92,8 @@ export class CommentService {
       .innerJoin(users, eq(users.id, comments.authorId))
       .where(eq(comments.id, id))
       .limit(1);
-    return this.toDto(row.comment, row.author);
+    const avatarBy = await avatarUrlsByUserIds([row.author.id]);
+    return this.toDto(row.comment, { ...row.author, avatarUrl: avatarBy.get(row.author.id) ?? null });
   }
 
   /** 软删：评论作者本人或链 owner（spec §1 owner 可删链内任何内容）。幂等（已删再删 204）。 */
@@ -109,7 +114,7 @@ export class CommentService {
     return m.chainId;
   }
 
-  private toDto(c: Comment, author: { id: string; nickname: string }): CommentDto {
+  private toDto(c: Comment, author: { id: string; nickname: string; avatarUrl: string | null }): CommentDto {
     return {
       id: c.id,
       momentId: c.momentId,

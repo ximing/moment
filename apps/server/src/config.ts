@@ -31,6 +31,8 @@ const envSchema = z.object({
   // GET TTL 上限 3600：alignedGetPresign 的「过期时刻落在下一窗内」推导要求 TTL ≤ 一个窗长（3600s）
   PRESIGN_GET_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(3600),
   PRESIGN_PUT_TTL_SECONDS: z.coerce.number().int().min(1).default(900),
+  /** 头像预签名 GET：默认 6 天。S3 SigV4 IAM 用户上限 7 天。 */
+  AVATAR_PRESIGN_TTL_SECONDS: z.coerce.number().int().min(60).max(7 * 24 * 3600).default(6 * 24 * 3600),
   EXPO_ACCESS_TOKEN: z.string().default(''),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().default(2000),
   WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(20),

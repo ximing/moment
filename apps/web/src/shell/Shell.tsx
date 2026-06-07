@@ -1,23 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import type { ChainDto } from '@moment/dto';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
-import { useAuth } from '@/auth/AuthProvider';
 import { useCompose } from '@/compose/ComposeContext';
 import { ComposeFab } from '@/compose/ComposeFab';
 import { ComposePanel } from '@/compose/ComposePanel';
 import { canCompose } from '@/lib/roles';
-import { chainColor, stickerClasses } from '@/lib/chain-color';
+import { ChainMark } from '@/chain/ChainMark';
+import { ContextMenu, MenuItem } from '@/ui/Menu';
 import { CreateChainDialog } from './CreateChainDialog';
+import { UserMenu } from './UserMenu';
 
 export function Shell() {
-  const { user, logout } = useAuth();
   const { openCompose } = useCompose();
   const navigate = useNavigate();
   const location = useLocation();
-  // Shell 是 path-less 布局路由，useParams 只取 match 数组末位，拿不到子路由 /chains/:chainId 的参数
-  // （审查修正：旧顶栏按钮/?compose=1 深链/FAB 的 chainId 曾恒为 undefined，统一改用 useMatch 来源）
   const chainId = useMatch('/chains/:chainId')?.params.chainId;
   const [creating, setCreating] = useState(false);
 
@@ -28,7 +27,6 @@ export function Shell() {
     refetchInterval: 30_000,
   });
   const unread = (notifications?.notifications ?? []).filter((n) => n.readAt === null).length;
-
   const currentChain = chains?.find((c) => c.id === chainId);
   const showCompose = currentChain ? canCompose(currentChain) : (chains ?? []).some(canCompose);
 
@@ -42,60 +40,55 @@ export function Shell() {
   }, [location.search, location.pathname, chainId, navigate, openCompose]);
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="sticky top-0 flex h-screen w-[232px] shrink-0 flex-col border-r-2 border-line bg-bg px-3 py-5">
-        <NavLink to="/" className="font-display px-2 text-2xl text-ink">
-          时<span className="text-action">刻</span>
-        </NavLink>
-        <nav className="mt-6 flex flex-1 flex-col gap-0.5 overflow-y-auto">
+    <div className="min-h-screen bg-bg">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar)] flex-col border-r border-[color:color-mix(in_srgb,var(--line)_70%,transparent)] bg-surface px-3 pt-6 min-[1400px]:flex">
+        <Brand />
+        <nav className="mt-6 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
           <NavLink to="/" end className={sideLink}>
-            我的时间线
+            <span className="inline-block h-4 w-4 shrink-0 rounded-full bg-[conic-gradient(var(--dot-pink),var(--dot-blue),var(--dot-mint),var(--dot-pink))]" />
+            大家的日子
           </NavLink>
-          <p className="mt-4 px-2 text-[11px] tracking-wide text-muted">链</p>
           {(chains ?? []).map((c) => (
-            <NavLink key={c.id} to={`/chains/${c.id}`} className={sideLink}>
-              <span
-                className={`mr-1.5 inline-block h-2.5 w-2.5 rounded-full border ${stickerClasses[chainColor(c.id)]}`}
-              />
-              {c.name}
-            </NavLink>
+            <ChainNav key={c.id} chain={c} className={sideLink} />
           ))}
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="mt-1 px-2 text-left text-sm text-muted hover:text-ink"
+            className="mt-2 rounded-xl px-2 py-1.5 text-left text-[13px] text-muted transition duration-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-ink"
           >
-            + 新的链
+            开一条新的链
           </button>
         </nav>
-        <div className="mt-auto space-y-1 border-t border-line pt-3">
-          <NavLink to="/notifications" className={sideLink}>
-            通知
-            {unread > 0 && (
-              <span className="ml-auto rounded-sticker bg-action px-1.5 text-xs text-action-fg">
-                {unread > 99 ? '99+' : unread}
-              </span>
-            )}
-          </NavLink>
-          <NavLink to="/me" className={sideLink}>
-            {user?.nickname ?? '我'}
-          </NavLink>
-          <button
-            type="button"
-            className="w-full px-2 py-1.5 text-left text-sm text-muted hover:text-ink"
-            onClick={async () => {
-              await logout();
-              navigate('/login');
-            }}
-          >
-            退出
-          </button>
+        <div className="shrink-0">
+          <div className="-mx-3 border-t border-[color:color-mix(in_srgb,var(--line)_70%,transparent)]" />
+          <div className="py-4">
+            <UserMenu unread={unread} />
+          </div>
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* 顶栏已随「记下此刻」按钮一起移除：发布入口移交时间线占位卡 + FAB（spec §5） */}
-        <main className="mx-auto w-full max-w-content flex-1 px-6 py-8">
+      <div className="min-[1400px]:pl-[var(--sidebar)] min-[1400px]:pr-[var(--rail)]">
+        <header className="sticky top-0 z-20 flex items-center gap-2.5 bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] px-4 py-3 backdrop-blur min-[1400px]:hidden">
+          <Brand compact />
+          <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <NavLink to="/" end className={chipLink}>
+              <span className="inline-block h-4 w-4 shrink-0 rounded-full bg-[conic-gradient(var(--dot-pink),var(--dot-blue),var(--dot-mint),var(--dot-pink))]" />
+              大家的日子
+            </NavLink>
+            {(chains ?? []).map((c) => (
+              <ChainNav key={c.id} chain={c} className={chipLink} />
+            ))}
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="shrink-0 rounded-sticker px-2.5 py-1 text-sm text-muted"
+            >
+              +
+            </button>
+          </div>
+          <UserMenu unread={unread} compact />
+        </header>
+        <main className="mx-auto w-full max-w-content px-5 pb-32 pt-6 min-[900px]:px-8">
           <Outlet />
         </main>
       </div>
@@ -107,10 +100,61 @@ export function Shell() {
   );
 }
 
+function ChainNav({
+  chain,
+  className,
+}: {
+  chain: ChainDto;
+  className: (args: { isActive: boolean }) => string;
+}) {
+  const navigate = useNavigate();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const onContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+  return (
+    <>
+      <NavLink to={`/chains/${chain.id}`} className={className} onContextMenu={onContextMenu}>
+        <ChainMark chainId={chain.id} color={chain.color} icon={chain.icon} size={16} />
+        <span className="truncate">{chain.name}</span>
+      </NavLink>
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
+          {(close) => (
+            <MenuItem
+              onClick={() => {
+                close();
+                navigate(`/chains/${chain.id}/settings`);
+              }}
+            >
+              设置
+            </MenuItem>
+          )}
+        </ContextMenu>
+      )}
+    </>
+  );
+}
+
+function Brand({ compact }: { compact?: boolean }) {
+  return (
+    <NavLink to="/" className={`font-display shrink-0 text-ink ${compact ? 'text-xl' : 'px-2 text-[28px] leading-none'}`}>
+      时<span className="text-action">刻</span>
+    </NavLink>
+  );
+}
+
 function sideLink({ isActive }: { isActive: boolean }) {
-  return `flex items-center px-2 py-1.5 text-sm ${
+  return `flex items-center gap-2 truncate rounded-xl px-2 py-1.5 text-sm ${
+    isActive ? 'font-semibold text-ink' : 'text-muted hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-ink'
+  }`;
+}
+
+function chipLink({ isActive }: { isActive: boolean }) {
+  return `inline-flex shrink-0 items-center gap-1.5 rounded-sticker px-2.5 py-1 text-sm ${
     isActive
-      ? 'rounded-sticker border-2 border-line bg-select text-ink shadow-sticker'
-      : 'rounded-card text-ink hover:bg-surface'
+      ? 'bg-surface font-semibold text-ink shadow-sticker'
+      : 'text-muted hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-ink'
   }`;
 }

@@ -1,20 +1,23 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
 import { useCompose } from '@/compose/ComposeContext';
 import { ComposerEntry } from '@/compose/ComposerEntry';
-import { canCompose, roleLabel } from '@/lib/roles';
+import { canCompose } from '@/lib/roles';
 import { Timeline } from '@/timeline/Timeline';
 import { TimelineRail, type RailFilter } from '@/timeline/TimelineRail';
-import { Avatar } from '@/ui/Avatar';
+import { ArrowLeft } from 'lucide-react';
 import { Banner } from '@/ui/Banner';
 import { Button } from '@/ui/Button';
+import { Icon } from '@/ui/Icon';
+import { KebabButton, Menu, MenuItem } from '@/ui/Menu';
 import { Empty } from './FeedHome';
 
 export function ChainHome() {
   const { chainId = '' } = useParams();
+  const navigate = useNavigate();
   const { openCompose } = useCompose();
   // 行内 tag chips / 排序小字按钮已迁入右栏 rail；tagId/order/before 合并为 RailFilter
   const [filter, setFilter] = useState<RailFilter>({ order: 'happened_at' });
@@ -43,22 +46,26 @@ export function ChainHome() {
     );
   }
 
-  // flex-wrap：rail 的 <1400px 触发按钮 order-first + w-full 落在主列顶部
   return (
-    <div className="flex flex-wrap gap-x-8">
-      <div className="min-w-0 flex-1">
-        <header className="mb-6 flex items-start gap-3">
-          <Avatar name={chain.name} size={48} />
+    <div>
+      <TimelineRail chains={[]} fixedChainId={chainId} value={filter} onChange={setFilter} />
+      <header className="mb-5 flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <h1 className="text-2xl">{chain.name}</h1>
-              <span className="text-sm text-muted">{roleLabel(chain.myRole)}</span>
-            </div>
+            <h1 className="text-2xl font-medium">{chain.name}</h1>
             {chain.description && <p className="mt-1 text-sm text-muted">{chain.description}</p>}
           </div>
-          <Link to={`/chains/${chain.id}/settings`} className="text-sm text-muted hover:text-ink">
-            设置
-          </Link>
+          <Menu trigger={<KebabButton label="设置" />}>
+            {(close) => (
+              <MenuItem
+                onClick={() => {
+                  close();
+                  navigate(`/chains/${chain.id}/settings`);
+                }}
+              >
+                设置
+              </MenuItem>
+            )}
+          </Menu>
         </header>
 
         {/* 锚定态「回到最新」：时间线顶部固定一枚（spec §4.3），清 before 回第一页 */}
@@ -67,9 +74,10 @@ export function ChainHome() {
             <button
               type="button"
               onClick={() => setFilter((f) => ({ ...f, before: undefined }))}
-              className="rounded-sticker border-2 border-line bg-select px-3 py-1 text-sm text-ink shadow-sticker"
+              className="inline-flex items-center gap-1 rounded-sticker bg-select px-3 py-1 text-sm text-select-fg"
             >
-              ← 回到最新
+              <Icon icon={ArrowLeft} size={14} />
+              回到今天
             </button>
           </div>
         )}
@@ -95,9 +103,6 @@ export function ChainHome() {
             )
           }
         />
-      </div>
-      {/* 链页 rail：fixedChainId 隐藏链 chips，索引/标签范围固定本链；chains 传 [] 避免多余的 qk.chains 查询 */}
-      <TimelineRail chains={[]} fixedChainId={chainId} value={filter} onChange={setFilter} />
     </div>
   );
 }

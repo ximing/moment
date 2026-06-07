@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import type { ChainDto } from '@moment/dto';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
-import { chainColor, stickerClasses } from '@/lib/chain-color';
 import { currentTzOffset, monthBeforeParam, monthFromBefore } from '@/lib/time';
 
 /** 右栏筛选值：before 为日期锚定（spec §4.2，仅 happened_at 序有意义）。 */
@@ -23,12 +22,12 @@ export type RailFilter = {
  * 页面换 query key 重查，不做双向滚动；「回到最新」由页面渲染，清 before。
  */
 export function TimelineRail({
-  chains,
   fixedChainId,
   value,
   onChange,
 }: {
-  chains: ChainDto[];
+  /** 换线已改走壳层导航；保留参数以免调用方改签名 */
+  chains?: ChainDto[];
   /** 链页传入：链 chips 整块隐藏，索引/标签范围固定为该链 */
   fixedChainId?: string;
   value: RailFilter;
@@ -36,21 +35,19 @@ export function TimelineRail({
 }) {
   const [open, setOpen] = useState(false);
   const content = (
-    <RailContent chains={chains} fixedChainId={fixedChainId} value={value} onChange={onChange} />
+    <RailContent fixedChainId={fixedChainId} value={value} onChange={onChange} />
   );
   return (
     <>
       {/* <1400px：主列顶部触发按钮 */}
-      <div className="order-first w-full min-[1400px]:hidden">
-        <div className="mb-4 flex justify-end">
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="rounded-sticker border-2 border-line bg-surface px-3 py-1.5 text-sm text-ink shadow-sticker"
-          >
-            筛选 / 索引
-          </button>
-        </div>
+      <div className="mb-3 flex justify-end min-[1400px]:hidden">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-sticker bg-surface px-3 py-1.5 text-[13px] text-ink elev-sm"
+        >
+          {new Date().getMonth() + 1}月
+        </button>
       </div>
       {/* <1400px：右侧抽屉（遮罩 30% 墨用 color-mix：var() 色值的 /30 修饰静默不生成） */}
       {open && (
@@ -59,9 +56,9 @@ export function TimelineRail({
             className="fixed inset-0 z-40 bg-[color-mix(in_srgb,var(--ink)_30%,transparent)]"
             onClick={() => setOpen(false)}
           />
-          <div className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] overflow-y-auto border-l-2 border-line bg-bg p-5">
+          <div className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] overflow-y-auto border-l border-stroke bg-bg p-5">
             <div className="mb-4 flex items-center justify-between">
-              <span className="font-display text-lg">筛选 / 索引</span>
+              <span className="text-lg font-medium">回到某个月</span>
               <button type="button" className="text-sm text-muted" onClick={() => setOpen(false)}>
                 关闭
               </button>
@@ -71,10 +68,8 @@ export function TimelineRail({
         </div>
       )}
       {/* ≥1400px：右侧栏 */}
-      <aside className="hidden w-72 shrink-0 min-[1400px]:block">
-        <div className="sticky top-8 max-h-[calc(100vh-4rem)] space-y-6 overflow-y-auto pb-4">
-          {content}
-        </div>
+      <aside className="fixed inset-y-0 right-0 z-10 hidden w-[148px] overflow-y-auto px-3 pt-7 min-[1400px]:block">
+        {content}
       </aside>
     </>
   );
@@ -86,17 +81,15 @@ function monthLabel(month: string): string {
   return `${y}年${Number(m)}月`;
 }
 
-const chip = 'rounded-sticker border-2 px-2.5 py-0.5 text-xs';
-const chipOn = 'border-line bg-select text-ink shadow-sticker';
-const chipOff = 'border-line bg-surface text-ink';
+const chip = 'rounded-sticker px-2.5 py-0.5 text-xs';
+const chipOn = 'bg-select text-select-fg';
+const chipOff = 'bg-surface text-ink shadow-sticker';
 
 function RailContent({
-  chains,
   fixedChainId,
   value,
   onChange,
 }: {
-  chains: ChainDto[];
   fixedChainId?: string;
   value: RailFilter;
   onChange: (next: RailFilter) => void;
@@ -121,12 +114,6 @@ function RailContent({
     enabled: Boolean(scopeChainId),
   });
 
-  const toggleChain = (id: string) => {
-    const cur = value.chainIds ?? [];
-    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-    // 换链范围时清 tagId：标签挂在单链上，跨范围保留无意义
-    onChange({ ...value, chainIds: next.length > 0 ? next : undefined, tagId: undefined });
-  };
   const toggleTag = (id: string) =>
     onChange({ ...value, tagId: value.tagId === id ? undefined : id });
   const orderOn = value.order === 'created_at';
@@ -137,7 +124,7 @@ function RailContent({
   return (
     <>
       <section>
-        <h3 className="mb-2 px-1 text-[11px] tracking-wide text-muted">时间索引</h3>
+        <h3 className="mb-2 px-1 text-[12px] text-muted">回到某个月</h3>
         {value.order === 'created_at' ? (
           <p className="px-1 text-xs text-muted">按添加时间看的时候没有月份索引</p>
         ) : idx.isPending ? (
@@ -153,8 +140,8 @@ function RailContent({
                   <button
                     type="button"
                     onClick={() => onChange({ ...value, before: monthBeforeParam(mo.month) })}
-                    className={`flex w-full items-baseline justify-between rounded-sticker border-2 px-3 py-1 text-sm ${
-                      active ? chipOn : 'border-line bg-surface text-ink hover:bg-select'
+                    className={`flex w-full items-baseline justify-between py-1.5 text-sm ${
+                      active ? 'font-semibold text-ink' : 'text-muted hover:text-ink'
                     }`}
                   >
                     <span>{monthLabel(mo.month)}</span>
@@ -168,35 +155,9 @@ function RailContent({
       </section>
 
       <section>
-        <h3 className="mb-2 px-1 text-[11px] tracking-wide text-muted">筛选</h3>
-        {!fixedChainId && chains.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => onChange({ ...value, chainIds: undefined, tagId: undefined })}
-              className={`${chip} ${(value.chainIds?.length ?? 0) === 0 ? chipOn : chipOff}`}
-            >
-              全部链
-            </button>
-            {chains.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => toggleChain(c.id)}
-                className={`${chip} inline-flex items-center ${value.chainIds?.includes(c.id) ? chipOn : chipOff}`}
-              >
-                {/* 链颜色点：同 Shell 侧栏圆点写法（chainColor 确定性推导） */}
-                <span
-                  aria-hidden
-                  className={`mr-1 inline-block h-2 w-2 rounded-full border ${stickerClasses[chainColor(c.id)]}`}
-                />
-                {c.name}
-              </button>
-            ))}
-          </div>
-        )}
         {scopeChainId && (tags?.tags.length ?? 0) > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            <h3 className="w-full px-1 text-[12px] text-muted">标签</h3>
             <button
               type="button"
               onClick={() => onChange({ ...value, tagId: undefined })}
@@ -221,16 +182,16 @@ function RailContent({
           role="switch"
           aria-checked={orderOn}
           onClick={toggleOrder}
-          className="mt-3 flex w-full items-center justify-between rounded-sticker border-2 border-line bg-surface px-3 py-1.5 text-sm text-ink shadow-sticker"
+          className="mt-3 flex w-full flex-col items-start gap-2 text-left text-sm text-muted"
         >
-          按添加时间看补发
+          按记下的顺序看
           <span
             aria-hidden
-            className={`inline-flex h-4 w-8 items-center rounded-full border-2 border-line px-0.5 ${
-              orderOn ? 'justify-end bg-select' : 'justify-start bg-bg'
+            className={`relative inline-flex h-5 w-[34px] items-center rounded-full ${
+              orderOn ? 'bg-[var(--today)]' : 'bg-line'
             }`}
           >
-            <span className="h-2 w-2 rounded-full bg-ink" />
+            <span className={`h-4 w-4 rounded-full bg-surface shadow-sticker ${orderOn ? 'ml-3.5' : 'ml-0.5'}`} />
           </span>
         </button>
       </section>

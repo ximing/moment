@@ -57,15 +57,18 @@ export function NotificationsHome() {
   const unread = items.filter((n) => n.readAt === null).length;
 
   return (
-    <div>
+    <div className="max-w-content">
       <div className="mb-6 flex items-center">
-        <h1 className="font-display text-2xl">通知</h1>
+        <h1 className="text-2xl font-medium">通知</h1>
         {unread > 0 && (
           <Button variant="ghost" className="ml-auto" disabled={markAll.isPending} onClick={() => markAll.mutate()}>
             全部标为已读
           </Button>
         )}
       </div>
+      {items.length === 0 && !q.isPending && (
+        <p className="py-16 text-center text-muted">还没有新消息。记下一条，家里人就会在这儿看见。</p>
+      )}
       <ul className="space-y-2">
         {items.map((n) => {
           const href = hrefOf(n.payload);
@@ -77,7 +80,7 @@ export function NotificationsHome() {
             </>
           );
           return (
-            <li key={n.id} className="rounded-card border-2 border-line bg-surface p-3 text-sm shadow-sticker">
+            <li key={n.id} className="rounded-card bg-surface p-3 text-sm shadow-sticker">
               {href ? (
                 <Link to={href} className="flex items-center gap-2">
                   {inner}

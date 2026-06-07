@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { MomentMedia } from '@moment/dto';
+import { Play } from 'lucide-react';
+import { Icon } from '@/ui/Icon';
 import { useMediaObjectUrl } from './useMediaObjectUrl';
 
 function srcOf(m: MomentMedia, shareToken?: string): string {
@@ -20,17 +22,19 @@ export function MediaBlock({
   if (media[0]!.mime.startsWith('video/')) {
     return <VideoOne media={media[0]!} shareToken={shareToken} />;
   }
-  const cols = media.length === 1 ? 'grid-cols-1' : media.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
+  if (media.length === 1) {
+    return (
+      <div className="elev overflow-hidden rounded-[20px] bg-[color:color-mix(in_srgb,var(--line)_55%,var(--surface))]">
+        <ImageOne media={media[0]!} shareToken={shareToken} single onClick={() => onOpen?.(0)} />
+      </div>
+    );
+  }
+  const cols = media.length <= 3 ? media.length : 3;
+  const grid = cols === 2 ? 'grid-cols-2' : 'grid-cols-3';
   return (
-    <div className={`mt-3 grid ${cols} gap-1.5`}>
+    <div className={`elev grid ${grid} gap-[3px] overflow-hidden rounded-[20px] bg-[color:color-mix(in_srgb,var(--line)_55%,var(--surface))]`}>
       {media.map((m, i) => (
-        <ImageOne
-          key={m.id}
-          media={m}
-          shareToken={shareToken}
-          single={media.length === 1}
-          onClick={() => onOpen?.(i)}
-        />
+        <ImageOne key={m.id} media={m} shareToken={shareToken} onClick={() => onOpen?.(i)} />
       ))}
     </div>
   );
@@ -44,19 +48,18 @@ function ImageOne({
 }: {
   media: MomentMedia;
   shareToken?: string;
-  single: boolean;
+  single?: boolean;
   onClick?: () => void;
 }) {
   const blobUrl = useMediaObjectUrl(shareToken ? null : media.id);
   const url = shareToken ? srcOf(media, shareToken) : blobUrl;
-  if (!url)
-    return <div className={`animate-pulse rounded-[12px] bg-line ${single ? 'aspect-[4/3]' : 'aspect-square'}`} />;
+  if (!url) return <div className={`animate-pulse bg-line ${single ? 'aspect-[4/3]' : 'aspect-square'}`} />;
   return (
-    <button type="button" onClick={onClick} className="block overflow-hidden rounded-[12px] border-2 border-line">
+    <button type="button" onClick={onClick} className="block w-full overflow-hidden">
       <img
         src={url}
         alt=""
-        className={single ? 'max-h-[28rem] w-full object-contain' : 'aspect-square w-full object-cover'}
+        className={single ? 'block h-auto max-h-[430px] w-full object-cover' : 'block aspect-square w-full object-cover'}
       />
     </button>
   );
@@ -71,12 +74,16 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
       <button
         type="button"
         onClick={() => setOn(true)}
-        className="mt-3 flex aspect-video w-full items-center justify-center rounded-[12px] border-2 border-line bg-ink text-sm text-bg"
+        className="elev relative aspect-video w-full overflow-hidden rounded-[20px] bg-ink"
       >
-        播放视频
+        <span className="absolute inset-0 grid place-items-center">
+          <span className="grid h-[58px] w-[58px] place-items-center rounded-full bg-action text-xl text-action-fg shadow-fab">
+            <Icon icon={Play} size={22} className="ml-0.5 fill-current" />
+          </span>
+        </span>
       </button>
     );
   }
-  if (!url) return <div className="mt-3 aspect-video w-full animate-pulse rounded-[12px] bg-line" />;
-  return <video controls src={url} className="mt-3 w-full rounded-[12px] border-2 border-line bg-ink" />;
+  if (!url) return <div className="aspect-video w-full animate-pulse rounded-[20px] bg-line" />;
+  return <video controls src={url} className="elev w-full rounded-[20px] bg-ink" />;
 }

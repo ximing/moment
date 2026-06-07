@@ -2,7 +2,7 @@ import type { MomentResponse } from '@moment/dto';
 import { localDateKey } from '@/lib/time';
 
 export interface DateGroup {
-  /** YYYY-MM-DD（作者本地墙钟） */
+  /** YYYY-MM-DD（发生地墙钟日期） */
   date: string;
   moments: MomentResponse[];
 }

@@ -1,22 +1,35 @@
-import type {
-  AcceptInviteResponse,
-  ChainDto,
-  ChainMemberDto,
-  CreateChainInput,
-  CreateInviteInput,
-  InviteDto,
-  InviteRole,
-  UpdateChainInput,
-  UserProfile,
+import {
+  CHAIN_COLORS,
+  CHAIN_ICONS,
+  type AcceptInviteResponse,
+  type ChainColor,
+  type ChainDto,
+  type ChainIcon,
+  type ChainMemberDto,
+  type CreateChainInput,
+  type CreateInviteInput,
+  type InviteDto,
+  type InviteRole,
+  type UpdateChainInput,
+  type UserProfile,
 } from '@moment/dto';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
+import { avatarUrlsByUserIds } from '../auth/avatar.js';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { chainInvites, chainMembers, chains, comments, media, momentTags, moments, reactions, shareLinks, tags, users, type Chain, type ChainInvite } from '../db/schema.js';
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
+
+function isChainColor(v: string | null): v is ChainColor {
+  return v !== null && (CHAIN_COLORS as readonly string[]).includes(v);
+}
+
+function isChainIcon(v: string | null): v is ChainIcon {
+  return v !== null && (CHAIN_ICONS as readonly string[]).includes(v);
+}
 
 @Service()
 export class ChainService {
@@ -31,6 +44,8 @@ export class ChainService {
         name: input.name,
         description: input.description ?? null,
         visibility: input.visibility,
+        color: input.color ?? null,
+        icon: input.icon ?? null,
         ownerId: userId,
       });
       await tx.insert(chainMembers).values({ chainId: id, userId, role: 'owner' });
@@ -66,6 +81,8 @@ export class ChainService {
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
+        ...(input.color !== undefined ? { color: input.color } : {}),
+        ...(input.icon !== undefined ? { icon: input.icon } : {}),
         updatedAt: new Date(),
       })
       .where(eq(chains.id, chainId));
@@ -105,9 +122,11 @@ export class ChainService {
       .innerJoin(users, eq(chainMembers.userId, users.id))
       .where(eq(chainMembers.chainId, chainId))
       .orderBy(chainMembers.joinedAt);
+    const avatarBy = await avatarUrlsByUserIds(rows.map((r) => r.member.userId));
     return rows.map((r) => ({
       userId: r.member.userId,
       nickname: r.nickname,
+      avatarUrl: avatarBy.get(r.member.userId) ?? null,
       role: r.member.role,
       joinedAt: r.member.joinedAt.toISOString(),
     }));
@@ -133,7 +152,14 @@ export class ChainService {
       .update(chainMembers)
       .set({ role })
       .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, targetUserId)));
-    return { userId: targetUserId, nickname: row.nickname, role, joinedAt: row.member.joinedAt.toISOString() };
+    const avatarBy = await avatarUrlsByUserIds([targetUserId]);
+    return {
+      userId: targetUserId,
+      nickname: row.nickname,
+      avatarUrl: avatarBy.get(targetUserId) ?? null,
+      role,
+      joinedAt: row.member.joinedAt.toISOString(),
+    };
   }
 
   /**
@@ -253,6 +279,8 @@ export class ChainService {
       name: chain.name,
       description: chain.description,
       coverMediaId: chain.coverMediaId,
+      color: isChainColor(chain.color) ? chain.color : null,
+      icon: isChainIcon(chain.icon) ? chain.icon : null,
       visibility: chain.visibility,
       ownerId: chain.ownerId,
       ...(myRole ? { myRole } : {}),

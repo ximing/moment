@@ -64,7 +64,7 @@ describe('POST /api/chains/:chainId/moments', () => {
       content: '第一次翻身',
       happenedTzOffset: -480,
       isBackfill: true,
-      author: { id: alice.id, nickname: 'alice' },
+      author: { id: alice.id, nickname: 'alice', avatarUrl: null },
       media: [],
     });
     // 服务端把 +08:00 换算为 UTC 存储（spec §5.6）

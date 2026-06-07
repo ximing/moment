@@ -23,6 +23,7 @@ import type {
   PublicShareResponse,
   RegisterInput,
   RegisterPushTokenInput,
+  UpdateMeInput,
   ShareLinkDto,
   ShareLinkListResponse,
   TagListResponse,
@@ -55,6 +56,7 @@ export interface MomentClient {
   login(input: LoginInput): Promise<AuthResponse>;
   logout(refreshToken: string): Promise<void>;
   me(): Promise<UserProfile>;
+  updateMe(input: UpdateMeInput): Promise<UserProfile>;
 
   listChains(): Promise<ChainDto[]>;
   getChain(chainId: string): Promise<ChainDto>;
@@ -125,6 +127,7 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
     logout: (refreshToken) =>
       http.request('/api/auth/logout', { method: 'POST', body: { refreshToken }, skipAuthRefresh: true }),
     me: () => http.request('/api/auth/me'),
+    updateMe: (input) => http.request('/api/auth/me', { method: 'PATCH', body: input }),
 
     listChains: () => http.request('/api/chains'),
     getChain: (chainId) => http.request(`/api/chains/${chainId}`),

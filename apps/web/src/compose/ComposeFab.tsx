@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { Icon } from '@/ui/Icon';
 import { useCompose } from './ComposeContext';
 
-/** 向下滚动后接力 composer 入口的橙色 FAB（spec §5）。滚动监听是事件源，非 effect 链式 setState。
-    chainId 由 Shell 经 useMatch 提供——path-less 布局路由里 useParams 拿不到子路由参数（审查修正）。 */
+/** 向下滚动后接力 composer 入口。chainId 由 Shell 经 useMatch 提供。 */
 export function ComposeFab({ chainId }: { chainId?: string }) {
   const { openCompose } = useCompose();
   const [show, setShow] = useState(false);
@@ -20,9 +21,10 @@ export function ComposeFab({ chainId }: { chainId?: string }) {
       type="button"
       aria-label="记下此刻"
       onClick={() => openCompose({ chainId })}
-      className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full border-2 border-line bg-action text-2xl text-action-fg shadow-card"
+      className="fixed bottom-6 right-6 z-30 inline-flex h-12 items-center gap-2 rounded-sticker bg-action px-5 font-display text-base text-action-fg shadow-fab"
     >
-      ＋
+      <Icon icon={Plus} size={20} />
+      记下
     </button>
   );
 }

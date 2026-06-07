@@ -26,6 +26,17 @@ test('updateChainInputSchema：拒绝空 patch；description 可显式置 null',
   assert.equal(ok.description, null);
 });
 
+test('create/update 接受预设色与图标，拒绝非法值', () => {
+  const created = createChainInputSchema.parse({ name: '宝宝', color: 'mint', icon: '👶' });
+  assert.equal(created.color, 'mint');
+  assert.equal(created.icon, '👶');
+  assert.throws(() => createChainInputSchema.parse({ name: 'x', color: 'neon' }));
+  assert.throws(() => createChainInputSchema.parse({ name: 'x', icon: '💩' }));
+  const cleared = updateChainInputSchema.parse({ icon: null, color: 'gold' });
+  assert.equal(cleared.icon, null);
+  assert.equal(cleared.color, 'gold');
+});
+
 test('updateMemberRoleInputSchema：不允许 owner（转让走专门端点）', () => {
   assert.throws(() => updateMemberRoleInputSchema.parse({ role: 'owner' }));
   assert.equal(updateMemberRoleInputSchema.parse({ role: 'viewer' }).role, 'viewer');

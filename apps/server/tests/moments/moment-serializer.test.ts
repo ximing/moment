@@ -19,13 +19,13 @@ describe('momentSerializer（moment → API 响应唯一出口）', () => {
         { id: 'md-2', mime: 'image/jpeg', width: 100, height: 200, duration: null, sortOrder: 1 },
         { id: 'md-1', mime: 'image/png', width: 10, height: 20, duration: null, sortOrder: 0 },
       ],
-      author: { id: 'u-1', nickname: 'Alice' },
+      author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
     });
     expect(res.media.map((m) => m.id)).toEqual(['md-1', 'md-2']);
     expect(res.media[0].url).toBe('/api/media/md-1');
     expect(JSON.stringify(res)).not.toContain('https://');
     expect(res.happenedAt).toBe('2026-08-15T02:00:00.000Z');
-    expect(res.author).toEqual({ id: 'u-1', nickname: 'Alice' });
+    expect(res.author).toEqual({ id: 'u-1', nickname: 'Alice', avatarUrl: null });
     expect(res.tags).toEqual([]);
     // 不传 counts / tags 时走默认值
     expect(res.commentCount).toBe(0);
@@ -36,7 +36,7 @@ describe('momentSerializer（moment → API 响应唯一出口）', () => {
   it('text 类型 media 为空数组', () => {
     const res = momentSerializer(
       { ...moment, type: 'text', content: 'hi' },
-      { media: [], author: { id: 'u-1', nickname: 'Alice' } }
+      { media: [], author: { id: 'u-1', nickname: 'Alice', avatarUrl: null } }
     );
     expect(res.media).toEqual([]);
     expect(res.tags).toEqual([]);
@@ -45,11 +45,11 @@ describe('momentSerializer（moment → API 响应唯一出口）', () => {
   it('extras.tags 原样挂到响应', () => {
     const res = momentSerializer(moment, {
       media: [],
-      author: { id: 'u-1', nickname: 'Alice' },
+      author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
       tags: [{ id: 't-1', name: '周岁' }],
     });
     expect(res.tags).toEqual([{ id: 't-1', name: '周岁' }]);
-    expect(res.author).toEqual({ id: 'u-1', nickname: 'Alice' });
+    expect(res.author).toEqual({ id: 'u-1', nickname: 'Alice', avatarUrl: null });
     expect(res.media).toEqual([]);
   });
 });

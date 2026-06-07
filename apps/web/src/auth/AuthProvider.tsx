@@ -10,6 +10,7 @@ interface AuthContextValue {
   logout(): Promise<void>;
   /** 邀请接受等流程复用：写入 tokens + user 并更新内存态 */
   applyAuth(res: AuthResponse): void;
+  refreshUser(next: UserProfile): void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -29,6 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('moment:auth-cleared', onAuthCleared);
     return () => window.removeEventListener('moment:auth-cleared', onAuthCleared);
   }, [queryClient]);
+
+  // 每次进站重拉 /me，换发 6 天头像链接（缓存里的旧签名会过期）
+  useEffect(() => {
+    if (!cachedUser()) return;
+    void client.me().then((next) => {
+      cacheUser(next);
+      setUser(next);
+    }).catch(() => undefined);
+  }, []);
 
   const applyAuth = useCallback((res: AuthResponse) => {
     tokenStore.setTokens(res.tokens);
@@ -61,9 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
   }, [queryClient]);
 
+  const refreshUser = useCallback((next: UserProfile) => {
+    cacheUser(next);
+    setUser(next);
+  }, []);
+
   const value = useMemo(
-    () => ({ user, login, register, logout, applyAuth }),
-    [user, login, register, logout, applyAuth]
+    () => ({ user, login, register, logout, applyAuth, refreshUser }),
+    [user, login, register, logout, applyAuth, refreshUser]
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

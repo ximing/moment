@@ -1,54 +1,93 @@
 :root {
-  --bg: #fdf0d9;
-  --surface: #fffdf8;
-  --ink: #241a0b;
-  --muted: #a68d5f;
-  --line: #241a0b;
-  --shadow: rgba(36, 26, 11, 0.1);
-  --action: #f4552f;
-  --action-fg: #ffffff;
-  --select: #ffc94d;
+  --bg: #fff4ee;
+  --surface: #fffcf9;
+  --ink: #2c1812;
+  --muted: #9a7264;
+  --line: #e4c7bb;
+  --stroke: #c4a094;
+  --shadow: rgba(44, 24, 18, 0.08);
+  --elev: 0 12px 32px rgba(44, 24, 18, 0.1);
+  --elev-sm: 0 4px 14px rgba(44, 24, 18, 0.08);
+  --action: #f0433a;
+  --action-fg: #fff8f5;
+  --today: #ff8a3a;
+  --knot-yesterday: #e07a6a;
+  --knot-older: #c4a094;
+  --select: #ffd4b0;
+  --select-fg: #2c1812;
   --danger: #c93a2e;
-  /* 贴纸四色：仅装饰，由 chainColor(chainId) 轮换，永不表意（spec §1.1/§1.4） */
+  /* 链点：饱和色，导航 / 长河链标用；贴纸底仍偏淡只作装饰 */
+  --dot-pink: #ff7aa2;
+  --dot-blue: #5aa7d6;
+  --dot-mint: #4cbe8a;
+  --dot-purple: #9b8fd0;
+  --dot-gold: #e4b04a;
   --sticker-pink: #ffd9e6;
   --sticker-blue: #cfe8ff;
   --sticker-mint: #bfe8d0;
   --sticker-purple: #e6dbff;
-  /* 浅色下贴纸描边同 --line（深墨） */
-  --sticker-pink-line: var(--line);
-  --sticker-blue-line: var(--line);
-  --sticker-mint-line: var(--line);
-  --sticker-purple-line: var(--line);
-  /* 日期贴纸（时间线分组头，spec §3.1）：浅色紫底墨字；深浅差异只落 token，组件层不判主题 */
+  --sticker-pink-line: var(--stroke);
+  --sticker-blue-line: var(--stroke);
+  --sticker-mint-line: var(--stroke);
+  --sticker-purple-line: var(--stroke);
   --date-sticker-bg: var(--sticker-purple);
   --date-sticker-line: var(--sticker-purple-line);
   --date-sticker-fg: var(--ink);
-  --content: 680px; /* spec §2：由 720 微调，配合链条缩进 */
+  --content: 720px;
+  --sidebar: 168px;
+  --rail: 148px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --control-h: 40px;
+  --control-h-sm: 32px;
+  --control-h-fab: 48px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
   --ease: 180ms ease;
   color-scheme: light;
 }
 
 :root[data-theme='dark'] {
-  --bg: #171208;
-  --surface: #221b10;
-  --ink: #f2e8d5;
-  --muted: #99855f;
-  --line: #4d4231; /* 深色结构线主动后退、低对比 */
-  --shadow: rgba(0, 0, 0, 0.45);
-  --danger: #ff8a66;
-  /* --action/--action-fg/--select 两主题同值，不重定义 */
-  --sticker-pink: #3a2831;
-  --sticker-blue: #233244;
-  --sticker-mint: #22392f;
-  --sticker-purple: #2e2842;
-  --sticker-pink-line: #8a5a70;
-  --sticker-blue-line: #56759c;
-  --sticker-mint-line: #4d7a67;
-  --sticker-purple-line: #6a5f94;
-  /* 日期贴纸深色：透明底、琥珀边黄字 */
+  /* 暖夜灯：炭灰底 + 灯下抬起的面。避免酱油黑糊成一团。 */
+  --bg: #141210;
+  --surface: #221e1b;
+  --ink: #f2ebe4;
+  --muted: #b3a69c;
+  --line: #3c362f;
+  --stroke: #c9bdb2;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --elev: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 228, 200, 0.07);
+  --elev-sm: 0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 228, 200, 0.06);
+  --action: #ff7a66;
+  --action-fg: #1a1613;
+  --today: #ffb15a;
+  --knot-yesterday: #e08a7a;
+  --knot-older: #8a7d74;
+  --select: #3d3228;
+  --select-fg: #f6eee6;
+  --danger: #ff8d72;
+  --dot-pink: #ff9bb8;
+  --dot-blue: #86c4e4;
+  --dot-mint: #78d4a8;
+  --dot-purple: #c0b0e8;
+  --dot-gold: #f0cc72;
+  --sticker-pink: #4a343c;
+  --sticker-blue: #2e3c4c;
+  --sticker-mint: #2e443c;
+  --sticker-purple: #3c364c;
+  --sticker-pink-line: #d09aaa;
+  --sticker-blue-line: #8ab4d4;
+  --sticker-mint-line: #7ab89a;
+  --sticker-purple-line: #b0a4d8;
   --date-sticker-bg: transparent;
-  --date-sticker-line: var(--select);
-  --date-sticker-fg: var(--select);
+  --date-sticker-line: var(--today);
+  --date-sticker-fg: var(--today);
   color-scheme: dark;
 }
 

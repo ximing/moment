@@ -1,0 +1,174 @@
+<h2>完整界面 mockup · v2 — 深色边框收敛</h2>
+<p class="subtitle">浅色不变;深色里描边从「亮奶油」改为低对比暖棕,硬阴影改深色,亮黄只留给当前项/主按钮/热态。结构线后退,内容上前</p>
+
+<style>
+  @font-face { font-family:"Smiley Sans"; src:url("https://cdn.jsdelivr.net/npm/smiley-sans@2.0.1/dist/SmileySans-Oblique.ttf.woff2") format("woff2"); font-display:swap; }
+  .v2 { font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif; }
+  .v2 .disp { font-family:"Smiley Sans","PingFang SC",sans-serif; font-weight:800; }
+
+  .v2-shell { display:flex; height:560px; border-radius:16px; overflow:hidden; border:2px solid rgba(0,0,0,.15); margin-top:14px; }
+
+  .L { --bg:#fdf0d9; --surface:#fffdf8; --ink:#241a0b; --muted:#a68d5f; --line:#241a0b; --shadow:var(--line);
+       --accent:#ffc94d; --coral:#ff7a59; --pink:#ffd9e6; --blue:#cfe8ff; --mint:#bfe8d0; --lav:#e6dbff;
+       --pink-line:var(--line); --blue-line:var(--line); --date-bg:var(--lav); --date-ink:var(--ink); --date-line:var(--line); }
+
+  /* 深色:结构线全部后退 */
+  .D { --bg:#171208; --surface:#221b10; --ink:#f2e8d5; --muted:#99855f;
+       --line:#4d4231;                /* 暖棕结构线,不再是亮奶油 */
+       --shadow:rgba(0,0,0,.45);       /* 硬阴影用深色,不用亮色 */
+       --accent:#ffc94d; --coral:#ff8a66;
+       --pink:#3a2831; --blue:#233244; --mint:#22392f; --lav:#2e2842;
+       --pink-line:#8a5a70; --blue-line:#56759c;
+       --date-bg:rgba(255,201,77,.13); --date-ink:#ffc94d; --date-line:rgba(255,201,77,.45); }
+
+  .v2-side { width:196px; flex:none; background:var(--bg); border-right:2px solid var(--line); padding:18px 12px; display:flex; flex-direction:column; gap:3px; font-size:12.5px; color:var(--ink); }
+  .v2-logo { font-size:22px; margin:0 6px 14px; letter-spacing:.04em; }
+  .v2-logo em { font-style:normal; color:var(--coral); }
+  .v2-nav { display:flex; align-items:center; gap:7px; padding:6px 10px; border-radius:12px; border:2px solid transparent; color:var(--ink); white-space:nowrap; }
+  .v2-nav.on { background:var(--accent); color:#241a0b; border-color:var(--accent); font-weight:800; box-shadow:2.5px 2.5px 0 var(--shadow); }
+  .L .v2-nav.on { border-color:var(--line); }
+  .v2-sec { font-size:10px; letter-spacing:.14em; color:var(--muted); margin:12px 10px 4px; font-weight:700; }
+  .v2-dot { width:9px; height:9px; border-radius:50%; border:1.5px solid var(--line); flex:none; }
+  .v2-new { color:var(--muted); padding:6px 10px; font-size:12px; }
+  .v2-badge { margin-left:auto; background:var(--coral); color:#fff; font-size:9.5px; font-weight:800; border-radius:99px; padding:1px 6px; }
+  .L .v2-badge { border:1.5px solid var(--line); }
+
+  .v2-main { flex:1; background:var(--bg); overflow:hidden; position:relative; padding:18px 26px; color:var(--ink); }
+  .v2-col { max-width:520px; margin:0 auto; position:relative; }
+  .v2-spine { position:absolute; left:9px; top:0; bottom:0; width:0; border-left:2.5px dashed var(--muted); opacity:.4; }
+  .v2-date { position:relative; margin:14px 0 10px 26px; display:inline-flex; }
+  .v2-date span { background:var(--date-bg); color:var(--date-ink); border:2px solid var(--date-line); border-radius:99px; padding:2px 12px; font-size:11px; font-weight:800; box-shadow:2px 2px 0 var(--shadow); }
+  .v2-date::before { content:""; position:absolute; left:-22px; top:50%; width:9px; height:9px; border-radius:50%; background:var(--accent); transform:translateY(-50%); }
+  .L .v2-date::before { border:2px solid var(--line); }
+  .v2-knot { position:absolute; left:5.5px; width:10px; height:10px; border-radius:50%; background:var(--surface); border:2.5px solid var(--line); }
+
+  .v2-composer { position:relative; margin-left:26px; background:var(--surface); border:2px solid var(--line); border-radius:16px; box-shadow:4px 4px 0 var(--shadow); padding:11px 13px; }
+  .v2-cph { color:var(--muted); font-size:13.5px; }
+  .v2-crow { display:flex; align-items:center; gap:8px; margin-top:9px; }
+  .v2-cico { font-size:13px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1.5px solid var(--line); border-radius:9px; background:var(--bg); }
+  .v2-cbtn { margin-left:auto; background:var(--ink); color:var(--bg); font-size:11.5px; font-weight:800; padding:6px 14px; border-radius:99px; border:2px solid var(--line); }
+  .D .v2-cbtn { background:var(--accent); color:#241a0b; border-color:var(--accent); }
+
+  .v2-card { position:relative; margin-left:26px; background:var(--surface); border:2px solid var(--line); border-radius:18px; box-shadow:4px 4px 0 var(--shadow); padding:13px 15px; margin-bottom:14px; }
+  .v2-hd { display:flex; align-items:center; gap:9px; }
+  .v2-ava { width:30px; height:30px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex:none; }
+  .v2-name { font-size:13px; font-weight:800; }
+  .v2-meta { font-size:10.5px; color:var(--muted); }
+  .v2-kebab { margin-left:auto; color:var(--muted); font-weight:800; letter-spacing:1px; }
+  .v2-text { font-size:13.5px; line-height:1.6; margin:9px 0 10px; }
+  .v2-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; border-radius:12px; overflow:hidden; border:2px solid var(--line); }
+  .v2-ph { aspect-ratio:1; }
+  .v2-tags { display:flex; gap:6px; margin-top:10px; }
+  .v2-tag { font-size:10.5px; font-weight:800; padding:2.5px 10px; border-radius:99px; border:1.5px solid var(--line); }
+  .v2-react { display:flex; gap:6px; align-items:center; margin-top:11px; font-size:11.5px; }
+  .v2-pill { padding:3px 10px; border-radius:99px; border:1.5px solid var(--line); background:var(--bg); }
+  .v2-pill.hot { background:var(--accent); color:#241a0b; border-color:var(--accent); font-weight:800; box-shadow:2px 2px 0 var(--shadow); }
+  .v2-cmt { margin-left:auto; color:var(--muted); font-weight:700; }
+
+  .v2-fab { position:absolute; right:22px; bottom:18px; background:var(--ink); color:var(--bg); border:2px solid var(--line); font-size:12px; font-weight:800; padding:10px 18px; border-radius:99px; box-shadow:3px 3px 0 rgba(0,0,0,.25); }
+  .D .v2-fab { background:var(--accent); color:#241a0b; border-color:var(--accent); box-shadow:3px 3px 0 rgba(0,0,0,.5); }
+
+  .ph1{background:linear-gradient(135deg,#f9c5d1,#f7e7b4)} .ph2{background:linear-gradient(135deg,#a8d8ea,#dff5e1)} .ph3{background:linear-gradient(135deg,#ffd8a8,#fcb7b7)}
+
+  .v2-notes { margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:10px 26px; font-size:13.5px; line-height:1.65; }
+  .v2-notes b { display:block; margin-bottom:2px; }
+  .skinlabel { font-size:12px; font-weight:700; letter-spacing:.1em; opacity:.6; margin:16px 0 0; }
+</style>
+
+<div class="v2">
+  <p class="skinlabel">浅色 · LIGHT(不变)</p>
+  <div class="v2-shell L">
+    <div class="v2-side">
+      <div class="v2-logo disp">时<em>刻</em></div>
+      <div class="v2-nav on">⌘&nbsp;我的时间线</div>
+      <div class="v2-sec">链</div>
+      <div class="v2-nav"><span class="v2-dot" style="background:var(--pink)"></span>宝宝成长</div>
+      <div class="v2-nav"><span class="v2-dot" style="background:var(--blue)"></span>家庭日常</div>
+      <div class="v2-new">＋ 新的链</div>
+      <div style="flex:1"></div>
+      <div class="v2-nav">通知<span class="v2-badge">3</span></div>
+      <div class="v2-nav">我的</div>
+    </div>
+    <div class="v2-main">
+      <div class="v2-col">
+        <div class="v2-spine"></div>
+        <div class="v2-composer">
+          <div class="v2-knot" style="top:16px"></div>
+          <div class="v2-cph">这一刻,记点什么…</div>
+          <div class="v2-crow"><span class="v2-cico">🖼</span><span class="v2-cico">🎬</span><span class="v2-cico">🏷</span><span class="v2-cico">🕐</span><span class="v2-cbtn">记下此刻</span></div>
+        </div>
+        <div class="v2-date"><span>今天</span></div>
+        <div class="v2-card">
+          <div class="v2-knot" style="top:18px"></div>
+          <div class="v2-hd">
+            <div class="v2-ava" style="background:var(--pink)">妈</div>
+            <div><div class="v2-name">妈妈</div><div class="v2-meta">下午 3:24 · 宝宝成长</div></div>
+            <div class="v2-kebab">···</div>
+          </div>
+          <div class="v2-text">第一次自己站起来走了三步!全家都沸腾了 🎉</div>
+          <div class="v2-grid"><div class="v2-ph ph1"></div><div class="v2-ph ph2"></div><div class="v2-ph ph3"></div></div>
+          <div class="v2-tags"><span class="v2-tag" style="background:var(--pink)">#第一次</span><span class="v2-tag" style="background:var(--blue)">#学步</span></div>
+          <div class="v2-react"><span class="v2-pill hot">❤️ 2</span><span class="v2-pill">👏 1</span><span class="v2-pill">＋</span><span class="v2-cmt">💬 3</span></div>
+        </div>
+      </div>
+      <div class="v2-fab">✏️ 记下此刻</div>
+    </div>
+  </div>
+
+  <p class="skinlabel">深色 · DARK(边框收敛后)</p>
+  <div class="v2-shell D">
+    <div class="v2-side">
+      <div class="v2-logo disp">时<em>刻</em></div>
+      <div class="v2-nav on">⌘&nbsp;我的时间线</div>
+      <div class="v2-sec">链</div>
+      <div class="v2-nav"><span class="v2-dot" style="background:#e08aa5"></span>宝宝成长</div>
+      <div class="v2-nav"><span class="v2-dot" style="background:#7ba7d9"></span>家庭日常</div>
+      <div class="v2-new">＋ 新的链</div>
+      <div style="flex:1"></div>
+      <div class="v2-nav">通知<span class="v2-badge">3</span></div>
+      <div class="v2-nav">我的</div>
+    </div>
+    <div class="v2-main">
+      <div class="v2-col">
+        <div class="v2-spine"></div>
+        <div class="v2-composer">
+          <div class="v2-knot" style="top:16px;border-color:var(--accent)"></div>
+          <div class="v2-cph">这一刻,记点什么…</div>
+          <div class="v2-crow"><span class="v2-cico">🖼</span><span class="v2-cico">🎬</span><span class="v2-cico">🏷</span><span class="v2-cico">🕐</span><span class="v2-cbtn">记下此刻</span></div>
+        </div>
+        <div class="v2-date"><span>今天</span></div>
+        <div class="v2-card">
+          <div class="v2-knot" style="top:18px"></div>
+          <div class="v2-hd">
+            <div class="v2-ava" style="background:#e08aa5;color:#241a0b;border-color:#e08aa5">妈</div>
+            <div><div class="v2-name">妈妈</div><div class="v2-meta">下午 3:24 · 宝宝成长</div></div>
+            <div class="v2-kebab">···</div>
+          </div>
+          <div class="v2-text">第一次自己站起来走了三步!全家都沸腾了 🎉</div>
+          <div class="v2-grid"><div class="v2-ph ph1"></div><div class="v2-ph ph2"></div><div class="v2-ph ph3"></div></div>
+          <div class="v2-tags"><span class="v2-tag" style="background:var(--pink);border-color:var(--pink-line)">#第一次</span><span class="v2-tag" style="background:var(--blue);border-color:var(--blue-line)">#学步</span></div>
+          <div class="v2-react"><span class="v2-pill hot">❤️ 2</span><span class="v2-pill">👏 1</span><span class="v2-pill">＋</span><span class="v2-cmt">💬 3</span></div>
+        </div>
+        <div class="v2-date"><span>8月12日</span></div>
+        <div class="v2-card">
+          <div class="v2-knot" style="top:18px"></div>
+          <div class="v2-hd">
+            <div class="v2-ava" style="background:#7fbf9f;color:#241a0b;border-color:#7fbf9f">爸</div>
+            <div><div class="v2-name">爸爸</div><div class="v2-meta">晚上 9:07 · 补记</div></div>
+            <div class="v2-kebab">···</div>
+          </div>
+          <div class="v2-text">翻到他满月时的视频,那时候一只手就能托起来。</div>
+          <div class="v2-react"><span class="v2-pill" style="background:var(--pink);border-color:var(--pink-line)">🥹 1</span><span class="v2-pill">＋</span><span class="v2-cmt">💬 1</span></div>
+        </div>
+      </div>
+      <div class="v2-fab">✏️ 记下此刻</div>
+    </div>
+  </div>
+
+  <div class="v2-notes">
+    <div><b>深色边框三档原则</b>结构线(卡片/侧栏)= 暖棕 #4d4231 低对比;贴纸线 = 同色系中亮色(粉贴配粉线);只有当前导航、主按钮、热态表情用亮黄 #ffc94d。</div>
+    <div><b>硬阴影在深色换向</b>浅色的「4px 墨影」在深色变成 4px 深影 rgba(0,0,0,.45),保留贴纸的厚度感但不泛白。</div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px">这版深色舒服了吗?还想再收(边框更浅/更细)或者哪里又太暗了,直接在终端说</p>

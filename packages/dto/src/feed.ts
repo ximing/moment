@@ -47,15 +47,15 @@ export const monthIndexQuerySchema = z.object({
   chain_ids: chainIdsCsv,
   tag_id: z.string().regex(uuidLoose).optional(),
   /**
-   * 查看者时区偏移（必填；分钟，语义同 JS getTimezoneOffset，东八区 = -480）。
-   * 归桶：happened_at − INTERVAL tz_offset MINUTE 后取 '%Y-%m'（spec §4.1）。
+   * 查看者时区偏移（必填，契约保留；分钟，语义同 JS getTimezoneOffset）。
+   * 归桶改用每条 moment.happened_tz_offset，不再用本参数。
    */
   tz_offset: z.coerce.number().int().min(-840).max(840),
 });
 export type MonthIndexQueryInput = z.infer<typeof monthIndexQuerySchema>;
 
 export interface MonthIndexEntry {
-  /** '%Y-%m'，查看者时区归桶 */
+  /** '%Y-%m'，发生地墙钟归桶 */
   month: string;
   count: number;
 }

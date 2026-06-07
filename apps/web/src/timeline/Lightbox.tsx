@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import type { MomentMedia } from '@moment/dto';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useMediaObjectUrl } from '@/media/useMediaObjectUrl';
+import { Icon } from '@/ui/Icon';
 
 export function Lightbox({
   items,
@@ -36,28 +38,28 @@ export function Lightbox({
       <button
         type="button"
         aria-label="关闭"
-        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-sticker border-2 border-line bg-surface text-xl text-ink shadow-sticker"
+        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-sticker border-2 border-stroke bg-surface text-xl text-ink shadow-sticker"
         onClick={onClose}
       >
-        ✕
+        <Icon icon={X} size={18} />
       </button>
       {items.length > 1 && (
         <>
           <button
             type="button"
             aria-label="上一张"
-            className="absolute left-4 z-10 flex h-10 w-10 items-center justify-center rounded-sticker border-2 border-line bg-surface text-2xl text-ink shadow-sticker"
+            className="absolute left-4 z-10 flex h-10 w-10 items-center justify-center rounded-sticker border-2 border-stroke bg-surface text-ink shadow-sticker"
             onClick={() => onIndex((index - 1 + items.length) % items.length)}
           >
-            ‹
+            <Icon icon={ChevronLeft} size={22} />
           </button>
           <button
             type="button"
             aria-label="下一张"
-            className="absolute right-4 z-10 flex h-10 w-10 items-center justify-center rounded-sticker border-2 border-line bg-surface text-2xl text-ink shadow-sticker"
+            className="absolute right-4 z-10 flex h-10 w-10 items-center justify-center rounded-sticker border-2 border-stroke bg-surface text-ink shadow-sticker"
             onClick={() => onIndex((index + 1) % items.length)}
           >
-            ›
+            <Icon icon={ChevronRight} size={22} />
           </button>
         </>
       )}

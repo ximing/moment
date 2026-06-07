@@ -7,11 +7,14 @@ import { compressImage } from '@/lib/compress';
 import { humanError } from '@/lib/errors';
 import { formatBytes, nowLocalInput, probeVideo } from '@/lib/media';
 import { canCompose } from '@/lib/roles';
-import { chainColor, stickerClasses } from '@/lib/chain-color';
-import { currentTzOffset } from '@/lib/time';
+import { ChainMark } from '@/chain/ChainMark';
+import { currentTzOffset, toWallClockInput, wallClockToIso } from '@/lib/time';
 import { Banner } from '@/ui/Banner';
 import { Button } from '@/ui/Button';
 import { Confirm } from '@/ui/Confirm';
+import { HappenedAtField } from '@/ui/HappenedAtField';
+import { Icon } from '@/ui/Icon';
+import { X } from 'lucide-react';
 import { useCompose } from './ComposeContext';
 
 interface PickedImage {
@@ -45,8 +48,9 @@ function ComposeBody({
   const [video, setVideo] = useState<{ file: File; previewUrl: string; durationSeconds: number } | null>(null);
   const [replaceConfirm, setReplaceConfirm] = useState<'image' | 'video' | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [backfill, setBackfill] = useState(edit?.isBackfill ?? false);
-  const [happenedAt, setHappenedAt] = useState(edit ? toLocalInput(edit.happenedAt) : nowLocalInput());
+  const [happenedAt, setHappenedAt] = useState(
+    edit ? toWallClockInput(edit.happenedAt, edit.happenedTzOffset) : nowLocalInput(),
+  );
   const [selectedTags, setSelectedTags] = useState<string[]>(edit?.tags.map((t) => t.id) ?? []);
   const [newTag, setNewTag] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +61,7 @@ function ComposeBody({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onClose();
+      if (e.key === 'Escape' && !busy && !e.defaultPrevented) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -181,19 +185,27 @@ function ComposeBody({
       setError('先写一句此刻吧');
       return;
     }
-    const happenedAtMs = Date.parse(happenedAt);
+    const timeEdited = Boolean(edit) && happenedAt !== toWallClockInput(edit!.happenedAt, edit!.happenedTzOffset);
+    const happenedIso = edit
+      ? timeEdited
+        ? wallClockToIso(happenedAt, edit.happenedTzOffset)
+        : edit.happenedAt
+      : new Date(Date.parse(happenedAt)).toISOString();
+    const happenedAtMs = Date.parse(happenedIso);
     if (Number.isNaN(happenedAtMs)) {
       setError('发生时间不合法');
       return;
     }
+    const isBackfill = edit && !timeEdited ? edit.isBackfill : isPastHappenedAt(happenedAtMs);
     setBusy(true);
     try {
       if (edit) {
         await client.updateMoment(edit.id, {
           content,
-          happenedAt: new Date(happenedAtMs).toISOString(),
-          happenedTzOffset: currentTzOffset(),
-          isBackfill: backfill,
+          ...(timeEdited
+            ? { happenedAt: happenedIso, happenedTzOffset: edit.happenedTzOffset }
+            : {}),
+          isBackfill,
           tagIds: selectedTags,
         });
       } else {
@@ -232,7 +244,7 @@ function ComposeBody({
           content,
           happenedAt: new Date(happenedAtMs).toISOString(),
           happenedTzOffset: currentTzOffset(),
-          isBackfill: backfill,
+          isBackfill,
           mediaIds,
           tagIds: selectedTags,
         });
@@ -257,7 +269,7 @@ function ComposeBody({
   // 遮罩 30% 墨：var() 色值的 /30 修饰静默不生成 CSS，用 color-mix（硬约束）
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-[color-mix(in_srgb,var(--ink)_30%,transparent)] p-6 pt-16">
-      <div className="w-full max-w-content rounded-card border-2 border-line bg-surface p-6 shadow-card">
+      <div className="w-full max-w-content rounded-[24px] bg-surface p-6 shadow-card">
         <div className="flex items-baseline justify-between">
           <h2 className="font-display text-xl">{title}</h2>
           <button type="button" className="text-sm text-muted" disabled={busy} onClick={onClose}>
@@ -272,15 +284,11 @@ function ComposeBody({
                 key={c.id}
                 type="button"
                 onClick={() => setPickedChainId(c.id)}
-                className={`flex items-center rounded-card border-2 border-line px-3 py-2 text-left text-sm ${
-                  chainId === c.id ? 'bg-select shadow-sticker' : ''
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-left text-sm ${
+                  chainId === c.id ? 'bg-surface font-semibold shadow-sticker' : 'bg-bg'
                 }`}
               >
-                {/* 链颜色点：同 Shell 侧栏圆点写法（chainColor 确定性推导） */}
-                <span
-                  aria-hidden
-                  className={`mr-1.5 inline-block h-2.5 w-2.5 rounded-full border ${stickerClasses[chainColor(c.id)]}`}
-                />
+                <ChainMark chainId={c.id} color={c.color} icon={c.icon} size={16} />
                 {c.name}
               </button>
             ))}
@@ -303,10 +311,10 @@ function ComposeBody({
               <div className="mb-2 grid grid-cols-4 gap-1">
                 {images.map((img, i) => (
                   <div key={img.previewUrl} className="relative">
-                    <img src={img.previewUrl} alt="" className="aspect-square w-full rounded-[12px] border-2 border-line object-cover" />
+                    <img src={img.previewUrl} alt="" className="aspect-square w-full rounded-[12px] border-2 border-stroke object-cover" />
                     <button
                       type="button"
-                      className="absolute right-1 top-1 rounded-full bg-action px-1 text-xs text-action-fg"
+                      className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-action text-action-fg"
                       onClick={() =>
                         setImages((prev) => {
                           URL.revokeObjectURL(prev[i]!.previewUrl);
@@ -314,7 +322,7 @@ function ComposeBody({
                         })
                       }
                     >
-                      ×
+                      <Icon icon={X} size={12} />
                     </button>
                   </div>
                 ))}
@@ -323,7 +331,7 @@ function ComposeBody({
             {video && (
               <video src={video.previewUrl} className="mb-2 max-h-40 w-full rounded" controls />
             )}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="ghost" onClick={() => imgRef.current?.click()}>
                 加图片
               </Button>
@@ -336,18 +344,22 @@ function ComposeBody({
           </div>
         )}
 
-        <div className="mt-4 text-sm">
-          <button type="button" className="text-muted" onClick={() => setBackfill((v) => !v)}>
-            {backfill ? '这是补记' : '就是现在 · 点此补记'}
-          </button>
-          {backfill && (
-            <input
-              type="datetime-local"
-              value={happenedAt}
-              onChange={(e) => setHappenedAt(e.target.value)}
-              className="mt-2 block rounded-card border border-line bg-bg px-3 py-2"
-            />
-          )}
+        <div className="mt-4">
+          <HappenedAtField
+            value={happenedAt}
+            onChange={setHappenedAt}
+            hint={
+              (edit && happenedAt === toWallClockInput(edit.happenedAt, edit.happenedTzOffset)
+                ? edit.isBackfill
+                : isPastHappenedAt(
+                    Date.parse(
+                      edit ? wallClockToIso(happenedAt, edit.happenedTzOffset) : happenedAt,
+                    ),
+                  ))
+                ? '补记，不会通知家人'
+                : undefined
+            }
+          />
         </div>
 
         {chainId && (
@@ -360,7 +372,7 @@ function ComposeBody({
                   setSelectedTags((prev) => (prev.includes(t.id) ? prev.filter((x) => x !== t.id) : [...prev, t.id]))
                 }
                 className={`rounded-full px-2 py-0.5 text-xs ${
-                  selectedTags.includes(t.id) ? 'bg-select text-ink' : 'border-2 border-line bg-surface text-ink'
+                  selectedTags.includes(t.id) ? 'bg-select text-select-fg' : 'border-2 border-stroke bg-surface text-ink'
                 }`}
               >
                 #{t.name}
@@ -390,8 +402,8 @@ function ComposeBody({
         )}
         {progress && <p className="mt-2 text-sm text-muted">{progress}</p>}
 
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="ghost" disabled={busy} onClick={onClose}>
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <Button variant="quiet" disabled={busy} onClick={onClose}>
             取消
           </Button>
           <Button disabled={busy} onClick={() => void submit()}>
@@ -416,8 +428,6 @@ function ComposeBody({
   );
 }
 
-function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
+function isPastHappenedAt(ms: number): boolean {
+  return Number.isFinite(ms) && Math.abs(ms - Date.now()) > 5 * 60_000;
 }

@@ -41,6 +41,7 @@ export async function insertMoment(opts: {
   chainId: string;
   authorId: string;
   happenedAt: Date;
+  happenedTzOffset?: number;
   createdAt?: Date;
   content?: string;
   isBackfill?: boolean;
@@ -55,7 +56,7 @@ export async function insertMoment(opts: {
     type: 'text',
     content: opts.content ?? '内容',
     happenedAt: opts.happenedAt,
-    happenedTzOffset: 0,
+    happenedTzOffset: opts.happenedTzOffset ?? 0,
     isBackfill: opts.isBackfill ?? false,
     createdAt: at,
     updatedAt: at,

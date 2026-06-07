@@ -10,7 +10,7 @@ export function Banner({
   const cls = tone === 'error' ? 'text-danger' : 'text-action';
   return (
     <div
-      className={`flex items-center gap-3 rounded-card border-2 border-line bg-surface px-3 py-2 text-sm shadow-card ${cls}`}
+      className={`flex items-center gap-3 rounded-card border border-line bg-surface px-3 py-2 text-sm shadow-card ${cls}`}
     >
       <p className="flex-1">{children}</p>
       {action && (

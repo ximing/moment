@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type MomentMedia, type MomentResponse } from '@moment/dto';
@@ -6,26 +6,34 @@ import { client } from '@/api/client';
 import { qk } from '@/api/keys';
 import { useAuth } from '@/auth/AuthProvider';
 import { useCompose } from '@/compose/ComposeContext';
-import { formatHappenedAt } from '@/lib/time';
+import { ChainMark } from '@/chain/ChainMark';
+import { formatHappenedClock } from '@/lib/time';
+import { humanError } from '@/lib/errors';
+import type { ChainColor, ChainIcon } from '@moment/dto';
 import { MediaBlock } from '@/media/MediaBlock';
 import { Avatar } from '@/ui/Avatar';
+import { Banner } from '@/ui/Banner';
+import { Button } from '@/ui/Button';
 import { Confirm } from '@/ui/Confirm';
-import { Menu } from '@/ui/Menu';
+import { KebabButton, Menu, MenuItem } from '@/ui/Menu';
 import { Lightbox } from './Lightbox';
 import { ReactionBar } from './ReactionBar';
 
 export function MomentSheet({
   moment,
   chainName,
+  chainColor,
+  chainIcon,
   shareToken,
   readOnly,
-  hideKnot,
 }: {
   moment: MomentResponse;
   chainName?: string;
+  chainColor?: ChainColor | null;
+  chainIcon?: ChainIcon | null;
   shareToken?: string;
   readOnly?: boolean;
-  /** 无链条上下文时传 true（如 Timeline hideSignature 降级）：不渲染链节圆环，避免无依托悬浮 */
+  /** 日子结在分组头上，卡片不再挂链节环；保留参数以免调用方报错 */
   hideKnot?: boolean;
 }) {
   const { user } = useAuth();
@@ -37,6 +45,7 @@ export function MomentSheet({
   const mine = user?.id === moment.author.id;
   const images = moment.media.filter((m) => !m.mime.startsWith('video/'));
   const lightboxItems: MomentMedia[] = images.length > 0 ? images : moment.media;
+  const hasMedia = moment.media.length > 0;
 
   const touch = () => {
     void queryClient.invalidateQueries({ queryKey: qk.moment(moment.id) });
@@ -58,114 +67,105 @@ export function MomentSheet({
     },
   });
 
-  return (
-    <article className="relative rounded-card border-2 border-line bg-surface p-5 shadow-card">
-      {/* 链节圆环：卡片左上角外侧，中心对齐时间线虚线（容器缩进 26px - 左偏 24px + 环半径 8px ≈ 线中心 x10，spec §3.1） */}
-      {!hideKnot && (
-        <span aria-hidden className="absolute -left-6 top-6 h-4 w-4 rounded-full border-2 border-line bg-surface" />
-      )}
-      <header className="flex items-center gap-2.5">
-        <Avatar name={moment.author.nickname} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-medium text-ink">{moment.author.nickname}</span>
-            {chainName && !shareToken && (
-              <Link to={`/chains/${moment.chainId}`} className="text-sm text-muted hover:text-action">
-                {chainName}
-              </Link>
-            )}
-          </div>
-          <p className="text-xs text-muted">
-            {formatHappenedAt(moment.happenedAt, moment.happenedTzOffset)}
-            {moment.isBackfill && ' · 补记'}
-          </p>
-        </div>
-        {/* 本人时刻操作收进 kebab；他人时刻（含 owner 视角）无 kebab 无操作入口（spec §0/§6 非目标，backlog） */}
-        {!readOnly && mine && (
-          <Menu
-            trigger={
-              <button
-                type="button"
-                aria-label="更多操作"
-                className="rounded-sticker border-2 border-line bg-surface px-2 py-0.5 text-muted shadow-sticker"
-              >
-                ···
-              </button>
-            }
-          >
-            {(close) => (
-              <span className="flex flex-col">
-                <button
-                  type="button"
-                  className="rounded px-3 py-1.5 text-left text-sm hover:bg-select"
-                  onClick={() => {
-                    close();
-                    openCompose({ chainId: moment.chainId, edit: moment });
-                  }}
-                >
-                  编辑
-                </button>
-                <button
-                  type="button"
-                  className="rounded px-3 py-1.5 text-left text-sm text-danger hover:bg-select"
-                  onClick={() => {
-                    close();
-                    setConfirmDel(true);
-                  }}
-                >
-                  删除
-                </button>
-              </span>
-            )}
-          </Menu>
-        )}
-      </header>
+  const tags = moment.tags.length > 0 && (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {moment.tags.map((t) => (
+        <span key={t.id} className="text-xs text-muted">
+          #{t.name}
+        </span>
+      ))}
+    </div>
+  );
 
-      {moment.content && <p className="mt-3 whitespace-pre-wrap text-[17px] leading-relaxed text-ink">{moment.content}</p>}
-
-      <MediaBlock media={moment.media} shareToken={shareToken} onOpen={(i) => setLightbox(i)} />
-
-      {moment.tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {moment.tags.map((t) => (
-            <span
-              key={t.id}
-              className="rounded-sticker border-2 border-line bg-surface px-2 py-0.5 text-xs text-muted shadow-sticker"
-            >
-              #{t.name}
-            </span>
-          ))}
-        </div>
-      )}
-
+  const acts = (
+    <>
       {!readOnly && (
-        <div className="mt-4 flex flex-wrap items-center gap-1.5">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <ReactionBar moment={moment} onReact={(emoji) => react.mutate(emoji)} />
           <button
             type="button"
-            className="ml-auto text-sm text-muted hover:text-ink"
+            className="ml-auto inline-flex h-8 items-center text-[13px] text-muted hover:text-ink"
             onClick={() => setShowComments((v) => !v)}
           >
             {moment.commentCount} 条评论
           </button>
         </div>
       )}
-
       {readOnly && (moment.commentCount > 0 || moment.reactions.length > 0) && (
-        <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
           {moment.reactions.map((r) => (
-            <span
-              key={r.emoji}
-              className="rounded-sticker border-2 border-line bg-surface px-2 py-0.5 text-xs"
-            >
+            <span key={r.emoji}>
               {r.emoji} {r.count}
             </span>
           ))}
-          {moment.commentCount > 0 && <span>· {moment.commentCount} 条评论</span>}
+          {moment.commentCount > 0 && <span>{moment.commentCount} 条评论</span>}
         </p>
       )}
+    </>
+  );
 
-      {showComments && !readOnly && <CommentPreview momentId={moment.id} />}
+  return (
+    <article>
+    <div className="flex gap-3">
+      <Avatar name={moment.author.nickname} src={moment.author.avatarUrl} size={32} />
+      <div className="min-w-0 flex-1">
+        <header className="mb-2 flex items-baseline gap-2 text-[13px]">
+          <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+            <span className="font-semibold text-ink">{moment.author.nickname}</span>
+            <span className="text-muted">{formatHappenedClock(moment.happenedAt, moment.happenedTzOffset)}</span>
+            {moment.isBackfill && <span className="text-muted">补记</span>}
+            {chainName && !shareToken && (
+              <Link to={`/chains/${moment.chainId}`} className="inline-flex items-center gap-1 text-muted hover:text-ink">
+                <ChainMark chainId={moment.chainId} color={chainColor} icon={chainIcon} size={14} />
+                {chainName}
+              </Link>
+            )}
+          </div>
+          {!readOnly && mine && (
+            <Menu trigger={<KebabButton label="更多操作" />}>
+              {(close) => (
+                <>
+                  <MenuItem
+                    onClick={() => {
+                      close();
+                      openCompose({ chainId: moment.chainId, edit: moment });
+                    }}
+                  >
+                    编辑
+                  </MenuItem>
+                  <MenuItem
+                    danger
+                    onClick={() => {
+                      close();
+                      setConfirmDel(true);
+                    }}
+                  >
+                    删除
+                  </MenuItem>
+                </>
+              )}
+            </Menu>
+          )}
+        </header>
+        {hasMedia ? (
+          <>
+            {moment.content && (
+              <p className="mb-2 whitespace-pre-wrap text-base leading-[1.65] text-ink">{moment.content}</p>
+            )}
+            <MediaBlock media={moment.media} shareToken={shareToken} onOpen={(i) => setLightbox(i)} />
+          </>
+        ) : (
+          moment.content && (
+            <div className="rounded-card bg-surface px-4 py-3">
+              <p className="whitespace-pre-wrap text-base leading-[1.65] text-ink">{moment.content}</p>
+            </div>
+          )
+        )}
+        {tags}
+        {acts}
+        {showComments && !readOnly && <CommentPreview momentId={moment.id} chainId={moment.chainId} />}
+      </div>
+    </div>
 
       {lightbox !== null && (
         <Lightbox
@@ -192,12 +192,35 @@ export function MomentSheet({
   );
 }
 
-function CommentPreview({ momentId }: { momentId: string }) {
+function CommentPreview({ momentId, chainId }: { momentId: string; chainId: string }) {
+  const queryClient = useQueryClient();
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const { data } = useQuery({
     queryKey: qk.comments(momentId),
     queryFn: () => client.listComments(momentId, { limit: 20 }),
   });
   const comments = data?.comments ?? [];
+  const add = useMutation({
+    mutationFn: (content: string) => client.createComment(momentId, content),
+    onSuccess: () => {
+      setText('');
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: qk.comments(momentId) });
+      void queryClient.invalidateQueries({ queryKey: qk.moment(momentId) });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: qk.chainMoments(chainId) });
+    },
+    onError: (e) => setError(humanError(e)),
+  });
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    const content = text.trim();
+    if (!content) return;
+    add.mutate(content);
+  }
+
   return (
     <div className="mt-3 space-y-2 border-t border-line pt-3">
       {comments.slice(0, 3).map((c) => (
@@ -206,9 +229,25 @@ function CommentPreview({ momentId }: { momentId: string }) {
           <span className="ml-2 text-ink">{c.content}</span>
         </p>
       ))}
-      <Link to={`/moments/${momentId}`} className="inline-block text-sm text-action">
-        查看全部评论
-      </Link>
+      {comments.length > 3 && (
+        <Link to={`/moments/${momentId}`} className="inline-block text-sm text-action">
+          查看全部评论
+        </Link>
+      )}
+      {error && <Banner>{error}</Banner>}
+      <form onSubmit={onSubmit} className="flex items-end gap-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="写一句…"
+          rows={2}
+          autoFocus
+          className="min-h-[3.25rem] w-full resize-y rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-[color-mix(in_srgb,var(--muted)_70%,transparent)] focus:border-action"
+        />
+        <Button type="submit" disabled={add.isPending || !text.trim()}>
+          发送
+        </Button>
+      </form>
     </div>
   );
 }

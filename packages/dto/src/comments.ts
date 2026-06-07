@@ -20,7 +20,7 @@ export type CreateCommentInput = z.infer<typeof createCommentInputSchema>;
 export interface CommentDto {
   id: string;
   momentId: string;
-  author: { id: string; nickname: string };
+  author: { id: string; nickname: string; avatarUrl: string | null };
   content: string;
   /** ISO 8601；软删评论不出现在列表，无 deletedAt 字段 */
   createdAt: string;

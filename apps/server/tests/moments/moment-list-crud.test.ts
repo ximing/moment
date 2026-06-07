@@ -143,7 +143,7 @@ describe('GET /api/chains/:chainId/moments（复合游标分页）', () => {
     expect(res.status).toBe(200);
     expect(res.body.items.map((i: { id: string }) => i.id)).not.toContain(doomed);
     const withMedia = res.body.items.find((i: { id: string }) => i.id === created.body.id);
-    expect(withMedia.author).toEqual({ id: alice.id, nickname: 'alice' });
+    expect(withMedia.author).toEqual({ id: alice.id, nickname: 'alice', avatarUrl: null });
     expect(withMedia.media).toHaveLength(1);
     expect(withMedia.media[0].url).toBe(`/api/media/${presigned.body.mediaId}`);
   });

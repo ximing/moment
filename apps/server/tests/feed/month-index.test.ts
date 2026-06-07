@@ -13,10 +13,10 @@ function auth(token: string) {
 const AUG_LOCAL = new Date('2026-07-31T16:30:00Z');
 
 describe('GET /api/feed/month-index', () => {
-  it('按查看者时区归桶：同一 UTC 时刻，不同 tz_offset 落不同月', async () => {
+  it('按发生地墙钟归桶：同一 UTC 时刻跟查询 tz_offset 无关，跟行上 happened_tz_offset', async () => {
     const owner = await registerUser();
     const chainId = await createChain(owner.id);
-    await insertMoment({ chainId, authorId: owner.id, happenedAt: AUG_LOCAL });
+    await insertMoment({ chainId, authorId: owner.id, happenedAt: AUG_LOCAL, happenedTzOffset: -480 });
 
     const east8 = await request(app).get('/api/feed/month-index?tz_offset=-480').set(auth(owner.token));
     expect(east8.status).toBe(200);
@@ -24,7 +24,7 @@ describe('GET /api/feed/month-index', () => {
 
     const utc = await request(app).get('/api/feed/month-index?tz_offset=0').set(auth(owner.token));
     expect(utc.status).toBe(200);
-    expect(utc.body).toEqual({ months: [{ month: '2026-07', count: 1 }] });
+    expect(utc.body).toEqual({ months: [{ month: '2026-08', count: 1 }] });
   });
 
   it('多月倒序聚合；同月计数；软删排除', async () => {

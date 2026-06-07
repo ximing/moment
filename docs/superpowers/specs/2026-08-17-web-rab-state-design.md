@@ -49,8 +49,8 @@ HTTP 仍走现成 `src/api/client.ts` 的 `client`（`@moment/api-client` 单例
 
 ```
 apps/web/src/
-  main.tsx                              # register 五个全局 Service；不再套 QueryClient / AuthProvider
-  app.tsx                               # observer + Routes；不再套 ComposeProvider
+  main.tsx                              # register 五个全局 Service（AuthService 排首）+ RSRoot；不再套 QueryClient / AuthProvider
+  app.tsx                               # Routes（不读 observable，无需 observer）；不再套 ComposeProvider
   services/
     auth.service.ts
     theme.service.ts
@@ -109,15 +109,17 @@ user: UserProfile | null; // 构造时 cachedUser() 水合
 applyAuth(res: AuthResponse): void;          // tokenStore + cacheUser + this.user；emit auth:changed
 login(input: LoginInput): Promise<void>;     // client.login → applyAuth
 register(input: RegisterInput): Promise<void>;
-logout(): Promise<void>;                     // revoke 可吞错；tokenStore.clear(); cacheUser(null); user=null; emit
+logout(): Promise<void>;                     // revoke 可吞错；只调 tokenStore.clear()，置空与 emit 走 auth-cleared 事件路径（不双发）
 refreshUser(next: UserProfile): void;        // cacheUser + this.user；emit auth:changed（资料页改头像）
 ```
 
 构造：
 
 1. `user = cachedUser()`。
-2. `window` 听 `moment:auth-cleared`：`user = null`；`emit('auth:changed', null, 'global')`。
-3. 若已有缓存用户，fire-and-forget `client.me()`，成功则 `refreshUser`。
+2. `window` 听 `moment:auth-cleared`：`user = null`；`cacheUser(null)`；`emit('auth:changed', null, 'global')`。登出的置空 + emit 只走这一条路径。
+3. 若已有缓存用户，fire-and-forget `client.me()`，成功则 `refreshUser`（`refreshUser` 的 emit 即冷启动补发 `auth:changed`；`me()` 失败时链表/通知起不来，见 §3.3/§3.4 构造兜底）。
+
+注意：`logout()` 只负责 revoke（吞错）与 `tokenStore.clear()`；不要在 logout 里再手动 `user = null` + emit，否则 `auth:changed` 双发、监听方双跑。
 
 登录/注册页、邀请页、`RequireAuth`、`UserMenu`、`MePage` 全部 `useService(AuthService)`。
 
@@ -139,7 +141,7 @@ chains: ChainDto[] = [];
 async load(): Promise<void>; // this.chains = await client.listChains()
 ```
 
-构造听 `auth:changed`：有 user 则 `load()`，否则 `chains = []`。听 `chain:changed` 则 `load()`。
+构造：读 `this.resolve(AuthService).user`，有则 fire-and-forget `load()`——不能只依赖 `auth:changed`：缓存登录态冷启动时 AuthService 构造不发事件，`me()` 失败也不发，只听事件的话侧栏链表永远空。之后听 `auth:changed`（有 user 则 `load()`，否则 `chains = []`）与 `chain:changed`（`load()`）。register 顺序保证 AuthService 在前。
 
 Shell 侧栏、首页链色表、发布选链都读这份列表，禁止再各拉一次。
 
@@ -151,13 +153,16 @@ nextCursor: string | null = null;
 
 async loadFirst(): Promise<void>;
 async loadMore(): Promise<void>;
-async markAllRead(): Promise<void>; // 成功后 emit notification:changed
+async pollUnread(): Promise<void>;   // 30s 轮询专用：只 merge 已有条目 + 未读数，不动 cursor
+async markAllRead(): Promise<void>;  // 成功后本地置 readAt / 重拉，不 emit notification:changed（唯一听者是自己，自发自收无意义）
 
 get unreadCount(): number; // items 里 readAt === null 的数量
 get hasMore(): boolean;
 ```
 
-登录后 `setInterval(30000)` 调 `loadFirst()`；登出 `clearInterval` 且 `items = []`。全局 Service 不随页面卸，必须靠 `auth:changed` 关表。
+轮询与冷启动：构造读 `this.resolve(AuthService).user`，有则开轮询（与 `ChainListService` 同理，不能只听 `auth:changed`）。之后听 `auth:changed`：有 user 开 `setInterval(30000)` 并 `loadFirst()`，无 user `clearInterval` 且 `items = []`。全局 Service 不随页面卸，必须靠 `auth:changed` 关表。
+
+轮询不能整表 `loadFirst()`：通知页共享这份 `items`，用户正在往下翻时每 30s 被整表替换 + `nextCursor` 清空，已加载的分页全丢。轮询改为 `pollUnread()`：拉第一页，只 merge 已在 `items` 里的条目与未读数，不动 `nextCursor`、不追加新页。整表 `loadFirst()` 只发生在：`auth:changed` 登入、`notification:changed`、用户在通知页手动下拉刷新。
 
 `Shell` 读 `unreadCount`；`pages/notifications` 读 `items` / `loadMore` / `markAllRead`。两处同一份数据，禁止再出现「finite query 与 infinite query 抢同一个 key」。
 
@@ -181,6 +186,8 @@ markCreated(id: string): void; // lastCreatedId = id
 
 页面组件：`const XContent = observer(() => { ... }); export const X = bindServices(XContent, [XService]);`  
 通知页没有页面 Service，只 `observer` + `useService(NotificationService)`。
+
+首次加载由谁发起：带 `hydrate` 的页面（链页 / 详情页）在 `hydrate` 里触发，且 `hydrate` 必须幂等（同 id 直接 return，挡 StrictMode 双调用）；无路由参数的页面（首页等）在构造里 fire-and-forget `loadFirst()`（+ 需要时 `loadMeta()`），组件里不写加载 effect 链。
 
 ### 4.1 分页公约（feed / 通知 / 详情评论）
 
@@ -267,7 +274,11 @@ async deleteComment(id: string): Promise<void>;
 
 ### 4.6 ComposePanelService
 
-草稿（正文、文件、标签、`happenedAt`、进度）活在面板生命周期。`submit` 成功：`composeSession.markCreated(id)`；`emit('moment:changed', { momentId, chainId, op: 'create' | 'update' }, 'global')`；`composeSession.closeCompose()`。
+草稿（正文、文件、标签、`happenedAt`、进度）活在面板生命周期。`bindServices` 绑在**条件挂载的面板本体**上（今天 `ComposeBody` 的位置），不绑常挂的外壳：外层 `ComposePanel` 是常挂的（`request === null` 渲 null），绑外层会让草稿跨开关半持久化——与非目标「不做草稿持久化」冲突且行为改变。
+
+`submit` 成功：`composeSession.markCreated(id)`；`emit('moment:changed', { momentId, chainId, op: 'create' | 'update' }, 'global')`；`composeSession.closeCompose()`。
+
+预览 blob 的 `URL.revokeObjectURL` 走**显式路径**（`submit` 成功、用户移除文件、`closeCompose` 时机），不放进 Service 的 `destroy()`——`bindServices` 的容器销毁靠 FinalizationRegistry/GC，不是 unmount 即时（见 §5），`destroy()` 里的清理时机不可控，blob URL 会滞留。
 
 ### 4.7 CreateChainDialogService
 
@@ -294,7 +305,12 @@ async submitComment(text: string): Promise<void>; // emit comment:changed
 
 ## 5. 事件
 
-一律 `this.emit(name, payload, 'global')` / `this.on(name, handler, 'global')`。页面 Service 的 `on` 随 `bindServices` dispose，不手写 `off`。
+一律 `this.emit(name, payload, 'global')` / `this.on(name, handler, 'global')`。
+
+**dispose 语义（源码事实，勿依赖）**：`bindServices` 的容器销毁走 `UniversalFinalizationRegistry`（浏览器为原生 FinalizationRegistry），React `useEffect` cleanup 只是兜底重注册——**不是 unmount 即时销毁**。路由切走后旧页面 Service 的全局监听在 GC 前仍是活的（zombie 窗口）：会继续收事件、白发 `loadFirst()` 请求。这不破坏正确性（实例无 UI 在读、分页 gen 守卫在），但两条铁律：
+
+1. 正确性必须不依赖监听器被及时移除（zombie 期只浪费请求，不能改坏状态）。
+2. 必须及时释放的资源（blob URL、`setInterval`）不放 Service `destroy()`，走显式路径（见 §3.4 / §4.6）。zombie 实例随导航累积到 GC，属预期。
 
 | 事件 | payload | 谁发 | 谁听 |
 |---|---|---|---|
@@ -302,7 +318,7 @@ async submitComment(text: string): Promise<void>; // emit comment:changed
 | `chain:changed` | `{ chainId: string; op: 'create' \| 'update' \| 'delete' }` | 建链 / 设置 / 邀请接受 | `ChainListService.load()`；`ChainHomeService` / `ChainSettingsService` 匹配 id 则重拉链 |
 | `moment:changed` | `{ momentId: string; chainId: string; op: 'create' \| 'update' \| 'delete' \| 'react' }` | 发布 / 编辑 / 删除 / 反应 | 首页、链页 `loadFirst`+`loadMeta`；详情页按 §4.4 |
 | `comment:changed` | `{ momentId: string }` | 加评 / 删评 | 同上（评论数在 moment 上） |
-| `notification:changed` | `undefined` | `markAllRead` | `NotificationService.loadFirst()` |
+| `notification:changed` | `undefined` | 通知页手动刷新 | `NotificationService.loadFirst()`（`markAllRead` 不发此事件，直接本地更新） |
 
 不发 `user:updated` 去刷时间线头像。Service **不**互相调用对方的 `load()`，只发事件。
 
@@ -316,9 +332,9 @@ async submitComment(text: string): Promise<void>; // emit comment:changed
 
 ## 7. 入口
 
-```ts
+```tsx
 // main.tsx
-register(AuthService);
+register(AuthService); // 必须排首：ChainListService / NotificationService 构造里 resolve 它
 register(ThemeService);
 register(ChainListService);
 register(NotificationService);
@@ -327,13 +343,17 @@ register(ComposeSessionService);
 createRoot(el).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <RSRoot>
+        <App />
+      </RSRoot>
     </BrowserRouter>
   </StrictMode>,
 );
 ```
 
-去掉 `QueryClientProvider`、`AuthProvider`。`App` 是 `observer`，不再包 `ComposeProvider`。依赖从 `apps/web/package.json` 删除 `@tanstack/react-query`。
+`RSRoot`（= `bindServices(Empty, [])`）给整棵树一个根容器。没有它，任何不在 `bindServices` 内的 `useService`（`App`、`Shell` 等）会走库的兼容分支 fallback 到全局容器，并打 `[WARN] 兼容模式` 日志；且该分支下 `useService` 遇到未注册的 Service 会**静默在全局注册它**——漏写 `bindServices` 的页面 Service 会无声变成全局单例、永不销毁，直接破坏成功标准 3。挂了 `RSRoot` 后整树 resolve 链可达全局容器。是否再上 `RSStrict`（漏绑直接 throw）在实现第 1 步验证与全局 `register` 的组合，可用就开。
+
+去掉 `QueryClientProvider`、`AuthProvider`。`App` 只挂路由、不读 observable，不需要 `observer`；不再包 `ComposeProvider`。依赖从 `apps/web/package.json` 删除 `@tanstack/react-query`。
 
 ## 8. 错误
 
@@ -347,7 +367,7 @@ createRoot(el).render(
 
 不平行养 RQ + rab。搬目录和改状态同一刀，每刀切完能开机。
 
-1. 入口 + `AuthService` + `ThemeService`，拆 `AuthProvider`；`App` 的主题 effect 搬走。
+1. 入口 + `RSRoot` + `AuthService` + `ThemeService`，拆 `AuthProvider`；`App` 的主题 effect 搬走。此步验证 `RSStrict` 可用性。
 2. `ComposeSessionService`，拆 `ComposeContext`。
 3. `ChainListService` + `NotificationService`；Shell 侧栏/未读下 RQ。
 4. 首页 + 链页挪到 `pages/feed-home`、`pages/chain-home`；Rail 改受控；feed 下 RQ。
@@ -358,6 +378,9 @@ createRoot(el).render(
 ## 10. 验收
 
 - 成功标准 §0 的 1–5。
+- 控制台无 `[WARN] 兼容模式`（证明所有 `useService` 都在容器树内，没有静默全局化）。
+- 冷启动（带缓存登录态刷新）：侧栏链表与通知未读数直接就有，不依赖 `client.me()` 成功。
+- 通知页往下翻几页后停留 >30s：列表不被轮询重置，`loadMore` 仍接得上。
 - 手测：登录 → 首页筛选 / 跳月 / 加载更多 → 发布生长动画 → 链页 / 设置 → 详情评论 → 通知未读角标与列表一致 → 登出回登录 → 分享页恒浅。
 - 回归：viewer 不见「记下」；`?compose=1` 打开面板并从 URL 清掉；改筛选出现「没有符合条件的时刻」+ 清除筛选。
 

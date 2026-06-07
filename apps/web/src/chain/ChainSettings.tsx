@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ChainDto, ShareLinkDto } from '@moment/dto';
+import type { ChainColor, ChainDto, ChainIcon, ShareLinkDto } from '@moment/dto';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
 import { useAuth } from '@/auth/AuthProvider';
+import { ChainLookPicker } from '@/chain/ChainLookPicker';
+import { fallbackChainColor } from '@/lib/chain-color';
 import { humanError } from '@/lib/errors';
 import { canInvite, isOwner, roleLabel } from '@/lib/roles';
 import { Banner } from '@/ui/Banner';
@@ -13,7 +15,7 @@ import { Confirm } from '@/ui/Confirm';
 import { Field, Input, Textarea } from '@/ui/Field';
 import { Avatar } from '@/ui/Avatar';
 
-type Section = 'share' | 'members' | 'profile' | 'danger';
+type Section = 'share' | 'members' | 'profile';
 
 export function ChainSettings({ chain }: { chain: ChainDto }) {
   const owner = isOwner(chain);
@@ -22,12 +24,11 @@ export function ChainSettings({ chain }: { chain: ChainDto }) {
     { key: 'share', label: '分享', show: owner },
     { key: 'members', label: '成员', show: true },
     { key: 'profile', label: '资料', show: owner },
-    { key: 'danger', label: '危险区', show: owner },
   ];
 
   return (
-    <div className="flex gap-8">
-      <nav className="w-28 shrink-0 space-y-1">
+    <div>
+      <nav className="mb-6 flex flex-wrap gap-2">
         {items
           .filter((i) => i.show)
           .map((i) => (
@@ -35,21 +36,20 @@ export function ChainSettings({ chain }: { chain: ChainDto }) {
               key={i.key}
               type="button"
               onClick={() => setSection(i.key)}
-              className={`block w-full px-3 py-1.5 text-left text-sm ${
+              className={
                 section === i.key
-                  ? 'rounded-sticker border-2 border-line bg-select text-ink shadow-sticker'
-                  : 'text-muted hover:text-ink'
-              }`}
+                  ? 'whitespace-nowrap rounded-sticker bg-select px-3 py-1.5 text-sm text-select-fg'
+                  : 'whitespace-nowrap rounded-sticker bg-surface px-3 py-1.5 text-sm text-muted elev-sm hover:text-ink'
+              }
             >
               {i.label}
             </button>
           ))}
       </nav>
-      <div className="min-w-0 flex-1">
+      <div>
         {section === 'share' && owner && <ShareSection chainId={chain.id} />}
         {section === 'members' && <MembersSection chain={chain} />}
         {section === 'profile' && owner && <ProfileSection chain={chain} />}
-        {section === 'danger' && owner && <DangerSection chain={chain} />}
       </div>
     </div>
   );
@@ -102,44 +102,54 @@ function ShareSection({ chainId }: { chainId: string }) {
   return (
     <div className="space-y-4">
       {/* 标题文字不在得意黑字形子集（scripts/font-glyphs.txt）内，不用 font-display */}
-      <h2 className="text-lg font-medium">给长辈的相册链接</h2>
-      <div className="flex flex-wrap items-end gap-2">
-        <select
-          value={expire}
-          onChange={(e) => setExpire(e.target.value as typeof expire)}
-          className="rounded-card border border-line bg-surface px-2 py-2 text-sm text-ink focus:border-action"
-        >
-          <option value="never">永不过期</option>
-          <option value="7">7 天</option>
-          <option value="30">30 天</option>
-          <option value="date">指定日期</option>
-        </select>
-        {expire === 'date' && (
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-card border border-line bg-surface px-2 py-2 text-sm text-ink focus:border-action" />
-        )}
-        <Button disabled={create.isPending} onClick={() => create.mutate()}>
-          生成分享链接
-        </Button>
+      <h2 className="text-lg font-medium">给长辈看这条链</h2>
+      <p className="text-sm text-muted">生成一条链接，长辈不用登录就能顺着日子看。</p>
+      <div className="rounded-card border border-line bg-surface p-4">
+        <div className="flex flex-col gap-3 min-[560px]:flex-row min-[560px]:items-center">
+          <select
+            value={expire}
+            onChange={(e) => setExpire(e.target.value as typeof expire)}
+            className="h-10 min-w-0 rounded-sticker border border-line bg-bg px-3 text-sm text-ink focus:border-action"
+          >
+            <option value="never">永不过期</option>
+            <option value="7">7 天</option>
+            <option value="30">30 天</option>
+            <option value="date">指定日期</option>
+          </select>
+          {expire === 'date' && (
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="h-10 min-w-0 rounded-sticker border border-line bg-bg px-3 text-sm text-ink focus:border-action"
+            />
+          )}
+          <Button className="min-[560px]:ml-auto" disabled={create.isPending} onClick={() => create.mutate()}>
+            生成分享链接
+          </Button>
+        </div>
       </div>
       {error && <Banner>{error}</Banner>}
       <ul className="space-y-2">
         {(data?.items ?? []).map((link) => {
           const status = linkStatus(link);
           return (
-            <li key={link.id} className={`flex flex-wrap items-center gap-2 rounded-card border-2 p-3 text-sm shadow-sticker ${SHARE_STATUS_CLASS[status]}`}>
-              <span className="text-muted">{new Date(link.createdAt).toLocaleString()}</span>
+            <li key={link.id} className={`flex flex-wrap items-center gap-2 rounded-card border p-3 text-sm ${SHARE_STATUS_CLASS[status]}`}>
+              <span className="min-w-0 text-muted">{new Date(link.createdAt).toLocaleString()}</span>
               <span>{status}</span>
               {link.expiresAt && <span className="text-muted">到期 {new Date(link.expiresAt).toLocaleDateString()}</span>}
-              {status === '有效' && (
-                <Button variant="ghost" onClick={() => copy(link)}>
-                  {copied === link.id ? '已复制' : '复制链接'}
-                </Button>
-              )}
-              {status !== '已吊销' && (
-                <Button variant="quiet" onClick={() => setRevokeId(link.id)}>
-                  吊销
-                </Button>
-              )}
+              <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                {status === '有效' && (
+                  <Button variant="ghost" size="sm" onClick={() => copy(link)}>
+                    {copied === link.id ? '已复制' : '复制链接'}
+                  </Button>
+                )}
+                {status !== '已吊销' && (
+                  <Button variant="quiet" size="sm" onClick={() => setRevokeId(link.id)}>
+                    吊销
+                  </Button>
+                )}
+              </span>
             </li>
           );
         })}
@@ -168,7 +178,7 @@ function linkStatus(link: ShareLinkDto): string {
 /** 分享链接贴纸卡三态色（spec §7：有效=薄荷、已过期=黄、已吊销=灰）。 */
 const SHARE_STATUS_CLASS: Record<string, string> = {
   有效: 'bg-sticker-mint border-sticker-mint-line',
-  已过期: 'bg-select border-line',
+  已过期: 'bg-select border-stroke',
   // 灰系：spec 无灰 token，用 --line 低饱和表达；color-mix arbitrary（var() 色值的 /40 修饰静默不生成，硬约束）
   已吊销: 'border-line bg-[color-mix(in_srgb,var(--line)_40%,transparent)] text-muted',
 };
@@ -248,8 +258,8 @@ function MembersSection({ chain }: { chain: ChainDto }) {
       {error && <Banner>{error}</Banner>}
       <ul className="space-y-2">
         {(members ?? []).map((m) => (
-          <li key={m.userId} className="flex items-center gap-2 text-sm">
-            <Avatar name={m.nickname} size={28} />
+          <li key={m.userId} className="flex flex-wrap items-center gap-2 text-sm">
+            <Avatar name={m.nickname} src={m.avatarUrl} size={28} />
             <span>{m.nickname}</span>
             <span className="text-muted">{roleLabel(m.role)}</span>
             {owner && m.role !== 'owner' && (
@@ -262,10 +272,10 @@ function MembersSection({ chain }: { chain: ChainDto }) {
                   <option value="editor">可记录</option>
                   <option value="viewer">只看</option>
                 </select>
-                <Button variant="quiet" onClick={() => remove.mutate(m.userId)}>
+                <Button variant="quiet" size="sm" onClick={() => remove.mutate(m.userId)}>
                   移除
                 </Button>
-                <Button variant="quiet" onClick={() => setTransferId(m.userId)}>
+                <Button variant="quiet" size="sm" onClick={() => setTransferId(m.userId)}>
                   转让给他
                 </Button>
               </>
@@ -280,10 +290,10 @@ function MembersSection({ chain }: { chain: ChainDto }) {
       )}
       {inviteOk && (
         <div>
-          <h3 className="mb-2 text-sm text-muted">邀请一起记</h3>
-          <div className="flex gap-2">
+          <h3 className="mb-2 text-sm text-muted">邀请家人</h3>
+          <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-center">
             <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="邮箱（可空，只生成链接）" />
-            <Button disabled={invite.isPending} onClick={() => invite.mutate()}>
+            <Button className="w-full min-[520px]:w-auto" disabled={invite.isPending} onClick={() => invite.mutate()}>
               生成邀请
             </Button>
           </div>
@@ -298,6 +308,7 @@ function MembersSection({ chain }: { chain: ChainDto }) {
                   <>
                     <Button
                       variant="ghost"
+                      size="sm"
                       onClick={() => {
                         void navigator.clipboard.writeText(`${window.location.origin}/invites/${inv.token}`).then(() => {
                           setCopied(inv.id);
@@ -307,7 +318,7 @@ function MembersSection({ chain }: { chain: ChainDto }) {
                     >
                       {copied === inv.id ? '已复制' : '复制邀请'}
                     </Button>
-                    <Button variant="quiet" onClick={() => revokeInv.mutate(inv.id)}>
+                    <Button variant="quiet" size="sm" onClick={() => revokeInv.mutate(inv.id)}>
                       吊销
                     </Button>
                   </>
@@ -342,11 +353,19 @@ function ProfileSection({ chain }: { chain: ChainDto }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(chain.name);
   const [description, setDescription] = useState(chain.description ?? '');
+  const [color, setColor] = useState<ChainColor>(chain.color ?? fallbackChainColor(chain.id));
+  const [icon, setIcon] = useState<ChainIcon | null>(chain.icon);
   const [error, setError] = useState<string | null>(null);
   const [tagName, setTagName] = useState('');
   const { data: tags } = useQuery({ queryKey: qk.tags(chain.id), queryFn: () => client.listTags(chain.id) });
   const save = useMutation({
-    mutationFn: () => client.updateChain(chain.id, { name: name.trim(), description: description.trim() || null }),
+    mutationFn: () =>
+      client.updateChain(chain.id, {
+        name: name.trim(),
+        description: description.trim() || null,
+        color,
+        icon,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.chain(chain.id) });
       void queryClient.invalidateQueries({ queryKey: qk.chains });
@@ -376,6 +395,7 @@ function ProfileSection({ chain }: { chain: ChainDto }) {
       <Field label="简介">
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
       </Field>
+      <ChainLookPicker color={color} icon={icon} onColor={setColor} onIcon={setIcon} />
       {error && <Banner>{error}</Banner>}
       <Button disabled={save.isPending} onClick={() => save.mutate()}>
         保存
@@ -392,12 +412,20 @@ function ProfileSection({ chain }: { chain: ChainDto }) {
             </li>
           ))}
         </ul>
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex flex-col gap-2 min-[480px]:flex-row min-[480px]:items-center">
           <Input value={tagName} onChange={(e) => setTagName(e.target.value)} placeholder="新标签" />
-          <Button variant="ghost" disabled={!tagName.trim() || addTag.isPending} onClick={() => addTag.mutate()}>
+          <Button
+            variant="ghost"
+            className="w-full min-[480px]:w-auto"
+            disabled={!tagName.trim() || addTag.isPending}
+            onClick={() => addTag.mutate()}
+          >
             添加
           </Button>
         </div>
+      </div>
+      <div className="border-t border-line pt-4">
+        <DangerSection chain={chain} />
       </div>
     </div>
   );
@@ -420,7 +448,7 @@ function DangerSection({ chain }: { chain: ChainDto }) {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-medium">删除这条链</h2>
+      <h2 className="text-sm text-muted">删除这条链</h2>
       <p className="text-sm text-muted">链里的时刻会一起消失。请输入链的名字确认。</p>
       {error && <Banner>{error}</Banner>}
       <Button variant="danger" onClick={() => setOpen(true)}>

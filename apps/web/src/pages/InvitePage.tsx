@@ -31,7 +31,7 @@ export function InvitePage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-6">
-      <div className="w-full max-w-sm rounded-card border-2 border-line bg-surface p-8 text-center shadow-card">
+      <div className="w-full max-w-sm rounded-card border border-line bg-surface p-8 text-center shadow-card">
         {/* 「加入」不在得意黑字形子集内，标题不用 font-display */}
         <h1 className="text-xl font-medium">加入时光链</h1>
         <p className="mt-2 text-sm text-muted">和家人一起记下这一家的时刻。</p>

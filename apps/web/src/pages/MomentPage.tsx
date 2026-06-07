@@ -6,9 +6,11 @@ import { qk } from '@/api/keys';
 import { useAuth } from '@/auth/AuthProvider';
 import { humanError } from '@/lib/errors';
 import { Timeline } from '@/timeline/Timeline';
+import { ArrowLeft } from 'lucide-react';
 import { Banner } from '@/ui/Banner';
 import { Button } from '@/ui/Button';
 import { Textarea } from '@/ui/Field';
+import { Icon } from '@/ui/Icon';
 
 export function MomentPage() {
   const { momentId = '' } = useParams();
@@ -60,15 +62,20 @@ export function MomentPage() {
   }
 
   // 骨架 60% surface：var() 色值的 /60 修饰静默不生成，用 color-mix（硬约束）
-  if (isPending) return <div className="h-40 animate-pulse rounded-card bg-[color-mix(in_srgb,var(--surface)_60%,transparent)]" />;
+  if (isPending) return <div className="max-w-content h-40 animate-pulse rounded-card bg-[color-mix(in_srgb,var(--surface)_60%,transparent)]" />;
   if (isError || !moment) {
-    return <Banner action={{ label: '重试', onClick: () => void refetch() }}>看不到这条时刻</Banner>;
+    return (
+      <div className="max-w-content">
+        <Banner action={{ label: '重试', onClick: () => void refetch() }}>看不到这条时刻</Banner>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <Link to={`/chains/${moment.chainId}`} className="text-sm text-muted hover:text-ink">
-        ← 回链
+    <div className="max-w-content space-y-6">
+      <Link to={`/chains/${moment.chainId}`} className="inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
+        <Icon icon={ArrowLeft} size={14} />
+        回链
       </Link>
       <Timeline
         moments={[moment]}
@@ -84,7 +91,7 @@ export function MomentPage() {
         <h2 className="mb-3 text-lg font-medium">评论</h2>
         <ul className="space-y-3">
           {comments.map((c) => (
-            <li key={c.id} className="rounded-card border-2 border-line bg-surface p-3 text-sm shadow-sticker">
+            <li key={c.id} className="rounded-card border border-line bg-surface p-3 text-sm shadow-sticker">
               <span className="font-medium">{c.author.nickname}</span>
               <span className="ml-2">{c.content}</span>
               {user?.id === c.author.id && (

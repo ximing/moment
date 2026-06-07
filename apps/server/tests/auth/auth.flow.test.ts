@@ -28,6 +28,16 @@ describe('auth 全流程', () => {
       .set('Authorization', `Bearer ${reg.body.tokens.accessToken}`);
     expect(me.status).toBe(200);
     expect(me.body.email).toBe('alice@example.com');
+    expect(me.body.avatarColor).toBeNull();
+    expect(me.body.avatarIcon).toBeNull();
+
+    const patched = await request(app)
+      .patch('/api/auth/me')
+      .set('Authorization', `Bearer ${reg.body.tokens.accessToken}`)
+      .send({ avatarColor: 'mint', avatarIcon: '⭐' });
+    expect(patched.status).toBe(200);
+    expect(patched.body.avatarColor).toBe('mint');
+    expect(patched.body.avatarIcon).toBe('⭐');
 
     // refresh：换新对，旧 refresh 不可复用
     const ref = await request(app)

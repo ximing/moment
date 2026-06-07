@@ -26,7 +26,7 @@ export function Confirm({
   const blocked = prompt ? promptValue !== prompt.expect : false;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--ink)_40%,transparent)] p-4" role="dialog" aria-modal>
-      <div className="w-full max-w-md rounded-card border-2 border-line bg-surface p-5 shadow-card">
+      <div className="w-full max-w-md rounded-card border border-line bg-surface p-5 shadow-card">
         <h2 className="font-display text-lg text-ink">{title}</h2>
         <p className="mt-2 text-sm text-muted">{body}</p>
         {prompt && (

@@ -1,0 +1,179 @@
+<h2>选一个设计方向</h2>
+<p class="subtitle">同一条时刻、三种完全不同的气质。点选你最有感觉的方向（细节后面都会再打磨，现在只定大方向）</p>
+
+<style>
+  .dirs { display:flex; gap:20px; align-items:stretch; justify-content:center; flex-wrap:wrap; margin-top:8px; }
+  .dir { width:370px; border-radius:18px; overflow:hidden; cursor:pointer; border:3px solid transparent; transition:border-color .15s, transform .15s; text-align:left; }
+  .dir:hover { transform:translateY(-3px); }
+  .dir.selected { border-color:#4f7cff; }
+  .dirscreen { height:470px; position:relative; overflow:hidden; font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif; }
+  .dircap { padding:14px 4px 4px; }
+  .dircap h3 { margin:0 0 4px; font-size:17px; }
+  .dircap p { margin:0; font-size:13px; opacity:.75; line-height:1.5; }
+
+  /* ---------- shared mini-mockup scaffolding ---------- */
+  .m-side { position:absolute; left:0; top:0; bottom:0; width:118px; padding:16px 10px; display:flex; flex-direction:column; gap:4px; font-size:11px; }
+  .m-main { position:absolute; left:118px; right:0; top:0; bottom:0; padding:14px 16px; overflow:hidden; }
+  .m-logo { font-size:15px; font-weight:700; margin-bottom:12px; }
+  .m-nav { padding:5px 8px; border-radius:8px; white-space:nowrap; }
+  .m-navsec { font-size:9px; letter-spacing:.08em; margin:10px 8px 3px; }
+  .m-card { border-radius:14px; padding:12px 13px; }
+  .m-ava { width:26px; height:26px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; }
+  .m-row { display:flex; align-items:center; gap:8px; }
+  .m-name { font-size:12px; font-weight:600; }
+  .m-time { font-size:10px; }
+  .m-text { font-size:12.5px; line-height:1.55; margin:8px 0; }
+  .m-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; border-radius:10px; overflow:hidden; }
+  .m-ph { aspect-ratio:1; }
+  .m-tags { display:flex; gap:5px; margin-top:8px; }
+  .m-tag { font-size:9.5px; padding:2px 8px; border-radius:99px; }
+  .m-react { display:flex; gap:5px; align-items:center; margin-top:9px; font-size:10.5px; }
+  .m-pill { padding:2px 8px; border-radius:99px; }
+  .m-fab { position:absolute; right:14px; bottom:14px; font-size:11px; padding:8px 14px; border-radius:99px; font-weight:600; }
+
+  /* photo stand-ins (gradients) */
+  .ph1 { background:linear-gradient(135deg,#f9c5d1,#f7e7b4); }
+  .ph2 { background:linear-gradient(135deg,#a8d8ea,#dff5e1); }
+  .ph3 { background:linear-gradient(135deg,#ffd8a8,#fcb7b7); }
+
+  /* ---------- A: 浮光 · 通透玻璃感(浅色) ---------- */
+  .dirA .dirscreen { background:#f4f4f2; color:#191917; }
+  .dirA .m-side { background:rgba(255,255,255,.65); backdrop-filter:blur(12px); border-right:1px solid rgba(0,0,0,.05); color:#55534e; }
+  .dirA .m-logo { color:#191917; letter-spacing:.02em; }
+  .dirA .m-nav.on { background:#191917; color:#fff; font-weight:600; }
+  .dirA .m-navsec { color:#a3a09a; }
+  .dirA .m-card { background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.04),0 12px 32px -12px rgba(0,0,0,.10); border-radius:18px; }
+  .dirA .m-ava { background:linear-gradient(135deg,#ff8a5c,#ff5c8a); color:#fff; }
+  .dirA .m-time { color:#9c9993; }
+  .dirA .m-tag { background:#f1f0ee; color:#6d6a64; }
+  .dirA .m-pill { background:#f4f4f2; color:#55534e; }
+  .dirA .m-pill.hot { background:#ffe9e4; color:#e84e1b; font-weight:600; }
+  .dirA .m-fab { background:linear-gradient(135deg,#ff7a45,#ff4d6d); color:#fff; box-shadow:0 8px 20px -6px rgba(255,77,109,.55); }
+
+  /* ---------- B: 夜幕 · 暗色画廊(照片发光) ---------- */
+  .dirB .dirscreen { background:#0f0f12; color:#f0f0f3; }
+  .dirB .m-side { background:#131318; border-right:1px solid rgba(255,255,255,.06); color:#8b8b95; }
+  .dirB .m-logo { color:#fff; }
+  .dirB .m-nav.on { background:rgba(255,181,61,.14); color:#ffb53d; font-weight:600; }
+  .dirB .m-navsec { color:#5b5b64; }
+  .dirB .m-card { background:#17171c; border:1px solid rgba(255,255,255,.07); }
+  .dirB .m-ava { background:linear-gradient(135deg,#ffb53d,#ff7847); color:#1a1206; }
+  .dirB .m-time { color:#77777f; }
+  .dirB .m-grid { box-shadow:0 0 0 1px rgba(255,255,255,.06), 0 12px 30px -10px rgba(0,0,0,.7); }
+  .dirB .m-tag { background:rgba(255,255,255,.07); color:#b9b9c2; }
+  .dirB .m-pill { background:rgba(255,255,255,.06); color:#a9a9b2; }
+  .dirB .m-pill.hot { background:rgba(255,181,61,.16); color:#ffb53d; font-weight:600; }
+  .dirB .m-fab { background:#ffb53d; color:#1a1206; box-shadow:0 8px 24px -6px rgba(255,181,61,.4); }
+
+  /* ---------- C: 晴天 · 明快玩趣(杂志式大胆) ---------- */
+  .dirC .dirscreen { background:#fff3df; color:#20180c; }
+  .dirC .m-side { background:#fff3df; border-right:2px solid #20180c; color:#20180c; }
+  .dirC .m-logo { font-weight:900; }
+  .dirC .m-nav { border:2px solid transparent; }
+  .dirC .m-nav.on { background:#ffc94d; border:2px solid #20180c; font-weight:800; box-shadow:2px 2px 0 #20180c; }
+  .dirC .m-navsec { color:#a98d5f; font-weight:700; }
+  .dirC .m-card { background:#fff; border:2px solid #20180c; border-radius:18px; box-shadow:4px 4px 0 #20180c; }
+  .dirC .m-ava { background:#7fd8b0; color:#20180c; border:2px solid #20180c; }
+  .dirC .m-time { color:#a98d5f; }
+  .dirC .m-tag { background:#ffd9e6; border:1.5px solid #20180c; color:#20180c; font-weight:700; }
+  .dirC .m-tag.t2 { background:#cfe8ff; }
+  .dirC .m-pill { background:#fff3df; border:1.5px solid #20180c; color:#20180c; }
+  .dirC .m-pill.hot { background:#ffc94d; font-weight:800; }
+  .dirC .m-fab { background:#20180c; color:#ffc94d; border:2px solid #20180c; box-shadow:3px 3px 0 rgba(32,24,12,.35); }
+</style>
+
+<div class="dirs">
+
+  <div class="dir dirA" data-choice="a" onclick="toggleSelect(this)">
+    <div class="dirscreen">
+      <div class="m-side">
+        <div class="m-logo">时刻</div>
+        <div class="m-nav on">我的时间线</div>
+        <div class="m-navsec">链</div>
+        <div class="m-nav">宝宝成长</div>
+        <div class="m-nav">家庭日常</div>
+        <div class="m-nav" style="margin-top:auto">通知 · 我</div>
+      </div>
+      <div class="m-main">
+        <div class="m-card">
+          <div class="m-row">
+            <div class="m-ava">妈</div>
+            <div><div class="m-name">妈妈</div><div class="m-time">今天下午 3:24 · 宝宝成长</div></div>
+          </div>
+          <div class="m-text">第一次自己站起来走了三步！全家都沸腾了 🎉</div>
+          <div class="m-grid"><div class="m-ph ph1"></div><div class="m-ph ph2"></div><div class="m-ph ph3"></div></div>
+          <div class="m-tags"><span class="m-tag">#第一次</span><span class="m-tag">#学步</span></div>
+          <div class="m-react"><span class="m-pill hot">❤️ 2</span><span class="m-pill">👏 1</span><span class="m-pill">😄</span><span style="margin-left:auto;opacity:.6">💬 3 条评论</span></div>
+        </div>
+        <div class="m-fab">✏️ 记下此刻</div>
+      </div>
+    </div>
+    <div class="dircap">
+      <h3>A · 浮光</h3>
+      <p>浅色通透、玻璃拟态侧栏、柔和层叠阴影、珊瑚橙渐变强调色。参照:Apple Photos / Day One。最大众、最「商业化安全」的现代感。</p>
+    </div>
+  </div>
+
+  <div class="dir dirB" data-choice="b" onclick="toggleSelect(this)">
+    <div class="dirscreen">
+      <div class="m-side">
+        <div class="m-logo">时刻</div>
+        <div class="m-nav on">我的时间线</div>
+        <div class="m-navsec">链</div>
+        <div class="m-nav">宝宝成长</div>
+        <div class="m-nav">家庭日常</div>
+        <div class="m-nav" style="margin-top:auto">通知 · 我</div>
+      </div>
+      <div class="m-main">
+        <div class="m-card">
+          <div class="m-row">
+            <div class="m-ava">妈</div>
+            <div><div class="m-name">妈妈</div><div class="m-time">今天下午 3:24 · 宝宝成长</div></div>
+          </div>
+          <div class="m-text">第一次自己站起来走了三步！全家都沸腾了 🎉</div>
+          <div class="m-grid"><div class="m-ph ph1"></div><div class="m-ph ph2"></div><div class="m-ph ph3"></div></div>
+          <div class="m-tags"><span class="m-tag">#第一次</span><span class="m-tag">#学步</span></div>
+          <div class="m-react"><span class="m-pill hot">❤️ 2</span><span class="m-pill">👏 1</span><span class="m-pill">😄</span><span style="margin-left:auto;opacity:.55">💬 3 条评论</span></div>
+        </div>
+        <div class="m-fab">✏️ 记下此刻</div>
+      </div>
+    </div>
+    <div class="dircap">
+      <h3>B · 夜幕</h3>
+      <p>暗色画廊:深墨底让照片自己发光,琥珀金点缀,晚上翻时间线像看影展。参照:VSCO / Frame.io。最有「高级感」,但长辈分享页要考虑可读性。</p>
+    </div>
+  </div>
+
+  <div class="dir dirC" data-choice="c" onclick="toggleSelect(this)">
+    <div class="dirscreen">
+      <div class="m-side">
+        <div class="m-logo">时刻</div>
+        <div class="m-nav on">我的时间线</div>
+        <div class="m-navsec">链</div>
+        <div class="m-nav">宝宝成长</div>
+        <div class="m-nav">家庭日常</div>
+        <div class="m-nav" style="margin-top:auto">通知 · 我</div>
+      </div>
+      <div class="m-main">
+        <div class="m-card">
+          <div class="m-row">
+            <div class="m-ava">妈</div>
+            <div><div class="m-name" style="font-weight:800">妈妈</div><div class="m-time">今天下午 3:24 · 宝宝成长</div></div>
+          </div>
+          <div class="m-text">第一次自己站起来走了三步！全家都沸腾了 🎉</div>
+          <div class="m-grid"><div class="m-ph ph1"></div><div class="m-ph ph2"></div><div class="m-ph ph3"></div></div>
+          <div class="m-tags"><span class="m-tag">#第一次</span><span class="m-tag t2">#学步</span></div>
+          <div class="m-react"><span class="m-pill hot">❤️ 2</span><span class="m-pill">👏 1</span><span class="m-pill">😄</span><span style="margin-left:auto;opacity:.6">💬 3 条评论</span></div>
+        </div>
+        <div class="m-fab">✏️ 记下此刻</div>
+      </div>
+    </div>
+    <div class="dircap">
+      <h3>C · 晴天</h3>
+      <p>奶油底+粗描边卡片+贴纸式标签,活泼有童趣但版式克制。参照:Gumroad / 新式手账风。最贴「家庭记录」的玩味,辨识度最高、也最大胆。</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:18px">也可以在终端直接说想法,比如「A 的干净 + B 的暗色模式」「C 太花了但喜欢标签贴纸感」——方向可以混合微调。</p>

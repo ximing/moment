@@ -33,7 +33,7 @@ export function ShareAlbumPage() {
     const closed = q.error instanceof ApiError && (q.error.status === 404 || q.error.code === 'SHARE_NOT_FOUND');
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg px-6">
-        <p className="rounded-card border-2 border-line bg-surface px-8 py-6 font-display text-xl text-ink shadow-card">
+        <p className="rounded-card border border-line bg-surface px-8 py-6 font-display text-xl text-ink shadow-card">
           {closed ? '这本相册的分享已关闭' : '加载失败，请稍后重试'}
         </p>
       </div>

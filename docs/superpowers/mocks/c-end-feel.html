@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>时刻 · 样稿</title>
+  <style>
+    @font-face {
+      font-family: "Smiley Sans";
+      src: url("./SmileySans-Oblique.ttf.woff2") format("woff2");
+      font-display: swap;
+    }
+
+    :root {
+      --paper: #fff4ee;
+      --card: #fffcf9;
+      --ink: #2c1812;
+      --muted: #9a7264;
+      --line: #e4c7bb;
+      --action: #f0433a;
+      --action-ink: #fff8f5;
+      --today: #ff8a3a;
+      --shadow: 0 10px 28px rgba(44, 24, 18, 0.08);
+      --baby: #ff7aa2;
+      --trip: #5aa7d6;
+      --two: #4cbe8a;
+      --ease: 180ms ease;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+      color: var(--ink);
+      background: #23140f;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; border: 0; background: none; }
+    img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+    .display {
+      font-family: "Smiley Sans", "PingFang SC", sans-serif;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+    }
+
+    /* ---------- 样稿外壳：不是产品本身 ---------- */
+    .viewer {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .viewer-bar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      background: #2c1812;
+      color: #f6e7df;
+      font-size: 13px;
+    }
+    .viewer-bar b { font-weight: 600; }
+    .viewer-bar .hint { color: #c9a89a; }
+    .viewer-bar .sp { flex: 1; }
+    .vbtn {
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: #4a2c22;
+      color: #f6e7df;
+    }
+    .vbtn.on { background: #f0433a; color: #fff; }
+
+    .stage {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      padding: 16px;
+    }
+    .stage.fill { padding: 0; }
+    .frame {
+      width: 100%;
+      height: 100%;
+      background: var(--paper);
+      overflow: auto;
+      position: relative;
+    }
+    .stage.framed .frame {
+      width: var(--frame-w);
+      max-width: 100%;
+      border-radius: 18px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+    }
+
+    /* ---------- 产品壳：容器查询跟舞台宽度走 ---------- */
+    .app {
+      container-type: inline-size;
+      container-name: app;
+      min-height: 100%;
+    }
+    .shell {
+      display: grid;
+      grid-template-columns: 168px minmax(0, 1fr) 148px;
+      min-height: 100%;
+    }
+
+    .rail, .months {
+      position: sticky;
+      top: 0;
+      height: 100cqh;
+      min-height: 100%;
+      align-self: start;
+    }
+    .rail {
+      display: flex;
+      flex-direction: column;
+      padding: 22px 14px 16px;
+      border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    }
+    .brand { font-size: 28px; line-height: 1; color: var(--ink); text-decoration: none; }
+    .brand em { color: var(--action); font-style: normal; }
+    .nav { margin-top: 28px; display: flex; flex-direction: column; gap: 4px; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+      padding: 8px 8px;
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .nav-item:hover { color: var(--ink); background: color-mix(in srgb, var(--card) 70%, transparent); }
+    .nav-item.on { color: var(--ink); font-weight: 600; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+    .dot.baby { background: var(--baby); }
+    .dot.trip { background: var(--trip); }
+    .dot.two { background: var(--two); }
+    .dot.all {
+      background: conic-gradient(var(--baby), var(--trip), var(--two), var(--baby));
+    }
+    .new-chain {
+      margin-top: 8px;
+      padding: 8px;
+      text-align: left;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .new-chain:hover { color: var(--ink); }
+    .me {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+    }
+    .avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      background: #ffd2b8;
+      font-size: 13px;
+      font-weight: 600;
+      position: relative;
+    }
+    .avatar.sm { width: 28px; height: 28px; font-size: 12px; }
+    .badge {
+      position: absolute;
+      top: -2px; right: -2px;
+      width: 8px; height: 8px;
+      background: var(--action);
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px var(--paper);
+    }
+
+    .top {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px 4px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: color-mix(in srgb, var(--paper) 88%, transparent);
+      backdrop-filter: blur(10px);
+    }
+    .top .brand { font-size: 22px; }
+    .chips {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      flex: 1;
+      scrollbar-width: none;
+      padding: 4px 0;
+    }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip {
+      flex: 0 0 auto;
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--card) 80%, #fff);
+      color: var(--muted);
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 1px 0 rgba(44, 24, 18, 0.04);
+    }
+    .chip.on { color: var(--ink); font-weight: 600; background: #fff; box-shadow: var(--shadow); }
+    .month-btn {
+      flex: 0 0 auto;
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: #fff;
+      font-size: 13px;
+      box-shadow: var(--shadow);
+    }
+
+    .main { min-width: 0; padding: 28px 28px 120px; }
+    .feed { max-width: 720px; margin: 0 auto; }
+
+    .composer-wrap { position: relative; padding-left: 36px; margin-bottom: 22px; }
+    .composer-wrap .spine { top: 22px; bottom: -22px; }
+    .composer-knot {
+      position: absolute;
+      left: 8px; top: 22px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--card);
+      border: 2px solid var(--line);
+      z-index: 1;
+    }
+    .composer {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 18px;
+      border-radius: 20px;
+      border: 1.5px dashed var(--line);
+      background: color-mix(in srgb, var(--card) 55%, transparent);
+      color: var(--muted);
+      text-align: left;
+    }
+    .composer:hover { color: var(--ink); background: var(--card); }
+    .composer .icons { margin-left: auto; letter-spacing: 6px; opacity: 0.7; }
+
+    .day { position: relative; padding-left: 36px; margin-bottom: 8px; }
+    .spine {
+      position: absolute;
+      left: 15px;
+      top: 18px;
+      bottom: -8px;
+      width: 0;
+      border-left: 2px dashed var(--line);
+    }
+    .day:last-child .spine { bottom: 24px; }
+
+    .knot {
+      position: absolute;
+      left: 6px;
+      top: 8px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--today);
+      box-shadow: 0 6px 16px rgba(255, 138, 58, 0.45);
+      z-index: 1;
+    }
+    .knot.y { width: 14px; height: 14px; left: 9px; top: 12px; background: #e07a6a; box-shadow: none; }
+    .knot.o { width: 10px; height: 10px; left: 11px; top: 14px; background: #c4a094; box-shadow: none; }
+    .day-label {
+      font-size: 28px;
+      line-height: 1.1;
+      margin: 0 0 16px;
+      color: var(--ink);
+    }
+    .day-label small {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      font-family: "PingFang SC", sans-serif;
+      letter-spacing: 0;
+      vertical-align: 4px;
+    }
+
+    .stack { display: flex; flex-direction: column; gap: 18px; padding-bottom: 28px; }
+    .moment { display: none; }
+    .app[data-view="all"] .moment,
+    .app[data-view="baby"] .moment.baby,
+    .app[data-view="trip"] .moment.trip,
+    .app[data-view="two"] .moment.two { display: block; }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .who { font-weight: 600; }
+    .when, .via { color: var(--muted); }
+    .via { display: inline-flex; align-items: center; gap: 5px; }
+    .via .dot { width: 6px; height: 6px; }
+
+    .bubble {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 16px 18px 12px;
+      box-shadow: var(--shadow);
+    }
+    .bubble p, .caption {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+    .media {
+      border-radius: 20px;
+      overflow: hidden;
+      background: #ead8cf;
+      box-shadow: var(--shadow);
+    }
+    .media.one { max-height: 430px; }
+    .media.one img { max-height: 430px; }
+    .g2, .g3, .g9 { display: grid; gap: 3px; }
+    .g2 { grid-template-columns: 1fr 1fr; }
+    .g2 .cell, .g3 .cell { aspect-ratio: 1; }
+    .g3 { grid-template-columns: 1fr 1fr 1fr; }
+    .g9 { grid-template-columns: repeat(3, 1fr); }
+    .g9 .cell { aspect-ratio: 1; }
+    .cell { overflow: hidden; background: #e7cfc4; }
+    .video { position: relative; aspect-ratio: 16/9; }
+    .play {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+    }
+    .play i {
+      width: 58px; height: 58px;
+      border-radius: 50%;
+      background: var(--action);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 10px 24px rgba(240, 67, 58, 0.4);
+      font-style: normal;
+      font-size: 20px;
+      padding-left: 3px;
+    }
+    .caption { margin-top: 8px; }
+    .acts {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .react {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(44, 24, 18, 0.08);
+    }
+    .comments { margin-left: auto; }
+    .empty-day { display: none; color: var(--muted); font-size: 14px; padding: 4px 0 20px; }
+    .day.is-empty .empty-day { display: block; }
+    .day.is-empty .stack { display: none; }
+
+    .months {
+      padding: 28px 16px;
+    }
+    .months h3 {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .m {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      width: 100%;
+      padding: 7px 0;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: left;
+    }
+    .m.on { color: var(--ink); font-weight: 600; }
+    .m em { font-style: normal; font-size: 12px; }
+    .order {
+      margin-top: 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      text-align: left;
+    }
+    .sw {
+      width: 34px; height: 20px;
+      border-radius: 99px;
+      background: #e8d4cb;
+      position: relative;
+    }
+    .sw i {
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #fff;
+    }
+    .sw.on { background: var(--today); }
+    .sw.on i { left: 16px; }
+
+    .fab {
+      position: sticky;
+      left: calc(100% - 28px);
+      bottom: 24px;
+      transform: translateX(-100%);
+      height: 52px;
+      padding: 0 18px 0 16px;
+      border-radius: 999px;
+      background: var(--action);
+      color: var(--action-ink);
+      font-size: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 12px 28px rgba(240, 67, 58, 0.35);
+      z-index: 6;
+    }
+
+    .drawer, .modal {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+    }
+    .drawer.on, .modal.on { display: block; }
+    .mask {
+      position: absolute;
+      inset: 0;
+      background: rgba(44, 24, 18, 0.32);
+    }
+    .panel {
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: min(280px, 86%);
+      background: var(--paper);
+      padding: 20px;
+      overflow: auto;
+    }
+    .sheet {
+      position: absolute;
+      left: 50%;
+      top: 8%;
+      transform: translateX(-50%);
+      width: min(560px, 92%);
+      background: var(--card);
+      border-radius: 24px;
+      padding: 22px 22px 18px;
+      box-shadow: 0 24px 60px rgba(44, 24, 18, 0.22);
+    }
+    .sheet h2 { margin: 0; font-size: 24px; }
+    .sheet .to { margin: 8px 0 12px; color: var(--muted); font-size: 13px; }
+    .picks { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pick {
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: #fff4ee;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pick.on { background: #fff; box-shadow: var(--shadow); font-weight: 600; }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      border: 0;
+      resize: vertical;
+      background: #fff6f1;
+      border-radius: 16px;
+      padding: 14px;
+      outline: none;
+    }
+    .tools { display: flex; gap: 8px; margin: 12px 0; }
+    .tool {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(44, 24, 18, 0.06);
+      font-size: 13px;
+    }
+    .foot { display: flex; justify-content: flex-end; gap: 8px; }
+    .ghost {
+      height: 38px;
+      padding: 0 16px;
+      border-radius: 999px;
+      color: var(--muted);
+    }
+    .go {
+      height: 38px;
+      padding: 0 18px;
+      border-radius: 999px;
+      background: var(--action);
+      color: #fff;
+    }
+
+    @container app (max-width: 1399px) {
+      .shell { grid-template-columns: 1fr; }
+      .rail, .months { display: none; }
+      .top { display: flex; }
+      .main { padding: 8px 20px 120px; }
+    }
+    @container app (max-width: 899px) {
+      .main { padding: 4px 14px 120px; }
+      .composer-wrap { padding-left: 28px; }
+      .composer { padding: 14px; }
+      .day { padding-left: 28px; }
+      .day-label { font-size: 24px; }
+      .fab { height: 48px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="viewer">
+    <div class="viewer-bar">
+      <span class="display">时刻</span>
+      <b>样稿</b>
+      <span class="hint">不是真应用 · 可点链、记下、月份 · 拉窗口或用右边切换屏宽</span>
+      <span class="sp"></span>
+      <button class="vbtn on" data-w="fill" type="button">铺满</button>
+      <button class="vbtn" data-w="1440" type="button">大屏</button>
+      <button class="vbtn" data-w="1100" type="button">平板</button>
+      <button class="vbtn" data-w="390" type="button">小屏</button>
+    </div>
+    <div class="stage fill" id="stage">
+      <div class="frame" id="frame">
+        <div class="app" id="app" data-view="all">
+          <div class="shell">
+            <aside class="rail">
+              <a class="brand display" href="#">时<em>刻</em></a>
+              <nav class="nav">
+                <button class="nav-item on" data-view="all" type="button"><span class="dot all"></span>大家的日子</button>
+                <button class="nav-item" data-view="baby" type="button"><span class="dot baby"></span>宝宝成长</button>
+                <button class="nav-item" data-view="trip" type="button"><span class="dot trip"></span>旅行</button>
+                <button class="nav-item" data-view="two" type="button"><span class="dot two"></span>两人日常</button>
+                <button class="new-chain" type="button">开一条新的链</button>
+              </nav>
+              <button class="me" type="button" title="我">
+                <span class="avatar">S<span class="badge"></span></span>
+                Simon
+              </button>
+            </aside>
+
+            <div>
+              <header class="top">
+                <a class="brand display" href="#">时<em>刻</em></a>
+                <div class="chips">
+                  <button class="chip on" data-view="all" type="button"><span class="dot all"></span>大家的日子</button>
+                  <button class="chip" data-view="baby" type="button"><span class="dot baby"></span>宝宝成长</button>
+                  <button class="chip" data-view="trip" type="button"><span class="dot trip"></span>旅行</button>
+                  <button class="chip" data-view="two" type="button"><span class="dot two"></span>两人日常</button>
+                </div>
+                <button class="month-btn" id="openMonths" type="button">8月</button>
+              </header>
+
+              <main class="main">
+                <div class="feed">
+                  <div class="composer-wrap">
+                    <div class="spine"></div>
+                    <span class="composer-knot" aria-hidden="true"></span>
+                    <button class="composer" id="openCompose" type="button">
+                      这一刻，记点什么…
+                      <span class="icons">🖼 🏷</span>
+                    </button>
+                  </div>
+
+                  <section class="day" data-day="today">
+                    <div class="spine"></div>
+                    <span class="knot" aria-hidden="true"></span>
+                    <h1 class="day-label display">今天 <small>8月17日 周一</small></h1>
+                    <div class="stack">
+                      <article class="moment baby">
+                        <div class="meta">
+                          <span class="avatar sm">妈</span>
+                          <span class="who">妈妈</span>
+                          <span class="when">下午 3:23</span>
+                          <span class="via"><span class="dot baby"></span>宝宝成长</span>
+                        </div>
+                        <div class="bubble">
+                          <p>退退退。站起来走了三步，又坐回去给自己鼓掌。</p>
+                          <div class="acts">
+                            <button class="react" type="button">＋</button>
+                            <span>😆 2</span>
+                            <span class="comments">1 条评论</span>
+                          </div>
+                        </div>
+                      </article>
+
+                      <article class="moment two">
+                        <div class="meta">
+                          <span class="avatar sm">S</span>
+                          <span class="who">Simon</span>
+                          <span class="when">中午 12:10</span>
+                          <span class="via"><span class="dot two"></span>两人日常</span>
+                        </div>
+                        <div class="media one">
+                          <img alt="" src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=70" />
+                        </div>
+                        <p class="caption">终于两人吃顿热的。汤溢出来一点，没关系。</p>
+                        <div class="acts">
+                          <button class="react" type="button">＋</button>
+                          <span>❤️ 1</span>
+                        </div>
+                      </article>
+                    </div>
+                    <p class="empty-day">这条链今天还没记。</p>
+                  </section>
+
+                  <section class="day" data-day="yday">
+                    <div class="spine"></div>
+                    <span class="knot y" aria-hidden="true"></span>
+                    <h2 class="day-label display">昨天 <small>8月16日 周日</small></h2>
+                    <div class="stack">
+                      <article class="moment baby">
+                        <div class="meta">
+                          <span class="avatar sm">爸</span>
+                          <span class="who">爸爸</span>
+                          <span class="when">晚上 8:40</span>
+                          <span class="via"><span class="dot baby"></span>宝宝成长</span>
+                        </div>
+                        <div class="media video">
+                          <img alt="" src="https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&w=1200&q=70" />
+                          <span class="play"><i>▶</i></span>
+                        </div>
+                        <p class="caption">睡前又把《小星星》点了三遍。视频里他在哼最后那句。</p>
+                        <div class="acts">
+                          <button class="react" type="button">＋</button>
+                          <span class="comments">3 条评论</span>
+                        </div>
+                      </article>
+
+                      <article class="moment trip">
+                        <div class="meta">
+                          <span class="avatar sm">S</span>
+                          <span class="who">Simon</span>
+                          <span class="when">下午 4:02</span>
+                          <span class="via"><span class="dot trip"></span>旅行</span>
+                        </div>
+                        <div class="media g2">
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=700&q=70" /></div>
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=700&q=70" /></div>
+                        </div>
+                        <p class="caption">回程堵在服务区，买了两杯豆浆。</p>
+                        <div class="acts"><button class="react" type="button">＋</button></div>
+                      </article>
+                    </div>
+                    <p class="empty-day">这条链昨天没记。</p>
+                  </section>
+
+                  <section class="day" data-day="sat">
+                    <div class="spine"></div>
+                    <span class="knot o" aria-hidden="true"></span>
+                    <h2 class="day-label display">8月15日 <small>周六</small></h2>
+                    <div class="stack">
+                      <article class="moment trip">
+                        <div class="meta">
+                          <span class="avatar sm">妈</span>
+                          <span class="who">妈妈</span>
+                          <span class="when">傍晚 6:18</span>
+                          <span class="via"><span class="dot trip"></span>旅行</span>
+                        </div>
+                        <div class="media g9">
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=500&q=70" /></div>
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?auto=format&fit=crop&w=500&q=70" /></div>
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=500&q=70" /></div>
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1439066615861-d4cad0db83d4?auto=format&fit=crop&w=500&q=70" /></div>
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=500&q=70" /></div>
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=500&q=70" /></div>
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=500&q=70" /></div>
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=500&q=70" /></div>
+                          <div class="cell"><img alt="" src="https://images.unsplash.com/photo-1418065460487-3e41a6c84dc5?auto=format&fit=crop&w=500&q=70" /></div>
+                        </div>
+                        <p class="caption">海边那天。手机快没电了，还是拍了一口袋。</p>
+                        <div class="acts">
+                          <button class="react" type="button">＋</button>
+                          <span>❤️ 4</span>
+                          <span class="comments">2 条评论</span>
+                        </div>
+                      </article>
+
+                      <article class="moment two">
+                        <div class="meta">
+                          <span class="avatar sm">S</span>
+                          <span class="who">Simon</span>
+                          <span class="when">早上 9:05</span>
+                          <span class="via"><span class="dot two"></span>两人日常</span>
+                        </div>
+                        <div class="bubble">
+                          <p>你说下周把阳台的花换了。先记一下，免得又忘。</p>
+                          <div class="acts"><button class="react" type="button">＋</button></div>
+                        </div>
+                      </article>
+                    </div>
+                    <p class="empty-day">这天没有这条链的记录。</p>
+                  </section>
+                </div>
+              </main>
+
+              <button class="fab display" id="fab" type="button">＋ 记下</button>
+            </div>
+
+            <aside class="months">
+              <h3>回到某个月</h3>
+              <button class="m on" type="button">8月 <em>6</em></button>
+              <button class="m" type="button">7月 <em>21</em></button>
+              <button class="m" type="button">6月 <em>9</em></button>
+              <button class="order" type="button">按记下的顺序看 <span class="sw" id="sw"><i></i></span></button>
+            </aside>
+          </div>
+
+          <div class="drawer" id="drawer">
+            <div class="mask" data-close="drawer"></div>
+            <div class="panel">
+              <h3 style="margin:0 0 12px;font-size:16px">回到某个月</h3>
+              <button class="m on" type="button">8月 <em>6</em></button>
+              <button class="m" type="button">7月 <em>21</em></button>
+              <button class="m" type="button">6月 <em>9</em></button>
+              <button class="order" type="button">按记下的顺序看 <span class="sw"><i></i></span></button>
+            </div>
+          </div>
+
+          <div class="modal" id="modal">
+            <div class="mask" data-close="modal"></div>
+            <div class="sheet">
+              <h2 class="display">记下此刻</h2>
+              <p class="to" id="composeTo">记到哪一条链？</p>
+              <div class="picks" id="picks">
+                <button class="pick" data-chain="baby" type="button"><span class="dot baby"></span>宝宝成长</button>
+                <button class="pick" data-chain="trip" type="button"><span class="dot trip"></span>旅行</button>
+                <button class="pick" data-chain="two" type="button"><span class="dot two"></span>两人日常</button>
+              </div>
+              <textarea placeholder="这一刻…"></textarea>
+              <div class="tools">
+                <button class="tool" type="button">加图片</button>
+                <button class="tool" type="button">加视频</button>
+                <button class="tool" type="button">这是补记</button>
+              </div>
+              <div class="foot">
+                <button class="ghost" data-close="modal" type="button">取消</button>
+                <button class="go display" data-close="modal" type="button">记下</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const app = document.getElementById("app");
+    const stage = document.getElementById("stage");
+
+    function setView(view) {
+      app.dataset.view = view;
+      document.querySelectorAll("[data-view]").forEach((el) => {
+        if (el === app) return;
+        el.classList.toggle("on", el.dataset.view === view);
+      });
+      document.querySelectorAll(".day").forEach((day) => {
+        const any = [...day.querySelectorAll(".moment")].some((m) => {
+          if (view === "all") return true;
+          return m.classList.contains(view);
+        });
+        day.classList.toggle("is-empty", !any);
+      });
+    }
+    setView("all");
+
+    document.querySelectorAll("[data-view]").forEach((el) => {
+      if (el === app) return;
+      el.addEventListener("click", () => setView(el.dataset.view));
+    });
+
+    document.querySelectorAll("[data-w]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("[data-w]").forEach((b) => b.classList.remove("on"));
+        btn.classList.add("on");
+        const w = btn.dataset.w;
+        if (w === "fill") {
+          stage.className = "stage fill";
+          stage.style.removeProperty("--frame-w");
+        } else {
+          stage.className = "stage framed";
+          stage.style.setProperty("--frame-w", w + "px");
+        }
+      });
+    });
+
+    const modal = document.getElementById("modal");
+    const drawer = document.getElementById("drawer");
+    const composeTo = document.getElementById("composeTo");
+    function openCompose() {
+      const v = app.dataset.view;
+      const names = { baby: "宝宝成长", trip: "旅行", two: "两人日常" };
+      composeTo.textContent = v === "all" ? "记到哪一条链？" : "记到「" + names[v] + "」";
+      document.querySelectorAll(".pick").forEach((p) => p.classList.toggle("on", p.dataset.chain === v));
+      modal.classList.add("on");
+    }
+    document.getElementById("openCompose").onclick = openCompose;
+    document.getElementById("fab").onclick = openCompose;
+    document.getElementById("openMonths").onclick = () => drawer.classList.add("on");
+    document.querySelectorAll("[data-close]").forEach((el) => {
+      el.addEventListener("click", () => document.getElementById(el.dataset.close).classList.remove("on"));
+    });
+    document.querySelectorAll(".pick").forEach((p) => {
+      p.addEventListener("click", () => {
+        document.querySelectorAll(".pick").forEach((x) => x.classList.remove("on"));
+        p.classList.add("on");
+        const names = { baby: "宝宝成长", trip: "旅行", two: "两人日常" };
+        composeTo.textContent = "记到「" + names[p.dataset.chain] + "」";
+      });
+    });
+    document.querySelectorAll(".order").forEach((el) => {
+      el.addEventListener("click", () => el.querySelector(".sw").classList.toggle("on"));
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        modal.classList.remove("on");
+        drawer.classList.remove("on");
+      }
+    });
+  </script>
+</body>
+</html>
