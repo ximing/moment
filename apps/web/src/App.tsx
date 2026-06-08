@@ -6,7 +6,7 @@ import { ChainSettingsPage } from '@/pages/ChainSettingsPage';
 import { FeedHome } from '@/pages/FeedHome';
 import { InvitePage } from '@/pages/InvitePage';
 import { MePage } from '@/pages/MePage';
-import { MomentPage } from '@/pages/MomentPage';
+import { MomentPage } from '@/pages/moment';
 import { NotificationsHome } from '@/pages/NotificationsHome';
 import { ShareAlbumPage } from '@/pages/ShareAlbumPage';
 import { Shell } from '@/shell/Shell';

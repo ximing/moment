@@ -5,7 +5,7 @@ import { ComposeSessionService } from '@/services/compose-session.service';
 import { dayHeading } from '@/lib/time';
 import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
 import { Banner } from '@/ui/Banner';
-import { MomentSheet } from './MomentSheet';
+import { MomentSheet } from './moment-sheet';
 import { groupMomentsByDate } from './group-by-date';
 
 /**

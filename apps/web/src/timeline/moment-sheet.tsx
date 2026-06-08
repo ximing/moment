@@ -1,16 +1,13 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type MomentMedia, type MomentResponse } from '@moment/dto';
-import { useService } from '@rabjs/react';
-import { client } from '@/api/client';
+import { bindServices, observer, useService } from '@rabjs/react';
+import { AuthService } from '@/services/auth.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
-import { qk } from '@/api/keys';
-import { useAuth } from '@/auth/AuthProvider';
-import { ChainMark } from '@/chain/ChainMark';
-import { formatHappenedClock } from '@/lib/time';
 import { humanError } from '@/lib/errors';
 import type { ChainColor, ChainIcon } from '@moment/dto';
+import { ChainMark } from '@/chain/ChainMark';
+import { formatHappenedClock } from '@/lib/time';
 import { MediaBlock } from '@/media/MediaBlock';
 import { Avatar } from '@/ui/Avatar';
 import { Banner } from '@/ui/Banner';
@@ -19,9 +16,10 @@ import { Confirm } from '@/ui/Confirm';
 import { KebabButton, Menu, MenuItem } from '@/ui/Menu';
 import { Lightbox } from './Lightbox';
 import { ReactionBar } from './ReactionBar';
+import { MomentSheetService } from './moment-sheet.service';
 
-export function MomentSheet({
-  moment,
+const MomentSheetContent = observer(function MomentSheetContent({
+  moment: momentProp,
   chainName,
   chainColor,
   chainIcon,
@@ -37,36 +35,24 @@ export function MomentSheet({
   /** 日子结在分组头上，卡片不再挂链节环；保留参数以免调用方报错 */
   hideKnot?: boolean;
 }) {
-  const { user } = useAuth();
+  const service = useService(MomentSheetService);
+  const auth = useService(AuthService);
   const composeSession = useService(ComposeSessionService);
-  const queryClient = useQueryClient();
-  const [lightbox, setLightbox] = useState<number | null>(null);
-  const [showComments, setShowComments] = useState(false);
-  const [confirmDel, setConfirmDel] = useState(false);
-  const mine = user?.id === moment.author.id;
+
+  useEffect(() => {
+    service.hydrate(momentProp);
+  }, [service, momentProp]);
+
+  // 评论展开时按需拉预览（Service 内幂等，同卡只拉一次）
+  useEffect(() => {
+    if (service.showComments) void service.loadPreview();
+  }, [service, service.showComments]);
+
+  const moment = momentProp; // 卡片渲染永远用父层传入的最新数据（feed 重拉后 prop 已是新值）
+  const mine = auth.user?.id === moment.author.id;
   const images = moment.media.filter((m) => !m.mime.startsWith('video/'));
   const lightboxItems: MomentMedia[] = images.length > 0 ? images : moment.media;
   const hasMedia = moment.media.length > 0;
-
-  const touch = () => {
-    void queryClient.invalidateQueries({ queryKey: qk.moment(moment.id) });
-    void queryClient.invalidateQueries({ queryKey: ['feed'] });
-    void queryClient.invalidateQueries({ queryKey: qk.chainMoments(moment.chainId) });
-  };
-
-  const react = useMutation({
-    mutationFn: (emoji: string) =>
-      moment.myReaction === emoji ? client.removeReaction(moment.id) : client.setReaction(moment.id, emoji),
-    onSuccess: touch,
-  });
-
-  const remove = useMutation({
-    mutationFn: () => client.deleteMoment(moment.id),
-    onSuccess: () => {
-      setConfirmDel(false);
-      touch();
-    },
-  });
 
   const tags = moment.tags.length > 0 && (
     <div className="mt-2 flex flex-wrap gap-2">
@@ -82,11 +68,11 @@ export function MomentSheet({
     <>
       {!readOnly && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <ReactionBar moment={moment} onReact={(emoji) => react.mutate(emoji)} />
+          <ReactionBar moment={moment} onReact={(emoji) => void service.react(emoji)} />
           <button
             type="button"
             className="ml-auto inline-flex h-8 items-center text-[13px] text-muted hover:text-ink"
-            onClick={() => setShowComments((v) => !v)}
+            onClick={() => (service.showComments = !service.showComments)}
           >
             {moment.commentCount} 条评论
           </button>
@@ -104,6 +90,12 @@ export function MomentSheet({
       )}
     </>
   );
+
+  function onSubmitPreview(e: FormEvent) {
+    e.preventDefault();
+    if (!service.previewText.trim()) return;
+    void service.submitPreviewComment().catch(() => undefined); // 错误读 $model.submitPreviewComment.error
+  }
 
   return (
     <article>
@@ -138,7 +130,7 @@ export function MomentSheet({
                     danger
                     onClick={() => {
                       close();
-                      setConfirmDel(true);
+                      service.confirmDel = true;
                     }}
                   >
                     删除
@@ -153,7 +145,7 @@ export function MomentSheet({
             {moment.content && (
               <p className="mb-2 whitespace-pre-wrap text-base leading-[1.65] text-ink">{moment.content}</p>
             )}
-            <MediaBlock media={moment.media} shareToken={shareToken} onOpen={(i) => setLightbox(i)} />
+            <MediaBlock media={moment.media} shareToken={shareToken} onOpen={(i) => (service.lightboxIndex = i)} />
           </>
         ) : (
           moment.content && (
@@ -164,91 +156,63 @@ export function MomentSheet({
         )}
         {tags}
         {acts}
-        {showComments && !readOnly && <CommentPreview momentId={moment.id} chainId={moment.chainId} />}
+        {service.showComments && !readOnly && (
+          <div className="mt-3 space-y-2 border-t border-line pt-3">
+            {service.preview.slice(0, 3).map((c) => (
+              <p key={c.id} className="text-sm">
+                <span className="font-medium">{c.author.nickname}</span>
+                <span className="ml-2 text-ink">{c.content}</span>
+              </p>
+            ))}
+            {service.preview.length > 3 && (
+              <Link to={`/moments/${moment.id}`} className="inline-block text-sm text-action">
+                查看全部评论
+              </Link>
+            )}
+            {service.$model.submitPreviewComment.error && (
+              <Banner>{humanError(service.$model.submitPreviewComment.error)}</Banner>
+            )}
+            <form onSubmit={onSubmitPreview} className="flex items-end gap-2">
+              <textarea
+                value={service.previewText}
+                onChange={(e) => (service.previewText = e.target.value)}
+                placeholder="写一句…"
+                rows={2}
+                autoFocus
+                className="min-h-[3.25rem] w-full resize-y rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-[color-mix(in_srgb,var(--muted)_70%,transparent)] focus:border-action"
+              />
+              <Button type="submit" disabled={service.$model.submitPreviewComment.loading || !service.previewText.trim()}>
+                发送
+              </Button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
 
-      {lightbox !== null && (
+      {service.lightboxIndex !== null && (
         <Lightbox
           items={lightboxItems}
-          index={Math.min(lightbox, lightboxItems.length - 1)}
+          index={Math.min(service.lightboxIndex, lightboxItems.length - 1)}
           shareToken={shareToken}
-          onClose={() => setLightbox(null)}
-          onIndex={setLightbox}
+          onClose={() => (service.lightboxIndex = null)}
+          onIndex={(n) => (service.lightboxIndex = n)}
         />
       )}
 
-      {confirmDel && (
+      {service.confirmDel && (
         <Confirm
           title="删除这条时刻？"
           body="删除后家人在时间线里就看不到了。"
           confirmLabel="删除"
           danger
-          busy={remove.isPending}
-          onCancel={() => setConfirmDel(false)}
-          onConfirm={() => remove.mutate()}
+          busy={service.$model.remove.loading}
+          onCancel={() => (service.confirmDel = false)}
+          onConfirm={() => void service.remove()}
         />
       )}
     </article>
   );
-}
+});
 
-function CommentPreview({ momentId, chainId }: { momentId: string; chainId: string }) {
-  const queryClient = useQueryClient();
-  const [text, setText] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const { data } = useQuery({
-    queryKey: qk.comments(momentId),
-    queryFn: () => client.listComments(momentId, { limit: 20 }),
-  });
-  const comments = data?.comments ?? [];
-  const add = useMutation({
-    mutationFn: (content: string) => client.createComment(momentId, content),
-    onSuccess: () => {
-      setText('');
-      setError(null);
-      void queryClient.invalidateQueries({ queryKey: qk.comments(momentId) });
-      void queryClient.invalidateQueries({ queryKey: qk.moment(momentId) });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: qk.chainMoments(chainId) });
-    },
-    onError: (e) => setError(humanError(e)),
-  });
-
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    const content = text.trim();
-    if (!content) return;
-    add.mutate(content);
-  }
-
-  return (
-    <div className="mt-3 space-y-2 border-t border-line pt-3">
-      {comments.slice(0, 3).map((c) => (
-        <p key={c.id} className="text-sm">
-          <span className="font-medium">{c.author.nickname}</span>
-          <span className="ml-2 text-ink">{c.content}</span>
-        </p>
-      ))}
-      {comments.length > 3 && (
-        <Link to={`/moments/${momentId}`} className="inline-block text-sm text-action">
-          查看全部评论
-        </Link>
-      )}
-      {error && <Banner>{error}</Banner>}
-      <form onSubmit={onSubmit} className="flex items-end gap-2">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="写一句…"
-          rows={2}
-          autoFocus
-          className="min-h-[3.25rem] w-full resize-y rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-[color-mix(in_srgb,var(--muted)_70%,transparent)] focus:border-action"
-        />
-        <Button type="submit" disabled={add.isPending || !text.trim()}>
-          发送
-        </Button>
-      </form>
-    </div>
-  );
-}
+export const MomentSheet = bindServices(MomentSheetContent, [MomentSheetService]);
