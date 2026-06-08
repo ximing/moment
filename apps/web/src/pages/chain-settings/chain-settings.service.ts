@@ -2,6 +2,7 @@ import { Service } from '@rabjs/react';
 import type { ChainColor, ChainDto, ChainIcon, ShareLinkDto } from '@moment/dto';
 import { client } from '@/api/client';
 import { queryClient } from '@/api/query-client';
+import { fallbackChainColor } from '@/lib/chain-color';
 import type { ChainChangedPayload } from '@/lib/events';
 
 /** 设置页全部状态（spec §4.5）：链详情 + 成员 + 邀请 + 分享链接 + 资料表单 + 标签。 */
@@ -38,7 +39,7 @@ export class ChainSettingsService extends Service {
       (p: ChainChangedPayload) => {
         if (p.chainId !== this.chainId) return;
         if (p.op === 'delete') return; // 删除后页面即将跳走
-        void this.loadChain();
+        void this.loadChain().catch(() => undefined);
       },
       'global',
     );
@@ -47,13 +48,11 @@ export class ChainSettingsService extends Service {
   hydrate(chainId: string): void {
     if (this.chainId === chainId) return;
     this.chainId = chainId;
-    // 先拉链（角色决定成员/邀请/分享的可见面），成功后再拉各分区数据
-    void this.loadChain().then(() => {
-      void this.loadMembers();
-      void this.loadShareLinks();
-      void this.loadTags();
-    });
+    // 先拉链（角色决定成员/邀请/分享的可见面）；分区级联在 loadChain 成功路径里（首载失败后重试也能拉全）
+    void this.loadChain().catch(() => undefined);
   }
+
+  private sectionsLoaded = false;
 
   private invalidateRq(): void {
     // 过渡期：['chains'] 前缀失效同时覆盖 sidebar 的 ['chains'] 与链页/成员/标签
@@ -64,12 +63,19 @@ export class ChainSettingsService extends Service {
 
   async loadChain(): Promise<void> {
     this.chain = await client.getChain(this.chainId);
+    if (!this.sectionsLoaded) {
+      // 链首次拉到后级联拉分区（角色决定可见面）；chain:changed 重拉不重复级联
+      this.sectionsLoaded = true;
+      void this.loadMembers().catch(() => undefined);
+      void this.loadShareLinks().catch(() => undefined);
+      void this.loadTags().catch(() => undefined);
+    }
     if (!this.formHydrated && this.chain) {
       // 首载水合资料表单（之后用户改动不覆盖）
       this.formHydrated = true;
       this.formName = this.chain.name;
       this.formDescription = this.chain.description ?? '';
-      this.formColor = this.chain.color ?? 'coral';
+      this.formColor = this.chain.color ?? fallbackChainColor(this.chain.id);
       this.formIcon = this.chain.icon;
     }
   }
