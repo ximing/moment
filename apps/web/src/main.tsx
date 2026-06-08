@@ -1,25 +1,26 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router';
+import { RSRoot, register } from '@rabjs/react';
 import { App } from './App';
-import { AuthProvider } from './auth/AuthProvider';
+import { queryClient } from './api/query-client';
+import { AuthService } from './services/auth.service';
+import { ThemeService } from './services/theme.service';
 import './index.css';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: false, staleTime: 30_000, refetchOnWindowFocus: false },
-  },
-});
+// AuthService 必须排首：ChainListService / NotificationService 构造里 resolve 它（Task 7 起）
+register(AuthService);
+register(ThemeService);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <BrowserRouter>
+      <BrowserRouter>
+        <RSRoot>
           <App />
-        </BrowserRouter>
-      </AuthProvider>
+        </RSRoot>
+      </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>
 );

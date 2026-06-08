@@ -11,7 +11,7 @@ import { canCompose } from '@/lib/roles';
 import { ChainMark } from '@/chain/ChainMark';
 import { ContextMenu, MenuItem } from '@/ui/Menu';
 import { CreateChainDialog } from './CreateChainDialog';
-import { UserMenu } from './UserMenu';
+import { UserMenu } from './user-menu';
 
 export function Shell() {
   const { openCompose } = useCompose();

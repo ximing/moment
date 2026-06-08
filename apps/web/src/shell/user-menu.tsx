@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useAuth } from '@/auth/AuthProvider';
+import { observer, useService } from '@rabjs/react';
+import { AuthService } from '@/services/auth.service';
 import { Avatar } from '@/ui/Avatar';
 import { Menu, MenuItem } from '@/ui/Menu';
 
 /** 头像菜单：我 / 通知 / 退出。宽栏贴侧栏向上弹；窄栏用通用 Menu。 */
-export function UserMenu({ unread, compact }: { unread: number; compact?: boolean }) {
-  const { user, logout } = useAuth();
+export const UserMenu = observer(function UserMenu({ unread, compact }: { unread: number; compact?: boolean }) {
+  const auth = useService(AuthService);
+  const user = auth.user;
   const navigate = useNavigate();
   if (!user) return null;
 
@@ -33,13 +35,13 @@ export function UserMenu({ unread, compact }: { unread: number; compact?: boolea
   if (compact) {
     return (
       <Menu align="right" placement="bottom" trigger={trigger()}>
-        {(close) => <UserMenuItems unread={unread} close={close} navigate={navigate} logout={logout} />}
+        {(close) => <UserMenuItems unread={unread} close={close} navigate={navigate} logout={auth.logout} />}
       </Menu>
     );
   }
 
-  return <SidebarUserMenu unread={unread} user={user} navigate={navigate} logout={logout} />;
-}
+  return <SidebarUserMenu unread={unread} user={user} navigate={navigate} logout={auth.logout} />;
+});
 
 function SidebarUserMenu({
   unread,
@@ -48,7 +50,7 @@ function SidebarUserMenu({
   logout,
 }: {
   unread: number;
-  user: NonNullable<ReturnType<typeof useAuth>['user']>;
+  user: NonNullable<AuthService['user']>;
   navigate: ReturnType<typeof useNavigate>;
   logout: () => Promise<unknown>;
 }) {
