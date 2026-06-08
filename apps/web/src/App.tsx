@@ -2,7 +2,7 @@ import { Navigate, Route, Routes, useParams } from 'react-router';
 import { RequireAuth } from '@/shell/require-auth';
 import { LoginPage, RegisterPage } from '@/pages/AuthPages';
 import { ChainHome } from '@/pages/ChainHome';
-import { ChainSettingsPage } from '@/pages/ChainSettingsPage';
+import { ChainSettingsPage } from '@/pages/chain-settings';
 import { FeedHome } from '@/pages/FeedHome';
 import { InvitePage } from '@/pages/InvitePage';
 import { MePage } from '@/pages/MePage';
