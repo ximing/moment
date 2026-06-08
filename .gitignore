@@ -9,3 +9,5 @@ build/
 .expo/
 coverage/
 .turbo.superpowers/
+
+.worktrees/
