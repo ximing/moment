@@ -25,7 +25,7 @@ const CreateChainDialogContent = observer(function CreateChainDialogContent({ on
         onClose();
         navigate(`/chains/${chainId}`);
       })
-      .catch((e) => setError(humanError(e)));
+      .catch(() => undefined); // API 错误横幅读 $model.submit.error，不双写本地 state
   }
 
   // 遮罩 30% 墨：var() 色值的 /30 修饰静默不生成 CSS，用 color-mix（硬约束）

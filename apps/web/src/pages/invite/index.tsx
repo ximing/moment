@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { humanError } from '@/lib/errors';
@@ -12,7 +12,6 @@ const InvitePageContent = observer(function InvitePageContent() {
   const service = useService(InviteService);
   const auth = useService(AuthService);
   const navigate = useNavigate();
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (token) service.hydrate(token);
@@ -28,11 +27,6 @@ const InvitePageContent = observer(function InvitePageContent() {
         {/* 「加入」不在得意黑字形子集内，标题不用 font-display */}
         <h1 className="text-xl font-medium">加入时光链</h1>
         <p className="mt-2 text-sm text-muted">和家人一起记下这一家的时刻。</p>
-        {error && (
-          <div className="mt-4">
-            <Banner>{error}</Banner>
-          </div>
-        )}
         {service.$model.accept.error && (
           <div className="mt-4">
             <Banner>{humanError(service.$model.accept.error)}</Banner>
@@ -45,7 +39,7 @@ const InvitePageContent = observer(function InvitePageContent() {
             void service
               .accept()
               .then((chainId) => navigate(`/chains/${chainId}`, { replace: true }))
-              .catch((e) => setError(humanError(e)))
+              .catch(() => undefined) // API 错误横幅读 $model.accept.error
           }
         >
           {service.$model.accept.loading ? '加入中…' : '接受邀请'}
