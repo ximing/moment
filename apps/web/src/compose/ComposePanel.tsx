@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { observer, useService } from '@rabjs/react';
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VIDEO_DURATION_SECONDS } from '@moment/dto';
 import { client } from '@/api/client';
+import { queryClient } from '@/api/query-client';
 import { qk } from '@/api/keys';
 import { compressImage } from '@/lib/compress';
 import { humanError } from '@/lib/errors';
@@ -15,18 +17,18 @@ import { Confirm } from '@/ui/Confirm';
 import { HappenedAtField } from '@/ui/HappenedAtField';
 import { Icon } from '@/ui/Icon';
 import { X } from 'lucide-react';
-import { useCompose } from './ComposeContext';
+import { ComposeSessionService } from '@/services/compose-session.service';
 
 interface PickedImage {
   file: File;
   previewUrl: string;
 }
 
-export function ComposePanel() {
-  const { request, closeCompose } = useCompose();
-  if (!request) return null;
-  return <ComposeBody request={request} onClose={closeCompose} />;
-}
+export const ComposePanel = observer(function ComposePanel() {
+  const composeSession = useService(ComposeSessionService);
+  if (!composeSession.request) return null;
+  return <ComposeBody request={composeSession.request} onClose={composeSession.closeCompose} />;
+});
 
 function ComposeBody({
   request,
@@ -35,8 +37,7 @@ function ComposeBody({
   request: { chainId?: string; edit?: import('@moment/dto').MomentResponse };
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
-  const { markCreated } = useCompose();
+  const composeSession = useService(ComposeSessionService);
   const edit = request.edit;
   const { data: chains } = useQuery({ queryKey: qk.chains, queryFn: () => client.listChains() });
   const writable = (chains ?? []).filter((c) => canCompose(c));
@@ -208,6 +209,11 @@ function ComposeBody({
           isBackfill,
           tagIds: selectedTags,
         });
+        composeSession.emit(
+          'moment:changed',
+          { momentId: edit.id, chainId: edit.chainId, op: 'update' },
+          'global',
+        );
       } else {
         const type = hasVideo ? 'video' : hasImages ? 'media' : 'text';
         const mediaIds: string[] = [];
@@ -249,7 +255,13 @@ function ComposeBody({
           tagIds: selectedTags,
         });
         // 「从链节长出来」微动效（spec §1.6）：显式记录新 moment id，Timeline 渲染期直读比对
-        markCreated(res.id);
+        composeSession.markCreated(res.id);
+        // emit 供已迁移的 feed Service 听（Task 10 起）；invalidate 供未迁移的 RQ 页面听（Task 14 摘）
+        composeSession.emit(
+          'moment:changed',
+          { momentId: res.id, chainId, op: 'create' },
+          'global',
+        );
       }
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
       void queryClient.invalidateQueries({ queryKey: qk.chainMoments(chainId) });

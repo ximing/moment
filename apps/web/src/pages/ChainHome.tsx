@@ -3,10 +3,11 @@ import { useNavigate, useParams } from 'react-router';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
-import { useCompose } from '@/compose/ComposeContext';
-import { ComposerEntry } from '@/compose/ComposerEntry';
+import { useService } from '@rabjs/react';
+import { ComposerEntry } from '@/compose/composer-entry';
+import { ComposeSessionService } from '@/services/compose-session.service';
 import { canCompose } from '@/lib/roles';
-import { Timeline } from '@/timeline/Timeline';
+import { Timeline } from '@/timeline/timeline';
 import { TimelineRail, type RailFilter } from '@/timeline/TimelineRail';
 import { ArrowLeft } from 'lucide-react';
 import { Banner } from '@/ui/Banner';
@@ -18,7 +19,7 @@ import { Empty } from './FeedHome';
 export function ChainHome() {
   const { chainId = '' } = useParams();
   const navigate = useNavigate();
-  const { openCompose } = useCompose();
+  const composeSession = useService(ComposeSessionService);
   // 行内 tag chips / 排序小字按钮已迁入右栏 rail；tagId/order/before 合并为 RailFilter
   const [filter, setFilter] = useState<RailFilter>({ order: 'happened_at' });
   const { data: chain, isPending: chainPending, isError, error, refetch } = useQuery({
@@ -98,7 +99,7 @@ export function ChainHome() {
             ) : (
               <Empty
                 title="还没有记下任何一刻"
-                action={canCompose(chain) ? <Button onClick={() => openCompose({ chainId: chain.id })}>记下此刻</Button> : undefined}
+                action={canCompose(chain) ? <Button onClick={() => composeSession.openCompose({ chainId: chain.id })}>记下此刻</Button> : undefined}
               />
             )
           }

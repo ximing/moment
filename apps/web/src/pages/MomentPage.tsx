@@ -5,7 +5,7 @@ import { client } from '@/api/client';
 import { qk } from '@/api/keys';
 import { useAuth } from '@/auth/AuthProvider';
 import { humanError } from '@/lib/errors';
-import { Timeline } from '@/timeline/Timeline';
+import { Timeline } from '@/timeline/timeline';
 import { ArrowLeft } from 'lucide-react';
 import { Banner } from '@/ui/Banner';
 import { Button } from '@/ui/Button';

@@ -3,7 +3,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { ApiError } from '@moment/api-client';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
-import { Timeline } from '@/timeline/Timeline';
+import { Timeline } from '@/timeline/timeline';
 
 export function ShareAlbumPage() {
   const { token = '' } = useParams();

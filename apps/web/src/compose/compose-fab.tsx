@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
+import { observer, useService } from '@rabjs/react';
+import { ComposeSessionService } from '@/services/compose-session.service';
 import { Icon } from '@/ui/Icon';
-import { useCompose } from './ComposeContext';
 
-/** 向下滚动后接力 composer 入口。chainId 由 Shell 经 useMatch 提供。 */
-export function ComposeFab({ chainId }: { chainId?: string }) {
-  const { openCompose } = useCompose();
+/** 向下滚动后接力 composer 入口。chainId 由 Shell 经 useMatch 提供。滚动显隐是纯 UI，留在组件（spec §6）。 */
+export const ComposeFab = observer(function ComposeFab({ chainId }: { chainId?: string }) {
+  const composeSession = useService(ComposeSessionService);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -20,11 +21,11 @@ export function ComposeFab({ chainId }: { chainId?: string }) {
     <button
       type="button"
       aria-label="记下此刻"
-      onClick={() => openCompose({ chainId })}
+      onClick={() => composeSession.openCompose({ chainId })}
       className="fixed bottom-6 right-6 z-30 inline-flex h-12 items-center gap-2 rounded-sticker bg-action px-5 font-display text-base text-action-fg shadow-fab"
     >
       <Icon icon={Plus} size={20} />
       记下
     </button>
   );
-}
+});

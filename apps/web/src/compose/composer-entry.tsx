@@ -1,10 +1,11 @@
 import { Image, Tag } from 'lucide-react';
+import { observer, useService } from '@rabjs/react';
+import { ComposeSessionService } from '@/services/compose-session.service';
 import { Icon } from '@/ui/Icon';
-import { useCompose } from './ComposeContext';
 
 /** 常驻 composer 入口：只是入口，点击显式打开 ComposePanel modal。挂在日子线上。 */
-export function ComposerEntry({ chainId }: { chainId?: string }) {
-  const { openCompose } = useCompose();
+export const ComposerEntry = observer(function ComposerEntry({ chainId }: { chainId?: string }) {
+  const composeSession = useService(ComposeSessionService);
   return (
     <div className="relative mb-6">
       <span
@@ -13,7 +14,7 @@ export function ComposerEntry({ chainId }: { chainId?: string }) {
       />
       <button
         type="button"
-        onClick={() => openCompose({ chainId })}
+        onClick={() => composeSession.openCompose({ chainId })}
         className="flex w-full items-center gap-3 rounded-card border border-dashed border-line bg-[color-mix(in_srgb,var(--surface)_55%,transparent)] px-4 py-4 text-left text-muted hover:bg-surface hover:text-ink"
       >
         <span className="text-[17px]">这一刻，记点什么…</span>
@@ -24,4 +25,4 @@ export function ComposerEntry({ chainId }: { chainId?: string }) {
       </button>
     </div>
   );
-}
+});

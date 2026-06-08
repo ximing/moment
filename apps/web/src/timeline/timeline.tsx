@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
+import { observer, useService } from '@rabjs/react';
 import type { ChainColor, ChainIcon, MomentResponse } from '@moment/dto';
-import { useCompose } from '@/compose/ComposeContext';
+import { ComposeSessionService } from '@/services/compose-session.service';
 import { dayHeading } from '@/lib/time';
 import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
 import { Banner } from '@/ui/Banner';
@@ -11,7 +12,7 @@ import { groupMomentsByDate } from './group-by-date';
  * 日子线：虚线贯穿 + 日期结 + 按内容变形的时刻。
  * hideSignature（order=created_at）时日期结收起，线仍在（发生日非单调，不是把线拆掉）。
  */
-export function Timeline({
+export const Timeline = observer(function Timeline({
   moments,
   chainLookById,
   shareToken,
@@ -41,10 +42,10 @@ export function Timeline({
   entry?: ReactNode;
 }) {
   const sentinelRef = useLoadMoreSentinel(!isPending && !isError, hasNextPage, isFetchingNextPage, fetchNextPage);
-  const { lastCreatedId } = useCompose();
+  const composeSession = useService(ComposeSessionService);
 
   const renderSheet = (m: MomentResponse) => (
-    <div key={m.id} className={m.id === lastCreatedId ? 'animate-[grow-in_200ms_ease-out]' : undefined}>
+    <div key={m.id} className={m.id === composeSession.lastCreatedId ? 'animate-[grow-in_200ms_ease-out]' : undefined}>
       <MomentSheet
         moment={m}
         chainName={chainLookById?.get(m.chainId)?.name}
@@ -125,7 +126,7 @@ export function Timeline({
       {tail}
     </div>
   );
-}
+});
 
 function Line() {
   return (

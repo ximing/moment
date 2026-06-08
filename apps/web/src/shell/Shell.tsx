@@ -1,20 +1,21 @@
 import { useEffect, useState, type MouseEvent } from 'react';
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import { observer, useService } from '@rabjs/react';
 import type { ChainDto } from '@moment/dto';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
-import { useCompose } from '@/compose/ComposeContext';
-import { ComposeFab } from '@/compose/ComposeFab';
+import { ComposeFab } from '@/compose/compose-fab';
 import { ComposePanel } from '@/compose/ComposePanel';
+import { ComposeSessionService } from '@/services/compose-session.service';
 import { canCompose } from '@/lib/roles';
 import { ChainMark } from '@/chain/ChainMark';
 import { ContextMenu, MenuItem } from '@/ui/Menu';
 import { CreateChainDialog } from './CreateChainDialog';
 import { UserMenu } from './user-menu';
 
-export function Shell() {
-  const { openCompose } = useCompose();
+export const Shell = observer(function Shell() {
+  const composeSession = useService(ComposeSessionService);
   const navigate = useNavigate();
   const location = useLocation();
   const chainId = useMatch('/chains/:chainId')?.params.chainId;
@@ -33,11 +34,11 @@ export function Shell() {
   useEffect(() => {
     const q = new URLSearchParams(location.search);
     if (q.get('compose') === '1') {
-      openCompose({ chainId });
+      composeSession.openCompose({ chainId });
       q.delete('compose');
       navigate({ pathname: location.pathname, search: q.toString() }, { replace: true });
     }
-  }, [location.search, location.pathname, chainId, navigate, openCompose]);
+  }, [location.search, location.pathname, chainId, navigate, composeSession]);
 
   return (
     <div className="min-h-screen bg-bg">
@@ -98,7 +99,7 @@ export function Shell() {
       {creating && <CreateChainDialog onClose={() => setCreating(false)} />}
     </div>
   );
-}
+});
 
 function ChainNav({
   chain,

@@ -2,10 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type MomentMedia, type MomentResponse } from '@moment/dto';
+import { useService } from '@rabjs/react';
 import { client } from '@/api/client';
+import { ComposeSessionService } from '@/services/compose-session.service';
 import { qk } from '@/api/keys';
 import { useAuth } from '@/auth/AuthProvider';
-import { useCompose } from '@/compose/ComposeContext';
 import { ChainMark } from '@/chain/ChainMark';
 import { formatHappenedClock } from '@/lib/time';
 import { humanError } from '@/lib/errors';
@@ -37,7 +38,7 @@ export function MomentSheet({
   hideKnot?: boolean;
 }) {
   const { user } = useAuth();
-  const { openCompose } = useCompose();
+  const composeSession = useService(ComposeSessionService);
   const queryClient = useQueryClient();
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [showComments, setShowComments] = useState(false);
@@ -128,7 +129,7 @@ export function MomentSheet({
                   <MenuItem
                     onClick={() => {
                       close();
-                      openCompose({ chainId: moment.chainId, edit: moment });
+                      composeSession.openCompose({ chainId: moment.chainId, edit: moment });
                     }}
                   >
                     编辑

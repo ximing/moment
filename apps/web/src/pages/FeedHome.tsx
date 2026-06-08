@@ -2,17 +2,18 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { qk } from '@/api/keys';
-import { useCompose } from '@/compose/ComposeContext';
-import { ComposerEntry } from '@/compose/ComposerEntry';
+import { useService } from '@rabjs/react';
+import { ComposerEntry } from '@/compose/composer-entry';
+import { ComposeSessionService } from '@/services/compose-session.service';
 import { canCompose } from '@/lib/roles';
-import { Timeline } from '@/timeline/Timeline';
+import { Timeline } from '@/timeline/timeline';
 import { TimelineRail, type RailFilter } from '@/timeline/TimelineRail';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 
 export function FeedHome() {
-  const { openCompose } = useCompose();
+  const composeSession = useService(ComposeSessionService);
   const { data: chains } = useQuery({ queryKey: qk.chains, queryFn: () => client.listChains() });
   const looks = useMemo(
     () => new Map((chains ?? []).map((c) => [c.id, { name: c.name, color: c.color, icon: c.icon }])),
@@ -73,7 +74,7 @@ export function FeedHome() {
             ) : (
               <Empty
                 title="还没有记下任何一刻"
-                action={<Button onClick={() => openCompose()}>记下此刻</Button>}
+                action={<Button onClick={() => composeSession.openCompose()}>记下此刻</Button>}
               />
             )
           }
