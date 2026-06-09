@@ -26,7 +26,7 @@ const LoginPageContent = observer(function LoginPageContent() {
     void service
       .submit()
       .then(() => navigate(location.state?.from ?? '/', { replace: true }))
-      .catch((err) => setError(humanError(err)));
+      .catch(() => undefined); // API 错误横幅读 $model.submit.error，不双写本地 state
   }
 
   return (
@@ -49,6 +49,7 @@ const LoginPageContent = observer(function LoginPageContent() {
           />
         </Field>
         {error && <Banner>{error}</Banner>}
+        {service.$model.submit.error && <Banner>{humanError(service.$model.submit.error)}</Banner>}
         <Button type="submit" className="w-full" disabled={service.$model.submit.loading}>
           {service.$model.submit.loading ? '登录中…' : '登录'}
         </Button>

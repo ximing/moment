@@ -34,7 +34,7 @@ const RegisterPageContent = observer(function RegisterPageContent() {
     void service
       .submit()
       .then(() => navigate(location.state?.from ?? '/', { replace: true }))
-      .catch((err) => setError(humanError(err)));
+      .catch(() => undefined); // API 错误横幅读 $model.submit.error，不双写本地 state
   }
 
   return (
@@ -53,6 +53,7 @@ const RegisterPageContent = observer(function RegisterPageContent() {
           <Input type="password" value={service.confirm} onChange={(e) => (service.confirm = e.target.value)} />
         </Field>
         {error && <Banner>{error}</Banner>}
+        {service.$model.submit.error && <Banner>{humanError(service.$model.submit.error)}</Banner>}
         <Button type="submit" className="w-full" disabled={service.$model.submit.loading}>
           {service.$model.submit.loading ? '注册中…' : '注册'}
         </Button>
