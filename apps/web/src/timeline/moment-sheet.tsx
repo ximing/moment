@@ -149,7 +149,7 @@ const MomentSheetContent = observer(function MomentSheetContent({
           </>
         ) : (
           moment.content && (
-            <div className="rounded-card bg-surface px-4 py-3">
+            <div className="rounded-card bg-surface px-4 py-3 shadow-sticker">
               <p className="whitespace-pre-wrap text-base leading-[1.65] text-ink">{moment.content}</p>
             </div>
           )
