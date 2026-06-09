@@ -9,7 +9,7 @@ import { InvitePage } from '@/pages/invite';
 import { MePage } from '@/pages/me';
 import { MomentPage } from '@/pages/moment';
 import { NotificationsHome } from '@/pages/notifications';
-import { ShareAlbumPage } from '@/pages/ShareAlbumPage';
+import { ShareAlbumPage } from '@/pages/share-album';
 import { Shell } from '@/shell/Shell';
 import { useAuth } from '@/auth/AuthProvider';
 

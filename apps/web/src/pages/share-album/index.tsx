@@ -1,22 +1,21 @@
+import { useEffect } from 'react';
 import { useParams } from 'react-router';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { bindServices, observer, useService } from '@rabjs/react';
 import { ApiError } from '@moment/api-client';
-import { client } from '@/api/client';
-import { qk } from '@/api/keys';
 import { Timeline } from '@/timeline/timeline';
+import { ShareAlbumService } from './share-album.service';
 
-export function ShareAlbumPage() {
+const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
   const { token = '' } = useParams();
-  const q = useInfiniteQuery({
-    queryKey: qk.publicShare(token),
-    queryFn: ({ pageParam }) => client.getPublicShare(token, pageParam),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-    enabled: token.length > 0,
-    retry: false,
-  });
+  const service = useService(ShareAlbumService);
 
-  if (q.isPending) {
+  useEffect(() => {
+    if (token) service.hydrate(token);
+  }, [service, token]);
+
+  // 三态判定（防 hydrate effect 首帧闪错误态，同 Task 3/4/11）
+  const loadErr = service.$model.loadFirst.error;
+  if (!service.chain && (service.$model.loadFirst.loading || !loadErr)) {
     return (
       <div className="min-h-screen bg-bg px-6 py-16">
         <div className="mx-auto max-w-content space-y-4">
@@ -28,9 +27,9 @@ export function ShareAlbumPage() {
       </div>
     );
   }
-
-  if (q.isError) {
-    const closed = q.error instanceof ApiError && (q.error.status === 404 || q.error.code === 'SHARE_NOT_FOUND');
+  if (loadErr && !service.$model.loadFirst.loading) {
+    const e = loadErr;
+    const closed = e instanceof ApiError && (e.status === 404 || e.code === 'SHARE_NOT_FOUND');
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg px-6">
         <p className="rounded-card border border-line bg-surface px-8 py-6 font-display text-xl text-ink shadow-card">
@@ -40,8 +39,7 @@ export function ShareAlbumPage() {
     );
   }
 
-  const chain = q.data.pages[0]?.chain;
-  const moments = q.data.pages.flatMap((p) => p.moments);
+  const chain = service.chain;
 
   return (
     <div className="min-h-screen bg-bg">
@@ -55,18 +53,20 @@ export function ShareAlbumPage() {
       </header>
       <main className="mx-auto max-w-content px-6 py-8">
         <Timeline
-          moments={moments}
+          moments={service.moments}
           shareToken={token}
           readOnly
           isPending={false}
           isError={false}
-          hasNextPage={Boolean(q.hasNextPage)}
-          isFetchingNextPage={q.isFetchingNextPage}
-          fetchNextPage={q.fetchNextPage}
+          hasNextPage={service.hasMore}
+          isFetchingNextPage={service.$model.loadMore.loading}
+          fetchNextPage={() => void service.loadMore()}
           empty={<p className="py-16 text-center text-muted">还没有内容</p>}
         />
       </main>
       <footer className="py-8 text-center text-xs text-muted">由家庭用「时刻」记录</footer>
     </div>
   );
-}
+});
+
+export const ShareAlbumPage = bindServices(ShareAlbumPageContent, [ShareAlbumService]);
