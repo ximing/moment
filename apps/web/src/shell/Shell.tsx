@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-route
 import { observer, useService } from '@rabjs/react';
 import type { ChainDto } from '@moment/dto';
 import { ComposeFab } from '@/compose/compose-fab';
-import { ComposePanel } from '@/compose/ComposePanel';
+import { ComposePanel } from '@/compose/compose-panel';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { ChainListService } from '@/services/chain-list.service';
 import { NotificationService } from '@/services/notification.service';
