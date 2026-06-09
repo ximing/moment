@@ -1,0 +1,6 @@
+# Codex CLI 项目级配置（随仓库分发；trust 本项目 .codex/ 层后生效）
+#
+# 让 Codex 沿 root→cwd 目录链复用既有 CLAUDE.md，不另建一套 AGENTS.md 真相源。
+# 每个目录按序检查：AGENTS.override.md → AGENTS.md → 回退名单，命中即止。
+# 本仓库仅根目录有 AGENTS.md（纯指针），其余目录均由 CLAUDE.md 命中。
+project_doc_fallback_filenames = ["CLAUDE.md"]

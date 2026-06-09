@@ -34,3 +34,6 @@
 - 横切规则（按路径自动加载）：
   - `.claude/rules/testing.md` — 所有测试文件
   - `.claude/rules/plan-docs.md` — `docs/superpowers/plans|prompts/` 下的计划与提示词文档
+  - `.claude/rules/web-ui.md` — `apps/web/src/**` 的 Design System 尺度与对齐网格
+
+Codex CLI 经 `.codex/config.toml` 回退名单复用本 `CLAUDE.md` 目录链（入口见根 `AGENTS.md`）。
