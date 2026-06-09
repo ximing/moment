@@ -7,7 +7,7 @@ import { FeedHome } from '@/pages/FeedHome';
 import { InvitePage } from '@/pages/invite';
 import { MePage } from '@/pages/MePage';
 import { MomentPage } from '@/pages/moment';
-import { NotificationsHome } from '@/pages/NotificationsHome';
+import { NotificationsHome } from '@/pages/notifications';
 import { ShareAlbumPage } from '@/pages/ShareAlbumPage';
 import { Shell } from '@/shell/Shell';
 import { useAuth } from '@/auth/AuthProvider';

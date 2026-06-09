@@ -1,7 +1,6 @@
 import { Link } from 'react-router';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { client } from '@/api/client';
-import { qk } from '@/api/keys';
+import { observer, useService } from '@rabjs/react';
+import { NotificationService } from '@/services/notification.service';
 import { Button } from '@/ui/Button';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -27,46 +26,27 @@ function hrefOf(payload: Record<string, unknown>): string | null {
   return null;
 }
 
-export function NotificationsHome() {
-  const queryClient = useQueryClient();
-  const q = useInfiniteQuery({
-    queryKey: qk.notifications(false),
-    queryFn: ({ pageParam }) => client.listNotifications(undefined, { cursor: pageParam, limit: 50 }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-  });
-  const items = q.data?.pages.flatMap((p) => p.notifications) ?? [];
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-  };
-  const markAll = useMutation({
-    mutationFn: async () => {
-      const unreadIds: string[] = [];
-      let cursor: string | undefined;
-      do {
-        const page = await client.listNotifications(undefined, { cursor, limit: 50 });
-        unreadIds.push(...page.notifications.filter((n) => n.readAt === null).map((n) => n.id));
-        cursor = page.nextCursor ?? undefined;
-      } while (cursor);
-      for (let i = 0; i < unreadIds.length; i += 100) {
-        await client.markNotificationsRead(unreadIds.slice(i, i + 100));
-      }
-    },
-    onSuccess: invalidate,
-  });
-  const unread = items.filter((n) => n.readAt === null).length;
+export const NotificationsHome = observer(function NotificationsHome() {
+  const notification = useService(NotificationService);
+  const items = notification.items;
+  const unread = notification.unreadCount;
 
   return (
     <div className="max-w-content">
       <div className="mb-6 flex items-center">
         <h1 className="text-2xl font-medium">通知</h1>
         {unread > 0 && (
-          <Button variant="ghost" className="ml-auto" disabled={markAll.isPending} onClick={() => markAll.mutate()}>
+          <Button
+            variant="ghost"
+            className="ml-auto"
+            disabled={notification.$model.markAllRead.loading}
+            onClick={() => void notification.markAllRead()}
+          >
             全部标为已读
           </Button>
         )}
       </div>
-      {items.length === 0 && !q.isPending && (
+      {items.length === 0 && !notification.$model.loadFirst.loading && (
         <p className="py-16 text-center text-muted">还没有新消息。记下一条，家里人就会在这儿看见。</p>
       )}
       <ul className="space-y-2">
@@ -92,11 +72,11 @@ export function NotificationsHome() {
           );
         })}
       </ul>
-      {q.hasNextPage && (
-        <button type="button" className="mt-4 text-sm text-muted" onClick={() => void q.fetchNextPage()}>
+      {notification.hasMore && (
+        <button type="button" className="mt-4 text-sm text-muted" onClick={() => void notification.loadMore()}>
           更早
         </button>
       )}
     </div>
   );
-}
+});

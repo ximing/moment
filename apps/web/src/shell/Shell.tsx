@@ -1,13 +1,12 @@
 import { useEffect, useState, type MouseEvent } from 'react';
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
 import { observer, useService } from '@rabjs/react';
 import type { ChainDto } from '@moment/dto';
-import { client } from '@/api/client';
-import { qk } from '@/api/keys';
 import { ComposeFab } from '@/compose/compose-fab';
 import { ComposePanel } from '@/compose/ComposePanel';
 import { ComposeSessionService } from '@/services/compose-session.service';
+import { ChainListService } from '@/services/chain-list.service';
+import { NotificationService } from '@/services/notification.service';
 import { canCompose } from '@/lib/roles';
 import { ChainMark } from '@/chain/ChainMark';
 import { ContextMenu, MenuItem } from '@/ui/Menu';
@@ -21,15 +20,12 @@ export const Shell = observer(function Shell() {
   const chainId = useMatch('/chains/:chainId')?.params.chainId;
   const [creating, setCreating] = useState(false);
 
-  const { data: chains } = useQuery({ queryKey: qk.chains, queryFn: () => client.listChains() });
-  const { data: notifications } = useQuery({
-    queryKey: qk.notifications(false),
-    queryFn: () => client.listNotifications(undefined, { limit: 50 }),
-    refetchInterval: 30_000,
-  });
-  const unread = (notifications?.notifications ?? []).filter((n) => n.readAt === null).length;
-  const currentChain = chains?.find((c) => c.id === chainId);
-  const showCompose = currentChain ? canCompose(currentChain) : (chains ?? []).some(canCompose);
+  const chainList = useService(ChainListService);
+  const notification = useService(NotificationService);
+  const chains = chainList.chains;
+  const unread = notification.unreadCount;
+  const currentChain = chains.find((c) => c.id === chainId);
+  const showCompose = currentChain ? canCompose(currentChain) : chains.some(canCompose);
 
   useEffect(() => {
     const q = new URLSearchParams(location.search);
