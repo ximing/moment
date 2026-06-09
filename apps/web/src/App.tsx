@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useParams } from 'react-router';
+import { observer, useService } from '@rabjs/react';
 import { RequireAuth } from '@/shell/require-auth';
 import { LoginPage } from '@/pages/login';
 import { RegisterPage } from '@/pages/register';
@@ -11,7 +12,7 @@ import { MomentPage } from '@/pages/moment';
 import { NotificationsHome } from '@/pages/notifications';
 import { ShareAlbumPage } from '@/pages/share-album';
 import { Shell } from '@/shell/Shell';
-import { useAuth } from '@/auth/AuthProvider';
+import { AuthService } from '@/services/auth.service';
 
 export function App() {
   return (
@@ -45,8 +46,8 @@ function ComposeRedirect() {
   return <Navigate to={`/chains/${chainId}?compose=1`} replace />;
 }
 
-function NotFound() {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
+const NotFound = observer(function NotFound() {
+  const auth = useService(AuthService);
+  if (!auth.user) return <Navigate to="/login" replace />;
   return <p className="py-16 text-center text-muted">没有这个页面</p>;
-}
+});

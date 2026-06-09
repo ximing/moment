@@ -1,7 +1,6 @@
 import { Service } from '@rabjs/react';
 import type { ChainColor, ChainDto, ChainIcon, ShareLinkDto } from '@moment/dto';
 import { client } from '@/api/client';
-import { queryClient } from '@/api/query-client';
 import { fallbackChainColor } from '@/lib/chain-color';
 import type { ChainChangedPayload } from '@/lib/events';
 
@@ -54,13 +53,6 @@ export class ChainSettingsService extends Service {
 
   private sectionsLoaded = false;
 
-  private invalidateRq(): void {
-    // 过渡期：['chains'] 前缀失效同时覆盖 sidebar 的 ['chains'] 与链页/成员/标签
-    // 的 ['chains', id, ...]；['feed'] 覆盖 feed + month-index（Task 14 删）
-    queryClient.invalidateQueries({ queryKey: ['chains'] });
-    queryClient.invalidateQueries({ queryKey: ['feed'] });
-  }
-
   async loadChain(): Promise<void> {
     this.chain = await client.getChain(this.chainId);
     if (!this.sectionsLoaded) {
@@ -106,7 +98,6 @@ export class ChainSettingsService extends Service {
       color: this.formColor,
       icon: this.formIcon,
     });
-    this.invalidateRq();
     this.emit('chain:changed', { chainId: this.chainId, op: 'update' }, 'global');
   }
 
@@ -138,7 +129,6 @@ export class ChainSettingsService extends Service {
 
   async leaveChain(userId: string): Promise<void> {
     await client.removeMember(this.chainId, userId);
-    this.invalidateRq();
     this.emit('chain:changed', { chainId: this.chainId, op: 'update' }, 'global');
   }
 
@@ -176,7 +166,6 @@ export class ChainSettingsService extends Service {
 
   async deleteChain(): Promise<void> {
     await client.deleteChain(this.chainId);
-    this.invalidateRq();
     this.emit('chain:changed', { chainId: this.chainId, op: 'delete' }, 'global');
   }
 }

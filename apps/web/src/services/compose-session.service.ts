@@ -6,7 +6,7 @@ export interface ComposeRequest {
   edit?: MomentResponse;
 }
 
-/** 全局发布面板会话（spec §3.5）：取代 ComposeContext。FAB / 入口卡 / ?compose=1 / 生长动画共用。 */
+/** 全局发布面板会话（spec §3.5）：FAB / 入口卡 / ?compose=1 / 生长动画共用。 */
 export class ComposeSessionService extends Service {
   request: ComposeRequest | null = null;
   /** 发布成功的 moment id：时间线「从链节长出来」微动效（spec §1.6）。渲染期直读，不用 ref。 */

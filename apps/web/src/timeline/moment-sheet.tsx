@@ -14,8 +14,8 @@ import { Banner } from '@/ui/Banner';
 import { Button } from '@/ui/Button';
 import { Confirm } from '@/ui/Confirm';
 import { KebabButton, Menu, MenuItem } from '@/ui/Menu';
-import { Lightbox } from './Lightbox';
-import { ReactionBar } from './ReactionBar';
+import { Lightbox } from './lightbox';
+import { ReactionBar } from './reaction-bar';
 import { MomentSheetService } from './moment-sheet.service';
 
 const MomentSheetContent = observer(function MomentSheetContent({

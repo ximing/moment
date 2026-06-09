@@ -1,7 +1,6 @@
 import { Service } from '@rabjs/react';
 import type { CommentDto, MomentResponse } from '@moment/dto';
 import { client } from '@/api/client';
-import { queryClient } from '@/api/query-client';
 import type { MomentChangedPayload, CommentChangedPayload } from '@/lib/events';
 
 /** 详情页状态（spec §4.4）：moment + 评论分页 + 草稿。写成功 emit，不直接拉别人的缓存。 */
@@ -89,17 +88,11 @@ export class MomentPageService extends Service {
     if (!text) return;
     await client.createComment(this.momentId, text);
     this.draft = '';
-    // 过渡期：RQ 页面（feed/链页未迁）还靠 invalidate 刷新（Task 14 摘）。
-    // ['feed'] 前缀覆盖 feed + month-index；['chains'] 前缀覆盖链页 chainMoments/链详情。
-    queryClient.invalidateQueries({ queryKey: ['feed'] });
-    queryClient.invalidateQueries({ queryKey: ['chains'] });
     this.emit('comment:changed', { momentId: this.momentId }, 'global');
   }
 
   async deleteComment(id: string): Promise<void> {
     await client.deleteComment(id);
-    queryClient.invalidateQueries({ queryKey: ['feed'] });
-    queryClient.invalidateQueries({ queryKey: ['chains'] });
     this.emit('comment:changed', { momentId: this.momentId }, 'global');
   }
 }

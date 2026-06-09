@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { observer, useService } from '@rabjs/react';
 import type { ChainColor, ChainIcon, ShareLinkDto } from '@moment/dto';
-import { useAuth } from '@/auth/AuthProvider';
+import { AuthService } from '@/services/auth.service';
 import { ChainLookPicker } from '@/chain/ChainLookPicker';
 import { humanError } from '@/lib/errors';
 import { canInvite, isOwner, roleLabel } from '@/lib/roles';
@@ -160,7 +160,7 @@ const SHARE_STATUS_CLASS: Record<string, string> = {
 
 const MembersSection = observer(function MembersSection() {
   const service = useService(ChainSettingsService);
-  const { user } = useAuth();
+  const auth = useService(AuthService);
   const navigate = useNavigate();
   const chain = service.chain!;
   const owner = isOwner(chain);
@@ -205,11 +205,11 @@ const MembersSection = observer(function MembersSection() {
           </li>
         ))}
       </ul>
-      {user && !owner && (
+      {auth.user && !owner && (
         <Button
           variant="ghost"
           disabled={service.$model.leaveChain.loading}
-          onClick={() => void service.leaveChain(user.id).then(() => navigate('/'))}
+          onClick={() => void service.leaveChain(auth.user!.id).then(() => navigate('/'))}
         >
           离开这条链
         </Button>
