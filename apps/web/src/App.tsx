@@ -5,7 +5,7 @@ import { ChainHome } from '@/pages/ChainHome';
 import { ChainSettingsPage } from '@/pages/chain-settings';
 import { FeedHome } from '@/pages/FeedHome';
 import { InvitePage } from '@/pages/invite';
-import { MePage } from '@/pages/MePage';
+import { MePage } from '@/pages/me';
 import { MomentPage } from '@/pages/moment';
 import { NotificationsHome } from '@/pages/notifications';
 import { ShareAlbumPage } from '@/pages/ShareAlbumPage';

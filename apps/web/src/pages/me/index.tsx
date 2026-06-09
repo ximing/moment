@@ -1,54 +1,24 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { useMutation } from '@tanstack/react-query';
-import { MAX_IMAGE_BYTES } from '@moment/dto';
-import { client } from '@/api/client';
-import { useAuth } from '@/auth/AuthProvider';
+import { bindServices, observer, useService } from '@rabjs/react';
 import { humanError } from '@/lib/errors';
-import { compressImage } from '@/lib/compress';
+import { AuthService } from '@/services/auth.service';
 import { Avatar } from '@/ui/Avatar';
 import { Banner } from '@/ui/Banner';
 import { Button } from '@/ui/Button';
 import { ThemeToggle } from '@/ui/ThemeToggle';
+import { MeService } from './me.service';
 
-export function MePage() {
-  const { user, logout, refreshUser } = useAuth();
+const MePageContent = observer(function MePageContent() {
+  const service = useService(MeService);
+  const auth = useService(AuthService);
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const upload = useMutation({
-    mutationFn: async (file: File) => {
-      if (file.size > MAX_IMAGE_BYTES) throw new Error('图片太大了');
-      const compressed = await compressImage(file);
-      const res = await client.uploadMedia({
-        file: compressed,
-        mime: compressed.type,
-        size: compressed.size,
-        kind: 'image',
-      });
-      return client.updateMe({ avatarMediaId: res.mediaId });
-    },
-    onSuccess: (next) => {
-      refreshUser(next);
-      setPreview(null);
-      setError(null);
-    },
-    onError: (e) => setError(humanError(e)),
-  });
-
-  const clear = useMutation({
-    mutationFn: () => client.updateMe({ avatarMediaId: null }),
-    onSuccess: (next) => {
-      refreshUser(next);
-      setPreview(null);
-    },
-    onError: (e) => setError(humanError(e)),
-  });
-
-  if (!user) return null;
-  const shown = preview ?? user.avatarUrl;
+  if (!auth.user) return null;
+  const user = auth.user;
+  const shown = service.preview ?? user.avatarUrl;
+  const error = service.$model.uploadAvatar.error ?? service.$model.clearAvatar.error;
 
   return (
     <div className="max-w-content">
@@ -80,21 +50,25 @@ export function MePage() {
               const file = e.target.files?.[0];
               e.target.value = '';
               if (!file) return;
-              setPreview(URL.createObjectURL(file));
-              upload.mutate(file);
+              service.setPreview(URL.createObjectURL(file));
+              void service.uploadAvatar(file).catch(() => undefined);
             }}
           />
           {error && (
             <div className="mt-3">
-              <Banner>{error}</Banner>
+              <Banner>{humanError(error)}</Banner>
             </div>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button disabled={upload.isPending} onClick={() => fileRef.current?.click()}>
-              {upload.isPending ? '上传中…' : '上传头像'}
+            <Button disabled={service.$model.uploadAvatar.loading} onClick={() => fileRef.current?.click()}>
+              {service.$model.uploadAvatar.loading ? '上传中…' : '上传头像'}
             </Button>
             {user.avatarUrl && (
-              <Button variant="ghost" disabled={clear.isPending} onClick={() => clear.mutate()}>
+              <Button
+                variant="ghost"
+                disabled={service.$model.clearAvatar.loading}
+                onClick={() => void service.clearAvatar().catch(() => undefined)}
+              >
                 去掉头像
               </Button>
             )}
@@ -112,13 +86,12 @@ export function MePage() {
       <button
         type="button"
         className="mt-8 rounded-lg px-2 py-1 text-sm text-muted hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-ink"
-        onClick={async () => {
-          await logout();
-          navigate('/login');
-        }}
+        onClick={() => void auth.logout().then(() => navigate('/login'))}
       >
         退出
       </button>
     </div>
   );
-}
+});
+
+export const MePage = bindServices(MePageContent, [MeService]);
