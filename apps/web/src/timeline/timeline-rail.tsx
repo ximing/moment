@@ -1,9 +1,6 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { ChainDto } from '@moment/dto';
-import { client } from '@/api/client';
-import { qk } from '@/api/keys';
-import { currentTzOffset, monthBeforeParam, monthFromBefore } from '@/lib/time';
+import type { MonthIndexEntry, TagResponse } from '@moment/dto';
+import { monthBeforeParam, monthFromBefore } from '@/lib/time';
 
 /** 右栏筛选值：before 为日期锚定（spec §4.2，仅 happened_at 序有意义）。 */
 export type RailFilter = {
@@ -20,22 +17,34 @@ export type RailFilter = {
  *   依赖页面外层 flex flex-wrap；与右下 FAB 空间分离——按钮在主列顶部，不是悬浮球）。
  * 跳转语义（spec §4.3）：点月份 → before = 该月下一月月初（本地）换算 UTC ISO，
  * 页面换 query key 重查，不做双向滚动；「回到最新」由页面渲染，清 before。
+ * 纯受控（spec §2）：index/tags 数据由页面 Service 传入，组件不自查。
  */
 export function TimelineRail({
   fixedChainId,
+  index,
+  indexPending,
+  tags,
   value,
   onChange,
 }: {
-  /** 换线已改走壳层导航；保留参数以免调用方改签名 */
-  chains?: ChainDto[];
   /** 链页传入：链 chips 整块隐藏，索引/标签范围固定为该链 */
   fixedChainId?: string;
+  index: MonthIndexEntry[];
+  indexPending: boolean;
+  tags: TagResponse[];
   value: RailFilter;
   onChange: (next: RailFilter) => void;
 }) {
   const [open, setOpen] = useState(false);
   const content = (
-    <RailContent fixedChainId={fixedChainId} value={value} onChange={onChange} />
+    <RailContent
+      fixedChainId={fixedChainId}
+      index={index}
+      indexPending={indexPending}
+      tags={tags}
+      value={value}
+      onChange={onChange}
+    />
   );
   return (
     <>
@@ -87,32 +96,23 @@ const chipOff = 'bg-surface text-ink shadow-sticker';
 
 function RailContent({
   fixedChainId,
+  index,
+  indexPending,
+  tags,
   value,
   onChange,
 }: {
   fixedChainId?: string;
+  index: MonthIndexEntry[];
+  indexPending: boolean;
+  tags: TagResponse[];
   value: RailFilter;
   onChange: (next: RailFilter) => void;
 }) {
-  // 索引/筛选范围：fixedChainId（链页）优先，否则用所选链集合
-  const scopeChainIds = value.chainIds ?? (fixedChainId ? [fixedChainId] : undefined);
   // 标签 chips 仅在范围恰好一条链时显示：标签挂在单链上，「全部链」/多选下标签来源无定义
   //（本计划定稿规则，与 web-product「/ 无标签条」一致）
   const scopeChainId = fixedChainId ?? (value.chainIds?.length === 1 ? value.chainIds[0] : undefined);
   const anchored = value.before ? monthFromBefore(value.before) : undefined;
-
-  const idx = useQuery({
-    queryKey: qk.monthIndex({ chainIds: scopeChainIds, tagId: value.tagId, tzOffset: currentTzOffset() }),
-    queryFn: () =>
-      client.getMonthIndex({ chainIds: scopeChainIds, tagId: value.tagId, tzOffset: currentTzOffset() }),
-    // created_at 下 before/月份锚定无意义（dto BEFORE_REQUIRES_HAPPENED_AT），索引块整体替换为说明
-    enabled: value.order === 'happened_at',
-  });
-  const { data: tags } = useQuery({
-    queryKey: qk.tags(scopeChainId ?? ''),
-    queryFn: () => client.listTags(scopeChainId!),
-    enabled: Boolean(scopeChainId),
-  });
 
   const toggleTag = (id: string) =>
     onChange({ ...value, tagId: value.tagId === id ? undefined : id });
@@ -127,13 +127,13 @@ function RailContent({
         <h3 className="mb-2 px-1 text-[12px] text-muted">回到某个月</h3>
         {value.order === 'created_at' ? (
           <p className="px-1 text-xs text-muted">按添加时间看的时候没有月份索引</p>
-        ) : idx.isPending ? (
+        ) : indexPending ? (
           <p className="px-1 text-xs text-muted">索引加载中…</p>
-        ) : (idx.data?.months.length ?? 0) === 0 ? (
+        ) : index.length === 0 ? (
           <p className="px-1 text-xs text-muted">还没有月份可跳</p>
         ) : (
           <ul className="space-y-1.5">
-            {idx.data!.months.map((mo) => {
+            {index.map((mo) => {
               const active = anchored === mo.month;
               return (
                 <li key={mo.month}>
@@ -155,7 +155,7 @@ function RailContent({
       </section>
 
       <section>
-        {scopeChainId && (tags?.tags.length ?? 0) > 0 && (
+        {scopeChainId && tags.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
             <h3 className="w-full px-1 text-[12px] text-muted">标签</h3>
             <button
@@ -165,7 +165,7 @@ function RailContent({
             >
               全部
             </button>
-            {tags!.tags.map((t) => (
+            {tags.map((t) => (
               <button
                 key={t.id}
                 type="button"

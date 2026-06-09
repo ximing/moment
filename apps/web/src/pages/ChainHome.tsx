@@ -8,13 +8,14 @@ import { ComposerEntry } from '@/compose/composer-entry';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { canCompose } from '@/lib/roles';
 import { Timeline } from '@/timeline/timeline';
-import { TimelineRail, type RailFilter } from '@/timeline/TimelineRail';
+import { TimelineRail, type RailFilter } from '@/timeline/timeline-rail';
+import { currentTzOffset } from '@/lib/time';
 import { ArrowLeft } from 'lucide-react';
 import { Banner } from '@/ui/Banner';
 import { Button } from '@/ui/Button';
+import { Empty } from '@/ui/Empty';
 import { Icon } from '@/ui/Icon';
 import { KebabButton, Menu, MenuItem } from '@/ui/Menu';
-import { Empty } from './FeedHome';
 
 export function ChainHome() {
   const { chainId = '' } = useParams();
@@ -29,6 +30,19 @@ export function ChainHome() {
   });
   // feed 固定本链 + rail 筛选；before 变化 = key 变化 = 重查第一页（spec §4.3）
   const feedFilter = { ...filter, chainIds: [chainId] };
+  // rail 改受控（T10）后页面自供数据：month-index/标签仍是 RQ，T11 整页迁 Service
+  const idx = useQuery({
+    queryKey: qk.monthIndex({ chainIds: [chainId], tagId: filter.tagId, tzOffset: currentTzOffset() }),
+    queryFn: () =>
+      client.getMonthIndex({ chainIds: [chainId], tagId: filter.tagId, tzOffset: currentTzOffset() }),
+    // created_at 下 before/月份锚定无意义（dto BEFORE_REQUIRES_HAPPENED_AT），索引块整体替换为说明
+    enabled: Boolean(chainId) && filter.order === 'happened_at',
+  });
+  const { data: tagData } = useQuery({
+    queryKey: qk.tags(chainId),
+    queryFn: () => client.listTags(chainId),
+    enabled: Boolean(chainId),
+  });
   const q = useInfiniteQuery({
     queryKey: qk.feed(feedFilter),
     queryFn: ({ pageParam }) => client.getFeed({ ...feedFilter, cursor: pageParam, limit: 50 }),
@@ -49,7 +63,14 @@ export function ChainHome() {
 
   return (
     <div>
-      <TimelineRail chains={[]} fixedChainId={chainId} value={filter} onChange={setFilter} />
+      <TimelineRail
+        fixedChainId={chainId}
+        index={idx.data?.months ?? []}
+        indexPending={idx.isPending}
+        tags={tagData?.tags ?? []}
+        value={filter}
+        onChange={setFilter}
+      />
       <header className="mb-5 flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-medium">{chain.name}</h1>

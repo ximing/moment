@@ -4,7 +4,7 @@ import { LoginPage } from '@/pages/login';
 import { RegisterPage } from '@/pages/register';
 import { ChainHome } from '@/pages/ChainHome';
 import { ChainSettingsPage } from '@/pages/chain-settings';
-import { FeedHome } from '@/pages/FeedHome';
+import { FeedHome } from '@/pages/feed-home';
 import { InvitePage } from '@/pages/invite';
 import { MePage } from '@/pages/me';
 import { MomentPage } from '@/pages/moment';
