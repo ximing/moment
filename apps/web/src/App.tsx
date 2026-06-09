@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useParams } from 'react-router';
 import { RequireAuth } from '@/shell/require-auth';
-import { LoginPage, RegisterPage } from '@/pages/AuthPages';
+import { LoginPage } from '@/pages/login';
+import { RegisterPage } from '@/pages/register';
 import { ChainHome } from '@/pages/ChainHome';
 import { ChainSettingsPage } from '@/pages/chain-settings';
 import { FeedHome } from '@/pages/FeedHome';
