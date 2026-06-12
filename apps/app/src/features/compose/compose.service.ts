@@ -72,22 +72,30 @@ export class ComposeService extends Service {
     }
   }
 
-  /** 选图 + 压缩；返回 rejected 数（压缩后仍超 MAX_IMAGE_BYTES 的跳过，组件 Alert 汇总）。 */
+  /** 选图 + 压缩；返回 rejected 数（仅统计压缩后仍超 MAX_IMAGE_BYTES 被跳过的，名额截断不算）。
+   *  满 9 张抛 Error（中文 message，组件 Alert）；压缩中途抛错也复位进度。 */
   async pickMoreImages(): Promise<number> {
     const picked = await pickImages();
     if (picked.length === 0) return 0;
     const remain = 9 - this.images.length;
-    if (remain <= 0) return 0;
-    this.progressLabel = '压缩中…';
+    if (remain <= 0) throw new Error('图片最多 9 张');
+    let rejected = 0;
     const ready: ReadyImage[] = [];
-    for (const img of picked.slice(0, remain)) {
-      const r = await compressImage(img);
-      if (r.size > MAX_IMAGE_BYTES) continue;
-      ready.push(r);
+    try {
+      this.progressLabel = '压缩中…';
+      for (const img of picked.slice(0, remain)) {
+        const r = await compressImage(img);
+        if (r.size > MAX_IMAGE_BYTES) {
+          rejected += 1; // 压缩后仍超限的个别图片（极端长图）跳过；常量唯一来源 @moment/dto
+          continue;
+        }
+        ready.push(r);
+      }
+    } finally {
+      this.progressLabel = null;
     }
-    this.progressLabel = null;
     this.images = [...this.images, ...ready].slice(0, 9);
-    return picked.length - ready.length;
+    return rejected;
   }
 
   /** 选视频 + 校验；返回问题文案（null = 成功）。 */
@@ -127,31 +135,34 @@ export class ComposeService extends Service {
     }
     const totalBytes = files.reduce((s, f) => s + f.size, 0);
     let doneBytes = 0;
-    for (const f of files) {
-      const res = await uploadWithRetry({
-        ...f,
-        onProgress: (loaded) => {
-          const overall = totalBytes > 0 ? Math.floor(((doneBytes + loaded) / totalBytes) * 100) : 100;
-          this.progressLabel = `上传中 ${overall}%`;
-        },
-      });
-      mediaIds.push(res.mediaId);
-      doneBytes += f.size;
-    }
+    try {
+      for (const f of files) {
+        const res = await uploadWithRetry({
+          ...f,
+          onProgress: (loaded) => {
+            const overall = totalBytes > 0 ? Math.floor(((doneBytes + loaded) / totalBytes) * 100) : 100;
+            this.progressLabel = `上传中 ${overall}%`;
+          },
+        });
+        mediaIds.push(res.mediaId);
+        doneBytes += f.size;
+      }
 
-    this.progressLabel = '发布中…';
-    const created = await client.createMoment(activeChainId, {
-      type: this.type,
-      content: this.content,
-      happenedAt: this.happenedAt.toISOString(),
-      // 与 dto 契约同语义：原值（同 JS getTimezoneOffset，东八区 = -480），不取反
-      happenedTzOffset: this.happenedAt.getTimezoneOffset(),
-      isBackfill: this.isBackfill,
-      mediaIds,
-      tagIds: this.tagIds,
-    });
-    this.progressLabel = null;
-    this.emit('moment:changed', { momentId: created.id, chainId: activeChainId, op: 'create' }, 'global');
+      this.progressLabel = '发布中…';
+      const created = await client.createMoment(activeChainId, {
+        type: this.type,
+        content: this.content,
+        happenedAt: this.happenedAt.toISOString(),
+        // 与 dto 契约同语义：原值（同 JS getTimezoneOffset，东八区 = -480），不取反
+        happenedTzOffset: this.happenedAt.getTimezoneOffset(),
+        isBackfill: this.isBackfill,
+        mediaIds,
+        tagIds: this.tagIds,
+      });
+      this.emit('moment:changed', { momentId: created.id, chainId: activeChainId, op: 'create' }, 'global');
+    } finally {
+      this.progressLabel = null; // 失败路径也复位，避免「上传中 N%」「发布中…」永久停留
+    }
     // 过渡期 invalidate（feed 前缀覆盖全部过滤组合 + 链内列表 + 标签计数）；Task 11 删
     void queryClient.invalidateQueries({ queryKey: qk.feedAll() });
     void queryClient.invalidateQueries({ queryKey: qk.chainMoments(activeChainId) });

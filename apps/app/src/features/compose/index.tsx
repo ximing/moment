@@ -19,9 +19,14 @@ const ComposeContent = observer(function ComposeContent() {
   }, [service, params.chainId]);
 
   async function onPickImages(): Promise<void> {
-    const rejected = await service.pickMoreImages().catch(() => 0);
-    if (rejected > 0) {
-      Alert.alert('提示', `${rejected} 张图片压缩后仍超限，已跳过`);
+    try {
+      const rejected = await service.pickMoreImages();
+      if (rejected > 0) {
+        Alert.alert('提示', `${rejected} 张图片压缩后仍超限，已跳过`);
+      }
+    } catch (err) {
+      // Service 前置校验（满 9 张等 Error 中文 message）直接展示
+      Alert.alert('提示', err instanceof Error ? err.message : '网络错误，请重试');
     }
   }
 
