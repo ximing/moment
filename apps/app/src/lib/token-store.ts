@@ -29,8 +29,25 @@ export const secureTokenStore: TokenStore = {
   async clear() {
     await SecureStore.deleteItemAsync(TOKENS_KEY).catch(() => undefined);
     await SecureStore.deleteItemAsync(USER_KEY).catch(() => undefined);
+    notifyAuthCleared(); // 单路径：登出与 refresh 失效都从这里通知 AuthService
   },
 };
+
+type AuthClearedListener = () => void;
+const authClearedListeners = new Set<AuthClearedListener>();
+
+/** tokenStore.clear() 的唯一桥（替代 web 的 window 'moment:auth-cleared'）：
+ *  api-client Http refresh 失效与 AuthService.logout 都经 clear() 收敛到 AuthService 构造里的订阅。 */
+export function onAuthCleared(fn: AuthClearedListener): () => void {
+  authClearedListeners.add(fn);
+  return () => {
+    authClearedListeners.delete(fn);
+  };
+}
+
+function notifyAuthCleared(): void {
+  for (const fn of [...authClearedListeners]) fn();
+}
 
 export async function loadUser(): Promise<UserProfile | null> {
   const raw = await SecureStore.getItemAsync(USER_KEY).catch(() => null);
