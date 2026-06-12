@@ -1,20 +1,17 @@
 import { Service } from '@rabjs/react';
-import type { ChainDto, ChainMemberDto, InviteDto, MomentResponse, TagResponse } from '@moment/dto';
+import type { ChainDto, MomentResponse, TagResponse } from '@moment/dto';
 import { client } from '../../lib/api';
 import { queryClient } from '../../lib/query';
 import { qk } from '../../lib/keys';
 import type { ChainChangedPayload } from '../../lib/events';
 
-export type ChainSegment = 'timeline' | 'members' | 'invites' | 'tags';
+export type ChainSegment = 'timeline' | 'tags';
 
-/** 链详情（本 Task 保持全功能四段；Task 9 上线设置页后收薄为 timeline + tags）。 */
+/** 链首页（时间线 + 标签两段；成员/邀请/设置已挪进设置页 Task 9）。 */
 export class ChainHomeService extends Service {
   chainId = '';
   chain: ChainDto | null = null;
-  segment: ChainSegment = 'timeline';
   moments: MomentResponse[] = [];
-  members: ChainMemberDto[] = [];
-  invites: InviteDto[] = [];
   tags: TagResponse[] = [];
   private nextCursor: string | null = null;
   private gen = 0;
@@ -53,8 +50,6 @@ export class ChainHomeService extends Service {
     this.chainId = chainId;
     this.chain = null;
     this.moments = [];
-    this.members = [];
-    this.invites = [];
     this.tags = [];
     this.sectionsLoaded = false;
     void this.loadChain().catch(() => undefined);
@@ -74,7 +69,6 @@ export class ChainHomeService extends Service {
     this.chain = await client.getChain(this.chainId);
     if (!this.sectionsLoaded) {
       this.sectionsLoaded = true;
-      void this.loadMembers().catch(() => undefined);
       void this.loadTags().catch(() => undefined);
     }
   }
@@ -101,40 +95,8 @@ export class ChainHomeService extends Service {
     }
   }
 
-  async loadMembers(): Promise<void> {
-    this.members = await client.listMembers(this.chainId);
-    // listInvites 仅 owner（editor 调会 403；这是服务端权限事实）
-    if (this.chain?.myRole === 'owner') {
-      this.invites = await client.listInvites(this.chainId);
-    } else {
-      this.invites = [];
-    }
-  }
-
   async loadTags(): Promise<void> {
     this.tags = (await client.listTags(this.chainId)).tags;
-  }
-
-  async changeRole(userId: string, role: 'editor' | 'viewer'): Promise<void> {
-    await client.updateMemberRole(this.chainId, userId, role);
-    await this.loadMembers();
-  }
-
-  async removeMember(userId: string): Promise<void> {
-    await client.removeMember(this.chainId, userId);
-    await this.loadMembers();
-    await this.loadChain();
-  }
-
-  async createInvite(role: 'editor' | 'viewer'): Promise<string> {
-    const invite = await client.createInvite(this.chainId, { role });
-    await this.loadMembers();
-    return invite.token; // 组件拼 moment://invites/<token> 走 Share
-  }
-
-  async revokeInvite(id: string): Promise<void> {
-    await client.revokeInvite(id);
-    await this.loadMembers();
   }
 
   async addTag(name: string): Promise<void> {

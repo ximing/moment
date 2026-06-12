@@ -15,6 +15,7 @@ const config: ExpoConfig = {
   experiments: { typedRoutes: false },
   extra: {
     apiUrl,
+    webUrl: process.env.EXPO_PUBLIC_WEB_URL ?? 'http://localhost:5173',
     // Expo serializeAndEvaluate treats null as {} (typeof null === 'object'),
     // and Expo Go then path.basename({}) on extra.eas.projectId. undefined stays absent.
     eas: { projectId: process.env.EAS_PROJECT_ID ?? undefined },

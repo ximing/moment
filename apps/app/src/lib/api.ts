@@ -16,3 +16,8 @@ export const client: MomentClient = createMomentClient({
   tokenStore: secureTokenStore,
   putWithProgress: rnPut,
 });
+
+/** 分享链接落 Web 端（/share/:token，web 已有匿名公开页）——长辈用浏览器打开。 */
+export const webUrl =
+  (Constants.expoConfig?.extra as { webUrl?: string } | undefined)?.webUrl ??
+  'http://localhost:5173';
