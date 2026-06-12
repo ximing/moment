@@ -5,6 +5,7 @@ import { client } from '../../lib/api';
 import { queryClient } from '../../lib/query';
 import { qk } from '../../lib/keys';
 import { compressImage, pickImages, pickVideo, validateVideo, type PickedVideo, type ReadyImage } from '../../lib/media';
+import { ChainListService } from '../../services/chain-list.service';
 
 /** 总尝试次数 = 初始 1 次 + ≤2 次重试；网络类（status 0）/5xx 才重试。
  *  服务端 complete 幂等，重试会重新 presign 拿新 mediaId，旧 mediaId 残留由 sweeper 清理。 */
@@ -63,7 +64,7 @@ export class ComposeService extends Service {
   }
 
   private async loadChains(): Promise<void> {
-    const chains = await client.listChains();
+    const chains = this.resolve(ChainListService).chains;
     this.editable = chains.filter((c) => c.myRole !== 'viewer').map((c) => ({ id: c.id, name: c.name }));
     const active = this.chainId ?? this.editable[0]?.id;
     if (active) {

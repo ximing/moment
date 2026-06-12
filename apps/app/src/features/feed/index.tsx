@@ -1,0 +1,102 @@
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { Link, router } from 'expo-router';
+import { bindServices, observer, useService } from '@rabjs/react';
+import type { MomentResponse } from '@moment/dto';
+import { Loading } from '../../components/Loading';
+import { MomentCard } from '../../components/MomentCard';
+import { FeedService } from './feed.service';
+
+const FeedContent = observer(function FeedContent() {
+  const service = useService(FeedService);
+
+  if (service.moments.length === 0 && service.$model.loadFirst.loading) return <Loading />;
+
+  return (
+    <View style={styles.flex}>
+      <View style={styles.filters}>
+        <Chip label="全部链" active={service.chainId == null} onPress={() => service.setChainFilter(undefined)} />
+        {service.chainList.map((c) => (
+          <Chip key={c.id} label={c.name} active={service.chainId === c.id} onPress={() => service.setChainFilter(c.id)} />
+        ))}
+        <Chip
+          label={service.order === 'happened_at' ? '按发生时间' : '按添加时间'}
+          active={false}
+          onPress={() => service.toggleOrder()}
+        />
+      </View>
+      {service.chainId != null && service.tags.length > 0 ? (
+        <View style={styles.filters}>
+          <Chip label="全部标签" active={service.tagId == null} onPress={() => service.setTagFilter(undefined)} />
+          {service.tags.map((t) => (
+            <Chip key={t.id} label={`#${t.name}`} active={service.tagId === t.id} onPress={() => service.setTagFilter(t.id)} />
+          ))}
+        </View>
+      ) : null}
+      {service.$model.loadFirst.error ? <Text style={styles.errorBanner}>加载失败，下拉重试</Text> : null}
+      <FlashList
+        data={service.moments}
+        keyExtractor={(m) => m.id}
+        contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={service.$model.loadFirst.loading} onRefresh={() => void service.loadFirst().catch(() => undefined)} />
+        }
+        onEndReachedThreshold={0.4}
+        onEndReached={() => void service.loadMore().catch(() => undefined)}
+        renderItem={({ item }: { item: MomentResponse }) => (
+          <MomentCard moment={item} onPress={() => router.push(`/moments/${item.id}`)} />
+        )}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>还没有时刻，发布第一条吧</Text>
+          </View>
+        }
+        ListFooterComponent={service.$model.loadMore.loading ? <Text style={styles.loadingMore}>加载中…</Text> : null}
+      />
+      <Link href={{ pathname: '/compose' }} asChild>
+        <Pressable style={styles.fab} onPress={() => undefined}>
+          <Text style={styles.fabText}>＋</Text>
+        </Pressable>
+      </Link>
+    </View>
+  );
+});
+
+function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
+      <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+export const FeedPage = bindServices(FeedContent, [FeedService]);
+
+const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: '#f6f6f6' },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingVertical: 6 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e5e5' },
+  chipActive: { backgroundColor: '#4a90d9', borderColor: '#4a90d9' },
+  chipText: { fontSize: 13, color: '#444' },
+  chipTextActive: { color: '#fff' },
+  list: { paddingBottom: 16 },
+  empty: { padding: 48, alignItems: 'center' },
+  emptyText: { color: '#999' },
+  loadingMore: { textAlign: 'center', color: '#999', padding: 12 },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#4a90d9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+  },
+  fabText: { color: '#fff', fontSize: 28, lineHeight: 32 },
+  errorBanner: { color: '#d33', textAlign: 'center', padding: 8 },
+});
