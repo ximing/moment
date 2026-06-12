@@ -1,5 +1,7 @@
 import { register } from '@rabjs/react';
 import { AuthService } from './auth.service';
+import { ChainListService } from './chain-list.service';
+import { NotificationService } from './notification.service';
 
 let registered = false;
 
@@ -9,5 +11,6 @@ export function registerGlobals(): void {
   if (registered) return;
   registered = true;
   register(AuthService);
-  // Task 6 追加：register(ChainListService); register(NotificationService);
+  register(ChainListService);
+  register(NotificationService);
 }
