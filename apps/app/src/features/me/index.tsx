@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Alert, Button, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { bindServices, observer, useService } from '@rabjs/react';
+import { ApiError } from '@moment/api-client';
 import { humanError } from '../../lib/errors';
 import { AuthService } from '../../services/auth.service';
 import { MeService } from './me.service';
@@ -60,17 +61,14 @@ const MeContent = observer(function MeContent() {
   );
 });
 
-/** 昵称输入行：TextInput 受控值绑 service.nicknameDraft（observer 响应）。 */
+/** 昵称输入行：TextInput 直接受控绑 service.nicknameDraft（点保存不依赖 blur 提交）。 */
 const TextInputRow = observer(function TextInputRow({ service }: { service: MeService }) {
-  const [draft, setDraft] = useState(service.nicknameDraft);
-  useEffect(() => setDraft(service.nicknameDraft), [service.nicknameDraft]);
   return (
     <View style={styles.nicknameRow}>
       <TextInput
         style={styles.input}
-        value={draft}
-        onChangeText={setDraft}
-        onEndEditing={() => (service.nicknameDraft = draft)}
+        value={service.nicknameDraft}
+        onChangeText={(v) => (service.nicknameDraft = v)}
         placeholder="昵称（1–50 字）"
         placeholderTextColor="#aaa"
         maxLength={50}
@@ -78,7 +76,7 @@ const TextInputRow = observer(function TextInputRow({ service }: { service: MeSe
       <Button
         title={service.$model.saveNickname.loading ? '保存中…' : '保存'}
         disabled={service.$model.saveNickname.loading}
-        onPress={() => void service.saveNickname().catch((err) => Alert.alert('失败', humanError(err)))}
+        onPress={() => void service.saveNickname().catch((err) => Alert.alert('失败', err instanceof Error && !(err instanceof ApiError) ? err.message : humanError(err)))}
       />
     </View>
   );
