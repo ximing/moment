@@ -1,6 +1,7 @@
 import { Service } from '@rabjs/react';
 import type { ChainDto, MomentResponse, TagResponse } from '@moment/dto';
 import { client } from '../../lib/api';
+import { ChainListService } from '../../services/chain-list.service';
 import type { ChainChangedPayload } from '../../lib/events';
 
 export type ChainSegment = 'timeline' | 'tags';
@@ -41,6 +42,12 @@ export class ChainHomeService extends Service {
       },
       'global',
     );
+  }
+
+  /** 发布按钮角色门（spec §4）：editor 及以上可发布；角色实时读全局链列表（转让后经 chain:changed 刷新）。 */
+  get canCompose(): boolean {
+    const role = this.resolve(ChainListService).myRoleOf(this.chainId);
+    return role === 'owner' || role === 'editor';
   }
 
   hydrate(chainId: string): void {

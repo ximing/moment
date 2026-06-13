@@ -38,33 +38,36 @@ export class ComposeService extends Service {
   progressLabel: string | null = null;
   showPicker = false; // 日期时间选择器展开态（iOS spinner 需要显式收起）
 
-  private editable: { id: string; name: string }[] = [];
   tagNames: { id: string; name: string }[] = [];
 
   /** 路由 param 进来（?chainId=）；compose 是 modal 路由，bindServices 实例随页面生灭，不挡幂等。 */
   hydrate(chainId: string | undefined): void {
     this.chainId = chainId;
-    void this.loadChains().catch(() => undefined);
+    void this.loadTags().catch(() => undefined);
   }
 
+  /** 实时读全局链列表（与 FeedService.chainList 同款 getter），无一次性快照的过期窗口。 */
   get editableChains(): { id: string; name: string }[] {
-    return this.editable;
+    return this.resolve(ChainListService).chains
+      .filter((c) => c.myRole !== 'viewer')
+      .map((c) => ({ id: c.id, name: c.name }));
   }
 
+  /** 路由参数的链若是 viewer 链（不在 editable 集合），回退到第一条可编辑链。 */
   get activeChainId(): string | undefined {
-    return this.chainId ?? this.editable[0]?.id;
+    if (this.chainId && this.editableChains.some((c) => c.id === this.chainId)) return this.chainId;
+    return this.editableChains[0]?.id;
   }
 
   setChain(id: string): void {
     this.chainId = id;
     this.tagIds = [];
-    void this.loadChains().catch(() => undefined);
+    void this.loadTags().catch(() => undefined);
   }
 
-  private async loadChains(): Promise<void> {
-    const chains = this.resolve(ChainListService).chains;
-    this.editable = chains.filter((c) => c.myRole !== 'viewer').map((c) => ({ id: c.id, name: c.name }));
-    const active = this.chainId ?? this.editable[0]?.id;
+  /** 只拉当前活跃链的标签（链集合本身由 ChainListService 实时持有）。 */
+  private async loadTags(): Promise<void> {
+    const active = this.activeChainId;
     if (active) {
       const tags = await client.listTags(active);
       this.tagNames = tags.tags.map((t) => ({ id: t.id, name: t.name }));
@@ -115,6 +118,8 @@ export class ComposeService extends Service {
   async submit(): Promise<void> {
     const activeChainId = this.activeChainId;
     if (!activeChainId) throw new Error('请选择要发布到的链（需要编辑权限）');
+    // 角色前置校验：viewer 链（含深链/旧参数）挡在媒体上传之前，避免全量上传后才被服务端 403
+    if (!this.editableChains.some((c) => c.id === activeChainId)) throw new Error('请选择要发布到的链（需要编辑权限）');
     if (this.type === 'text' && this.content.trim().length === 0) throw new Error('文字类型需要内容');
     if (this.content.length > 5000) throw new Error('正文最多 5000 字');
     if (this.type === 'media' && this.images.length === 0) throw new Error('图文类型至少选 1 张图（最多 9 张）');

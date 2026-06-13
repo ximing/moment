@@ -27,7 +27,9 @@ const Content = observer(function Content() {
         <Text style={styles.name}>{service.chain?.name ?? ''}</Text>
         {service.chain?.description ? <Text style={styles.desc}>{service.chain.description}</Text> : null}
         <View style={styles.headActions}>
-          <Button title="＋ 发布时刻" onPress={() => router.push({ pathname: '/compose', params: { chainId: service.chainId } })} />
+          {service.canCompose ? (
+            <Button title="＋ 发布时刻" onPress={() => router.push({ pathname: '/compose', params: { chainId: service.chainId } })} />
+          ) : null}
           <Pressable style={styles.gear} onPress={() => router.push(`/chains/${service.chainId}/settings`)}>
             <Text style={styles.gearText}>⚙️ 设置</Text>
           </Pressable>

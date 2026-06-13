@@ -10,16 +10,16 @@ export class ChainListService extends Service {
   constructor() {
     super();
     // 兜底：auth:changed（AuthService hydrate 完成会发）是主通道
-    if (this.resolve(AuthService).user) void this.load();
+    if (this.resolve(AuthService).user) void this.load().catch(() => undefined);
     this.on(
       'auth:changed',
       (user: UserProfile | null) => {
-        if (user) void this.load();
+        if (user) void this.load().catch(() => undefined);
         else this.chains = [];
       },
       'global',
     );
-    this.on('chain:changed', () => void this.load(), 'global');
+    this.on('chain:changed', () => void this.load().catch(() => undefined), 'global');
   }
 
   async load(): Promise<void> {

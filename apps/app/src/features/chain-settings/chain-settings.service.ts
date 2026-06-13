@@ -123,6 +123,8 @@ export class ChainSettingsService extends Service {
 
   async transferChain(userId: string): Promise<void> {
     await client.transferChain(this.chainId, userId);
+    // 转让后自己 owner→editor：扇出让 ChainListService 刷新 myRole（发布按钮/选链集合都吃它）
+    this.emit('chain:changed', { chainId: this.chainId, op: 'update' }, 'global');
     await this.loadMembers();
     await this.loadChain();
   }

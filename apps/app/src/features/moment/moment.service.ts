@@ -25,7 +25,7 @@ export class MomentPageService extends Service {
           this.deleted = true;
           return;
         }
-        void this.loadMoment();
+        void this.loadMoment().catch(() => undefined);
       },
       'global',
     );
@@ -33,8 +33,8 @@ export class MomentPageService extends Service {
       'comment:changed',
       (p: CommentChangedPayload) => {
         if (p.momentId !== this.momentId) return;
-        void this.loadFirstComments();
-        void this.loadMoment(); // 刷新评论数
+        void this.loadFirstComments().catch(() => undefined);
+        void this.loadMoment().catch(() => undefined); // 刷新评论数
       },
       'global',
     );
@@ -48,8 +48,8 @@ export class MomentPageService extends Service {
     this.deleted = false;
     this.comments = [];
     this.nextCursor = null;
-    void this.loadMoment();
-    void this.loadFirstComments();
+    void this.loadMoment().catch(() => undefined);
+    void this.loadFirstComments().catch(() => undefined);
   }
 
   get hasMore(): boolean {
@@ -102,6 +102,6 @@ export class MomentPageService extends Service {
     if (emoji === null) await client.removeReaction(this.momentId);
     else await client.setReaction(this.momentId, emoji);
     this.emit('moment:changed', { momentId: this.momentId, chainId, op: 'react' }, 'global');
-    void this.loadMoment(); // 本页即时刷新计数
+    void this.loadMoment().catch(() => undefined); // 本页即时刷新计数
   }
 }
