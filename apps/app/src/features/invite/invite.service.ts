@@ -2,8 +2,6 @@ import { Service } from '@rabjs/react';
 import type { AcceptInviteResponse } from '@moment/dto';
 import { ApiError } from '@moment/api-client';
 import { client } from '../../lib/api';
-import { queryClient } from '../../lib/query';
-import { qk } from '../../lib/keys';
 
 /** 邀请接受页：terminal = 邀请失效类错误（不可重试）；成功 emit chain:changed(create)。 */
 export class InviteService extends Service {
@@ -21,7 +19,6 @@ export class InviteService extends Service {
       this.result = res;
       this.terminal = false;
       this.emit('chain:changed', { chainId: res.chainId, op: 'create' }, 'global');
-      void queryClient.invalidateQueries({ queryKey: qk.chains() }); // 过渡期；Task 11 删
     } catch (err) {
       if (err instanceof ApiError) {
         this.terminal = new Set(['INVITE_EXPIRED', 'INVITE_ALREADY_ACCEPTED', 'INVITE_EMAIL_MISMATCH']).has(err.code);

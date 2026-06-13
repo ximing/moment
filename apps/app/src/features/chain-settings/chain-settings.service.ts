@@ -11,7 +11,6 @@ export class ChainSettingsService extends Service {
   members: Awaited<ReturnType<typeof client.listMembers>> = [];
   invites: Awaited<ReturnType<typeof client.listInvites>> = [];
   shareLinks: ShareLinkDto[] = [];
-  tags: Awaited<ReturnType<typeof client.listTags>>['tags'] = [];
 
   // 资料表单（name/description/color/icon；无封面——服务端 updateChain 不支持）
   formName = '';
@@ -22,9 +21,6 @@ export class ChainSettingsService extends Service {
 
   // 分享链接创建选项（与 web 同款）
   shareExpire: 'never' | '7' | '30' = 'never';
-
-  // 成员操作
-  inviteEmail = '';
 
   private sectionsLoaded = false;
 
@@ -59,7 +55,6 @@ export class ChainSettingsService extends Service {
       if (this.chain.myRole === 'owner') {
         void this.loadShareLinks().catch(() => undefined);
       }
-      void this.loadTags().catch(() => undefined);
     }
     if (!this.formHydrated) {
       // 首载水合资料表单（之后用户改动不覆盖）
@@ -84,10 +79,6 @@ export class ChainSettingsService extends Service {
   async loadShareLinks(): Promise<void> {
     if (this.chain?.myRole !== 'owner') return;
     this.shareLinks = (await client.listShareLinks(this.chainId)).items;
-  }
-
-  async loadTags(): Promise<void> {
-    this.tags = (await client.listTags(this.chainId)).tags;
   }
 
   async saveProfile(): Promise<void> {
@@ -137,11 +128,7 @@ export class ChainSettingsService extends Service {
   }
 
   async createInvite(): Promise<string> {
-    const invite = await client.createInvite(this.chainId, {
-      email: this.inviteEmail.trim() || undefined,
-      role: 'editor',
-    });
-    this.inviteEmail = '';
+    const invite = await client.createInvite(this.chainId, { role: 'editor' });
     await this.loadMembers();
     return invite.token;
   }
@@ -149,18 +136,6 @@ export class ChainSettingsService extends Service {
   async revokeInvite(id: string): Promise<void> {
     await client.revokeInvite(id);
     await this.loadMembers();
-  }
-
-  async addTag(name: string): Promise<void> {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    await client.createTag(this.chainId, trimmed);
-    await this.loadTags();
-  }
-
-  async deleteTag(id: string): Promise<void> {
-    await client.deleteTag(id);
-    await this.loadTags();
   }
 
   async deleteChain(): Promise<void> {

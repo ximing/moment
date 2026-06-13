@@ -2,7 +2,6 @@ import { Service } from '@rabjs/react';
 import type { AuthResponse, LoginInput, RegisterInput, UserProfile } from '@moment/dto';
 import { ApiError } from '@moment/api-client';
 import { client } from '../lib/api';
-import { queryClient } from '../lib/query';
 import { loadUser, onAuthCleared, saveUser, secureTokenStore } from '../lib/token-store';
 
 /** 全局认证态（spec §3）。SecureStore 异步水合 → ready 闸；事件单路径收敛在 onAuthCleared。 */
@@ -17,7 +16,6 @@ export class AuthService extends Service {
     onAuthCleared(() => {
       this.user = null;
       this.ready = true;
-      queryClient.clear(); // 过渡期：RQ 缓存随会话作废；Task 11 删
       this.emit('auth:changed', null, 'global');
     });
     void this.hydrate();
@@ -48,7 +46,6 @@ export class AuthService extends Service {
     // 必须先 await 落盘（SecureStore 异步），再触发任何带 token 的调用，避免读到旧/空 token
     await secureTokenStore.setTokens(res.tokens);
     await saveUser(res.user);
-    queryClient.clear(); // 换会话即换缓存（过渡期；Task 11 删）
     this.user = res.user;
     this.emit('auth:changed', res.user, 'global');
   }

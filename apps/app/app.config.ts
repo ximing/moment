@@ -11,7 +11,7 @@ const config: ExpoConfig = {
   platforms: ['ios', 'android'],
   ios: { bundleIdentifier: 'com.moment.app', supportsTablet: false },
   android: { package: 'com.moment.app' },
-  plugins: ['expo-router', 'expo-secure-store', 'expo-notifications'],
+  plugins: ['expo-router', 'expo-secure-store'],
   experiments: { typedRoutes: false },
   extra: {
     apiUrl,

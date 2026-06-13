@@ -1,8 +1,6 @@
 import { Service } from '@rabjs/react';
 import type { ChainDto, MomentResponse, TagResponse } from '@moment/dto';
 import { client } from '../../lib/api';
-import { queryClient } from '../../lib/query';
-import { qk } from '../../lib/keys';
 import type { ChainChangedPayload } from '../../lib/events';
 
 export type ChainSegment = 'timeline' | 'tags';
@@ -56,15 +54,6 @@ export class ChainHomeService extends Service {
     void this.loadFirst().catch(() => undefined);
   }
 
-  get hasMore(): boolean {
-    return this.nextCursor !== null;
-  }
-
-  get myRole(): string | undefined {
-    // 优先 chain.myRole（getChain 实时）；兜底全局链列表
-    return this.chain?.myRole;
-  }
-
   async loadChain(): Promise<void> {
     this.chain = await client.getChain(this.chainId);
     if (!this.sectionsLoaded) {
@@ -104,12 +93,10 @@ export class ChainHomeService extends Service {
     if (!trimmed) return;
     await client.createTag(this.chainId, trimmed);
     await this.loadTags();
-    void queryClient.invalidateQueries({ queryKey: qk.tags(this.chainId) }); // 过渡期；Task 11 删
   }
 
   async deleteTag(id: string): Promise<void> {
     await client.deleteTag(id);
     await this.loadTags();
-    void queryClient.invalidateQueries({ queryKey: qk.tags(this.chainId) }); // 过渡期；Task 11 删
   }
 }

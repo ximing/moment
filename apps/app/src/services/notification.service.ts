@@ -85,7 +85,7 @@ export class NotificationService extends Service {
     const unreadIds: string[] = [];
     let cursor: string | undefined;
     do {
-      const page = await client.listNotifications(false, { cursor, limit: 50 });
+      const page = await client.listNotifications(undefined, { cursor, limit: 50 });
       unreadIds.push(...page.notifications.filter((n) => n.readAt === null).map((n) => n.id));
       cursor = page.nextCursor ?? undefined;
     } while (cursor);

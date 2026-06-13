@@ -2,8 +2,6 @@ import { Service } from '@rabjs/react';
 import { MAX_IMAGE_BYTES, type MediaCompleteResponse, type MomentType } from '@moment/dto';
 import { ApiError } from '@moment/api-client';
 import { client } from '../../lib/api';
-import { queryClient } from '../../lib/query';
-import { qk } from '../../lib/keys';
 import { compressImage, pickImages, pickVideo, validateVideo, type PickedVideo, type ReadyImage } from '../../lib/media';
 import { ChainListService } from '../../services/chain-list.service';
 
@@ -164,9 +162,5 @@ export class ComposeService extends Service {
     } finally {
       this.progressLabel = null; // 失败路径也复位，避免「上传中 N%」「发布中…」永久停留
     }
-    // 过渡期 invalidate（feed 前缀覆盖全部过滤组合 + 链内列表 + 标签计数）；Task 11 删
-    void queryClient.invalidateQueries({ queryKey: qk.feedAll() });
-    void queryClient.invalidateQueries({ queryKey: qk.chainMoments(activeChainId) });
-    void queryClient.invalidateQueries({ queryKey: qk.tags(activeChainId) });
   }
 }
