@@ -4,14 +4,12 @@ import { Link, router } from 'expo-router';
 import { observer, useService } from '@rabjs/react';
 import type { ChainDto } from '@moment/dto';
 import { ChainListService } from '../../services/chain-list.service';
-import { AuthService } from '../../services/auth.service';
 import { Loading } from '../../components/Loading';
 
 const ROLE_LABEL: Record<string, string> = { owner: '主理人', editor: '编辑', viewer: '只读' };
 
 export const ChainsPage = observer(function ChainsPage() {
   const chainList = useService(ChainListService);
-  const auth = useService(AuthService);
 
   if (chainList.chains.length === 0 && chainList.$model.load.loading) return <Loading />;
 
@@ -45,14 +43,6 @@ export const ChainsPage = observer(function ChainsPage() {
             </Pressable>
           </Link>
         }
-        ListFooterComponent={
-          <View style={styles.footer}>
-            <Text style={styles.user}>{auth.user?.nickname ?? ''}</Text>
-            <Pressable onPress={() => void auth.logout().catch(() => undefined)}>
-              <Text style={styles.logout}>退出登录</Text>
-            </Pressable>
-          </View>
-        }
       />
     </View>
   );
@@ -70,7 +60,4 @@ const styles = StyleSheet.create({
   emptyText: { color: '#999' },
   newBtn: { backgroundColor: '#4a90d9', borderRadius: 8, padding: 12, alignItems: 'center', marginBottom: 12 },
   newBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-  user: { color: '#666' },
-  logout: { color: '#d33' },
 });

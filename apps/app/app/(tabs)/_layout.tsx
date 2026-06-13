@@ -22,6 +22,10 @@ export default function TabsLayout() {
           name="notifications"
           options={{ title: '通知', tabBarIcon: ({ focused }) => <TabIcon label="🔔" focused={focused} /> }}
         />
+        <Tabs.Screen
+          name="me"
+          options={{ title: '我', tabBarIcon: ({ focused }) => <TabIcon label="👤" focused={focused} /> }}
+        />
       </Tabs>
     </RequireAuth>
   );
