@@ -6,6 +6,8 @@ import {
   transferChainInputSchema,
   updateChainInputSchema,
   updateMemberRoleInputSchema,
+  type ChainDto,
+  type ChainMemberPreview,
 } from './chains.js';
 
 test('createChainInputSchema：visibility 默认 private，name trim', () => {
@@ -54,4 +56,20 @@ test('createInviteInputSchema：role 默认 editor，仅允许 editor/viewer，e
 test('transferChainInputSchema：要求 userId', () => {
   assert.throws(() => transferChainInputSchema.parse({}));
   assert.equal(transferChainInputSchema.parse({ userId: 'u1' }).userId, 'u1');
+});
+
+test('ChainMemberPreview 只有四字段；ChainDto 要求 membersPreview + memberCount', () => {
+  const preview: ChainMemberPreview = {
+    userId: 'u1',
+    nickname: '妈',
+    avatarUrl: null,
+    role: 'owner',
+  };
+  assert.deepEqual(Object.keys(preview).sort(), ['avatarUrl', 'nickname', 'role', 'userId']);
+  const slice: Pick<ChainDto, 'membersPreview' | 'memberCount'> = {
+    membersPreview: [preview],
+    memberCount: 1,
+  };
+  assert.equal(slice.memberCount, 1);
+  assert.equal(slice.membersPreview[0].role, 'owner');
 });
