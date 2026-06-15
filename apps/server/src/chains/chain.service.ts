@@ -6,6 +6,7 @@ import {
   type ChainDto,
   type ChainIcon,
   type ChainMemberDto,
+  type ChainMemberPreview,
   type CreateChainInput,
   type CreateInviteInput,
   type InviteDto,
@@ -61,7 +62,7 @@ export class ChainService {
       .innerJoin(chains, eq(chainMembers.chainId, chains.id))
       .where(eq(chainMembers.userId, userId))
       .orderBy(desc(chains.createdAt));
-    return rows.map((r) => this.toChainDto(r.chain, r.role));
+    return this.attachPreviews(rows.map((r) => ({ chain: r.chain, role: r.role })));
   }
 
   /** 详情：service 层过 ChainPolicy（读接口同样验成员身份，防 IDOR）。 */
@@ -69,7 +70,8 @@ export class ChainService {
     const role = await this.policy.require(userId, chainId, 'viewer');
     const [chain] = await db.select().from(chains).where(eq(chains.id, chainId)).limit(1);
     if (!chain) throw new NotFoundError('CHAIN_NOT_FOUND'); // policy 已保证存在，防御性兜底
-    return this.toChainDto(chain, role);
+    const [dto] = await this.attachPreviews([{ chain, role }]);
+    return dto;
   }
 
   /** owner 改链设置（coverMediaId 属 Phase 3，本阶段不可改）。 */
@@ -273,7 +275,11 @@ export class ChainService {
     return { chainId: invite.chainId, role: invite.role, alreadyMember: false };
   }
 
-  private toChainDto(chain: Chain, myRole?: ChainRole): ChainDto {
+  private toChainDto(
+    chain: Chain,
+    myRole: ChainRole | undefined,
+    extras: { membersPreview: ChainMemberPreview[]; memberCount: number },
+  ): ChainDto {
     return {
       id: chain.id,
       name: chain.name,
@@ -286,7 +292,61 @@ export class ChainService {
       ...(myRole ? { myRole } : {}),
       createdAt: chain.createdAt.toISOString(),
       updatedAt: chain.updatedAt.toISOString(),
+      membersPreview: extras.membersPreview,
+      memberCount: extras.memberCount,
     };
+  }
+
+  private async attachPreviews(items: { chain: Chain; role?: ChainRole }[]): Promise<ChainDto[]> {
+    if (items.length === 0) return [];
+    const chainIds = items.map((i) => i.chain.id);
+    const rows = await db
+      .select({
+        chainId: chainMembers.chainId,
+        userId: chainMembers.userId,
+        role: chainMembers.role,
+        joinedAt: chainMembers.joinedAt,
+        nickname: users.nickname,
+      })
+      .from(chainMembers)
+      .innerJoin(users, eq(chainMembers.userId, users.id))
+      .where(inArray(chainMembers.chainId, chainIds));
+
+    const byChain = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const list = byChain.get(row.chainId) ?? [];
+      list.push(row);
+      byChain.set(row.chainId, list);
+    }
+
+    const previewUserIds: string[] = [];
+    const prepared = new Map<string, { preview: typeof rows; count: number }>();
+    for (const id of chainIds) {
+      const list = [...(byChain.get(id) ?? [])].sort((a, b) => {
+        const dt = a.joinedAt.getTime() - b.joinedAt.getTime();
+        if (dt !== 0) return dt;
+        if (a.userId < b.userId) return -1;
+        if (a.userId > b.userId) return 1;
+        return 0;
+      });
+      const preview = list.slice(0, 5);
+      prepared.set(id, { preview, count: list.length });
+      for (const p of preview) previewUserIds.push(p.userId);
+    }
+
+    const avatarBy = await avatarUrlsByUserIds(previewUserIds);
+    return items.map(({ chain, role }) => {
+      const extra = prepared.get(chain.id) ?? { preview: [], count: 0 };
+      return this.toChainDto(chain, role, {
+        memberCount: extra.count,
+        membersPreview: extra.preview.map((p) => ({
+          userId: p.userId,
+          nickname: p.nickname,
+          avatarUrl: avatarBy.get(p.userId) ?? null,
+          role: p.role,
+        })),
+      });
+    });
   }
 
   private toInviteDto(invite: ChainInvite): InviteDto {

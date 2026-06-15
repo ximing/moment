@@ -1,5 +1,5 @@
 import type { ChainDto } from '@moment/dto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
@@ -193,3 +193,160 @@ describe('DELETE /api/chains/:chainId', () => {
     expect(gone.status).toBe(404);
   });
 });
+
+function expectPreviewItem(
+  actual: unknown,
+  expected: { userId: string; nickname: string; role: 'owner' | 'editor' | 'viewer' },
+): void {
+  expect(actual).toEqual({
+    userId: expected.userId,
+    nickname: expected.nickname,
+    avatarUrl: null,
+    role: expected.role,
+  });
+  expect(actual as object).not.toHaveProperty('email');
+  expect(actual as object).not.toHaveProperty('joinedAt');
+}
+
+async function setJoinedAt(chainId: string, userId: string, at: Date): Promise<void> {
+  await db
+    .update(chainMembers)
+    .set({ joinedAt: at })
+    .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, userId)));
+}
+
+describe('ChainDto membersPreview', () => {
+  it('POST /chains：预览只有创建者，memberCount === 1', async () => {
+    const res = await request(app)
+      .post('/api/chains')
+      .set('Authorization', auth(owner))
+      .send({ name: '预览链' });
+    expect(res.status).toBe(201);
+    const chain = res.body as ChainDto;
+    expect(chain.memberCount).toBe(1);
+    expect(chain.membersPreview).toHaveLength(1);
+    expectPreviewItem(chain.membersPreview[0], {
+      userId: owner.id,
+      nickname: 'owner',
+      role: 'owner',
+    });
+  });
+
+  it('GET /chains/:id 三人按 joinedAt 升序；GET /chains 两条链互不串', async () => {
+    const chainA = await createChain(app, owner, 'A链');
+    const editor = await createUser(app, 'editor@example.com');
+    const viewer = await createUser(app, 'viewer@example.com');
+    await addMember(chainA.id, editor.id, 'editor');
+    await addMember(chainA.id, viewer.id, 'viewer');
+    const t0 = new Date('2026-01-01T00:00:00Z');
+    await setJoinedAt(chainA.id, owner.id, t0);
+    await setJoinedAt(chainA.id, editor.id, new Date(t0.getTime() + 1000));
+    await setJoinedAt(chainA.id, viewer.id, new Date(t0.getTime() + 2000));
+
+    const chainSolo = await createChain(app, owner, 'C链');
+
+    const one = await request(app).get(`/api/chains/${chainA.id}`).set('Authorization', auth(owner));
+    expect(one.status).toBe(200);
+    const detail = one.body as ChainDto;
+    expect(detail.memberCount).toBe(3);
+    expect(detail.membersPreview.map((m) => m.userId)).toEqual([owner.id, editor.id, viewer.id]);
+    expectPreviewItem(detail.membersPreview[0], { userId: owner.id, nickname: 'owner', role: 'owner' });
+    expectPreviewItem(detail.membersPreview[1], { userId: editor.id, nickname: 'editor', role: 'editor' });
+    expectPreviewItem(detail.membersPreview[2], { userId: viewer.id, nickname: 'viewer', role: 'viewer' });
+
+    const list = await request(app).get('/api/chains').set('Authorization', auth(owner));
+    expect(list.status).toBe(200);
+    const byId = Object.fromEntries((list.body as ChainDto[]).map((c) => [c.id, c]));
+    expect(byId[chainA.id].memberCount).toBe(3);
+    expect(byId[chainA.id].membersPreview.map((m) => m.userId)).toEqual([owner.id, editor.id, viewer.id]);
+    expect(byId[chainSolo.id].memberCount).toBe(1);
+    expect(byId[chainSolo.id].membersPreview).toHaveLength(1);
+    expectPreviewItem(byId[chainSolo.id].membersPreview[0], {
+      userId: owner.id,
+      nickname: 'owner',
+      role: 'owner',
+    });
+  });
+
+  it('第 6 人加入后预览切 5 人，挤掉 joinedAt 最晚者', async () => {
+    const chain = await createChain(app, owner, '六人链');
+    const extras: TestUser[] = [];
+    for (let i = 2; i <= 6; i++) {
+      extras.push(await createUser(app, `u${i}@example.com`));
+      await addMember(chain.id, extras[i - 2].id, 'viewer');
+    }
+    const t0 = new Date('2026-02-01T00:00:00Z');
+    await setJoinedAt(chain.id, owner.id, t0);
+    for (let i = 0; i < extras.length; i++) {
+      await setJoinedAt(chain.id, extras[i].id, new Date(t0.getTime() + (i + 1) * 1000));
+    }
+    const excluded = extras[4]; // u6，最晚
+
+    const res = await request(app).get(`/api/chains/${chain.id}`).set('Authorization', auth(owner));
+    expect(res.status).toBe(200);
+    const body = res.body as ChainDto;
+    expect(body.memberCount).toBe(6);
+    expect(body.membersPreview).toHaveLength(5);
+    expect(body.membersPreview.map((m) => m.userId)).toEqual([
+      owner.id,
+      extras[0].id,
+      extras[1].id,
+      extras[2].id,
+      extras[3].id,
+    ]);
+    expect(body.membersPreview.map((m) => m.userId)).not.toContain(excluded.id);
+    expectPreviewItem(body.membersPreview[0], { userId: owner.id, nickname: 'owner', role: 'owner' });
+    expectPreviewItem(body.membersPreview[4], { userId: extras[3].id, nickname: 'u5', role: 'viewer' });
+  });
+
+  it('仅发出邀请未接受：预览仍只有创建者，响应无邀请邮箱', async () => {
+    const chain = await createChain(app, owner, '邀请链');
+    const inv = await request(app)
+      .post(`/api/chains/${chain.id}/invites`)
+      .set('Authorization', auth(owner))
+      .send({ email: 'pending@example.com', role: 'editor' });
+    expect(inv.status).toBe(201);
+
+    const res = await request(app).get(`/api/chains/${chain.id}`).set('Authorization', auth(owner));
+    expect(res.status).toBe(200);
+    const body = res.body as ChainDto;
+    expect(body.memberCount).toBe(1);
+    expect(body.membersPreview).toHaveLength(1);
+    expectPreviewItem(body.membersPreview[0], { userId: owner.id, nickname: 'owner', role: 'owner' });
+    expect(JSON.stringify(res.body)).not.toContain('pending@example.com');
+  });
+
+  it('PATCH visibility 不改预览 userId 与 memberCount', async () => {
+    const chain = await createChain(app, owner, '可见性链');
+    const editor = await createUser(app, 'ed2@example.com');
+    await addMember(chain.id, editor.id, 'editor');
+    const before = await request(app).get(`/api/chains/${chain.id}`).set('Authorization', auth(owner));
+    const prev = before.body as ChainDto;
+
+    const res = await request(app)
+      .patch(`/api/chains/${chain.id}`)
+      .set('Authorization', auth(owner))
+      .send({ visibility: 'link' });
+    expect(res.status).toBe(200);
+    const after = res.body as ChainDto;
+    expect(after.visibility).toBe('link');
+    expect(after.memberCount).toBe(prev.memberCount);
+    expect(after.membersPreview.map((m) => m.userId)).toEqual(prev.membersPreview.map((m) => m.userId));
+  });
+
+  it('非成员 GET 404 不带 membersPreview；未登录 401；无链列表为 []', async () => {
+    const chain = await createChain(app, owner, '私链');
+    const nf = await request(app).get(`/api/chains/${chain.id}`).set('Authorization', auth(outsider));
+    expect(nf.status).toBe(404);
+    expect(nf.body.error.code).toBe('CHAIN_NOT_FOUND');
+    expect(nf.body).not.toHaveProperty('membersPreview');
+
+    expect((await request(app).get(`/api/chains/${chain.id}`)).status).toBe(401);
+
+    const emptyUser = await createUser(app, 'nochains@example.com');
+    const empty = await request(app).get('/api/chains').set('Authorization', auth(emptyUser));
+    expect(empty.status).toBe(200);
+    expect(empty.body).toEqual([]);
+  });
+});
+

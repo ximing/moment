@@ -151,7 +151,7 @@ describe('DELETE /api/chains/:chainId/members/:userId', () => {
 
 describe('POST /api/chains/:chainId/transfer', () => {
   it('owner 转让：同事务改两边角色与 chains.owner_id；旧 owner 变 editor', async () => {
-    const { owner, editor, chain } = await setup();
+    const { owner, editor, viewer, chain } = await setup();
     const res = await request(app)
       .post(`/api/chains/${chain.id}/transfer`)
       .set('Authorization', auth(owner))
@@ -182,6 +182,17 @@ describe('POST /api/chains/:chainId/transfer', () => {
       .set('Authorization', auth(owner))
       .send({ name: '旧 owner 改名' });
     expect(no.status).toBe(403);
+
+    const preview = res.body as ChainDto;
+    expect(preview.memberCount).toBe(3);
+    const byUser = Object.fromEntries(preview.membersPreview.map((m) => [m.userId, m]));
+    expect(byUser[editor.id].role).toBe('owner');
+    expect(byUser[owner.id].role).toBe('editor');
+    expect(new Set(preview.membersPreview.map((m) => m.userId))).toEqual(
+      new Set([owner.id, editor.id, viewer.id]),
+    );
+    expect(byUser[editor.id]).not.toHaveProperty('email');
+    expect(byUser[editor.id]).not.toHaveProperty('joinedAt');
   });
 
   it('转给自己 400 CANNOT_TRANSFER_TO_SELF；目标非成员 404；非 owner 发起 403', async () => {
