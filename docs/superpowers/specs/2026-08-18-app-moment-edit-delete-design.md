@@ -23,11 +23,17 @@ api-client 已有 `updateMoment(momentId, PatchMomentInput)` 与 `deleteMoment(m
 - `ComposeService` 增加编辑态：
   - `edit: MomentResponse | null`、`get isEdit`。
   - `hydrate(chainId?, momentId?)`：有 `momentId` 时走 `loadForEdit`（`client.getMoment` → 预填草稿），否则走现有新建分支。
-  - 预填：`content`、`tagIds`、`type`、`isBackfill`；`happenedAt` 用原始墙钟毫秒（`Date.parse(iso) − tzOffset·60_000`）构造 Date，picker 的本地字段即显示记录时区的墙钟（与 `formatMomentTime` 同源语义）。
+  - 预填：`content`、`tagIds`、`type`、`isBackfill`。**编辑态链固定**：链恒为 `edit.chainId`，不参与 `activeChainId` 的「回退第一条可编辑链」逻辑（否则标签会加载错链，提交时 `TAG_NOT_IN_CHAIN` 400）。
+  - **发生时间的显示与换算（关键，勿走 Date 本地字段捷径）**：RN `DateTimePicker` 按设备本地字段渲染 Date，与 web 的 `datetime-local` 字符串路径不同，必须显式引入设备时区偏移做两次平移（review C1 修正）：
+    - `wallMs = Date.parse(edit.happenedAt) − edit.happenedTzOffset·60_000`（记录时区墙钟毫秒，语义同 `formatMomentTime`，但**只作数值，不当本地时间用**）。
+    - `deviceOffset = new Date().getTimezoneOffset()`，在 `loadForEdit` 时采样一次并保存字段，提交时复用同一值（防 DST 期间偏移变化）。
+    - 显示：`pickerValue = new Date(wallMs + deviceOffset·60_000)` —— 该 Date 的**设备本地字段**即记录时区墙钟。
+    - 变更判断：`pickerValue.getTime() − deviceOffset·60_000 !== wallMs`（不能直接比较 `getTime()`）。
+    - 提交还原：`iso = new Date(newWallMs + edit.happenedTzOffset·60_000).toISOString()`，其中 `newWallMs = picker.getTime() − deviceOffset·60_000`。
 - **编辑态 UI 收敛**：类型 SegmentBar、选链 chip、选图/选视频区全部隐藏（server 不允许改）；媒体用现有 `MediaGrid` 只读展示；按钮文案「发布」→「保存」。
 - **提交**：`submit()` 有 `edit` 时走 `submitEdit()`：
   - 前置校验同新建（文字类型非空、≤5000 字）。
-  - patch 基础为 `{ content, tagIds }`；`happenedAt.getTime() !== 原始墙钟毫秒` 时按记录时区还原 ISO（`+ tzOffset·60_000` 再 toISOString）并重算 `isBackfill`（`< now − 10min`）。
+  - patch 基础为 `{ content, tagIds }`；时间被改过（见上判断式）才传 `happenedAt`（按上式还原 ISO）并重算 `isBackfill`——公式对齐 web `compose-panel`：`Math.abs(newMs − Date.now()) > 5*60_000`（未来时间也算补发；review I4 修正，不再用「< now − 10min」）。
   - 成功 emit `moment:changed { op: 'update' }`（feed / 链详情 / 详情页已监听自动重拉）。
 
 ## 3. 删除
@@ -50,9 +56,10 @@ api-client 已有 `updateMoment(momentId, PatchMomentInput)` 与 `deleteMoment(m
 
 ## 5. 错误处理
 
-- 编辑加载失败：compose 显示加载/失败态（`$model.loadForEdit` 单通道），可返回。
+- 编辑加载失败：compose 显示加载/失败态（`$model.loadForEdit` 单通道），可返回。404 `MOMENT_NOT_FOUND` / 410 `MOMENT_DELETED`（编辑期间被他处删除）给区别于网络错误的文案「该时刻可能已被删除」（review M4）。
 - 提交失败：沿用现有「前置校验 Error 中文 message 直接展示，ApiError 走 humanError」分流。
 - 非作者在服务端被 `NOT_MOMENT_AUTHOR` 403 拦截（入口已隐藏，此处只是兜底）。
+- 删除重试幂等：首次成功但响应丢失后重试会收 404，按已删除处理（emit 事件并回退），不报错。
 
 ## 6. 验证
 
