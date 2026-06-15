@@ -4,6 +4,7 @@
 > 状态：页面级方向已与用户通过前后对比稿逐项对齐；组件级规范待后续独立评审
 > 范围：`apps/web` 的品牌基调、壳层、页眉、日子线、时刻内容、Tag、链来源、时间索引与响应式规则
 > 权威边界：数据与权限听 `2026-08-15-moment-design.md`；功能面听 `2026-08-16-web-product.md`；链页眉成员与可见性听 `2026-08-18-chain-audience-header-design.md`；Web 视觉基础与页面组合听本文
+> 视觉参考：[`2026-08-18-web-commercial-design-reference.html`](../mocks/2026-08-18-web-commercial-design-reference.html)；可编辑源稿：[`fragment.html`](../mocks/2026-08-18-web-commercial-design-reference.fragment.html)
 
 本文是 Web 视觉的唯一真相源，整体替换 `2026-08-16-web-redesign-sticker-design.md` 的视觉规则，也替换本文修订前的“柔影卡片”表达。后续 Button、Modal、Menu、Field 等组件规范必须引用本文，不得另起一套颜色、密度或层级语言。
 

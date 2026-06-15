@@ -1,0 +1,1018 @@
+<style>
+  #moment-commercial-comparison {
+    color-scheme: light dark;
+    width: 100%;
+    font-family:
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      "PingFang SC",
+      "Microsoft YaHei",
+      sans-serif;
+  }
+
+  #moment-commercial-comparison * {
+    box-sizing: border-box;
+  }
+
+  #moment-commercial-comparison .moment-comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  #moment-commercial-comparison .moment-version-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 8px;
+    color: var(--foreground);
+    font-size: var(--font-size-base);
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-version-label span {
+    color: var(--muted-foreground);
+    font-size: 0.78em;
+    font-weight: 400;
+  }
+
+  #moment-commercial-comparison .moment-window {
+    overflow: hidden;
+    min-height: 548px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--moment-page);
+    color: var(--moment-ink);
+  }
+
+  #moment-commercial-comparison .moment-current {
+    --moment-page: light-dark(#fff4ee, #141210);
+    --moment-surface: light-dark(#fffcf9, #221e1b);
+    --moment-ink: light-dark(#2c1812, #f2ebe4);
+    --moment-muted: light-dark(#9a7264, #b3a69c);
+    --moment-line: light-dark(#e4c7bb, #3c362f);
+    --moment-accent: light-dark(#f0433a, #ff7a66);
+    --moment-thread: light-dark(#e4c7bb, #3c362f);
+    --moment-photo-a: light-dark(#dfe9ff, #243047);
+    --moment-photo-b: light-dark(#bfd0ff, #182442);
+  }
+
+  #moment-commercial-comparison .moment-refined {
+    --moment-page: light-dark(#f6f1ec, #171412);
+    --moment-surface: light-dark(#fffdfb, #26211e);
+    --moment-ink: light-dark(#2b201c, #f7efe9);
+    --moment-muted: light-dark(#715e55, #c3b5ad);
+    --moment-line: light-dark(#d8c9c0, #463c37);
+    --moment-accent: light-dark(#e9573f, #ff755e);
+    --moment-select: light-dark(#f2b84b, #f2b84b);
+    --moment-lilac: light-dark(#ded4ff, #433b5e);
+    --moment-sage: light-dark(#6ca58a, #87c2a5);
+    --moment-thread: light-dark(#b79989, #76675f);
+    --moment-photo-a: light-dark(#d9e7e1, #294039);
+    --moment-photo-b: light-dark(#87b5a1, #315f50);
+  }
+
+  #moment-commercial-comparison .moment-shell {
+    display: grid;
+    grid-template-columns: 78px minmax(0, 1fr) 64px;
+    min-height: 548px;
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-shell {
+    grid-template-columns: 104px minmax(0, 1fr) 92px;
+  }
+
+  #moment-commercial-comparison .moment-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px 10px 12px;
+    border-right: 1px solid var(--moment-line);
+    background: var(--moment-surface);
+  }
+
+  #moment-commercial-comparison .moment-logo {
+    margin-bottom: 8px;
+    font-family: "Smiley Sans", "PingFang SC", system-ui, sans-serif;
+    font-size: 22px;
+    letter-spacing: -0.06em;
+  }
+
+  #moment-commercial-comparison .moment-logo strong {
+    color: var(--moment-accent);
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 5px 6px;
+    border-radius: 10px;
+    color: var(--moment-muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  #moment-commercial-comparison .moment-nav-item i {
+    width: 10px;
+    height: 10px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--moment-accent);
+  }
+
+  #moment-commercial-comparison .moment-current .moment-nav-item.active {
+    color: var(--moment-ink);
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-nav-item.active {
+    border: 1px solid
+      color-mix(in srgb, var(--moment-select) 55%, var(--moment-line));
+    background: color-mix(
+      in srgb,
+      var(--moment-select) 22%,
+      var(--moment-surface)
+    );
+    color: var(--moment-ink);
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-user {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--moment-line);
+    color: var(--moment-muted);
+    font-size: 11px;
+  }
+
+  #moment-commercial-comparison .moment-avatar,
+  #moment-commercial-comparison .moment-mini-avatar {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: color-mix(
+      in srgb,
+      var(--moment-accent) 28%,
+      var(--moment-surface)
+    );
+    color: var(--moment-ink);
+  }
+
+  #moment-commercial-comparison .moment-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+  #moment-commercial-comparison .moment-mini-avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 10px;
+  }
+
+  #moment-commercial-comparison .moment-main {
+    min-width: 0;
+    padding: 18px 14px 28px;
+  }
+
+  #moment-commercial-comparison .moment-page-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  #moment-commercial-comparison .moment-current .moment-page-header {
+    min-height: 24px;
+  }
+
+  #moment-commercial-comparison .moment-chain-mark {
+    display: none;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    background: var(--moment-lilac);
+    color: var(--moment-ink);
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-chain-mark.aggregate {
+    background: conic-gradient(
+      var(--moment-accent),
+      var(--moment-lilac),
+      var(--moment-sage),
+      var(--moment-accent)
+    );
+    color: var(--moment-surface);
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-chain-mark {
+    display: grid;
+  }
+
+  #moment-commercial-comparison .moment-page-title {
+    min-width: 0;
+    flex: 1;
+  }
+
+  #moment-commercial-comparison .moment-page-title h2 {
+    overflow: hidden;
+    margin: 0;
+    color: var(--moment-ink);
+    font-size: 18px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #moment-commercial-comparison .moment-current .moment-page-title h2 {
+    font-size: 15px;
+  }
+
+  #moment-commercial-comparison .moment-page-title p {
+    overflow: hidden;
+    margin: 2px 0 0;
+    color: var(--moment-muted);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #moment-commercial-comparison .moment-member-stack {
+    display: flex;
+    margin-right: 2px;
+  }
+
+  #moment-commercial-comparison .moment-member-stack b {
+    display: grid;
+    width: 20px;
+    height: 20px;
+    margin-left: -5px;
+    place-items: center;
+    border: 2px solid var(--moment-page);
+    border-radius: 50%;
+    background: var(--moment-lilac);
+    color: var(--moment-ink);
+    font-size: 8px;
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-primary-action {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--moment-accent);
+    color: light-dark(#fffdfb, #241714);
+    font: inherit;
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-current .moment-member-stack,
+  #moment-commercial-comparison .moment-current .moment-primary-action,
+  #moment-commercial-comparison .moment-current .moment-page-title p {
+    display: none;
+  }
+
+  #moment-commercial-comparison .moment-timeline {
+    position: relative;
+    padding-left: 26px;
+  }
+
+  #moment-commercial-comparison .moment-current .moment-timeline {
+    padding-left: 22px;
+  }
+
+  #moment-commercial-comparison .moment-thread {
+    position: absolute;
+    top: 4px;
+    bottom: 0;
+    left: 10px;
+    border-left: 2px dashed var(--moment-thread);
+    opacity: 0.72;
+  }
+
+  #moment-commercial-comparison .moment-compose-entry {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    border: 1px dashed var(--moment-line);
+    border-radius: 15px;
+    background: color-mix(in srgb, var(--moment-surface) 60%, transparent);
+    color: var(--moment-muted);
+    font-size: 11px;
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-compose-entry {
+    min-height: 52px;
+    border-style: solid;
+    background: var(--moment-surface);
+  }
+
+  #moment-commercial-comparison .moment-compose-entry::before {
+    content: "";
+    position: absolute;
+    left: -22px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--moment-line);
+    border-radius: 50%;
+    background: var(--moment-surface);
+  }
+
+  #moment-commercial-comparison .moment-compose-icons {
+    letter-spacing: 3px;
+  }
+
+  #moment-commercial-comparison .moment-date-row {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    margin: 0 0 14px;
+  }
+
+  #moment-commercial-comparison .moment-date-row::before {
+    content: "";
+    position: absolute;
+    left: -20px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--moment-accent);
+  }
+
+  #moment-commercial-comparison .moment-date-row h3 {
+    margin: 0;
+    color: var(--moment-ink);
+    font-family: "Smiley Sans", "PingFang SC", system-ui, sans-serif;
+    font-size: 20px;
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-date-row span {
+    color: var(--moment-muted);
+    font-size: 10px;
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-date-row {
+    width: fit-content;
+    padding: 5px 9px 5px 8px;
+    border: 1px solid
+      color-mix(in srgb, var(--moment-lilac) 70%, var(--moment-line));
+    border-radius: 999px;
+    background: color-mix(
+      in srgb,
+      var(--moment-lilac) 72%,
+      var(--moment-surface)
+    );
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-date-row h3 {
+    font-size: 14px;
+  }
+  #moment-commercial-comparison .moment-refined .moment-date-row::before {
+    left: -20px;
+  }
+
+  #moment-commercial-comparison .moment-entry {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 8px;
+    margin-bottom: 17px;
+  }
+
+  #moment-commercial-comparison .moment-entry-body {
+    min-width: 0;
+  }
+
+  #moment-commercial-comparison .moment-author-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 26px;
+    color: var(--moment-muted);
+    font-size: 10px;
+  }
+
+  #moment-commercial-comparison .moment-author-row strong {
+    color: var(--moment-ink);
+    font-weight: 500;
+  }
+  #moment-commercial-comparison .moment-author-row time {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #moment-commercial-comparison .moment-author-row em {
+    margin-left: auto;
+    font-style: normal;
+    letter-spacing: 2px;
+  }
+
+  #moment-commercial-comparison .moment-chain-context {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+    color: var(--moment-muted);
+    white-space: nowrap;
+  }
+
+  #moment-commercial-comparison .moment-chain-context i {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--moment-accent);
+  }
+
+  #moment-commercial-comparison .moment-chain-context.sage i {
+    background: var(--moment-sage);
+  }
+
+  #moment-commercial-comparison .moment-copy {
+    margin: 6px 0 8px;
+    color: var(--moment-ink);
+    font-size: 12px;
+  }
+
+  #moment-commercial-comparison .moment-photo {
+    position: relative;
+    overflow: hidden;
+    min-height: 144px;
+    border-radius: 14px;
+    background:
+      radial-gradient(
+        circle at 78% 22%,
+        color-mix(in srgb, var(--moment-photo-a) 82%, transparent) 0 9%,
+        transparent 10%
+      ),
+      linear-gradient(
+        155deg,
+        transparent 0 46%,
+        color-mix(in srgb, var(--moment-photo-b) 55%, transparent) 47% 64%,
+        transparent 65%
+      ),
+      linear-gradient(22deg, var(--moment-photo-b), var(--moment-photo-a));
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-photo {
+    border: 1px solid
+      color-mix(in srgb, var(--moment-sage) 45%, var(--moment-line));
+  }
+
+  #moment-commercial-comparison .moment-photo::after {
+    content: "周末去看了海";
+    position: absolute;
+    right: 10px;
+    bottom: 9px;
+    padding: 4px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--moment-surface) 88%, transparent);
+    color: var(--moment-ink);
+    font-size: 9px;
+  }
+
+  #moment-commercial-comparison .moment-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 9px;
+    margin: 5px 0 4px;
+    color: color-mix(in srgb, var(--moment-sage) 74%, var(--moment-muted));
+    font-size: 9px;
+  }
+
+  #moment-commercial-comparison .moment-tags span {
+    white-space: nowrap;
+  }
+
+  #moment-commercial-comparison .moment-inline-tags {
+    margin-right: 7px;
+    color: color-mix(in srgb, var(--moment-sage) 74%, var(--moment-muted));
+    font-size: 1em;
+    white-space: nowrap;
+  }
+
+  #moment-commercial-comparison .moment-inline-tags span + span {
+    margin-left: 6px;
+  }
+
+  #moment-commercial-comparison .moment-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    color: var(--moment-muted);
+    font-size: 10px;
+  }
+
+  #moment-commercial-comparison .moment-reaction {
+    display: grid;
+    min-width: 26px;
+    min-height: 26px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--moment-surface);
+    box-shadow: 2px 2px 0 color-mix(in srgb, var(--moment-ink) 7%, transparent);
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 34px;
+    margin-top: 9px;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  #moment-commercial-comparison .moment-action-control {
+    display: inline-flex;
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--moment-muted);
+    font: inherit;
+    font-size: 10px;
+  }
+
+  #moment-commercial-comparison .moment-action-control:first-child {
+    color: var(--moment-ink);
+  }
+
+  #moment-commercial-comparison
+    .moment-action-control
+    + .moment-action-control {
+    border-left-color: transparent;
+  }
+
+  #moment-commercial-comparison .moment-more-control {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    margin-left: auto;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--moment-muted);
+    font: inherit;
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+
+  #moment-commercial-comparison .moment-reaction-control {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--moment-lilac) 34%, transparent);
+    color: var(--moment-ink);
+    font: inherit;
+    font-size: 14px;
+  }
+
+  #moment-commercial-comparison .moment-comment-control {
+    display: inline-flex;
+    min-height: 30px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 2px;
+    border: 0;
+    background: transparent;
+    color: var(--moment-muted);
+    font: inherit;
+    font-size: 10px;
+  }
+
+  #moment-commercial-comparison .moment-comment-mark {
+    position: relative;
+    display: inline-block;
+    width: 13px;
+    height: 11px;
+    border: 1px solid currentColor;
+    border-radius: 5px;
+  }
+
+  #moment-commercial-comparison .moment-comment-mark::after {
+    content: "";
+    position: absolute;
+    right: 1px;
+    bottom: -3px;
+    width: 4px;
+    height: 4px;
+    border-right: 1px solid currentColor;
+    transform: skewY(34deg);
+  }
+
+  #moment-commercial-comparison .moment-text-note {
+    margin-top: 6px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: var(--moment-surface);
+    color: var(--moment-ink);
+    font-size: 11px;
+    box-shadow: 3px 3px 0 color-mix(in srgb, var(--moment-ink) 7%, transparent);
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-text-note {
+    border: 0;
+    box-shadow: none;
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-rail-divider {
+    height: 6px;
+    margin: 6px 0;
+    background: transparent;
+  }
+
+  #moment-commercial-comparison .moment-rail {
+    padding: 20px 9px;
+    color: var(--moment-muted);
+    font-size: 9px;
+  }
+
+  #moment-commercial-comparison .moment-rail h3 {
+    margin: 0 0 10px;
+    color: var(--moment-muted);
+    font-size: 9px;
+    font-weight: 400;
+  }
+
+  #moment-commercial-comparison .moment-rail-month {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding: 5px 2px;
+  }
+
+  #moment-commercial-comparison .moment-year-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 10px 0 4px;
+    color: var(--moment-ink);
+  }
+
+  #moment-commercial-comparison .moment-year-label strong {
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-year-label span {
+    color: var(--moment-muted);
+    font-size: 8px;
+  }
+
+  #moment-commercial-comparison .moment-year-collapsed {
+    display: flex;
+    width: 100%;
+    min-height: 26px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding: 0 2px;
+    border: 0;
+    background: transparent;
+    color: var(--moment-muted);
+    font: inherit;
+    font-size: 9px;
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-rail {
+    margin: 18px 10px 18px 0;
+    padding: 12px 10px;
+    border: 1px solid var(--moment-line);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--moment-surface) 82%, transparent);
+  }
+
+  #moment-commercial-comparison .moment-refined .moment-rail-month.active {
+    margin-inline: -4px;
+    padding-inline: 6px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--moment-select) 22%, transparent);
+    color: var(--moment-ink);
+    font-weight: 500;
+  }
+
+  #moment-commercial-comparison .moment-rail-divider {
+    height: 1px;
+    margin: 10px 0;
+    background: var(--moment-line);
+  }
+
+  #moment-commercial-comparison .moment-switch {
+    width: 24px;
+    height: 13px;
+    margin-top: 6px;
+    padding: 2px;
+    border-radius: 999px;
+    background: var(--moment-line);
+  }
+
+  #moment-commercial-comparison .moment-switch::before {
+    content: "";
+    display: block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--moment-surface);
+  }
+
+  @media (max-width: 820px) {
+    #moment-commercial-comparison .moment-comparison-grid {
+      grid-template-columns: 1fr;
+    }
+    #moment-commercial-comparison .moment-window {
+      min-height: 510px;
+    }
+    #moment-commercial-comparison .moment-shell {
+      min-height: 510px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    #moment-commercial-comparison .moment-window {
+      border-radius: 12px;
+    }
+    #moment-commercial-comparison .moment-shell,
+    #moment-commercial-comparison .moment-refined .moment-shell {
+      grid-template-columns: 54px minmax(0, 1fr);
+    }
+    #moment-commercial-comparison .moment-rail {
+      display: none;
+    }
+    #moment-commercial-comparison .moment-sidebar {
+      padding-inline: 6px;
+    }
+    #moment-commercial-comparison .moment-nav-item {
+      justify-content: center;
+      font-size: 0;
+    }
+    #moment-commercial-comparison .moment-user span {
+      display: none;
+    }
+    #moment-commercial-comparison .moment-main {
+      padding-inline: 10px;
+    }
+    #moment-commercial-comparison .moment-member-stack {
+      display: none;
+    }
+  }
+</style>
+
+<div id="moment-commercial-comparison">
+  <div class="moment-comparison-grid">
+    <section aria-label="当前设计示意">
+      <div class="moment-version-label">当前 <span>柔和，但层级偏平</span></div>
+      <div class="moment-window moment-current">
+        <div class="moment-shell">
+          <aside class="moment-sidebar">
+            <div class="moment-logo">时<strong>刻</strong></div>
+            <div class="moment-nav-item"><i></i>大家的日子</div>
+            <div class="moment-nav-item active"><i></i>周末小家</div>
+            <div class="moment-nav-item">＋ 开一条新链</div>
+            <div class="moment-user">
+              <div class="moment-avatar">S</div>
+              <span>simon</span>
+            </div>
+          </aside>
+          <main class="moment-main">
+            <div class="moment-page-header">
+              <div class="moment-chain-mark">周</div>
+              <div class="moment-page-title">
+                <h2>周末小家</h2>
+                <p>一起记录平凡日子</p>
+              </div>
+              <div class="moment-member-stack"><b>林</b><b>乔</b></div>
+              <button class="moment-primary-action" type="button">
+                记下此刻
+              </button>
+            </div>
+            <div class="moment-timeline">
+              <div class="moment-thread" aria-hidden="true"></div>
+              <div class="moment-compose-entry">
+                <span>这一刻，记点什么…</span
+                ><span class="moment-compose-icons">▧ ◇</span>
+              </div>
+              <div class="moment-date-row">
+                <h3>昨天</h3>
+                <span>8月17日 周一</span>
+              </div>
+              <article class="moment-entry">
+                <div class="moment-mini-avatar">S</div>
+                <div class="moment-entry-body">
+                  <div class="moment-author-row">
+                    <strong>simon</strong><time>晚上 10:01</time><em>···</em>
+                  </div>
+                  <p class="moment-copy">周末去看了海</p>
+                  <div
+                    class="moment-photo"
+                    role="img"
+                    aria-label="海边照片占位"
+                  ></div>
+                  <div class="moment-actions">
+                    <span class="moment-reaction">＋</span><span>0 条评论</span>
+                  </div>
+                </div>
+              </article>
+              <article class="moment-entry">
+                <div class="moment-mini-avatar">S</div>
+                <div class="moment-entry-body">
+                  <div class="moment-author-row">
+                    <strong>simon</strong><time>晚上 10:00</time><em>···</em>
+                  </div>
+                  <div class="moment-text-note">
+                    回家的路上买了刚出炉的面包。
+                  </div>
+                  <div class="moment-actions">
+                    <span class="moment-reaction">＋</span><span>1 条评论</span>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </main>
+          <aside class="moment-rail">
+            <h3>回到某个月</h3>
+            <div class="moment-rail-month">
+              <span>2026年8月</span><span>2</span>
+            </div>
+            <div class="moment-rail-divider"></div>
+            <div>按记下的顺序看</div>
+            <div class="moment-switch"></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="商业化收口设计示意">
+      <div class="moment-version-label">
+        商业化收口 <span>Tag 归内容，链名归来源</span>
+      </div>
+      <div class="moment-window moment-refined">
+        <div class="moment-shell">
+          <aside class="moment-sidebar">
+            <div class="moment-logo">时<strong>刻</strong></div>
+            <div class="moment-nav-item active"><i></i>大家的日子</div>
+            <div class="moment-nav-item"><i></i>周末小家</div>
+            <div class="moment-nav-item">＋ 开一条新链</div>
+            <div class="moment-user">
+              <div class="moment-avatar">S</div>
+              <span>simon</span>
+            </div>
+          </aside>
+          <main class="moment-main">
+            <div class="moment-page-header">
+              <div class="moment-chain-mark aggregate">日</div>
+              <div class="moment-page-title">
+                <h2>大家的日子</h2>
+                <p>来自 3 条时光链</p>
+              </div>
+              <div class="moment-member-stack"><b>林</b><b>乔</b></div>
+              <button class="moment-primary-action" type="button">
+                记下此刻
+              </button>
+            </div>
+            <div class="moment-timeline">
+              <div class="moment-thread" aria-hidden="true"></div>
+              <div class="moment-compose-entry">
+                <span>记下此刻</span
+                ><span class="moment-compose-icons">▧ ◇</span>
+              </div>
+              <div class="moment-date-row">
+                <h3>昨天</h3>
+                <span>8月17日 周一</span>
+              </div>
+              <article class="moment-entry">
+                <div class="moment-mini-avatar">S</div>
+                <div class="moment-entry-body">
+                  <div class="moment-author-row">
+                    <strong>simon</strong><time>晚上 10:01</time
+                    ><span class="moment-chain-context"><i></i>周末小家</span
+                    ><button
+                      class="moment-more-control"
+                      type="button"
+                      aria-label="更多操作"
+                    >
+                      ···
+                    </button>
+                  </div>
+                  <p class="moment-copy">
+                    <span class="moment-inline-tags" aria-label="标签"
+                      ><span>#海边</span><span>#周末</span></span
+                    >周末去看了海
+                  </p>
+                  <div
+                    class="moment-photo"
+                    role="img"
+                    aria-label="海边照片占位"
+                  ></div>
+                  <div class="moment-actions" aria-label="时刻操作">
+                    <button
+                      class="moment-reaction-control"
+                      type="button"
+                      aria-label="加个表情"
+                    >
+                      ＋
+                    </button>
+                    <button class="moment-comment-control" type="button">
+                      <span
+                        class="moment-comment-mark"
+                        aria-hidden="true"
+                      ></span
+                      ><span>0 条回应</span>
+                    </button>
+                  </div>
+                </div>
+              </article>
+              <article class="moment-entry">
+                <div class="moment-mini-avatar">S</div>
+                <div class="moment-entry-body">
+                  <div class="moment-author-row">
+                    <strong>simon</strong><time>晚上 10:00</time
+                    ><span class="moment-chain-context sage"
+                      ><i></i>宝宝成长</span
+                    ><button
+                      class="moment-more-control"
+                      type="button"
+                      aria-label="更多操作"
+                    >
+                      ···
+                    </button>
+                  </div>
+                  <div class="moment-text-note">
+                    <span class="moment-inline-tags" aria-label="标签"
+                      ><span>#日常</span><span>#晚餐</span></span
+                    >回家的路上买了刚出炉的面包。
+                  </div>
+                  <div class="moment-actions" aria-label="时刻操作">
+                    <button
+                      class="moment-reaction-control"
+                      type="button"
+                      aria-label="加个表情"
+                    >
+                      ＋
+                    </button>
+                    <button class="moment-comment-control" type="button">
+                      <span
+                        class="moment-comment-mark"
+                        aria-hidden="true"
+                      ></span
+                      ><span>1 条回应</span>
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </main>
+          <aside class="moment-rail">
+            <h3>时间索引</h3>
+            <div class="moment-year-label">
+              <strong>2026</strong><span>今年</span>
+            </div>
+            <div class="moment-rail-month active">
+              <span>8月</span><span>2</span>
+            </div>
+            <div class="moment-rail-month"><span>7月</span><span>18</span></div>
+            <div class="moment-rail-month"><span>6月</span><span>7</span></div>
+            <div class="moment-year-label"><strong>2025</strong></div>
+            <div class="moment-rail-month"><span>12月</span><span>6</span></div>
+            <div class="moment-rail-month"><span>11月</span><span>3</span></div>
+            <button class="moment-year-collapsed" type="button">
+              <span>2024</span><span>›</span>
+            </button>
+            <div class="moment-rail-divider"></div>
+            <div>记录顺序</div>
+            <div class="moment-switch"></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
