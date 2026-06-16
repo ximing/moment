@@ -303,7 +303,7 @@ tokens.css → Tailwind 语义映射 → ui 基础组件 → 页面组合模式
 组件规范按以下顺序逐个评审，不在本文提前锁死细节：
 
 1. **Button**：语义层级、尺寸、图标、文案、全状态、危险操作。已固化为 [`2026-08-18-web-button-design.md`](./2026-08-18-web-button-design.md)。
-2. **Modal / Dialog / Sheet**：层级、宽度、移动端形态、遮罩、焦点、关闭与操作区。
+2. **Modal / Dialog / Sheet**：层级、宽度、移动端形态、遮罩、焦点、关闭与操作区。已固化为 [`2026-08-18-web-modal-dialog-sheet-design.md`](./2026-08-18-web-modal-dialog-sheet-design.md)。
 3. **Field**：输入、文本域、日期时间、校验、帮助与错误。
 4. **Menu / Popover / Tooltip**：锚点、展开方向、触控降级、键盘行为。
 5. **Feedback**：Banner、Toast、Empty、Skeleton、Confirm。

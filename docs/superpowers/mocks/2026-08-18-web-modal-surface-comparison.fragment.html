@@ -1,0 +1,571 @@
+<style>
+  #moment-compose-surfaces {
+    --m-page: light-dark(#f6f1ec, #171412);
+    --m-surface: light-dark(#fffdfb, #26211e);
+    --m-soft: light-dark(#eee6e0, #211c19);
+    --m-ink: light-dark(#2b201c, #f7efe9);
+    --m-muted: light-dark(#6f5d54, #c3b5ad);
+    --m-line: light-dark(#d8c9c0, #463c37);
+    --m-stroke: light-dark(#b79989, #76675f);
+    --m-action: light-dark(#c94a3a, #ff755e);
+    --m-action-fg: light-dark(#fffdfb, #241714);
+    --m-date: light-dark(#ded4ff, #433b5e);
+    --m-tag: light-dark(#4b7562, #87c2a5);
+    color-scheme: light dark;
+    width: 100%;
+    color: var(--m-ink);
+    font-family:
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      "PingFang SC",
+      "Microsoft YaHei",
+      sans-serif;
+    font-size: var(--font-size-base);
+  }
+
+  #moment-compose-surfaces * {
+    box-sizing: border-box;
+  }
+
+  #moment-compose-surfaces .mcs-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 10px;
+  }
+
+  #moment-compose-surfaces .mcs-heading h2,
+  #moment-compose-surfaces .mcs-heading p,
+  #moment-compose-surfaces .mcs-option h3,
+  #moment-compose-surfaces .mcs-option p {
+    margin: 0;
+  }
+
+  #moment-compose-surfaces .mcs-heading p {
+    color: var(--m-muted);
+  }
+
+  #moment-compose-surfaces .mcs-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  #moment-compose-surfaces .mcs-option {
+    min-width: 0;
+  }
+
+  #moment-compose-surfaces .mcs-option-head {
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 2px 8px;
+  }
+
+  #moment-compose-surfaces .mcs-option-head h3 {
+    font-weight: 500;
+  }
+
+  #moment-compose-surfaces .mcs-option-head p {
+    margin-top: 2px;
+    color: var(--m-muted);
+  }
+
+  #moment-compose-surfaces .mcs-choice {
+    flex: none;
+    border-radius: 999px;
+    padding: 3px 8px;
+    background: color-mix(in srgb, var(--m-action) 13%, transparent);
+    color: var(--m-action);
+  }
+
+  #moment-compose-surfaces .mcs-window {
+    position: relative;
+    overflow: hidden;
+    min-height: 500px;
+    border: 1px solid var(--m-line);
+    border-radius: 18px;
+    background: var(--m-page);
+  }
+
+  #moment-compose-surfaces .mcs-shell {
+    display: grid;
+    min-height: 500px;
+    grid-template-columns: 70px 1fr;
+  }
+
+  #moment-compose-surfaces .mcs-sidebar {
+    padding: 15px 10px;
+    border-right: 1px solid color-mix(in srgb, var(--m-line) 74%, transparent);
+    background: var(--m-soft);
+  }
+
+  #moment-compose-surfaces .mcs-brand {
+    color: var(--m-action);
+    font-weight: 500;
+  }
+
+  #moment-compose-surfaces .mcs-nav-dot {
+    display: block;
+    width: 8px;
+    height: 8px;
+    margin-top: 22px;
+    border-radius: 50%;
+    background: var(--m-action);
+  }
+
+  #moment-compose-surfaces .mcs-page {
+    padding: 16px 14px;
+  }
+
+  #moment-compose-surfaces .mcs-page-title {
+    font-weight: 500;
+  }
+
+  #moment-compose-surfaces .mcs-day {
+    display: inline-flex;
+    margin-top: 18px;
+    border-radius: 999px;
+    padding: 5px 10px;
+    background: var(--m-date);
+    color: var(--m-ink);
+    font-weight: 500;
+  }
+
+  #moment-compose-surfaces .mcs-timeline-row {
+    position: relative;
+    margin-top: 14px;
+    padding-left: 24px;
+  }
+
+  #moment-compose-surfaces .mcs-timeline-row::before {
+    position: absolute;
+    top: 2px;
+    bottom: -72px;
+    left: 8px;
+    width: 1px;
+    background: var(--m-stroke);
+    content: "";
+  }
+
+  #moment-compose-surfaces .mcs-timeline-row::after {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--m-action);
+    content: "";
+  }
+
+  #moment-compose-surfaces .mcs-meta {
+    color: var(--m-muted);
+  }
+
+  #moment-compose-surfaces .mcs-copy {
+    margin-top: 8px;
+  }
+
+  #moment-compose-surfaces .mcs-photo {
+    height: 104px;
+    margin-top: 10px;
+    border-radius: 14px;
+    background:
+      linear-gradient(
+        152deg,
+        transparent 0 44%,
+        color-mix(in srgb, var(--m-tag) 18%, transparent) 45% 63%,
+        transparent 64%
+      ),
+      color-mix(in srgb, var(--m-tag) 28%, var(--m-soft));
+  }
+
+  #moment-compose-surfaces .mcs-scrim {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--m-ink) 38%, transparent);
+  }
+
+  #moment-compose-surfaces .mcs-compose {
+    background: var(--m-surface);
+    color: var(--m-ink);
+  }
+
+  #moment-compose-surfaces .mcs-dialog {
+    position: absolute;
+    z-index: 2;
+    top: 38px;
+    right: 22px;
+    left: 22px;
+    overflow: hidden;
+    max-height: 424px;
+    border-radius: 22px;
+    box-shadow: 0 22px 56px color-mix(in srgb, var(--m-ink) 25%, transparent);
+  }
+
+  #moment-compose-surfaces .mcs-sheet {
+    position: absolute;
+    z-index: 2;
+    inset: 12px 12px 12px auto;
+    width: calc(76% - 12px);
+    border-radius: 22px;
+    box-shadow: -18px 0 48px color-mix(in srgb, var(--m-ink) 20%, transparent);
+  }
+
+  #moment-compose-surfaces .mcs-fullscreen {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+  }
+
+  #moment-compose-surfaces .mcs-dialog .mcs-compose-body,
+  #moment-compose-surfaces .mcs-sheet .mcs-compose-body,
+  #moment-compose-surfaces .mcs-fullscreen .mcs-compose-body {
+    padding: 14px;
+  }
+
+  #moment-compose-surfaces .mcs-sheet .mcs-compose-body {
+    min-height: 476px;
+  }
+
+  #moment-compose-surfaces .mcs-compose-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  #moment-compose-surfaces .mcs-compose-title {
+    font-weight: 500;
+  }
+
+  #moment-compose-surfaces button {
+    border: 0;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  #moment-compose-surfaces .mcs-close {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--m-muted);
+  }
+
+  #moment-compose-surfaces .mcs-close:hover {
+    background: color-mix(in srgb, var(--m-ink) 7%, transparent);
+    color: var(--m-ink);
+  }
+
+  #moment-compose-surfaces .mcs-chain {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--m-muted);
+  }
+
+  #moment-compose-surfaces .mcs-chain i {
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--m-tag);
+  }
+
+  #moment-compose-surfaces .mcs-textarea {
+    min-height: 104px;
+    margin-top: 12px;
+    border-radius: 14px;
+    background: var(--m-page);
+    padding: 12px;
+    color: var(--m-muted);
+  }
+
+  #moment-compose-surfaces .mcs-media {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  #moment-compose-surfaces .mcs-media-item {
+    display: flex;
+    width: 56px;
+    height: 56px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--m-tag) 24%, var(--m-page));
+    color: var(--m-tag);
+  }
+
+  #moment-compose-surfaces .mcs-field {
+    display: flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    border-radius: 11px;
+    background: var(--m-page);
+    padding: 0 12px;
+    color: var(--m-muted);
+  }
+
+  #moment-compose-surfaces .mcs-compose-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  #moment-compose-surfaces .mcs-action {
+    min-height: 40px;
+    border-radius: 11px;
+    padding: 0 16px;
+  }
+
+  #moment-compose-surfaces .mcs-action-quiet {
+    background: transparent;
+    color: var(--m-muted);
+  }
+
+  #moment-compose-surfaces .mcs-action-primary {
+    background: var(--m-action);
+    color: var(--m-action-fg);
+  }
+
+  #moment-compose-surfaces .mcs-fullscreen .mcs-compose-body {
+    display: grid;
+    min-height: 500px;
+    grid-template-rows: auto auto 1fr auto auto;
+  }
+
+  #moment-compose-surfaces .mcs-fullscreen .mcs-textarea {
+    min-height: 172px;
+  }
+
+  #moment-compose-surfaces .mcs-fullscreen .mcs-compose-actions {
+    padding-top: 4px;
+  }
+
+  @media (max-width: 820px) {
+    #moment-compose-surfaces .mcs-grid {
+      grid-template-columns: 1fr;
+    }
+
+    #moment-compose-surfaces .mcs-option {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    #moment-compose-surfaces .mcs-option-head {
+      align-items: flex-start;
+      padding-top: 12px;
+    }
+
+    #moment-compose-surfaces .mcs-window {
+      min-height: 420px;
+    }
+
+    #moment-compose-surfaces .mcs-shell,
+    #moment-compose-surfaces .mcs-sheet .mcs-compose-body,
+    #moment-compose-surfaces .mcs-fullscreen .mcs-compose-body {
+      min-height: 420px;
+    }
+  }
+
+  @media (max-width: 560px) {
+    #moment-compose-surfaces .mcs-heading {
+      display: block;
+    }
+
+    #moment-compose-surfaces .mcs-heading p {
+      margin-top: 3px;
+    }
+
+    #moment-compose-surfaces .mcs-option {
+      display: block;
+    }
+
+    #moment-compose-surfaces .mcs-option-head {
+      padding-top: 0;
+    }
+  }
+</style>
+
+<div id="moment-compose-surfaces">
+  <div class="mcs-heading">
+    <h2>“记下此刻”的容器形态</h2>
+    <p>同一条时间线、同一份编辑内容</p>
+  </div>
+
+  <div class="mcs-grid">
+    <section class="mcs-option" aria-label="方案 A：居中大 Dialog">
+      <header class="mcs-option-head">
+        <div>
+          <h3>A · 居中大 Dialog</h3>
+          <p>集中，但长内容容易像 Web 表单</p>
+        </div>
+      </header>
+      <div class="mcs-window">
+        <div class="mcs-shell">
+          <aside class="mcs-sidebar">
+            <span class="mcs-brand">时刻</span><span class="mcs-nav-dot"></span>
+          </aside>
+          <main class="mcs-page">
+            <div class="mcs-page-title">大家的日子</div>
+            <div class="mcs-day">昨天</div>
+            <div class="mcs-timeline-row">
+              <span class="mcs-meta">simon · 晚上 10:01</span>
+              <div class="mcs-copy">周末去看了海</div>
+              <div class="mcs-photo"></div>
+            </div>
+          </main>
+        </div>
+        <div class="mcs-scrim"></div>
+        <section class="mcs-compose mcs-dialog">
+          <div class="mcs-compose-body">
+            <header class="mcs-compose-head">
+              <span class="mcs-compose-title">记下此刻</span>
+              <button class="mcs-close" type="button" aria-label="关闭">
+                <i data-lucide="x" aria-hidden="true"></i>
+              </button>
+            </header>
+            <div class="mcs-chain"><i></i>周末小家</div>
+            <div class="mcs-textarea">这一刻…</div>
+            <div class="mcs-media">
+              <div class="mcs-media-item">
+                <i data-lucide="image" aria-hidden="true"></i>
+              </div>
+            </div>
+            <div class="mcs-field">
+              <span>发生在</span><span>今天 17:16</span>
+            </div>
+            <div class="mcs-compose-actions">
+              <button class="mcs-action mcs-action-quiet" type="button">
+                取消
+              </button>
+              <button class="mcs-action mcs-action-primary" type="button">
+                记下
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="mcs-option" aria-label="方案 B：右侧 Sheet">
+      <header class="mcs-option-head">
+        <div>
+          <h3>B · 右侧 Sheet</h3>
+          <p>桌面保留时间线；移动端转底部全高</p>
+        </div>
+        <span class="mcs-choice">建议</span>
+      </header>
+      <div class="mcs-window">
+        <div class="mcs-shell">
+          <aside class="mcs-sidebar">
+            <span class="mcs-brand">时刻</span><span class="mcs-nav-dot"></span>
+          </aside>
+          <main class="mcs-page">
+            <div class="mcs-page-title">大家的日子</div>
+            <div class="mcs-day">昨天</div>
+            <div class="mcs-timeline-row">
+              <span class="mcs-meta">simon · 晚上 10:01</span>
+              <div class="mcs-copy">周末去看了海</div>
+              <div class="mcs-photo"></div>
+            </div>
+          </main>
+        </div>
+        <div class="mcs-scrim"></div>
+        <section class="mcs-compose mcs-sheet">
+          <div class="mcs-compose-body">
+            <header class="mcs-compose-head">
+              <span class="mcs-compose-title">记下此刻</span>
+              <button class="mcs-close" type="button" aria-label="关闭">
+                <i data-lucide="x" aria-hidden="true"></i>
+              </button>
+            </header>
+            <div class="mcs-chain"><i></i>周末小家</div>
+            <div class="mcs-textarea">这一刻…</div>
+            <div class="mcs-media">
+              <div class="mcs-media-item">
+                <i data-lucide="image" aria-hidden="true"></i>
+              </div>
+            </div>
+            <div class="mcs-field">
+              <span>发生在</span><span>今天 17:16</span>
+            </div>
+            <div class="mcs-compose-actions">
+              <button class="mcs-action mcs-action-quiet" type="button">
+                取消
+              </button>
+              <button class="mcs-action mcs-action-primary" type="button">
+                记下
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="mcs-option" aria-label="方案 C：独立全屏编辑">
+      <header class="mcs-option-head">
+        <div>
+          <h3>C · 独立全屏编辑</h3>
+          <p>最专注，但打断随手记录的节奏</p>
+        </div>
+      </header>
+      <div class="mcs-window">
+        <div class="mcs-shell">
+          <aside class="mcs-sidebar">
+            <span class="mcs-brand">时刻</span><span class="mcs-nav-dot"></span>
+          </aside>
+          <main class="mcs-page"></main>
+        </div>
+        <section class="mcs-compose mcs-fullscreen">
+          <div class="mcs-compose-body">
+            <header class="mcs-compose-head">
+              <span class="mcs-compose-title">记下此刻</span>
+              <button class="mcs-close" type="button" aria-label="关闭">
+                <i data-lucide="x" aria-hidden="true"></i>
+              </button>
+            </header>
+            <div class="mcs-chain"><i></i>周末小家</div>
+            <div class="mcs-textarea">这一刻…</div>
+            <div class="mcs-media">
+              <div class="mcs-media-item">
+                <i data-lucide="image" aria-hidden="true"></i>
+              </div>
+            </div>
+            <div>
+              <div class="mcs-field">
+                <span>发生在</span><span>今天 17:16</span>
+              </div>
+              <div class="mcs-compose-actions">
+                <button class="mcs-action mcs-action-quiet" type="button">
+                  取消
+                </button>
+                <button class="mcs-action mcs-action-primary" type="button">
+                  记下
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </div>
+</div>
