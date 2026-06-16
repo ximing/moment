@@ -23,17 +23,18 @@
 
 ## File ownership map
 
-| Owner task | Exact shared files it alone may modify                                                                                                                                                                                            | Consumers after it lands |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| 2          | `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/vitest.config.ts`, `apps/web/src/test/setup.ts`, `apps/web/src/styles/tokens.css`, `apps/web/tailwind.config.js`, `.claude/rules/web-ui.md`                                  | 3–15                     |
-| 3          | `apps/web/src/ui/Button.tsx`                                                                                                                                                                                                      | 4–15                     |
-| 4          | `apps/web/src/ui/modal.tsx`, `apps/web/src/ui/Confirm.tsx`, `apps/web/src/timeline/lightbox.tsx`, `apps/web/src/shell/create-chain-dialog/index.tsx`                                                                              | 5–15                     |
-| 5          | `apps/web/src/ui/Field.tsx`, `apps/web/src/ui/HappenedAtField.tsx`                                                                                                                                                                | 6–15                     |
-| 6          | `apps/web/src/ui/Menu.tsx`, `apps/web/src/ui/floating-layer.tsx`, `apps/web/src/ui/popover.tsx`, `apps/web/src/ui/tooltip.tsx`, `apps/web/src/ui/HoverTip.tsx`, `apps/web/src/shell/user-menu.tsx`                                | 7–15                     |
-| 7          | `apps/web/src/ui/Banner.tsx`, `apps/web/src/ui/Empty.tsx`, `apps/web/src/ui/feedback.tsx`, `apps/web/src/ui/use-pending.ts`                                                                                                       | 8–15                     |
-| 8          | `apps/web/src/pages/design-lab/index.tsx`, `apps/web/src/App.tsx`                                                                                                                                                                 | 9–15                     |
-| 9          | `apps/web/src/shell/Shell.tsx`, `apps/web/src/timeline/timeline.tsx`, `apps/web/src/timeline/timeline-rail.tsx`, `apps/web/src/compose/composer-entry.tsx`, `apps/web/src/compose/compose-fab.tsx`                                | 10–15                    |
-| 10         | `apps/web/src/pages/chain-home/index.tsx`, `apps/web/src/pages/chain-home/chain-audience.tsx`, `apps/web/src/timeline/moment-sheet.tsx`, `apps/web/src/timeline/reaction-bar.tsx`, `apps/web/src/compose/compose-panel/index.tsx` | 11–15                    |
+| Owner task | Exact shared files it alone may modify                                                                                                                                                                                                 | Consumers after it lands |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 2          | `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/vitest.config.ts`, `apps/web/src/test/setup.ts`, `apps/web/src/styles/tokens.css`, `apps/web/src/styles/tokens.test.ts`, `apps/web/tailwind.config.js`, `.claude/rules/web-ui.md` | 3–15                     |
+| 3          | `apps/web/src/ui/button/**`                                                                                                                                                                                                            | 4–15                     |
+| 4          | `apps/web/src/ui/modal/**`                                                                                                                                                                                                             | 5–15                     |
+| 5          | `apps/web/src/ui/floating/**`, `apps/web/src/ui/menu/**`, `apps/web/src/ui/popover/**`, `apps/web/src/ui/tooltip/**`                                                                                                                   | 6–15                     |
+| 6          | `apps/web/src/ui/field/**`                                                                                                                                                                                                             | 7–15                     |
+| 7          | `apps/web/src/ui/feedback/**`                                                                                                                                                                                                          | 8–15                     |
+| 8          | `apps/web/src/pages/design-lab/**`, `apps/web/src/App.tsx`                                                                                                                                                                             | 9–15                     |
+| 13         | legacy UI paths removed after callers have migrated                                                                                                                                                                                    | 14–15                    |
+| 9          | `apps/web/src/shell/Shell.tsx`, `apps/web/src/timeline/timeline.tsx`, `apps/web/src/timeline/timeline-rail.tsx`, `apps/web/src/compose/composer-entry.tsx`, `apps/web/src/compose/compose-fab.tsx`                                     | 10–15                    |
+| 10         | `apps/web/src/pages/chain-home/index.tsx`, `apps/web/src/pages/chain-home/chain-audience.tsx`, `apps/web/src/timeline/moment-sheet.tsx`, `apps/web/src/timeline/reaction-bar.tsx`, `apps/web/src/compose/compose-panel/index.tsx`      | 11–15                    |
 
 ## Task 1: Repair the Web dependency link and establish a green build baseline
 
@@ -98,7 +99,7 @@ git add apps/web/vite.config.ts docs/superpowers/verification/2026-08-18-web-bui
 git commit -m "feat(web): make react-dom alias hoist-safe"
 ```
 
-## Task 2: Add Web test infrastructure and promote tokens to the single visual source
+## Task 2: Establish the Web test scripts and token owner
 
 **Files:**
 
@@ -114,27 +115,27 @@ git commit -m "feat(web): make react-dom alias hoist-safe"
 **Interfaces:**
 
 - Consumes: Task 1 buildable Vite importer; existing `:root[data-theme='dark']` theme contract.
-- Produces: `pnpm --filter @moment/web test` runs Vitest in jsdom; Tailwind names `bg-bg`, `bg-surface`, `text-ink`, `text-muted`, `bg-action`, `text-action-fg`, `text-danger`, `bg-field`, `bg-floating`, `bg-feedback-info`, `z-floating`, `z-overlay`, `z-toast`; CSS custom properties in the six approved specs.
+- Produces: the sole Web owner for package test scripts, Vitest setup, CSS tokens and Tailwind semantic mappings; `pnpm --filter @moment/web test` runs Vitest in jsdom, and later UI tasks consume only the published token names.
 
-- [ ] **Step 1: Write the failing token contract test.**
+- [ ] **Step 1: Write the failing token and script contract.**
 
-Create `apps/web/src/styles/tokens.test.ts` that reads `tokens.css` and asserts both `:root` and `:root[data-theme='dark']` define `--bg`, `--surface`, `--ink`, `--muted`, `--line`, `--stroke`, `--action`, `--date`, `--tag`, `--focus`, `--danger`, `--field-bg`, `--scrim`, `--floating-bg`, `--feedback-error-bg`, `--z-floating`, `--z-overlay`, `--z-toast`, plus a reduced-motion rule.
+Create `apps/web/src/styles/tokens.test.ts` to assert both themes define the approved base, field, overlay, feedback, geometry and z-index tokens, plus reduced motion. Assert the package exposes the single `test` script and Vitest loads `src/test/setup.ts`.
 
-- [ ] **Step 2: Run the test before adding Vitest and record the expected failure.**
+- [ ] **Step 2: Run the focused contract before adding the owner implementation.**
 
 Run: `pnpm --filter @moment/web test -- tokens.test.ts`
 
-Expected: FAIL because the package has no `test` script and no Vitest configuration.
+Expected: FAIL because the package has no test script, Vitest configuration, or complete token contract.
 
-- [ ] **Step 3: Add the minimum runnable test facility and complete the semantic token layer.**
+- [ ] **Step 3: Add the only package/test-script owner and complete the semantic token layer.**
 
-Add `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/user-event` and `@testing-library/jest-dom` as Web development dependencies. Configure `test.environment = 'jsdom'`, load `src/test/setup.ts`, and expose `test` as `vitest run`. In `tokens.css`, add the approved light/dark color and component tokens while retaining only explicit, documented temporary aliases for existing pre-migration callers; keep `--dot-pink`, `--dot-blue`, `--dot-mint`, `--dot-purple` exclusively for chain identity. In Tailwind map every produced semantic color/z-index/width/height token and mark legacy `shadow-sticker`, `control-sm`, `today` and `knot-*` mappings for removal by Task 15. Update `.claude/rules/web-ui.md` to make new code consume semantic tokens and forbid introducing further legacy aliases.
+Add the Web testing dependencies and configure the single `test` script as `vitest run`, jsdom, setup and coverage-independent focused execution. Add the approved light/dark color, field, overlay, feedback, geometry and z-index tokens; retain only documented temporary aliases for old callers until Task 13 cleanup. Map every public semantic token in Tailwind and mark legacy mappings for removal by Task 15. Update `.claude/rules/web-ui.md` so no later task adds package scripts, test setup, tokens or legacy aliases.
 
-- [ ] **Step 4: Run the focused test and baseline static gates.**
+- [ ] **Step 4: Run the focused contract and baseline static gates.**
 
 Run: `pnpm --filter @moment/web test -- tokens.test.ts && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint`
 
-Expected: all exit 0; every new component contract uses semantic tokens, while any listed legacy alias is confined to its transition mapping.
+Expected: all exit 0; the package script, test setup and token contract are green, while legacy aliases remain confined to the documented transition mapping.
 
 - [ ] **Step 5: Commit the infrastructure and token contract.**
 
@@ -143,76 +144,58 @@ git add apps/web/package.json pnpm-lock.yaml apps/web/vitest.config.ts apps/web/
 git commit -m "feat(web): establish design system tokens and tests"
 ```
 
-## Task 3: Replace the Button family
+## Task 3: Create the Button family directory
 
 **Files:**
 
-- Modify: `apps/web/src/ui/Button.tsx`
-- Create: `apps/web/src/ui/Button.test.tsx`
-- Modify: `apps/web/src/compose/compose-fab.tsx`
-- Modify: `apps/web/src/compose/composer-entry.tsx`
-- Modify: `apps/web/src/compose/compose-panel/index.tsx`
-- Modify: `apps/web/src/timeline/moment-sheet.tsx`
-- Modify: `apps/web/src/shell/create-chain-dialog/index.tsx`
-- Modify: `apps/web/src/pages/chain-settings/sections.tsx`
-- Modify: `apps/web/src/pages/notifications/index.tsx`
-- Modify: `apps/web/src/pages/login/index.tsx`
-- Modify: `apps/web/src/pages/feed-home/index.tsx`
-- Modify: `apps/web/src/pages/invite/index.tsx`
-- Modify: `apps/web/src/pages/register/index.tsx`
-- Modify: `apps/web/src/pages/moment/index.tsx`
-- Modify: `apps/web/src/pages/chain-home/index.tsx`
-- Modify: `apps/web/src/pages/me/index.tsx`
+- Create: `apps/web/src/ui/button/Button.tsx`
+- Create: `apps/web/src/ui/button/Button.test.tsx`
+- Create: `apps/web/src/ui/button/index.ts`
 
 **Interfaces:**
 
 - Consumes: Task 2 control, focus and action tokens.
-- Produces: `Button(props: ButtonProps)`, `ButtonLink(props: ButtonLinkProps)`, `IconButton(props: IconButtonProps)` where `ButtonVariant = 'primary' | 'secondary' | 'quiet' | 'danger'`, `ButtonShape = 'standard' | 'pill'`, and `type ButtonProps = CommonButtonProps & ({ variant?: Exclude<ButtonVariant, 'danger'>; shape?: ButtonShape } | { variant: 'danger'; shape?: 'standard' })`; `danger + pill` is rejected by this discriminated union.
+- Produces: `Button`, `ButtonLink`, `IconButton`, `ButtonVariant`, `ButtonShape`, `ButtonProps`, `ButtonLinkProps` and `IconButtonProps` from `ui/button`; `danger + pill` is rejected by the discriminated union. Existing UI files remain untouched for Task 13 cleanup.
 
 - [ ] **Step 1: Write failing Button behavior tests.**
 
-In `Button.test.tsx`, render `<Button>保存更改</Button>`, `<Button loading>发布</Button>`, `<ButtonLink to="/invites/x">接受邀请</ButtonLink>`, and `<IconButton icon={MoreHorizontal} label="更多操作" />`; assert default native `type="button"`, loading has `aria-busy="true"` and does not invoke `onClick`, ButtonLink is an anchor, and IconButton has its accessible name. Add a `// @ts-expect-error` compilation fixture for `<Button variant="danger" shape="pill">删除</Button>`.
+In `ui/button/Button.test.tsx`, render the four public primitives; assert default native `type="button"`, loading has `aria-busy="true"` and suppresses `onClick`, ButtonLink is an anchor, IconButton has its accessible name, and a `// @ts-expect-error` fixture rejects danger-pill.
 
 - [ ] **Step 2: Run the focused test before implementation.**
 
 Run: `pnpm --filter @moment/web test -- Button.test.tsx`
 
-Expected: FAIL because existing `Button` has `ghost/sm`, no loading/link/icon APIs, and allows the invalid shape.
+Expected: FAIL because the new `ui/button` directory and exports do not exist.
 
-- [ ] **Step 3: Implement the minimum Button family and migrate its two global compose entry points.**
+- [ ] **Step 3: Implement the minimum Button family.**
 
-Implement the discriminated prop union, `primary/secondary/quiet/danger` state classes, standard 40px/pill 44px geometry, spinner slot, focus ring and reduced-motion behavior exclusively from tokens. `className` may affect outer placement only. In every file listed in this Task, replace `ghost` with the specifically intended `secondary` or `quiet` action, replace `sm` with quiet/menu/icon composition, and replace arbitrary action styling with Button, ButtonLink or IconButton; do not keep any legacy Button adapter. Make `ComposeFab` use the only independent `primary + pill` action and `ComposerEntry` use the same action label.
+Implement the discriminated prop union, semantic variants, standard/pill geometry, spinner slot, focus ring and reduced-motion behavior exclusively from Task 2 tokens. Keep `className` limited to outer placement and export the family from `index.ts`; do not create a compatibility adapter or edit callers. Existing callers continue to use their old paths until Task 13.
 
 - [ ] **Step 4: Verify Button contracts and compilation.**
 
 Run: `pnpm --filter @moment/web test -- Button.test.tsx && pnpm --filter @moment/web typecheck`
 
-Expected: all tests pass; TypeScript rejects the danger-pill fixture and no source imports or passes `size`, `ghost`, or `sm` to Button.
+Expected: all tests pass and TypeScript rejects the danger-pill fixture; only the new directory is involved.
 
 - [ ] **Step 5: Commit the Button family.**
 
 ```bash
-git add apps/web/src/ui/Button.tsx apps/web/src/ui/Button.test.tsx apps/web/src/compose/compose-fab.tsx apps/web/src/compose/composer-entry.tsx apps/web/src/compose/compose-panel/index.tsx apps/web/src/timeline/moment-sheet.tsx apps/web/src/shell/create-chain-dialog/index.tsx apps/web/src/pages/chain-settings/sections.tsx apps/web/src/pages/notifications/index.tsx apps/web/src/pages/login/index.tsx apps/web/src/pages/feed-home/index.tsx apps/web/src/pages/invite/index.tsx apps/web/src/pages/register/index.tsx apps/web/src/pages/moment/index.tsx apps/web/src/pages/chain-home/index.tsx apps/web/src/pages/me/index.tsx
-git commit -m "feat(web): replace button family"
+git add apps/web/src/ui/button/Button.tsx apps/web/src/ui/button/Button.test.tsx apps/web/src/ui/button/index.ts
+git commit -m "feat(web): create button primitives"
 ```
 
-## Task 4: Establish Modal, Dialog, Sheet, AlertDialog and Lightbox behavior
+## Task 4: Create the Modal family directory
 
 **Files:**
 
-- Create: `apps/web/src/ui/modal.tsx`
-- Create: `apps/web/src/ui/modal.test.tsx`
-- Delete: `apps/web/src/ui/Confirm.tsx`
-- Modify: `apps/web/src/timeline/lightbox.tsx`
-- Modify: `apps/web/src/shell/create-chain-dialog/index.tsx`
-- Modify: `apps/web/src/timeline/moment-sheet.tsx`
-- Modify: `apps/web/src/compose/compose-panel/index.tsx`
-- Modify: `apps/web/src/pages/chain-settings/sections.tsx`
+- Create: `apps/web/src/ui/modal/Modal.tsx`
+- Create: `apps/web/src/ui/modal/Modal.test.tsx`
+- Create: `apps/web/src/ui/modal/index.ts`
 
 **Interfaces:**
 
-- Consumes: Task 2 overlay tokens and Task 3 `Button`/`IconButton`.
-- Produces: `type CloseReason = 'close-button' | 'escape' | 'outside'`; controlled `Dialog`, `Sheet`, and `AlertDialog` props `{ open: boolean; title: string; busy?: boolean; onRequestClose?: (reason: CloseReason) => void }`; AlertDialog additionally has `{ body: string; confirmLabel: string; cancelLabel: string; danger?: boolean; onConfirm(): void | Promise<void>; onCancel(): void }`; `Lightbox` retains its current media-navigation props.
+- Consumes: Task 2 overlay tokens and Task 3 `ui/button` exports.
+- Produces: `CloseReason`, controlled `Dialog`, `Sheet`, `AlertDialog`, `ModalSurface` and their exact public props from `ui/modal`; existing overlays remain untouched until Task 13 cleanup.
 
 - [ ] **Step 1: Write failing overlay tests.**
 
@@ -222,143 +205,119 @@ In `modal.test.tsx`, assert Dialog returns focus to its trigger after close, `Es
 
 Run: `pnpm --filter @moment/web test -- modal.test.tsx`
 
-Expected: FAIL because no `ui/modal.tsx` export exists and Confirm/Lightbox use independent fixed overlays.
+Expected: FAIL because the new `ui/modal` directory and exports do not exist.
 
 - [ ] **Step 3: Implement controlled surfaces and migrate existing overlays without changing their services.**
 
-Build an internal `ModalSurface` with react-aria Modal/Dialog focus containment, inert background, scroll lock, portal z-layer, scrim and focus restoration. Dialog/Sheet provide the fixed Header/Body/Footer structure; Sheet changes from right-floating desktop to bottom near-full mobile at 768px. AlertDialog never closes outside and initially focuses cancel. Convert every existing Confirm caller listed in this Task directly to AlertDialog, preserve callback/input-confirmation contracts and concrete outcome labels, then delete `Confirm.tsx`. Move Lightbox to `--z-lightbox`, retain arrow navigation, and migrate create-chain to Dialog while preserving its service truth source.
+Build `ModalSurface` with react-aria focus containment, inert background, scroll lock, portal z-layer, scrim and focus restoration. Export Dialog/Sheet with fixed Header/Body/Footer structure and AlertDialog with cancel-first focus, busy protection and close-reason semantics; Sheet changes from right-floating desktop to bottom near-full mobile at 768px. Keep existing Confirm, Lightbox and caller files untouched until Task 13 migrates and removes them.
 
 - [ ] **Step 4: Verify focus, close reasons and existing callers.**
 
 Run: `pnpm --filter @moment/web test -- modal.test.tsx && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint`
 
-Expected: all exit 0; no modified file contains `fixed inset-0`, `z-40`, `z-50`, or a window Escape listener.
+Expected: all exit 0; the new directory contains no `fixed inset-0`, `z-40`, `z-50`, or window Escape listener.
 
 - [ ] **Step 5: Commit modal behavior.**
 
 ```bash
-git add apps/web/src/ui/modal.tsx apps/web/src/ui/modal.test.tsx apps/web/src/timeline/lightbox.tsx apps/web/src/shell/create-chain-dialog/index.tsx apps/web/src/timeline/moment-sheet.tsx apps/web/src/compose/compose-panel/index.tsx apps/web/src/pages/chain-settings/sections.tsx
-git rm apps/web/src/ui/Confirm.tsx
-git commit -m "feat(web): unify modal dialog and sheet behavior"
+git add apps/web/src/ui/modal/Modal.tsx apps/web/src/ui/modal/Modal.test.tsx apps/web/src/ui/modal/index.ts
+git commit -m "feat(web): create modal primitives"
 ```
 
-## Task 5: Implement Field and DateTimeField
+## Task 5: Create floating, menu, popover and tooltip directories
 
 **Files:**
 
-- Modify: `apps/web/src/ui/Field.tsx`
-- Modify: `apps/web/src/ui/HappenedAtField.tsx`
-- Create: `apps/web/src/ui/Field.test.tsx`
-- Modify: `apps/web/src/shell/create-chain-dialog/index.tsx`
-- Modify: `apps/web/src/compose/compose-panel/index.tsx`
-- Modify: `apps/web/src/pages/chain-settings/sections.tsx`
-- Modify: `apps/web/src/pages/login/index.tsx`
-- Modify: `apps/web/src/pages/register/index.tsx`
-- Modify: `apps/web/src/pages/moment/index.tsx`
+- Create: `apps/web/src/ui/floating/FloatingLayer.tsx`
+- Create: `apps/web/src/ui/floating/FloatingLayer.test.tsx`
+- Create: `apps/web/src/ui/floating/index.ts`
+- Create: `apps/web/src/ui/menu/Menu.tsx`
+- Create: `apps/web/src/ui/menu/Menu.test.tsx`
+- Create: `apps/web/src/ui/menu/index.ts`
+- Create: `apps/web/src/ui/popover/Popover.tsx`
+- Create: `apps/web/src/ui/popover/index.ts`
+- Create: `apps/web/src/ui/tooltip/Tooltip.tsx`
+- Create: `apps/web/src/ui/tooltip/index.ts`
 
 **Interfaces:**
 
-- Consumes: Tasks 2–4 token, button and floating-surface contracts.
-- Produces: `Field`, `Input`, `Textarea`, `Select`, `TextField`, `TextareaField`, `PasswordField`, `SelectField`, `DateTimeField`; each composed field accepts `{ label: string; name: string; isRequired?: boolean; isOptional?: boolean; description?: string; isInvalid?: boolean; errorMessage?: string }` plus native control props; `HappenedAtField` retains existing `{ value, onChange, hint }` business contract.
+- Consumes: Task 2 semantic tokens, Task 3 button exports and Task 4 modal layering contract.
+- Produces: `FloatingLayer`, `ResponsiveMenu`, `MenuItem`, `MenuLinkItem`, `MenuGroup`, `ContextMenu`, `Popover`, `ReactionPopover`, `MemberPopover` and `Tooltip`; menu callers do not read viewport width. Field creation waits for Task 6.
+
+- [ ] **Step 1: Write failing floating-surface tests.**
+
+In the new floating/menu tests, assert ArrowDown opens and focuses the first item, Escape restores trigger focus, desktop menu uses `role="menu"`, an under-768 viewport opens a modal ActionSheet with a separate “取消” action, and a ReactionPopover exposes grid arrow-key navigation.
+
+- [ ] **Step 2: Run the focused test before creating the directories.**
+
+Run: `pnpm --filter @moment/web test -- Menu.test.tsx`
+
+Expected: FAIL because the new floating/menu/popover/tooltip directories and exports do not exist.
+
+- [ ] **Step 3: Implement the floating and command-surface contracts.**
+
+Implement the portal-based FloatingLayer for flip/shift, collision, outside dismissal, viewport exit and focus restoration. Build one declarative command collection for desktop Menu and mobile ActionSheet at 768px, plus Popover and short desktop Tooltip contracts. Keep all existing menu, hover-tip, reaction and date-time callers untouched until Task 13.
+
+- [ ] **Step 4: Verify keyboard and viewport behavior.**
+
+Run: `pnpm --filter @moment/web test -- Menu.test.tsx && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint`
+
+Expected: PASS; the new directories contain no arbitrary z-index, full-screen outside button, custom window key listener, caller-supplied placement, width or shadow.
+
+- [ ] **Step 5: Commit the floating command surfaces.**
+
+```bash
+git add apps/web/src/ui/floating/FloatingLayer.tsx apps/web/src/ui/floating/FloatingLayer.test.tsx apps/web/src/ui/floating/index.ts apps/web/src/ui/menu/Menu.tsx apps/web/src/ui/menu/Menu.test.tsx apps/web/src/ui/menu/index.ts apps/web/src/ui/popover/Popover.tsx apps/web/src/ui/popover/index.ts apps/web/src/ui/tooltip/Tooltip.tsx apps/web/src/ui/tooltip/index.ts
+git commit -m "feat(web): create floating command primitives"
+```
+
+## Task 6: Create the Field family directory consuming Task 5
+
+**Files:**
+
+- Create: `apps/web/src/ui/field/Field.tsx`
+- Create: `apps/web/src/ui/field/Field.test.tsx`
+- Create: `apps/web/src/ui/field/index.ts`
+
+**Interfaces:**
+
+- Consumes: Tasks 2–5 token, button, modal and floating-surface contracts.
+- Produces: `Field`, `Input`, `Textarea`, `Select`, `TextField`, `TextareaField`, `PasswordField`, `SelectField`, `DateTimeField`; each composed field accepts `{ label: string; name: string; isRequired?: boolean; isOptional?: boolean; description?: string; isInvalid?: boolean; errorMessage?: string }` plus native control props. Existing field callers remain untouched until Task 13.
 
 - [ ] **Step 1: Write failing Field tests.**
 
-In `Field.test.tsx`, assert a TextField associates label/description/error IDs, error replaces description and sets `aria-invalid`, PasswordField toggles type without changing value or focus, and Textarea has `resize-none`, 16px text, 44px controls and the required 112px minimum height.
+In `Field.test.tsx`, assert TextField associates label/description/error IDs, error replaces description and sets `aria-invalid`, PasswordField toggles type without changing value or focus, and Textarea has `resize-none`, 16px text, 44px controls and the required 112px minimum height.
 
-- [ ] **Step 2: Run the focused test before migration.**
+- [ ] **Step 2: Run the focused test before creating the directory.**
 
 Run: `pnpm --filter @moment/web test -- Field.test.tsx`
 
-Expected: FAIL because the current label wrapper has no ID associations, invalid API, password field, or no-resize textarea.
+Expected: FAIL because the new `ui/field` directory and exports do not exist.
 
-- [ ] **Step 3: Implement the fixed Field API and adapt create-chain/date-time.**
+- [ ] **Step 3: Implement the fixed Field API.**
 
-Use react-aria-components associations for stable IDs; expose no size/radius/tone variants; map default/hover/focus/error/disabled/readonly/autofill through field tokens. Render “可选” only from `isOptional`; `isRequired` is native semantics without a star. Convert every existing Field caller listed in this Task to composed field APIs, including compose and reply scene components; new code may not use `hint` or `error` props. Restyle HappenedAtField as DateTimeField with its existing date/time/timezone values, preserving the existing popover selection logic and business validation.
+Use react-aria-components associations for stable IDs; expose no size/radius/tone variants; map default/hover/focus/error/disabled/readonly/autofill through Task 2 field tokens. Render “可选” only from `isOptional`; `isRequired` is native semantics without a star. Implement DateTimeField on top of Task 5 Popover behavior while preserving the existing date/time/timezone value contract. Do not edit or adapt any existing caller in this task.
 
-- [ ] **Step 4: Verify Field semantics and caller types.**
+- [ ] **Step 4: Verify Field semantics.**
 
-Run: `pnpm --filter @moment/web test -- Field.test.tsx && pnpm --filter @moment/web typecheck`
+Run: `pnpm --filter @moment/web test -- Field.test.tsx && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint`
 
-Expected: PASS; no caller of the modified files passes `hint`, `error`, `rounded-*`, `border-line`, `h-10`, or `resize-y` to a base control.
+Expected: PASS; the new field directory contains no `hint`, `error`, `rounded-*`, `border-line`, `h-10`, or `resize-y` compatibility API.
 
 - [ ] **Step 5: Commit the Field family.**
 
 ```bash
-git add apps/web/src/ui/Field.tsx apps/web/src/ui/HappenedAtField.tsx apps/web/src/ui/Field.test.tsx apps/web/src/shell/create-chain-dialog/index.tsx apps/web/src/compose/compose-panel/index.tsx apps/web/src/pages/chain-settings/sections.tsx apps/web/src/pages/login/index.tsx apps/web/src/pages/register/index.tsx apps/web/src/pages/moment/index.tsx
-git commit -m "feat(web): establish semantic field components"
+git add apps/web/src/ui/field/Field.tsx apps/web/src/ui/field/Field.test.tsx apps/web/src/ui/field/index.ts
+git commit -m "feat(web): create field primitives"
 ```
 
-## Task 6: Consolidate Menu, Popover, Tooltip and mobile ActionSheet
+## Task 7: Create the Feedback family directory
 
 **Files:**
 
-- Create: `apps/web/src/ui/floating-layer.tsx`
-- Modify: `apps/web/src/ui/Menu.tsx`
-- Create: `apps/web/src/ui/popover.tsx`
-- Create: `apps/web/src/ui/tooltip.tsx`
-- Create: `apps/web/src/ui/Menu.test.tsx`
-- Modify: `apps/web/src/ui/HoverTip.tsx`
-- Modify: `apps/web/src/shell/user-menu.tsx`
-- Modify: `apps/web/src/shell/Shell.tsx`
-- Modify: `apps/web/src/timeline/moment-sheet.tsx`
-- Modify: `apps/web/src/timeline/reaction-bar.tsx`
-- Modify: `apps/web/src/pages/chain-home/index.tsx`
-
-**Interfaces:**
-
-- Consumes: Tasks 2–5 z-layer, Button/IconButton, Modal and Field contracts.
-- Produces: `ResponsiveMenu`, `MenuItem`, `MenuLinkItem`, `MenuGroup`, `ContextMenu`, `KebabButton`, `ReactionPopover`, `MemberPopover`, `Tooltip`; `ResponsiveMenu` accepts `{ 'aria-label': string; trigger: ReactNode; sheetTitle?: string; sheetContext?: string; onAction(key: string): void }`; `MenuItem` accepts `{ id: string; textValue: string; icon?: LucideIcon; tone?: 'danger'; children: ReactNode }`.
-
-- [ ] **Step 1: Write failing responsive-menu tests.**
-
-In `Menu.test.tsx`, assert ArrowDown opens and focuses the first item, Escape restores trigger focus, desktop menu uses `role="menu"`, an under-768 viewport opens a modal ActionSheet with a separate “取消” action, and a ReactionPopover exposes grid arrow-key navigation.
-
-- [ ] **Step 2: Run tests before replacement.**
-
-Run: `pnpm --filter @moment/web test -- Menu.test.tsx`
-
-Expected: FAIL because Menu children require a `close()` callback and currently render an absolute menu plus a transparent full-screen button.
-
-- [ ] **Step 3: Implement the one command collection and floating layer.**
-
-Use a portal-based internal FloatingLayer for flip/shift, outside dismissal, viewport exit and focus restoration. At 768px ResponsiveMenu switches internally between anchored React Aria Menu and modal ActionSheet; do not let callers read viewport width. Implement ContextMenu only as a desktop shortcut with the same collection, MemberPopover in place of HoverTip, ReactionPopover instead of menu-based reactions, DateTime popover integration for Task 5, and Tooltip only for short desktop icon explanation. Convert every existing Menu caller listed in this Task from `children(close)` to a declarative command collection; do not retain a legacy adapter. Replace HoverTip’s implementation with MemberPopover and migrate UserMenu labels to “我的资料”, “通知”, “退出登录”.
-
-- [ ] **Step 4: Verify keyboard/viewport behavior.**
-
-Run: `pnpm --filter @moment/web test -- Menu.test.tsx && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint`
-
-Expected: PASS; no modified source retains a full-screen outside button, custom window key listener, arbitrary z-index, or caller-supplied placement/width/shadow.
-
-- [ ] **Step 5: Commit floating command surfaces.**
-
-```bash
-git add apps/web/src/ui/floating-layer.tsx apps/web/src/ui/Menu.tsx apps/web/src/ui/popover.tsx apps/web/src/ui/tooltip.tsx apps/web/src/ui/Menu.test.tsx apps/web/src/ui/HoverTip.tsx apps/web/src/shell/user-menu.tsx apps/web/src/shell/Shell.tsx apps/web/src/timeline/moment-sheet.tsx apps/web/src/timeline/reaction-bar.tsx apps/web/src/pages/chain-home/index.tsx
-git commit -m "feat(web): unify menus popovers and tooltips"
-```
-
-## Task 7: Build the Feedback family
-
-**Files:**
-
-- Modify: `apps/web/src/ui/Banner.tsx`
-- Modify: `apps/web/src/ui/Empty.tsx`
-- Create: `apps/web/src/ui/feedback.tsx`
-- Create: `apps/web/src/ui/use-pending.ts`
-- Create: `apps/web/src/ui/feedback.test.tsx`
-- Modify: `apps/web/src/shell/Shell.tsx`
-- Modify: `apps/web/src/timeline/timeline.tsx`
-- Modify: `apps/web/src/timeline/moment-sheet.tsx`
-- Modify: `apps/web/src/compose/compose-panel/index.tsx`
-- Modify: `apps/web/src/shell/create-chain-dialog/index.tsx`
-- Modify: `apps/web/src/pages/chain-settings/index.tsx`
-- Modify: `apps/web/src/pages/chain-settings/sections.tsx`
-- Modify: `apps/web/src/pages/login/index.tsx`
-- Modify: `apps/web/src/pages/register/index.tsx`
-- Modify: `apps/web/src/pages/invite/index.tsx`
-- Modify: `apps/web/src/pages/moment/index.tsx`
-- Modify: `apps/web/src/pages/chain-home/index.tsx`
-- Modify: `apps/web/src/pages/feed-home/index.tsx`
-- Modify: `apps/web/src/pages/me/index.tsx`
+- Create: `apps/web/src/ui/feedback/Feedback.tsx`
+- Create: `apps/web/src/ui/feedback/Feedback.test.tsx`
+- Create: `apps/web/src/ui/feedback/index.ts`
 
 **Interfaces:**
 
@@ -373,23 +332,23 @@ In `feedback.test.tsx`, assert Banner renders `role="alert"` for error and its a
 
 Run: `pnpm --filter @moment/web test -- feedback.test.tsx`
 
-Expected: FAIL because Toast/Progress/Skeleton exports do not exist and current Banner/Empty accept the old arbitrary API.
+Expected: FAIL because the new `ui/feedback` directory and exports do not exist.
 
 - [ ] **Step 3: Implement structured feedback and mount one global toast region.**
 
-Replace card-style Banner and arbitrary Empty with token-only structured components. Convert every existing Banner/Empty caller listed in this Task to structured messages/actions; do not retain legacy component adapters. Implement ToastProvider queue/timers (3.5s ordinary, 6s undo, one visible/two queued, clear at logout), pending hook (180ms delay, 280ms min visible), four fixed skeleton templates and InlineProgress. Mount ToastProvider/ToastRegion once in Shell; do not add toast on mutations whose visible list result already proves success. Confirm remains an AlertDialog, not a feedback component.
+Implement token-only structured Banner, EmptyState, ToastProvider, ToastRegion, skeleton templates, InlineProgress and `usePending` in the new directory. Keep one visible/two queued Toast timing and deduplication semantics, and do not add compatibility adapters or edit callers; Task 13 performs migration and removes old paths.
 
 - [ ] **Step 4: Verify feedback contracts.**
 
 Run: `pnpm --filter @moment/web test -- feedback.test.tsx && pnpm --filter @moment/web typecheck`
 
-Expected: PASS; only Toast has a shadow; Banner/EmptyState/Skeleton/InlineProgress use no fixed position or private `animate-pulse`, and no legacy feedback adapter remains.
+Expected: PASS; only Toast has a shadow; the new feedback directory uses no fixed position for content feedback, private `animate-pulse`, or legacy adapter.
 
 - [ ] **Step 5: Commit feedback primitives.**
 
 ```bash
-git add apps/web/src/ui/Banner.tsx apps/web/src/ui/Empty.tsx apps/web/src/ui/feedback.tsx apps/web/src/ui/use-pending.ts apps/web/src/ui/feedback.test.tsx apps/web/src/shell/Shell.tsx apps/web/src/timeline/timeline.tsx apps/web/src/timeline/moment-sheet.tsx apps/web/src/compose/compose-panel/index.tsx apps/web/src/shell/create-chain-dialog/index.tsx apps/web/src/pages/chain-settings/index.tsx apps/web/src/pages/chain-settings/sections.tsx apps/web/src/pages/login/index.tsx apps/web/src/pages/register/index.tsx apps/web/src/pages/invite/index.tsx apps/web/src/pages/moment/index.tsx apps/web/src/pages/chain-home/index.tsx apps/web/src/pages/feed-home/index.tsx apps/web/src/pages/me/index.tsx
-git commit -m "feat(web): add structured feedback components"
+git add apps/web/src/ui/feedback/Feedback.tsx apps/web/src/ui/feedback/Feedback.test.tsx apps/web/src/ui/feedback/index.ts
+git commit -m "feat(web): create feedback primitives"
 ```
 
 ## Task 8: Add the development-only Design Lab
