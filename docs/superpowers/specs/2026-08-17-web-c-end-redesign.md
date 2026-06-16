@@ -1,7 +1,7 @@
 # 时刻 Moment — Web C 端商业化视觉体系
 
 > 日期：2026-08-17；商业化收口修订：2026-08-18
-> 状态：页面级方向已与用户通过前后对比稿逐项对齐；Button、Modal、Field、Menu / Popover / Tooltip 组件规范已固化，Feedback 待后续独立评审
+> 状态：页面级方向及 Button、Modal、Field、Menu / Popover / Tooltip、Feedback 组件规范均已固化
 > 范围：`apps/web` 的品牌基调、壳层、页眉、日子线、时刻内容、Tag、链来源、时间索引与响应式规则
 > 权威边界：数据与权限听 `2026-08-15-moment-design.md`；功能面听 `2026-08-16-web-product.md`；链页眉成员与可见性听 `2026-08-18-chain-audience-header-design.md`；Web 视觉基础与页面组合听本文
 > 视觉参考：[`2026-08-18-web-commercial-design-reference.html`](../mocks/2026-08-18-web-commercial-design-reference.html)；可编辑源稿：[`fragment.html`](../mocks/2026-08-18-web-commercial-design-reference.fragment.html)
@@ -306,7 +306,7 @@ tokens.css → Tailwind 语义映射 → ui 基础组件 → 页面组合模式
 2. **Modal / Dialog / Sheet**：层级、宽度、移动端形态、遮罩、焦点、关闭与操作区。已固化为 [`2026-08-18-web-modal-dialog-sheet-design.md`](./2026-08-18-web-modal-dialog-sheet-design.md)。
 3. **Field**：输入、文本域、日期时间、校验、帮助与错误。已固化为 [`2026-08-18-web-field-input-design.md`](./2026-08-18-web-field-input-design.md)。
 4. **Menu / Popover / Tooltip**：锚点、展开方向、触控降级、键盘行为。已固化为 [`2026-08-18-web-menu-popover-tooltip-design.md`](./2026-08-18-web-menu-popover-tooltip-design.md)。
-5. **Feedback**：Banner、Toast、Empty、Skeleton、Confirm。
+5. **Feedback**：Banner、Toast、EmptyState、Skeleton、InlineProgress；危险确认归 AlertDialog。已固化为 [`2026-08-18-web-feedback-design.md`](./2026-08-18-web-feedback-design.md)。
 
 每份组件规范必须给出：适用场景、禁止场景、解剖结构、Token、尺寸、状态矩阵、响应式、无障碍、文案规则和视觉验收样例。
 
