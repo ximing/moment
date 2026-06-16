@@ -12,6 +12,7 @@ import { Button } from '@/ui/Button';
 import { Empty } from '@/ui/Empty';
 import { Icon } from '@/ui/Icon';
 import { KebabButton, Menu, MenuItem } from '@/ui/Menu';
+import { ChainAudience } from './chain-audience';
 import { ChainHomeService } from './chain-home.service';
 
 const ChainHomeContent = observer(function ChainHomeContent() {
@@ -51,7 +52,10 @@ const ChainHomeContent = observer(function ChainHomeContent() {
       />
       <header className="mb-5 flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-medium">{chain.name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="min-w-0 truncate text-2xl font-medium">{chain.name}</h1>
+              <ChainAudience chain={chain} />
+            </div>
             {chain.description && <p className="mt-1 text-sm text-muted">{chain.description}</p>}
           </div>
           <Menu trigger={<KebabButton label="设置" />}>

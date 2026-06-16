@@ -76,6 +76,17 @@ export interface ChainDto {
   createdAt: string;
   /** ISO 8601 */
   updatedAt: string;
+  /** 成员预览：joinedAt 升序再 userId 升序，最多 5 人，含自己 */
+  membersPreview: ChainMemberPreview[];
+  /** 成员总数，含自己 */
+  memberCount: number;
+}
+
+export interface ChainMemberPreview {
+  userId: string;
+  nickname: string;
+  avatarUrl: string | null;
+  role: ChainRole;
 }
 
 export interface ChainMemberDto {

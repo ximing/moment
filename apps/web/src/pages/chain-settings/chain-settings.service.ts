@@ -119,12 +119,14 @@ export class ChainSettingsService extends Service {
   async changeRole(userId: string, role: 'editor' | 'viewer'): Promise<void> {
     await client.updateMemberRole(this.chainId, userId, role);
     await this.loadMembers();
+    this.emit('chain:changed', { chainId: this.chainId, op: 'update' }, 'global');
   }
 
   async removeMember(userId: string): Promise<void> {
     await client.removeMember(this.chainId, userId);
     await this.loadMembers();
     await this.loadChain();
+    this.emit('chain:changed', { chainId: this.chainId, op: 'update' }, 'global');
   }
 
   async leaveChain(userId: string): Promise<void> {
@@ -138,6 +140,7 @@ export class ChainSettingsService extends Service {
     this.transferName = '';
     await this.loadMembers();
     await this.loadChain();
+    this.emit('chain:changed', { chainId: this.chainId, op: 'update' }, 'global');
   }
 
   async createInvite(): Promise<void> {
