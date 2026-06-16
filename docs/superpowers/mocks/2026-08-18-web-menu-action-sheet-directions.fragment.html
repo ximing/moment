@@ -1,0 +1,600 @@
+<style>
+  #moment-menu-directions {
+    --mm-bg: light-dark(#f6f1ec, #171412);
+    --mm-surface: light-dark(#fffdfb, #26211e);
+    --mm-float: light-dark(#fffdfb, #2b2521);
+    --mm-soft: light-dark(#f0e9e4, #1f1a17);
+    --mm-ink: light-dark(#2b201c, #f7efe9);
+    --mm-muted: light-dark(#6f5d54, #c3b5ad);
+    --mm-line: light-dark(#d8c9c0, #463c37);
+    --mm-action: light-dark(#c94a3a, #ff755e);
+    --mm-danger: light-dark(#b83a30, #ff8a72);
+    --mm-focus: light-dark(#7656d8, #b59cff);
+    --mm-scrim: light-dark(rgb(43 32 28 / 28%), rgb(0 0 0 / 52%));
+    --mm-shadow-soft: light-dark(rgb(43 32 28 / 18%), rgb(0 0 0 / 44%));
+    --mm-shadow-clear: light-dark(rgb(43 32 28 / 13%), rgb(0 0 0 / 34%));
+    width: 100%;
+    color: var(--mm-ink);
+    color-scheme: light dark;
+    font-family:
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      "PingFang SC",
+      "Microsoft YaHei",
+      sans-serif;
+  }
+
+  #moment-menu-directions * {
+    box-sizing: border-box;
+  }
+
+  #moment-menu-directions h2,
+  #moment-menu-directions h3,
+  #moment-menu-directions p {
+    margin: 0;
+  }
+
+  #moment-menu-directions .mmd-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  #moment-menu-directions .mmd-heading p,
+  #moment-menu-directions .mmd-option-head p,
+  #moment-menu-directions .mmd-time,
+  #moment-menu-directions .mmd-sheet-context {
+    color: var(--mm-muted);
+  }
+
+  #moment-menu-directions .mmd-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  #moment-menu-directions .mmd-option {
+    overflow: hidden;
+    min-width: 0;
+    border: 1px solid var(--mm-line);
+    border-radius: 20px;
+    background: var(--mm-bg);
+  }
+
+  #moment-menu-directions .mmd-option[data-recommended="true"] {
+    border-color: color-mix(in srgb, var(--mm-action) 68%, var(--mm-line));
+  }
+
+  #moment-menu-directions .mmd-option-head {
+    display: flex;
+    min-height: 72px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--mm-surface);
+  }
+
+  #moment-menu-directions .mmd-option-head h3 {
+    font-weight: 500;
+  }
+
+  #moment-menu-directions .mmd-option-head p {
+    margin-top: 3px;
+  }
+
+  #moment-menu-directions .mmd-recommend {
+    flex: none;
+    border-radius: 999px;
+    padding: 3px 8px;
+    background: color-mix(in srgb, var(--mm-action) 13%, transparent);
+    color: var(--mm-action);
+  }
+
+  #moment-menu-directions .mmd-label {
+    padding: 12px 14px 8px;
+    color: var(--mm-muted);
+  }
+
+  #moment-menu-directions .mmd-desktop {
+    position: relative;
+    min-height: 180px;
+    margin: 0 12px;
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--mm-surface);
+    padding: 14px;
+  }
+
+  #moment-menu-directions .mmd-author {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) 40px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  #moment-menu-directions .mmd-avatar {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--mm-focus) 20%, var(--mm-soft));
+    color: var(--mm-focus);
+    font-weight: 500;
+  }
+
+  #moment-menu-directions .mmd-name {
+    font-weight: 500;
+  }
+
+  #moment-menu-directions .mmd-more {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: var(--mm-soft);
+    color: var(--mm-muted);
+  }
+
+  #moment-menu-directions .mmd-copy {
+    max-width: 70%;
+    margin: 18px 0 0 42px;
+    color: var(--mm-muted);
+  }
+
+  #moment-menu-directions .mmd-menu {
+    position: absolute;
+    top: 58px;
+    right: 12px;
+    z-index: 2;
+    min-width: 156px;
+    background: var(--mm-float);
+  }
+
+  #moment-menu-directions .mmd-menu-action,
+  #moment-menu-directions .mmd-sheet-action,
+  #moment-menu-directions .mmd-sheet-cancel {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    background: transparent;
+    color: var(--mm-ink);
+    font: inherit;
+    text-align: left;
+  }
+
+  #moment-menu-directions .mmd-menu-action {
+    min-height: 40px;
+    padding: 0 11px;
+  }
+
+  #moment-menu-directions .mmd-menu-action[data-danger="true"],
+  #moment-menu-directions .mmd-sheet-action[data-danger="true"] {
+    color: var(--mm-danger);
+  }
+
+  #moment-menu-directions .mmd-phone {
+    position: relative;
+    min-height: 290px;
+    margin-top: 8px;
+    overflow: hidden;
+    background: var(--mm-surface);
+  }
+
+  #moment-menu-directions .mmd-phone-content {
+    padding: 18px 16px;
+  }
+
+  #moment-menu-directions .mmd-phone-line {
+    height: 10px;
+    margin-top: 12px;
+    border-radius: 999px;
+    background: var(--mm-soft);
+  }
+
+  #moment-menu-directions .mmd-phone-line[data-short="true"] {
+    width: 62%;
+  }
+
+  #moment-menu-directions .mmd-scrim {
+    position: absolute;
+    inset: 0;
+    background: var(--mm-scrim);
+  }
+
+  #moment-menu-directions .mmd-sheet {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 2;
+    background: var(--mm-float);
+    padding: 14px 12px 12px;
+  }
+
+  #moment-menu-directions .mmd-sheet-title {
+    padding: 2px 8px 0;
+    font-weight: 500;
+  }
+
+  #moment-menu-directions .mmd-sheet-context {
+    padding: 3px 8px 10px;
+  }
+
+  #moment-menu-directions .mmd-sheet-action {
+    min-height: 48px;
+    padding: 0 12px;
+  }
+
+  #moment-menu-directions .mmd-sheet-cancel {
+    min-height: 48px;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  #moment-menu-directions .mmd-option[data-style="clear"] .mmd-menu {
+    border: 1px solid var(--mm-line);
+    border-radius: 14px;
+    box-shadow: 0 12px 30px var(--mm-shadow-clear);
+    padding: 4px;
+  }
+
+  #moment-menu-directions .mmd-option[data-style="clear"] .mmd-menu-action {
+    border-radius: 9px;
+  }
+
+  #moment-menu-directions
+    .mmd-option[data-style="clear"]
+    .mmd-menu-action:first-child {
+    background: var(--mm-soft);
+  }
+
+  #moment-menu-directions .mmd-option[data-style="clear"] .mmd-sheet {
+    border-top: 1px solid var(--mm-line);
+    border-radius: 20px 20px 0 0;
+  }
+
+  #moment-menu-directions .mmd-option[data-style="clear"] .mmd-sheet-action,
+  #moment-menu-directions .mmd-option[data-style="clear"] .mmd-sheet-cancel {
+    border-radius: 10px;
+  }
+
+  #moment-menu-directions
+    .mmd-option[data-style="clear"]
+    .mmd-sheet-action:first-of-type {
+    background: var(--mm-soft);
+  }
+
+  #moment-menu-directions .mmd-option[data-style="soft"] .mmd-menu {
+    border-radius: 18px;
+    box-shadow: 0 18px 48px var(--mm-shadow-soft);
+    padding: 6px;
+  }
+
+  #moment-menu-directions .mmd-option[data-style="soft"] .mmd-menu-action {
+    min-height: 42px;
+    border-radius: 12px;
+  }
+
+  #moment-menu-directions
+    .mmd-option[data-style="soft"]
+    .mmd-menu-action:first-child {
+    background: var(--mm-soft);
+  }
+
+  #moment-menu-directions .mmd-option[data-style="soft"] .mmd-sheet {
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -18px 48px var(--mm-shadow-soft);
+  }
+
+  #moment-menu-directions .mmd-option[data-style="soft"] .mmd-sheet-action,
+  #moment-menu-directions .mmd-option[data-style="soft"] .mmd-sheet-cancel {
+    border-radius: 13px;
+  }
+
+  #moment-menu-directions
+    .mmd-option[data-style="soft"]
+    .mmd-sheet-action:first-of-type {
+    background: var(--mm-soft);
+  }
+
+  #moment-menu-directions .mmd-option[data-style="islands"] .mmd-menu {
+    border-radius: 22px;
+    box-shadow: 0 18px 48px var(--mm-shadow-soft);
+    padding: 8px;
+  }
+
+  #moment-menu-directions .mmd-option[data-style="islands"] .mmd-menu-action {
+    min-height: 46px;
+    border-radius: 14px;
+    background: var(--mm-soft);
+  }
+
+  #moment-menu-directions
+    .mmd-option[data-style="islands"]
+    .mmd-menu-action
+    + .mmd-menu-action {
+    margin-top: 6px;
+  }
+
+  #moment-menu-directions .mmd-option[data-style="islands"] .mmd-sheet {
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -18px 48px var(--mm-shadow-soft);
+    padding: 16px 14px 14px;
+  }
+
+  #moment-menu-directions .mmd-option[data-style="islands"] .mmd-sheet-action,
+  #moment-menu-directions .mmd-option[data-style="islands"] .mmd-sheet-cancel {
+    min-height: 50px;
+    border-radius: 16px;
+    background: var(--mm-soft);
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  #moment-menu-directions
+    .mmd-option[data-style="islands"]
+    .mmd-sheet-action
+    + .mmd-sheet-action {
+    margin-top: 7px;
+  }
+
+  #moment-menu-directions svg {
+    flex: none;
+  }
+
+  @media (max-width: 820px) {
+    #moment-menu-directions .mmd-grid {
+      grid-template-columns: 1fr;
+    }
+
+    #moment-menu-directions .mmd-option {
+      display: grid;
+      grid-template-columns: minmax(190px, 0.72fr) minmax(0, 1fr);
+    }
+
+    #moment-menu-directions .mmd-option-head {
+      grid-column: 1 / -1;
+    }
+
+    #moment-menu-directions .mmd-label {
+      align-self: end;
+    }
+
+    #moment-menu-directions .mmd-desktop {
+      margin-bottom: 12px;
+    }
+
+    #moment-menu-directions .mmd-phone {
+      grid-column: 2;
+      grid-row: 2 / span 2;
+      margin-top: 0;
+    }
+  }
+
+  @media (max-width: 560px) {
+    #moment-menu-directions .mmd-heading {
+      display: block;
+    }
+
+    #moment-menu-directions .mmd-heading p {
+      margin-top: 3px;
+    }
+
+    #moment-menu-directions .mmd-option {
+      display: block;
+    }
+
+    #moment-menu-directions .mmd-phone {
+      margin-top: 8px;
+    }
+  }
+</style>
+
+<div id="moment-menu-directions">
+  <div class="mmd-heading">
+    <h2>Menu 与移动 Action Sheet</h2>
+    <p>同一组命令，在桌面锚定；在移动端沉到底部</p>
+  </div>
+
+  <div class="mmd-grid">
+    <section
+      class="mmd-option"
+      data-style="clear"
+      aria-label="方案 A：精简描边"
+    >
+      <header class="mmd-option-head">
+        <div>
+          <h3>A · 精简描边</h3>
+          <p>利落，但工具感仍然明显</p>
+        </div>
+      </header>
+      <p class="mmd-label">桌面 Menu</p>
+      <div class="mmd-desktop">
+        <div class="mmd-author">
+          <span class="mmd-avatar">S</span>
+          <span
+            ><span class="mmd-name">simon</span><br /><span class="mmd-time"
+              >晚上 10:01</span
+            ></span
+          >
+          <button class="mmd-more" type="button" aria-label="更多操作">
+            <i data-lucide="ellipsis"></i>
+          </button>
+        </div>
+        <p class="mmd-copy">周末去看了海，风很轻。</p>
+        <div class="mmd-menu" role="menu" aria-label="这条时刻的操作">
+          <button class="mmd-menu-action" type="button" role="menuitem">
+            <i data-lucide="pencil"></i>编辑时刻
+          </button>
+          <button
+            class="mmd-menu-action"
+            type="button"
+            role="menuitem"
+            data-danger="true"
+          >
+            <i data-lucide="trash-2"></i>删除时刻
+          </button>
+        </div>
+      </div>
+      <div class="mmd-phone">
+        <div class="mmd-phone-content">
+          <div class="mmd-author">
+            <span class="mmd-avatar">S</span><span class="mmd-name">simon</span
+            ><span></span>
+          </div>
+          <div class="mmd-phone-line"></div>
+          <div class="mmd-phone-line" data-short="true"></div>
+        </div>
+        <div class="mmd-scrim"></div>
+        <div class="mmd-sheet" aria-label="移动端操作面板">
+          <p class="mmd-sheet-title">这条时刻</p>
+          <p class="mmd-sheet-context">周末小家 · simon</p>
+          <button class="mmd-sheet-action" type="button">
+            <i data-lucide="pencil"></i>编辑时刻
+          </button>
+          <button class="mmd-sheet-action" type="button" data-danger="true">
+            <i data-lucide="trash-2"></i>删除时刻
+          </button>
+          <button class="mmd-sheet-cancel" type="button">取消</button>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="mmd-option"
+      data-style="soft"
+      data-recommended="true"
+      aria-label="方案 B：柔和浮层"
+    >
+      <header class="mmd-option-head">
+        <div>
+          <h3>B · 柔和浮层</h3>
+          <p>安静、有触感，和 Field / Sheet 同源</p>
+        </div>
+        <span class="mmd-recommend">建议</span>
+      </header>
+      <p class="mmd-label">桌面 Menu</p>
+      <div class="mmd-desktop">
+        <div class="mmd-author">
+          <span class="mmd-avatar">S</span>
+          <span
+            ><span class="mmd-name">simon</span><br /><span class="mmd-time"
+              >晚上 10:01</span
+            ></span
+          >
+          <button class="mmd-more" type="button" aria-label="更多操作">
+            <i data-lucide="ellipsis"></i>
+          </button>
+        </div>
+        <p class="mmd-copy">周末去看了海，风很轻。</p>
+        <div class="mmd-menu" role="menu" aria-label="这条时刻的操作">
+          <button class="mmd-menu-action" type="button" role="menuitem">
+            <i data-lucide="pencil"></i>编辑时刻
+          </button>
+          <button
+            class="mmd-menu-action"
+            type="button"
+            role="menuitem"
+            data-danger="true"
+          >
+            <i data-lucide="trash-2"></i>删除时刻
+          </button>
+        </div>
+      </div>
+      <div class="mmd-phone">
+        <div class="mmd-phone-content">
+          <div class="mmd-author">
+            <span class="mmd-avatar">S</span><span class="mmd-name">simon</span
+            ><span></span>
+          </div>
+          <div class="mmd-phone-line"></div>
+          <div class="mmd-phone-line" data-short="true"></div>
+        </div>
+        <div class="mmd-scrim"></div>
+        <div class="mmd-sheet" aria-label="移动端操作面板">
+          <p class="mmd-sheet-title">这条时刻</p>
+          <p class="mmd-sheet-context">周末小家 · simon</p>
+          <button class="mmd-sheet-action" type="button">
+            <i data-lucide="pencil"></i>编辑时刻
+          </button>
+          <button class="mmd-sheet-action" type="button" data-danger="true">
+            <i data-lucide="trash-2"></i>删除时刻
+          </button>
+          <button class="mmd-sheet-cancel" type="button">取消</button>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="mmd-option"
+      data-style="islands"
+      aria-label="方案 C：圆润动作岛"
+    >
+      <header class="mmd-option-head">
+        <div>
+          <h3>C · 圆润动作岛</h3>
+          <p>触感更强，但菜单存在感偏重</p>
+        </div>
+      </header>
+      <p class="mmd-label">桌面 Menu</p>
+      <div class="mmd-desktop">
+        <div class="mmd-author">
+          <span class="mmd-avatar">S</span>
+          <span
+            ><span class="mmd-name">simon</span><br /><span class="mmd-time"
+              >晚上 10:01</span
+            ></span
+          >
+          <button class="mmd-more" type="button" aria-label="更多操作">
+            <i data-lucide="ellipsis"></i>
+          </button>
+        </div>
+        <p class="mmd-copy">周末去看了海，风很轻。</p>
+        <div class="mmd-menu" role="menu" aria-label="这条时刻的操作">
+          <button class="mmd-menu-action" type="button" role="menuitem">
+            <i data-lucide="pencil"></i>编辑时刻
+          </button>
+          <button
+            class="mmd-menu-action"
+            type="button"
+            role="menuitem"
+            data-danger="true"
+          >
+            <i data-lucide="trash-2"></i>删除时刻
+          </button>
+        </div>
+      </div>
+      <div class="mmd-phone">
+        <div class="mmd-phone-content">
+          <div class="mmd-author">
+            <span class="mmd-avatar">S</span><span class="mmd-name">simon</span
+            ><span></span>
+          </div>
+          <div class="mmd-phone-line"></div>
+          <div class="mmd-phone-line" data-short="true"></div>
+        </div>
+        <div class="mmd-scrim"></div>
+        <div class="mmd-sheet" aria-label="移动端操作面板">
+          <p class="mmd-sheet-title">这条时刻</p>
+          <p class="mmd-sheet-context">周末小家 · simon</p>
+          <button class="mmd-sheet-action" type="button">
+            <i data-lucide="pencil"></i>编辑时刻
+          </button>
+          <button class="mmd-sheet-action" type="button" data-danger="true">
+            <i data-lucide="trash-2"></i>删除时刻
+          </button>
+          <button class="mmd-sheet-cancel" type="button">取消</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
