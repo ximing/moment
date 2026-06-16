@@ -39,69 +39,63 @@
 
 **Files:**
 
-- Modify: `apps/web/node_modules/react-dom` (generated pnpm workspace symlink only; never commit it)
-- Modify: `apps/web/node_modules/.pnpm` (generated pnpm workspace links only; never commit it)
-- Verify: `pnpm-lock.yaml` (must remain byte-for-byte unchanged)
+- Modify: `apps/web/vite.config.ts`
 - Create: `docs/superpowers/verification/2026-08-18-web-build-baseline.md`
 
 **Interfaces:**
 
 - Consumes: `apps/web/package.json` dependency `react-dom@^19.2.0` and root lockfile resolution `react-dom@19.2.8`.
-- Produces: `apps/web/node_modules/react-dom/client.js` resolves for Vite; no tracked dependency-manifest change; the exact failed/repaired command evidence is recorded in the baseline document.
+- Produces: Vite resolves `react-dom` from the installed package root under hoisted or isolated layouts; no tracked dependency-manifest change; the exact failed/repaired command evidence is recorded in the baseline document.
 
-- [ ] **Step 1: Record the failing production build and prove the broken target.**
+- [ ] **Step 1: Record the fail-first baseline and prove the broken target.**
 
-Run: `pnpm --filter @moment/web build`
+Ensure `apps/web/node_modules/react-dom` is deleted or does not exist, then run:
+
+```bash
+test ! -e apps/web/node_modules/react-dom
+test -e node_modules/react-dom/package.json
+pnpm --filter @moment/web build
+```
 
 Expected: exit 1 during `vite build` with `Could not load ...apps/web/node_modules/react-dom/client` and `ENOENT`.
 
-Run: `test -e apps/web/node_modules/react-dom/client.js`
+- [ ] **Step 2: Make Vite's React DOM alias hoist-safe.**
 
-Expected: exit 1, while `test -e node_modules/react-dom/client.js` exits 0.
+In `apps/web/vite.config.ts`, import `createRequire` from `node:module` and derive the installed package root with:
 
-- [ ] **Step 2: Apply the minimum scoped dependency repair.**
-
-Run exactly:
-
-```bash
-pnpm --filter @moment/web install --force --frozen-lockfile
+```ts
+const reactDomRoot = path.dirname(
+  createRequire(import.meta.url).resolve("react-dom/package.json"),
+);
 ```
 
-This is the minimum repair because it reconstructs the Web importer links without changing source manifests or the lockfile. Do not remove the root `node_modules`, alter React versions, or add a Vite alias.
+Keep `reactRoot` and `dedupe: ['react', 'react-dom']` unchanged. Do not add a scoped pnpm install, conditional repair, generated symlink, lockfile change, or React version change.
 
-- [ ] **Step 3: Verify the repaired link and production bundle.**
+- [ ] **Step 3: Verify the no-symlink green baseline and tracked-file invariants.**
 
-Run: `test -e apps/web/node_modules/react-dom/client.js && pnpm --filter @moment/web build`
+Run:
 
-Expected: exit 0; TypeScript build and Vite bundle complete with no `react-dom/client` resolution error.
+```bash
+test ! -e apps/web/node_modules/react-dom
+node -e "console.log(require('node:path').dirname(require('node:module').createRequire('./apps/web/vite.config.ts').resolve('react-dom/package.json')))"
+pnpm --filter @moment/web build
+pnpm --filter @moment/web typecheck
+git diff --exit-code -- pnpm-lock.yaml
+```
 
-- [ ] **Step 4: Verify no dependency declaration was rewritten.**
+Expected: the path resolves to the installed `react-dom` package root; build and typecheck exit 0 without a Web-local `react-dom` symlink; `pnpm-lock.yaml` is byte-for-byte unchanged.
 
-Run: `git diff --exit-code -- apps/web/package.json pnpm-lock.yaml && git status --short`
-
-Expected: exit 0 for the diff; generated `node_modules` remains ignored.
-
-- [ ] **Step 5: Record the reproducible baseline and commit the task.**
+- [ ] **Step 4: Record the reproducible baseline and commit the task.**
 
 Create `docs/superpowers/verification/2026-08-18-web-build-baseline.md` with this exact result table, replacing only `<pnpm-version>` with `pnpm --version` output:
 
-```markdown
-# Web build baseline — 2026-08-18
+Record the no-symlink fail-first and pass results, including the root package existence check, build, typecheck, path resolution, and unchanged lockfile in `docs/superpowers/verification/2026-08-18-web-build-baseline.md`.
 
-| Command                                                                                | Expected result                                              |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `pnpm --filter @moment/web build` before repair                                        | fails: `ENOENT` for `apps/web/node_modules/react-dom/client` |
-| `pnpm --filter @moment/web install --force --frozen-lockfile`                          | recreates Web importer links without a lockfile change       |
-| `test -e apps/web/node_modules/react-dom/client.js && pnpm --filter @moment/web build` | exits 0                                                      |
-
-pnpm: `<pnpm-version>`
-```
-
-Then commit the evidence; if a tracked installer configuration was required, add that exact file to the same commit:
+Then commit only the two Task 1 tracked files:
 
 ```bash
-git add docs/superpowers/verification/2026-08-18-web-build-baseline.md
-git commit -m "chore(web): record build baseline repair"
+git add apps/web/vite.config.ts docs/superpowers/verification/2026-08-18-web-build-baseline.md
+git commit -m "feat(web): make react-dom alias hoist-safe"
 ```
 
 ## Task 2: Add Web test infrastructure and promote tokens to the single visual source
