@@ -1,0 +1,431 @@
+<style>
+  #moment-field-directions {
+    --m-page: light-dark(#f6f1ec, #171412);
+    --m-surface: light-dark(#fffdfb, #26211e);
+    --m-field: light-dark(#f0e9e4, #1f1a17);
+    --m-ink: light-dark(#2b201c, #f7efe9);
+    --m-muted: light-dark(#6f5d54, #c3b5ad);
+    --m-line: light-dark(#d8c9c0, #463c37);
+    --m-action: light-dark(#c94a3a, #ff755e);
+    --m-action-fg: light-dark(#fffdfb, #241714);
+    --m-focus: light-dark(#7656d8, #b59cff);
+    --m-danger: light-dark(#b83a30, #ff8a72);
+    color-scheme: light dark;
+    width: 100%;
+    color: var(--m-ink);
+    font-family:
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      "PingFang SC",
+      "Microsoft YaHei",
+      sans-serif;
+  }
+
+  #moment-field-directions * {
+    box-sizing: border-box;
+  }
+
+  #moment-field-directions .mfd-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 10px;
+  }
+
+  #moment-field-directions .mfd-heading h2,
+  #moment-field-directions .mfd-heading p,
+  #moment-field-directions .mfd-option h3,
+  #moment-field-directions .mfd-option p {
+    margin: 0;
+  }
+
+  #moment-field-directions .mfd-heading p,
+  #moment-field-directions .mfd-option-head p {
+    color: var(--m-muted);
+  }
+
+  #moment-field-directions .mfd-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  #moment-field-directions .mfd-option {
+    overflow: hidden;
+    min-width: 0;
+    border: 1px solid var(--m-line);
+    border-radius: 18px;
+    background: var(--m-page);
+  }
+
+  #moment-field-directions .mfd-option[data-recommended="true"] {
+    border-color: color-mix(in srgb, var(--m-action) 72%, var(--m-line));
+  }
+
+  #moment-field-directions .mfd-option-head {
+    display: flex;
+    min-height: 64px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--m-surface);
+  }
+
+  #moment-field-directions .mfd-option-head h3 {
+    font-weight: 500;
+  }
+
+  #moment-field-directions .mfd-option-head p {
+    margin-top: 2px;
+  }
+
+  #moment-field-directions .mfd-recommend {
+    flex: none;
+    border-radius: 999px;
+    padding: 3px 8px;
+    background: color-mix(in srgb, var(--m-action) 13%, transparent);
+    color: var(--m-action);
+  }
+
+  #moment-field-directions .mfd-form {
+    padding: 16px 14px;
+  }
+
+  #moment-field-directions .mfd-field + .mfd-field {
+    margin-top: 18px;
+  }
+
+  #moment-field-directions .mfd-label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  #moment-field-directions .mfd-label {
+    font-weight: 500;
+  }
+
+  #moment-field-directions .mfd-optional,
+  #moment-field-directions .mfd-hint {
+    color: var(--m-muted);
+  }
+
+  #moment-field-directions input,
+  #moment-field-directions textarea {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--m-ink);
+    font: inherit;
+    outline: none;
+  }
+
+  #moment-field-directions textarea {
+    min-height: 112px;
+    resize: none;
+  }
+
+  #moment-field-directions input::placeholder,
+  #moment-field-directions textarea::placeholder {
+    color: var(--m-muted);
+  }
+
+  #moment-field-directions .mfd-control {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    padding: 0 14px;
+  }
+
+  #moment-field-directions .mfd-control-textarea {
+    align-items: flex-start;
+    padding-top: 11px;
+    padding-bottom: 11px;
+  }
+
+  #moment-field-directions .mfd-hint {
+    display: block;
+    margin-top: 6px;
+  }
+
+  #moment-field-directions .mfd-error {
+    display: block;
+    margin-top: 6px;
+    color: var(--m-danger);
+  }
+
+  #moment-field-directions .mfd-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 18px;
+  }
+
+  #moment-field-directions .mfd-save {
+    min-height: 40px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--m-action);
+    padding: 0 16px;
+    color: var(--m-action-fg);
+    font: inherit;
+    font-weight: 500;
+  }
+
+  #moment-field-directions .mfd-option[data-style="outline"] .mfd-control {
+    border: 1px solid var(--m-line);
+    border-radius: 11px;
+    background: var(--m-surface);
+  }
+
+  #moment-field-directions
+    .mfd-option[data-style="outline"]
+    .mfd-control[data-state="focus"] {
+    border-color: var(--m-focus);
+    box-shadow: 0 0 0 1px var(--m-focus);
+  }
+
+  #moment-field-directions
+    .mfd-option[data-style="outline"]
+    .mfd-control[data-state="error"] {
+    border-color: var(--m-danger);
+    box-shadow: 0 0 0 1px var(--m-danger);
+  }
+
+  #moment-field-directions .mfd-option[data-style="soft"] .mfd-control {
+    border-radius: 13px;
+    background: var(--m-field);
+  }
+
+  #moment-field-directions
+    .mfd-option[data-style="soft"]
+    .mfd-control[data-state="focus"] {
+    box-shadow: 0 0 0 2px var(--m-focus);
+  }
+
+  #moment-field-directions
+    .mfd-option[data-style="soft"]
+    .mfd-control[data-state="error"] {
+    box-shadow: 0 0 0 2px var(--m-danger);
+  }
+
+  #moment-field-directions .mfd-option[data-style="underline"] .mfd-control {
+    min-height: 42px;
+    padding-right: 2px;
+    padding-left: 2px;
+    border-bottom: 1px solid var(--m-line);
+  }
+
+  #moment-field-directions
+    .mfd-option[data-style="underline"]
+    .mfd-control[data-state="focus"] {
+    border-bottom: 2px solid var(--m-focus);
+  }
+
+  #moment-field-directions
+    .mfd-option[data-style="underline"]
+    .mfd-control[data-state="error"] {
+    border-bottom: 2px solid var(--m-danger);
+  }
+
+  #moment-field-directions
+    .mfd-option[data-style="underline"]
+    .mfd-control-textarea {
+    padding-top: 8px;
+  }
+
+  @media (max-width: 820px) {
+    #moment-field-directions .mfd-grid {
+      grid-template-columns: 1fr;
+    }
+
+    #moment-field-directions .mfd-option {
+      display: grid;
+      grid-template-columns: minmax(160px, 0.72fr) minmax(0, 1fr);
+    }
+
+    #moment-field-directions .mfd-option-head {
+      align-items: flex-start;
+      border-right: 1px solid color-mix(in srgb, var(--m-line) 70%, transparent);
+    }
+  }
+
+  @media (max-width: 560px) {
+    #moment-field-directions .mfd-heading {
+      display: block;
+    }
+
+    #moment-field-directions .mfd-heading p {
+      margin-top: 3px;
+    }
+
+    #moment-field-directions .mfd-option {
+      display: block;
+    }
+
+    #moment-field-directions .mfd-option-head {
+      align-items: center;
+      border-right: 0;
+    }
+  }
+</style>
+
+<div id="moment-field-directions">
+  <div class="mfd-heading">
+    <h2>Field 基础视觉方向</h2>
+    <p>默认、Focus、错误和可选字段同时对照</p>
+  </div>
+
+  <div class="mfd-grid">
+    <section
+      class="mfd-option"
+      data-style="outline"
+      aria-label="方案 A：清晰描边"
+    >
+      <header class="mfd-option-head">
+        <div>
+          <h3>A · 清晰描边</h3>
+          <p>明确，但连续表单分割感偏重</p>
+        </div>
+      </header>
+      <form class="mfd-form">
+        <div class="mfd-field">
+          <div class="mfd-label-row">
+            <label class="mfd-label" for="mfd-outline-name">名字</label>
+          </div>
+          <div class="mfd-control" data-state="focus">
+            <input id="mfd-outline-name" value="周末小家" aria-label="名字" />
+          </div>
+          <span class="mfd-hint">家人会在时间线上看到这个名字</span>
+        </div>
+        <div class="mfd-field">
+          <div class="mfd-label-row">
+            <label class="mfd-label" for="mfd-outline-desc">一句话</label
+            ><span class="mfd-optional">可选</span>
+          </div>
+          <div class="mfd-control mfd-control-textarea">
+            <textarea
+              id="mfd-outline-desc"
+              placeholder="写下这条链想记录的日子"
+            ></textarea>
+          </div>
+        </div>
+        <div class="mfd-field">
+          <div class="mfd-label-row">
+            <label class="mfd-label" for="mfd-outline-email">邀请邮箱</label>
+          </div>
+          <div class="mfd-control" data-state="error">
+            <input id="mfd-outline-email" value="simon@" aria-invalid="true" />
+          </div>
+          <span class="mfd-error">请填写完整的邮箱地址</span>
+        </div>
+        <div class="mfd-actions">
+          <button class="mfd-save" type="button">保存更改</button>
+        </div>
+      </form>
+    </section>
+
+    <section
+      class="mfd-option"
+      data-style="soft"
+      data-recommended="true"
+      aria-label="方案 B：柔和色面"
+    >
+      <header class="mfd-option-head">
+        <div>
+          <h3>B · 柔和色面</h3>
+          <p>清爽、亲和，状态由焦点环表达</p>
+        </div>
+        <span class="mfd-recommend">建议</span>
+      </header>
+      <form class="mfd-form">
+        <div class="mfd-field">
+          <div class="mfd-label-row">
+            <label class="mfd-label" for="mfd-soft-name">名字</label>
+          </div>
+          <div class="mfd-control" data-state="focus">
+            <input id="mfd-soft-name" value="周末小家" aria-label="名字" />
+          </div>
+          <span class="mfd-hint">家人会在时间线上看到这个名字</span>
+        </div>
+        <div class="mfd-field">
+          <div class="mfd-label-row">
+            <label class="mfd-label" for="mfd-soft-desc">一句话</label
+            ><span class="mfd-optional">可选</span>
+          </div>
+          <div class="mfd-control mfd-control-textarea">
+            <textarea
+              id="mfd-soft-desc"
+              placeholder="写下这条链想记录的日子"
+            ></textarea>
+          </div>
+        </div>
+        <div class="mfd-field">
+          <div class="mfd-label-row">
+            <label class="mfd-label" for="mfd-soft-email">邀请邮箱</label>
+          </div>
+          <div class="mfd-control" data-state="error">
+            <input id="mfd-soft-email" value="simon@" aria-invalid="true" />
+          </div>
+          <span class="mfd-error">请填写完整的邮箱地址</span>
+        </div>
+        <div class="mfd-actions">
+          <button class="mfd-save" type="button">保存更改</button>
+        </div>
+      </form>
+    </section>
+
+    <section
+      class="mfd-option"
+      data-style="underline"
+      aria-label="方案 C：编辑下划线"
+    >
+      <header class="mfd-option-head">
+        <div>
+          <h3>C · 编辑下划线</h3>
+          <p>轻，但长表单和错误状态较弱</p>
+        </div>
+      </header>
+      <form class="mfd-form">
+        <div class="mfd-field">
+          <div class="mfd-label-row">
+            <label class="mfd-label" for="mfd-line-name">名字</label>
+          </div>
+          <div class="mfd-control" data-state="focus">
+            <input id="mfd-line-name" value="周末小家" aria-label="名字" />
+          </div>
+          <span class="mfd-hint">家人会在时间线上看到这个名字</span>
+        </div>
+        <div class="mfd-field">
+          <div class="mfd-label-row">
+            <label class="mfd-label" for="mfd-line-desc">一句话</label
+            ><span class="mfd-optional">可选</span>
+          </div>
+          <div class="mfd-control mfd-control-textarea">
+            <textarea
+              id="mfd-line-desc"
+              placeholder="写下这条链想记录的日子"
+            ></textarea>
+          </div>
+        </div>
+        <div class="mfd-field">
+          <div class="mfd-label-row">
+            <label class="mfd-label" for="mfd-line-email">邀请邮箱</label>
+          </div>
+          <div class="mfd-control" data-state="error">
+            <input id="mfd-line-email" value="simon@" aria-invalid="true" />
+          </div>
+          <span class="mfd-error">请填写完整的邮箱地址</span>
+        </div>
+        <div class="mfd-actions">
+          <button class="mfd-save" type="button">保存更改</button>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>

@@ -1,7 +1,7 @@
 # 时刻 Moment — Web C 端商业化视觉体系
 
 > 日期：2026-08-17；商业化收口修订：2026-08-18
-> 状态：页面级方向已与用户通过前后对比稿逐项对齐；组件级规范待后续独立评审
+> 状态：页面级方向已与用户通过前后对比稿逐项对齐；Button、Modal 与 Field 组件规范已固化，其余组件待后续独立评审
 > 范围：`apps/web` 的品牌基调、壳层、页眉、日子线、时刻内容、Tag、链来源、时间索引与响应式规则
 > 权威边界：数据与权限听 `2026-08-15-moment-design.md`；功能面听 `2026-08-16-web-product.md`；链页眉成员与可见性听 `2026-08-18-chain-audience-header-design.md`；Web 视觉基础与页面组合听本文
 > 视觉参考：[`2026-08-18-web-commercial-design-reference.html`](../mocks/2026-08-18-web-commercial-design-reference.html)；可编辑源稿：[`fragment.html`](../mocks/2026-08-18-web-commercial-design-reference.fragment.html)
@@ -87,7 +87,7 @@
 
 ### 2.3 间距与圆角
 
-- 间距只使用 4 / 8 / 12 / 16 / 20 / 24 / 32px。
+- 页面布局与组件之间的间距只使用 4 / 8 / 12 / 16 / 20 / 24 / 32px；组件内部允许使用已固化的光学校准 Token，页面不得把这些值当作新间距档位。
 - 输入和内容色面使用 14–20px 圆角；情绪入口和主动作可用满圆。
 - 同一时刻内部用 4–12px 的紧节奏；时刻之间用 20–24px；日期章节之间用 32px。
 - 圆角只表达材质和触感，不给每段文字单独套胶囊。
@@ -304,7 +304,7 @@ tokens.css → Tailwind 语义映射 → ui 基础组件 → 页面组合模式
 
 1. **Button**：语义层级、尺寸、图标、文案、全状态、危险操作。已固化为 [`2026-08-18-web-button-design.md`](./2026-08-18-web-button-design.md)。
 2. **Modal / Dialog / Sheet**：层级、宽度、移动端形态、遮罩、焦点、关闭与操作区。已固化为 [`2026-08-18-web-modal-dialog-sheet-design.md`](./2026-08-18-web-modal-dialog-sheet-design.md)。
-3. **Field**：输入、文本域、日期时间、校验、帮助与错误。
+3. **Field**：输入、文本域、日期时间、校验、帮助与错误。已固化为 [`2026-08-18-web-field-input-design.md`](./2026-08-18-web-field-input-design.md)。
 4. **Menu / Popover / Tooltip**：锚点、展开方向、触控降级、键盘行为。
 5. **Feedback**：Banner、Toast、Empty、Skeleton、Confirm。
 
@@ -321,7 +321,7 @@ tokens.css → Tailwind 语义映射 → ui 基础组件 → 页面组合模式
 7. 跨年索引以年份章节表达；历史年份可折叠；没有分割线。
 8. 浅色普通小字与动作按钮达到 AA；深色层级不糊成一片。
 9. 390px 下点击区域、正文宽度、长链名和长 Tag 均可用。
-10. Modal、Button 等页面引用组件遵循后续组件规范，不在页面内私自变体。
+10. Modal、Button、Field 等页面引用组件遵循对应组件规范，不在页面内私自变体。
 
 ## 13. 与既有 Spec 的关系
 
