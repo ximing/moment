@@ -19,6 +19,17 @@
 - `apps/server/.env` 可能含真实凭据，已 gitignore，**严禁提交或覆盖**。
 - 数据库红线：测试/开发只打 `.env` 指向的测试库，**严禁对生产库跑测试或 `resetDb()`**。
 
+## Web C 端设计规范
+
+`apps/web` 的所有页面与组件开发必须遵循下列已批准规范；这些文件是视觉和组件行为的唯一真相源，不能在页面或局部规则中另建相冲突的样式约定：
+
+- `docs/superpowers/specs/2026-08-17-web-c-end-redesign.md`
+- `docs/superpowers/specs/2026-08-18-web-button-design.md`
+- `docs/superpowers/specs/2026-08-18-web-modal-dialog-sheet-design.md`
+- `docs/superpowers/specs/2026-08-18-web-field-input-design.md`
+- `docs/superpowers/specs/2026-08-18-web-menu-popover-tooltip-design.md`
+- `docs/superpowers/specs/2026-08-18-web-feedback-design.md`
+
 ## 常用命令
 
 - 构建：`pnpm build`（先构建 dto 等依赖包再起 dev）
@@ -34,6 +45,6 @@
 - 横切规则（按路径自动加载）：
   - `.claude/rules/testing.md` — 所有测试文件
   - `.claude/rules/plan-docs.md` — `docs/superpowers/plans|prompts/` 下的计划与提示词文档
-  - `.claude/rules/web-ui.md` — `apps/web/src/**` 的 Design System 尺度与对齐网格
+  - `.claude/rules/web-ui.md` — `apps/web/src/**` 的 Design System 入口与跨页面尺度 / 对齐约束
 
 Codex CLI 经 `.codex/config.toml` 回退名单复用本 `CLAUDE.md` 目录链（入口见根 `AGENTS.md`）。

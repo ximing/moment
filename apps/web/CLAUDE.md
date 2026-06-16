@@ -18,4 +18,16 @@
 - 媒体与分享链接依赖**同源相对路径**：Web 与 API 必须同源部署，`/api` 反代到 server:3000；代码里不要写绝对 API 域名。
 - 认证态等跨页状态集中在全局 Service（`src/services/`），不要在页面组件里各自缓存 token。
 - 发布相关状态变更优先走显式动作（提交/回调），避免 effect 里链式 setState。
-- 视觉尺度与对齐网格见 `.claude/rules/web-ui.md`（Design System）。改 `apps/web/src/**` 必须走 token，禁止一次性 `px-[18px]` / 负边距通栏。
+
+## Web C 端设计系统
+
+所有 `apps/web` 页面与组件开发必须遵循以下已批准规范；页面不得复写 Button、Modal、Field、Menu / Popover / Tooltip 或 Feedback 的内部视觉、尺寸、状态和无障碍规则：
+
+- `docs/superpowers/specs/2026-08-17-web-c-end-redesign.md`
+- `docs/superpowers/specs/2026-08-18-web-button-design.md`
+- `docs/superpowers/specs/2026-08-18-web-modal-dialog-sheet-design.md`
+- `docs/superpowers/specs/2026-08-18-web-field-input-design.md`
+- `docs/superpowers/specs/2026-08-18-web-menu-popover-tooltip-design.md`
+- `docs/superpowers/specs/2026-08-18-web-feedback-design.md`
+
+`.claude/rules/web-ui.md` 仅补充跨页面尺度和对齐约束。改 `apps/web/src/**` 必须走 Token，禁止一次性 `px-[18px]` 或负边距通栏。
