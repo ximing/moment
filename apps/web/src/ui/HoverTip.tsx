@@ -20,14 +20,15 @@ export function HoverTip({ label, children }: { label: ReactNode; children: Reac
   }, [open]);
 
   useEffect(() => {
-    if (!sticky) return;
+    if (!open) return;
     const onDoc = (e: PointerEvent) => {
       if (rootRef.current?.contains(e.target as Node)) return;
+      setHover(false);
       setSticky(false);
     };
     document.addEventListener('pointerdown', onDoc);
     return () => document.removeEventListener('pointerdown', onDoc);
-  }, [sticky]);
+  }, [open]);
 
   return (
     <span
