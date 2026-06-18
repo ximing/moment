@@ -12,3 +12,6 @@ coverage/
 
 .worktrees/
 .turbo
+
+# Web 设计系统 E2E 运行时产物；baselines 与 manifest 是受控基线，保持入库
+apps/web/e2e/artifacts/**
