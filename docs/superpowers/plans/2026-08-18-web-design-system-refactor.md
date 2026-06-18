@@ -13,11 +13,11 @@
 ## Global Constraints
 
 - 执行顺序固定为 Task 1 → 15；同一时刻只允许当前 Task 修改其列出的共享热点。
-- 不修改 `packages/dto/**`、`apps/server/**`、`apps/web/src/api/client.ts`、任一 RAB Service 的状态含义或请求路径；跨域刷新仍只经既有 `'global'` 事件。
+- 不修改 `packages/dto/**`、`apps/web/src/api/client.ts`、任一 RAB Service 的状态含义或请求路径；仅 Task 14 可在其列出的 `apps/server/**` 文件中实现本地 E2E CLI fixture seeder，绝不增加 HTTP gateway、控制器或业务路由。跨域刷新仍只经既有 `'global'` 事件。
 - 保留 `App.tsx` 现有路由集合与 `/chains/:chainId/compose` 重定向；页面从 `useParams` 调 `service.hydrate(id)`、跳转留在组件。
 - 组件颜色、尺寸、圆角、阴影、z-index 一律从 `apps/web/src/styles/tokens.css` 与 Tailwind 语义映射消费；业务页不得写十六进制、一次性 `px-[…]`、`h-[…]`、页面私有阴影或 `z-40/z-50`。
 - 页面网格只用 4/8/12/16/20/24/32px；动态业务内容用系统字体，固定“时刻/今天/昨天/记下此刻”才可使用 Smiley Sans；所有交互均有可见 `focus-visible`。
-- Web 测试不得运行 `pnpm test` 或 `resetDb()`；CSI 只用专用测试帐号和受控 seed，绝不依赖个人登录态或生产数据库。CSI 运行器仅连接 `http://127.0.0.1:5173` 和 `http://127.0.0.1:3000/api`；`fixtures/seed.mjs` 必须在每次写入前拒绝非 loopback URL、缺少 `MOMENT_E2E=1` 或 `_e2e/preflight` 未回报 `{ mode: 'e2e', database: 'moment_e2e' }` 的目标。
+- Web 测试不得运行 `pnpm test` 或 `resetDb()`；CSI 只用专用测试帐号和受控 seed，绝不依赖个人登录态或生产数据库。CSI 运行器仅连接 `http://127.0.0.1:5173` 和 `http://127.0.0.1:3000/api`；`fixtures/seed.mjs` 必须在每次写入前拒绝非 loopback URL、缺少 `MOMENT_E2E=1`、或本地 CLI `preflight` 未回报 `{ mode: 'e2e', database: 'moment_e2e' }` 的目标。CLI 必须同时要求 `NODE_ENV=test` 和数据库名以 `_e2e` 结尾的 `DATABASE_URL`，并且不暴露 HTTP seed gateway。
 
 ---
 
@@ -31,13 +31,13 @@
 | 5          | `apps/web/src/ui/floating/**`, `apps/web/src/ui/menu/**`, `apps/web/src/ui/popover/**`, `apps/web/src/ui/tooltip/**`                                                                                                                                                                                                                                                                                                                                                                  | 6–15                     |
 | 6          | `apps/web/src/ui/field/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 7–15                     |
 | 7          | `apps/web/src/ui/feedback/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 8–15                     |
-| 8          | `apps/web/src/pages/design-lab/**`, `apps/web/src/App.tsx`                                                                                                                                                                                                                                                                                                                                                                                                                            | 9–15                     |
+| 8          | `apps/web/src/pages/design-lab/**`, `apps/web/src/app-toast.test.tsx`, `apps/web/src/App.tsx`                                                                                                                                                                                                                                                                                                                                                                                         | 9–15                     |
 | 9          | `apps/web/src/shell/Shell.tsx`, `apps/web/src/shell/user-menu.tsx`, `apps/web/src/shell/create-chain-dialog/index.tsx`, `apps/web/src/compose/composer-entry.tsx`, `apps/web/src/compose/compose-fab.tsx`                                                                                                                                                                                                                                                                             | 10–15                    |
 | 10         | `apps/web/src/pages/chain-home/index.tsx`, `apps/web/src/pages/chain-home/chain-audience.tsx`, `apps/web/src/timeline/timeline.tsx`, `apps/web/src/timeline/timeline-rail.tsx`, `apps/web/src/timeline/moment-sheet.tsx`, `apps/web/src/timeline/reaction-bar.tsx`, `apps/web/src/compose/compose-panel/index.tsx`                                                                                                                                                                    | 11–15                    |
 | 11         | `apps/web/src/pages/feed-home/index.tsx`, `apps/web/src/pages/moment/index.tsx`, `apps/web/src/pages/share-album/index.tsx`, `apps/web/src/media/MediaBlock.tsx`, `apps/web/src/timeline/lightbox.tsx`                                                                                                                                                                                                                                                                                | 12–15                    |
 | 12         | `apps/web/src/pages/chain-settings/index.tsx`, `apps/web/src/pages/chain-settings/sections.tsx`, `apps/web/src/chain/ChainLookPicker.tsx`, `apps/web/src/pages/me/index.tsx`, `apps/web/src/ui/ThemeToggle.tsx`, `apps/web/src/ui/Avatar.tsx`, `apps/web/src/pages/notifications/index.tsx`                                                                                                                                                                                           | 13–15                    |
 | 13         | `apps/web/src/pages/auth-frame.tsx`, `apps/web/src/pages/login/index.tsx`, `apps/web/src/pages/register/index.tsx`, `apps/web/src/pages/invite/index.tsx`, `apps/web/src/pages/not-found.tsx`, `apps/web/src/ui/Button.tsx`, `apps/web/src/ui/Field.tsx`, `apps/web/src/ui/Menu.tsx`, `apps/web/src/ui/Confirm.tsx`, `apps/web/src/ui/Banner.tsx`, `apps/web/src/ui/Empty.tsx`, `apps/web/src/ui/HoverTip.tsx`, `apps/web/src/ui/HappenedAtField.tsx`, `apps/web/src/ui/Floating.tsx` | 14–15                    |
-| 14         | `apps/web/e2e/run.mjs`, `apps/web/e2e/lib/bridge.mjs`, `apps/web/e2e/lib/env.mjs`, `apps/web/e2e/fixtures/seed.mjs`, `apps/web/e2e/cases/design-system-regression.md`, `apps/web/e2e/suites/design-system-regression.mjs`, `apps/web/e2e/baselines/**/*.png`, `apps/web/e2e/README.md`                                                                                                                                                                                                | 15                       |
+| 14         | `apps/server/src/config.ts`, `apps/server/.env.example`, `apps/server/src/e2e/fixture-seeder.ts`, `apps/server/src/e2e/fixture-cli.ts`, `apps/server/src/e2e/fixture-cli.test.ts`, `apps/web/e2e/run.mjs`, `apps/web/e2e/lib/bridge.mjs`, `apps/web/e2e/lib/env.mjs`, `apps/web/e2e/fixtures/seed.mjs`, `apps/web/e2e/cases/design-system-regression.md`, `apps/web/e2e/suites/design-system-regression.mjs`, `apps/web/e2e/baselines/**/*.png`, `apps/web/e2e/README.md`             | 15                       |
 
 ## Task 1: Repair the Web dependency link and establish a green build baseline
 
@@ -81,7 +81,7 @@ Run:
 
 ```bash
 test ! -e apps/web/node_modules/react-dom
-node -e "console.log(require('node:path').dirname(require('node:module').createRequire('./apps/web/vite.config.ts').resolve('react-dom/package.json')))"
+node -e "const {createRequire}=require('node:module'); const {resolve,dirname}=require('node:path'); console.log(dirname(createRequire(resolve('apps/web/vite.config.ts')).resolve('react-dom/package.json')))"
 pnpm --filter @moment/web build
 pnpm --filter @moment/web typecheck
 git diff --exit-code -- pnpm-lock.yaml
@@ -91,9 +91,20 @@ Expected: the path resolves to the installed `react-dom` package root; build and
 
 - [ ] **Step 4: Record the reproducible baseline and commit the task.**
 
-Create `docs/superpowers/verification/2026-08-18-web-build-baseline.md` with this exact result table, replacing only `<pnpm-version>` with `pnpm --version` output:
+Create `docs/superpowers/verification/2026-08-18-web-build-baseline.md` with this exact result table, replacing only `<pnpm-version>` with `pnpm --version` output and each `<exit>` with the observed integer exit code:
 
-Record the no-symlink fail-first and pass results, including the root package existence check, build, typecheck, path resolution, and unchanged lockfile in `docs/superpowers/verification/2026-08-18-web-build-baseline.md`.
+| Check               | Exact command                                                                                                                                                                                                     | Expected result                           | Observed result                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------- |
+| pnpm version        | `pnpm --version`                                                                                                                                                                                                  | records `<pnpm-version>`                  | `<pnpm-version>`                       |
+| no local symlink    | `test ! -e apps/web/node_modules/react-dom`                                                                                                                                                                       | exit 0                                    | exit `<exit>`                          |
+| root package exists | `test -e node_modules/react-dom/package.json`                                                                                                                                                                     | exit 0                                    | exit `<exit>`                          |
+| fail-first build    | `pnpm --filter @moment/web build`                                                                                                                                                                                 | exit 1; `react-dom/client` ENOENT         | exit `<exit>`; recorded terminal error |
+| absolute Vite probe | `node -e "const {createRequire}=require('node:module'); const {resolve,dirname}=require('node:path'); console.log(dirname(createRequire(resolve('apps/web/vite.config.ts')).resolve('react-dom/package.json')))"` | prints installed `react-dom` package root | printed path                           |
+| repaired build      | `pnpm --filter @moment/web build`                                                                                                                                                                                 | exit 0                                    | exit `<exit>`                          |
+| repaired typecheck  | `pnpm --filter @moment/web typecheck`                                                                                                                                                                             | exit 0                                    | exit `<exit>`                          |
+| lockfile invariant  | `git diff --exit-code -- pnpm-lock.yaml`                                                                                                                                                                          | exit 0; no output                         | exit `<exit>`                          |
+
+Do not replace any command, expected result, or table row. The table makes the no-symlink fail-first and repaired results, root package existence, absolute path probe, build, typecheck, and lockfile invariant independently reproducible.
 
 Then commit only the two Task 1 tracked files:
 
@@ -338,9 +349,9 @@ Run: `pnpm --filter @moment/web test -- feedback.test.tsx`
 
 Expected: FAIL because the new `ui/feedback` directory and exports do not exist.
 
-- [ ] **Step 3: Implement structured feedback and mount one global toast region.**
+- [ ] **Step 3: Implement structured feedback primitives.**
 
-Implement token-only structured Banner, EmptyState, ToastProvider, ToastRegion, skeleton templates, InlineProgress and `usePending` in the new directory. Keep one visible/two queued Toast timing and deduplication semantics, and do not add compatibility adapters or edit callers; Task 13 performs migration and removes old paths.
+Implement token-only structured Banner, EmptyState, ToastProvider, ToastRegion, skeleton templates, InlineProgress and `usePending` in the new directory. Keep one visible/two queued Toast timing and deduplication semantics. Export `ToastProvider` and `ToastRegion` as separate primitives; do not mount either into the app here, add compatibility adapters, or edit callers. Task 8 is the sole `App.tsx` owner and mounts exactly one provider/region; Task 13 performs migration and removes old paths.
 
 - [ ] **Step 4: Verify feedback contracts.**
 
@@ -361,37 +372,38 @@ git commit -m "feat(web): create feedback primitives"
 
 - Create: `apps/web/src/pages/design-lab/index.tsx`
 - Create: `apps/web/src/pages/design-lab/design-lab.test.tsx`
+- Create: `apps/web/src/app-toast.test.tsx`
 - Modify: `apps/web/src/App.tsx`
 
 **Interfaces:**
 
-- Consumes: public Task 3–7 UI exports and existing `ThemeService` data-theme behavior.
-- Produces: development-only `/__design-lab` route with deterministic fixture props, light/dark switch, and 390/1024/1440/1895 container presets; production route tree contains no Design Lab route.
+- Consumes: public Task 3–7 UI exports, especially `ToastProvider`/`ToastRegion`, and existing `ThemeService` data-theme behavior.
+- Produces: development-only `/__design-lab` route with deterministic fixture props, light/dark switch, and 390/1024/1440/1895 container presets; production route tree contains no Design Lab route; `App` wraps the complete router once with `ToastProvider` and renders one sibling `ToastRegion`, which stays singular after route navigation.
 
 - [ ] **Step 1: Write failing route-boundary tests.**
 
-In `design-lab.test.tsx`, stub `import.meta.env.DEV` true/false and assert the Design Lab renders Button/Field/Modal/Menu/Feedback trigger sections only when DEV is true, with all four labelled viewport presets.
+In `design-lab.test.tsx`, stub `import.meta.env.DEV` true/false and assert the Design Lab renders Button/Field/Modal/Menu/Feedback trigger sections only when DEV is true, with all four labelled viewport presets. In `app-toast.test.tsx`, render the real App at two routable locations in sequence, navigate through its router, and assert `getAllByRole('region', { name: /通知|toast/i })` has length exactly one both before and after navigation.
 
 - [ ] **Step 2: Run before adding the route.**
 
-Run: `pnpm --filter @moment/web test -- design-lab.test.tsx`
+Run: `pnpm --filter @moment/web test -- design-lab.test.tsx app-toast.test.tsx`
 
-Expected: FAIL because no Design Lab module or `/__design-lab` route exists.
+Expected: FAIL because no Design Lab module or `/__design-lab` route exists, and App does not yet provide one persistent global toast region.
 
 - [ ] **Step 3: Implement the isolated visual harness.**
 
-Create a static fixture page with real interactive triggers for Button states, fields (error/password/date), Dialog/Sheet/AlertDialog, Menu/Popover/Tooltip and all Feedback variants. Register `<Route path="/__design-lab" ...>` only inside `if (import.meta.env.DEV)`; use local component state and fixed strings only—no client, service, seed, or production navigation changes.
+Create a static fixture page with real interactive triggers for Button states, fields (error/password/date), Dialog/Sheet/AlertDialog, Menu/Popover/Tooltip and all Feedback variants. In `App.tsx`, wrap the entire existing route tree exactly once with `<ToastProvider>` and render exactly one `<ToastRegion />` as a sibling inside that provider, outside individual routes, Shell, and the Design Lab. Register `<Route path="/__design-lab" ...>` only inside `if (import.meta.env.DEV)`; use local component state and fixed strings only—no client, service, seed, or production navigation changes. Do not add a second provider/region in Shell, pages, overlays, or test-only routing.
 
 - [ ] **Step 4: Verify dev visibility and production omission.**
 
-Run: `pnpm --filter @moment/web test -- design-lab.test.tsx && pnpm --filter @moment/web build`
+Run: `pnpm --filter @moment/web test -- design-lab.test.tsx app-toast.test.tsx && pnpm --filter @moment/web build`
 
-Expected: PASS; production build succeeds and its route source does not contain a runtime-accessible `__design-lab` branch.
+Expected: PASS; production build succeeds, its route source does not contain a runtime-accessible `__design-lab` branch, and the App integration test proves one ToastRegion survives a route transition.
 
 - [ ] **Step 5: Commit the lab.**
 
 ```bash
-git add apps/web/src/pages/design-lab/index.tsx apps/web/src/pages/design-lab/design-lab.test.tsx apps/web/src/App.tsx
+git add apps/web/src/pages/design-lab/index.tsx apps/web/src/pages/design-lab/design-lab.test.tsx apps/web/src/app-toast.test.tsx apps/web/src/App.tsx
 git commit -m "feat(web): add development design lab"
 ```
 
@@ -640,6 +652,11 @@ git commit -m "feat(web): migrate entry states and remove legacy ui"
 
 **Files:**
 
+- Modify: `apps/server/src/config.ts`
+- Modify: `apps/server/.env.example`
+- Create: `apps/server/src/e2e/fixture-seeder.ts`
+- Create: `apps/server/src/e2e/fixture-cli.ts`
+- Create: `apps/server/src/e2e/fixture-cli.test.ts`
 - Create: `apps/web/e2e/run.mjs`
 - Create: `apps/web/e2e/lib/bridge.mjs`
 - Create: `apps/web/e2e/lib/env.mjs`
@@ -651,10 +668,12 @@ git commit -m "feat(web): migrate entry states and remove legacy ui"
 
 **Interfaces:**
 
-- Consumes: Task 2's package-owned `e2e:design-system` script, `pixelmatch`/`pngjs` dependencies and artifact-ignore rules; Task 8 `/__design-lab`; Task 9–13 route/UI contracts; a local `_e2e` fixture gateway at `http://127.0.0.1:3000/api/_e2e`; and a CSI daemon. Task 14 must not modify `apps/web/package.json`, `pnpm-lock.yaml`, `.gitignore`, app source, server source, or any legacy component path.
-- Produces: `node e2e/run.mjs design-system-regression [--update-baselines]`; `seed({ action: 'reset' | 'seed' | 'teardown' }): Promise<DesignSystemFixture>`; `fixture = { owner: { email, password }, viewer: { email, password }, chainId, momentId, shareToken, inviteToken, fixedNow, apiBaseUrl, webBaseUrl }`; `bridge.comparePng({ baselinePath, actualPath, threshold: 0.1, maxDiffPixels: 120 }): Promise<{ diffPixels: number; diffPath: string }>`; tracked baseline files at `apps/web/e2e/baselines/**/*.png`; and ignored run evidence at `apps/web/e2e/artifacts/**`. Only `--update-baselines` may write a tracked baseline; a normal run always writes actual/diff/log evidence only under `artifacts/`.
+- Consumes: Task 2's package-owned `e2e:design-system` script, `pixelmatch`/`pngjs` dependencies and artifact-ignore rules; Task 8 `/__design-lab`; Task 9–13 route/UI contracts; the existing Drizzle schema; and a CSI daemon. Task 14 must not modify `apps/web/package.json`, `pnpm-lock.yaml`, `.gitignore`, app source, route/controller registration, or any legacy component path.
+- Produces: config-owned `MOMENT_E2E` and `DATABASE_URL`; `assertE2eFixtureGuard(env: Pick<Config, 'MOMENT_E2E' | 'NODE_ENV' | 'DATABASE_URL' | 'MYSQL_DATABASE'>): void`, which permits fixture work only when `MOMENT_E2E === '1'`, `NODE_ENV === 'test'`, the parsed `DATABASE_URL` database name ends in `_e2e`, and that parsed name equals `MYSQL_DATABASE`; `runFixtureAction(action: 'preflight' | 'reset' | 'seed' | 'teardown'): Promise<E2eCliResult>`; and `fixture-cli.ts <preflight|reset|seed|teardown>`, whose successful stdout is one JSON object and whose stderr never includes a secret or database URL. `preflight` returns exactly `{ mode: 'e2e', database: 'moment_e2e' }`; `seed` returns `DesignSystemFixture`; `reset` and `teardown` return `{ ok: true }`. Web produces `node e2e/run.mjs design-system-regression [--update-baselines]`; `seed({ action: 'reset' | 'seed' | 'teardown' }): Promise<DesignSystemFixture | { ok: true }>`; `fixture = { owner: { email, password }, viewer: { email, password }, chainId, momentId, shareToken, inviteToken, fixedNow, apiBaseUrl, webBaseUrl }`; `bridge.comparePng({ baselinePath, actualPath, threshold: 0.1, maxDiffPixels: 120 }): Promise<{ diffPixels: number; diffPath: string }>`; tracked baseline files at `apps/web/e2e/baselines/**/*.png`; and ignored run evidence at `apps/web/e2e/artifacts/**`. Only `--update-baselines` may write a tracked baseline; a normal run always writes actual/diff/log evidence only under `artifacts/`.
 
-- [ ] **Step 1: Write the failing protocol and natural-language case before automation.**
+- [ ] **Step 1: Write the failing guarded-CLI contract and natural-language case before automation.**
+
+Create `apps/server/src/e2e/fixture-cli.test.ts` as Node's built-in test-runner unit test. Before any implementation, it must import the future guard/CLI parsing exports and assert that each absent or invalid member of the triple guard fails before a seeder method can run: `MOMENT_E2E !== '1'`, `NODE_ENV !== 'test'`, and a missing, malformed, or database-name-not-suffixed-`_e2e` `DATABASE_URL`; it must also reject a `MYSQL_DATABASE` that differs from the parsed URL database name. It must assert `preflight` serializes exactly `{ mode: 'e2e', database: 'moment_e2e' }`, unsupported actions are rejected, and error text contains neither a supplied secret nor a supplied database URL. Stub the seeder dependency; this test must neither import `db` nor open a pool, call `resetDb()`, run migrations, or use Jest.
 
 Create the case as a human-readable acceptance journey, not an automation implementation: it contains user actions and visible outcomes only, with no CSS selector, `data-*` selector, XPath, CSI `@e` reference, or locator syntax. It must name these exact fixture inputs and invariants:
 
@@ -672,28 +691,33 @@ apiBaseUrl     = http://127.0.0.1:3000/api
 webBaseUrl     = http://127.0.0.1:5173
 ```
 
-Passwords and `MOMENT_E2E_RESET_SECRET` come only from ignored local `.env.e2e` or CI's non-production secret store: do not put a password, token secret, access token, or database URL in any tracked fixture, case, suite, screenshot name, terminal output, or README. The case says to first reset then seed; to visit `/__design-lab`, `/`, `/chains/{chainId}`, `/chains/{chainId}?compose=1`, `/chains/{chainId}/settings`, `/moments/{momentId}`, `/me`, `/notifications`, `/share/{shareToken}`, `/invites/{inviteToken}`, `/login`, `/register`, and authenticated wildcard; and to verify the visible role/read-only/invite-from, reaction/comment/edit/delete, tag/order/date-anchor, loading/error/empty, and no-business-semantics-drift states. Cover light and dark at 390×844, 1024×900, 1440×900 and 1895×900; keyboard and overlay behavior; reduced motion; and a separate 1440×900 light-theme 200% zoom journey with visible labels and no horizontal clipping.
+Passwords come only from ignored local `.env.e2e` or CI's non-production secret store: do not put a password, access token, or database URL in any tracked fixture, case, suite, screenshot name, terminal output, or README. The case says to first reset then seed; to visit `/__design-lab`, `/`, `/chains/{chainId}`, `/chains/{chainId}?compose=1`, `/chains/{chainId}/settings`, `/moments/{momentId}`, `/me`, `/notifications`, `/share/{shareToken}`, `/invites/{inviteToken}`, `/login`, `/register`, and authenticated wildcard; and to verify the visible role/read-only/invite-from, reaction/comment/edit/delete, tag/order/date-anchor, loading/error/empty, and no-business-semantics-drift states. Cover light and dark at 390×844, 1024×900, 1440×900 and 1895×900; keyboard and overlay behavior; reduced motion; and a separate 1440×900 light-theme 200% zoom journey with visible labels and no horizontal clipping.
 
-- [ ] **Step 2: Prove the package command exists but fails before the Task 14 runner exists.**
+- [ ] **Step 2: Prove the new contracts fail before implementation.**
 
 Run:
 
 ```bash
+node --loader ts-node/esm --test apps/server/src/e2e/fixture-cli.test.ts
 pnpm --filter @moment/web e2e:design-system
 ```
 
-Expected: FAIL with Node's missing-module error for `apps/web/e2e/run.mjs`; the command itself resolves because Task 2, the sole `package.json` owner, already installed the script. Do not edit `package.json` to make this fail or pass.
+Expected: the first command fails because the CLI guard exports do not exist; the second fails with Node's missing-module error for `apps/web/e2e/run.mjs`. The package command itself resolves because Task 2, the sole `package.json` owner, already installed the script. Do not edit `package.json` to make either command fail or pass.
 
-- [ ] **Step 3: Implement the minimal safe seed, bridge, runner and suite.**
+- [ ] **Step 3: Implement the guarded local seeder, bridge, runner and suite.**
 
-`fixtures/seed.mjs` is the only seed/reset producer. Before every action it requires `MOMENT_E2E=1`, both base URLs to be HTTP loopback URLs with exactly ports 3000 and 5173, all four fixture credential variables, and `MOMENT_E2E_RESET_SECRET`; it calls `GET /api/_e2e/preflight` and rejects unless the JSON is exactly `{ mode: 'e2e', database: 'moment_e2e' }`. It then sends the secret only in `X-Moment-E2E-Secret` to `POST /api/_e2e/reset`, `POST /api/_e2e/seed`, and final `POST /api/_e2e/teardown`, with `{ fixedNow, ownerEmail, viewerEmail, chainId, momentId, shareToken, inviteToken }`; it never sends a password in a request body or writes secrets to disk. `reset` clears the dedicated e2e database, `seed` returns the exact `DesignSystemFixture`, and `teardown` invokes reset again. A failed preflight, reset, seed, or teardown is fatal and names only the endpoint/status, never a secret.
+In `apps/server/src/config.ts`, add `MOMENT_E2E` as the literal `'0' | '1'` config value defaulting to `'0'`, and optional `DATABASE_URL` as a URL string. In `apps/server/.env.example`, document both variables with a non-secret localhost example whose database name is `moment_e2e`; do not add `.env.e2e` to Git. `fixture-cli.ts` consumes only `config`, accepts exactly one action argument, validates the triple guard before dynamically importing `fixture-seeder.ts`, and exits nonzero for a guard/action/seeder error without echoing environment values. The guard must parse the URL with `new URL`, reject a non-MySQL URL, reject unless `decodeURIComponent(url.pathname).replace(/^\//, '')` ends with `_e2e`, and reject unless that name equals `config.MYSQL_DATABASE`; it must not accept a substring elsewhere in the URL. `preflight` is guard-only and reports the fixed JSON contract, so it cannot connect to MySQL.
+
+`fixture-seeder.ts` is the only DB-writing producer. `reset` deletes the existing schema tables in foreign-key reverse order (`pushTokens`, `notifications`, `reactions`, `comments`, `momentTags`, `tags`, `outbox`, `media`, `moments`, `chainInvites`, `chainMembers`, `shareLinks`, `chains`, `refreshTokens`, `users`) and then inserts nothing. `seed` first performs that reset and then transactionally inserts the two configured E2E users, owner/viewer chain members, chain, fixed timestamped text moment, tag association, share link, and pending invite using the exact stable IDs/tokens from Step 1; it uses the credentials only to hash passwords and never serializes them outside the `DesignSystemFixture` stdout result. `teardown` invokes the same reset. Do not create an HTTP endpoint, controller, Express route, middleware exception, reset secret, or gateway; the CLI's three guards are the only authority boundary.
+
+`fixtures/seed.mjs` is the only Web seed/reset producer. Before every action it requires `MOMENT_E2E=1`, both base URLs to be HTTP loopback URLs with exactly ports 3000 and 5173, and all four fixture credential variables. It uses `child_process.execFile` with `process.execPath`, `['--loader', 'ts-node/esm', 'apps/server/src/e2e/fixture-cli.ts', action]`, and the inherited guarded environment to invoke `preflight`, `reset`, `seed`, and `teardown`; parse only the CLI's JSON stdout and reject a nonzero child status. It runs `preflight` before every write action and rejects unless its JSON is exactly `{ mode: 'e2e', database: 'moment_e2e' }`. A failed child is fatal and identifies only its action/exit status; it never puts credentials, database URLs, or stderr text into artifacts. `reset` clears the dedicated E2E database, `seed` returns the exact `DesignSystemFixture`, and `teardown` invokes reset again.
 
 `lib/env.mjs` exports `assertE2eEnvironment()`, `waitForReadiness()`, and `waitForVisualIdle()`. Its README commands are exact and must run in three terminals after sourcing ignored `.env.e2e` whose server database is `moment_e2e`:
 
 ```bash
 # terminal 1: server; never use a production .env
 set -a; source .env.e2e; set +a
-MOMENT_E2E=1 NODE_ENV=test PORT=3000 pnpm --filter @moment/server exec tsx watch src/index.ts
+MOMENT_E2E=1 NODE_ENV=test PORT=3000 pnpm --filter @moment/server exec nodemon --exec "node --loader ts-node/esm" ./src/index.ts
 
 # terminal 2: Web uses Vite's existing same-origin /api proxy
 pnpm --filter @moment/web dev -- --host 127.0.0.1 --port 5173 --strictPort
@@ -701,17 +725,28 @@ pnpm --filter @moment/web dev -- --host 127.0.0.1 --port 5173 --strictPort
 # terminal 3: readiness, deterministic reset/seed, replay, deterministic teardown
 until curl -fsS http://127.0.0.1:3000/api/health | rg -q '"status":"ok"'; do sleep 0.2; done
 until curl -fsS http://127.0.0.1:5173/ > /dev/null; do sleep 0.2; done
+MOMENT_E2E=1 node --loader ts-node/esm apps/server/src/e2e/fixture-cli.ts preflight
 MOMENT_E2E=1 node apps/web/e2e/fixtures/seed.mjs reset
 MOMENT_E2E=1 node apps/web/e2e/fixtures/seed.mjs seed
 pnpm --filter @moment/web e2e:design-system
 MOMENT_E2E=1 node apps/web/e2e/fixtures/seed.mjs teardown
 ```
 
-The runner owns `try/finally` teardown, so the explicit final command is only the recovery/debug command and every normal, failure, interrupt, and `--update-baselines` run calls it. `run.mjs` accepts only the suite name and optional `--update-baselines`, rejects any other argument, resets and seeds before suite execution, and uses a single CSI session named `e2e-web-design-system-refactor`. `bridge.mjs` wraps the CSI daemon with `open`, `click`, `press`, `fill`, `evaluate`, `screenshot`, `setViewport`, `setPageScaleFactor`, `waitForNetworkIdle`, and PNG comparison; it records actual image, pixel diff and JSON assertion evidence in the ignored artifacts directory. The suite is the only file with stable locators: semantic role/name, label, or unique `id`/`data-testid` locators only; no classes, positional selectors, CSS layout selectors, XPath, or `@e` references.
+The runner owns `try/finally` teardown, so the explicit final command is only the recovery/debug command and every normal, failure, interrupt, and `--update-baselines` run calls it. `run.mjs` accepts only the suite name and optional `--update-baselines`, rejects any other argument, resets and seeds before suite execution, and uses the one CSI session `e2e-web-design-system-refactor`.
+
+`bridge.mjs` wraps CSI at the fixed daemon URL `http://127.0.0.1:10088`. Before opening a page or issuing a command, it calls `GET /status` and rejects unless JSON has `extension_connected === true`. Every bridge operation sends `POST /command` with exactly `{ session: 'e2e-web-design-system-refactor', command: { method, params } }`, parses JSON, and rejects unless every response has `success === true`; it returns only `result`. `open`, `click`, `press`, `fill`, `evaluate`, `screenshot`, and `waitForNetworkIdle` map to that envelope. `setViewport(width, height)` must send CDP `Emulation.setDeviceMetricsOverride` with `{ width, height, deviceScaleFactor: 1, mobile: false }`; `setPageScaleFactor(scale)` must send CDP `Emulation.setPageScaleFactor` with `{ pageScaleFactor: scale }`. It records actual image, pixel diff and JSON assertion evidence in the ignored artifacts directory. The suite is the only file with stable locators: semantic role/name, label, or unique `id`/`data-testid` locators only; no classes, positional selectors, CSS layout selectors, XPath, or `@e` references.
 
 For each state, wait for `document.fonts.ready`, decoded rendered images/video poster promises, two `requestAnimationFrame` frames after layout, and no tracked fetch/XHR for 500 ms before the screenshot or comparison. Capture `baselines/{route}/{theme}/{width}.png` using the four required widths and both themes; compare with threshold `0.1` and `maxDiffPixels: 120`, fail on either exceeded value, and retain `artifacts/{runId}/{route}-{theme}-{width}.actual.png`, `.diff.png`, and `.json`. At 390 px assert focus order, Tab/Shift+Tab, Escape, outside click and focus restoration for each overlay; at 767 px assert ResponsiveMenu is an ActionSheet; at 768 px assert it is anchored; resize an open menu/sheet across the boundary and assert it closes and returns focus. Assert Popover collision, AlertDialog safe default/cancel flow, and dirty Sheet protection. At 200% call `setPageScaleFactor(2)`, assert `visualViewport.scale >= 1.99`, assert each tested control has `scrollWidth <= clientWidth` and an in-viewport bounding rectangle, and save both the screenshot and JSON scale/geometry evidence.
 
-- [ ] **Step 4: Capture approved tracked baselines once, then prove ordinary replay is read-only.**
+- [ ] **Step 4: Verify the guarded CLI and capture approved tracked baselines once, then prove ordinary replay is read-only.**
+
+Run the pure server test without Jest or a database:
+
+```bash
+node --loader ts-node/esm --test apps/server/src/e2e/fixture-cli.test.ts
+```
+
+Expected: PASS; it does not import `db`, open a pool, call `resetDb()`, run migrations, invoke `pnpm --filter @moment/server test`, or invoke repository-wide `pnpm test`.
 
 Run the baseline update only after human visual approval:
 
@@ -740,7 +775,8 @@ Expected: both ordinary runs pass, tracked baselines remain byte-identical, actu
 
 ```bash
 git add apps/web/e2e/run.mjs apps/web/e2e/lib/bridge.mjs apps/web/e2e/lib/env.mjs apps/web/e2e/fixtures/seed.mjs apps/web/e2e/cases/design-system-regression.md apps/web/e2e/suites/design-system-regression.mjs apps/web/e2e/baselines apps/web/e2e/README.md
-git commit -m "test(web): add design system visual regression"
+git add apps/server/src/config.ts apps/server/.env.example apps/server/src/e2e/fixture-seeder.ts apps/server/src/e2e/fixture-cli.ts apps/server/src/e2e/fixture-cli.test.ts
+git commit -m "test(web): add guarded design system visual regression"
 ```
 
 ## Task 15: Run final static gates and whole-site acceptance
@@ -757,9 +793,9 @@ git commit -m "test(web): add design system visual regression"
 
 - [ ] **Step 1: Run focused Web automated gates first.**
 
-Run: `pnpm --filter @moment/web test && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint && pnpm --filter @moment/web build`
+Run: `node --loader ts-node/esm --test apps/server/src/e2e/fixture-cli.test.ts && pnpm --filter @moment/web test && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint && pnpm --filter @moment/web build`
 
-Expected: every command exits 0; the build proves Task 1’s `react-dom/client` link fix remains valid.
+Expected: every command exits 0; the server-side CLI check remains a pure no-database Node test (no `resetDb()`, migration, `pnpm --filter @moment/server test`, or repository-wide `pnpm test`), and the Web build proves Task 1’s `react-dom/client` link fix remains valid.
 
 - [ ] **Step 2: Run the full replayable visual/interaction matrix.**
 
@@ -795,7 +831,7 @@ Record the exact commands, exit codes, CSI run ID, baseline `git diff --exit-cod
 ## Self-review checklist
 
 - [ ] All 15 required deliveries map one-to-one to Tasks 1–15, including the broken `react-dom/client` baseline, test facility/tokens, all five component families, dev-only lab, Shell/Timeline, every requested page group, CSI replay, and final static/whole-site verification.
-- [ ] Tasks 2–14 declare their shared owner exactly once: Task 2 alone owns `apps/web/package.json`, `pnpm-lock.yaml` and `.gitignore`; Task 14 creates only its eight listed E2E paths; Task 15 verifies and owns no modified file.
+- [ ] Tasks 2–14 declare their shared owner exactly once: Task 2 alone owns `apps/web/package.json`, `pnpm-lock.yaml` and `.gitignore`; Task 8 alone owns `App.tsx` and its toast integration test; Task 14 alone owns its listed server E2E CLI and Web E2E paths; Task 15 verifies and owns no modified file.
 - [ ] All exported interfaces named by a later task are produced in an earlier task, and every state-changing page still delegates data/business semantics to its existing RAB Service.
 - [ ] No task uses placeholders, open-ended paths, “same as another task”, or a generic test instruction; each has files, consumes/produces interfaces, an initial failure, minimum implementation, passing command, and a commit.
 - [ ] Before handoff, run `pnpm exec prettier --check docs/superpowers/plans/2026-08-18-web-design-system-refactor.md`, scan the plan for prohibited placeholders, inspect the ownership map for duplicate Task 14 paths, and run `git diff --check`.
