@@ -23,18 +23,20 @@
 
 ## File ownership map
 
-| Owner task | Exact shared files it alone may modify                                                                                                                                                                                                 | Consumers after it lands |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| 2          | `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/vitest.config.ts`, `apps/web/src/test/setup.ts`, `apps/web/src/styles/tokens.css`, `apps/web/src/styles/tokens.test.ts`, `apps/web/tailwind.config.js`, `.claude/rules/web-ui.md` | 3–15                     |
-| 3          | `apps/web/src/ui/button/**`                                                                                                                                                                                                            | 4–15                     |
-| 4          | `apps/web/src/ui/modal/**`                                                                                                                                                                                                             | 5–15                     |
-| 5          | `apps/web/src/ui/floating/**`, `apps/web/src/ui/menu/**`, `apps/web/src/ui/popover/**`, `apps/web/src/ui/tooltip/**`                                                                                                                   | 6–15                     |
-| 6          | `apps/web/src/ui/field/**`                                                                                                                                                                                                             | 7–15                     |
-| 7          | `apps/web/src/ui/feedback/**`                                                                                                                                                                                                          | 8–15                     |
-| 8          | `apps/web/src/pages/design-lab/**`, `apps/web/src/App.tsx`                                                                                                                                                                             | 9–15                     |
-| 13         | legacy UI paths removed after callers have migrated                                                                                                                                                                                    | 14–15                    |
-| 9          | `apps/web/src/shell/Shell.tsx`, `apps/web/src/timeline/timeline.tsx`, `apps/web/src/timeline/timeline-rail.tsx`, `apps/web/src/compose/composer-entry.tsx`, `apps/web/src/compose/compose-fab.tsx`                                     | 10–15                    |
-| 10         | `apps/web/src/pages/chain-home/index.tsx`, `apps/web/src/pages/chain-home/chain-audience.tsx`, `apps/web/src/timeline/moment-sheet.tsx`, `apps/web/src/timeline/reaction-bar.tsx`, `apps/web/src/compose/compose-panel/index.tsx`      | 11–15                    |
+| Owner task | Exact shared files it alone may modify                                                                                                                                                                                                                                                                                                                                                                                                                                                | Consumers after it lands |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 2          | `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/vitest.config.ts`, `apps/web/src/test/setup.ts`, `apps/web/src/styles/tokens.css`, `apps/web/src/styles/tokens.test.ts`, `apps/web/tailwind.config.js`, `.claude/rules/web-ui.md`                                                                                                                                                                                                                                                | 3–15                     |
+| 3          | `apps/web/src/ui/button/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 4–15                     |
+| 4          | `apps/web/src/ui/modal/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 5–15                     |
+| 5          | `apps/web/src/ui/floating/**`, `apps/web/src/ui/menu/**`, `apps/web/src/ui/popover/**`, `apps/web/src/ui/tooltip/**`                                                                                                                                                                                                                                                                                                                                                                  | 6–15                     |
+| 6          | `apps/web/src/ui/field/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 7–15                     |
+| 7          | `apps/web/src/ui/feedback/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 8–15                     |
+| 8          | `apps/web/src/pages/design-lab/**`, `apps/web/src/App.tsx`                                                                                                                                                                                                                                                                                                                                                                                                                            | 9–15                     |
+| 9          | `apps/web/src/shell/Shell.tsx`, `apps/web/src/shell/user-menu.tsx`, `apps/web/src/shell/create-chain-dialog/index.tsx`, `apps/web/src/compose/composer-entry.tsx`, `apps/web/src/compose/compose-fab.tsx`                                                                                                                                                                                                                                                                             | 10–15                    |
+| 10         | `apps/web/src/pages/chain-home/index.tsx`, `apps/web/src/pages/chain-home/chain-audience.tsx`, `apps/web/src/timeline/timeline.tsx`, `apps/web/src/timeline/timeline-rail.tsx`, `apps/web/src/timeline/moment-sheet.tsx`, `apps/web/src/timeline/reaction-bar.tsx`, `apps/web/src/compose/compose-panel/index.tsx`                                                                                                                                                                    | 11–15                    |
+| 11         | `apps/web/src/pages/feed-home/index.tsx`, `apps/web/src/pages/moment/index.tsx`, `apps/web/src/pages/share-album/index.tsx`, `apps/web/src/media/MediaBlock.tsx`, `apps/web/src/timeline/lightbox.tsx`                                                                                                                                                                                                                                                                                | 12–15                    |
+| 12         | `apps/web/src/pages/chain-settings/index.tsx`, `apps/web/src/pages/chain-settings/sections.tsx`, `apps/web/src/chain/ChainLookPicker.tsx`, `apps/web/src/pages/me/index.tsx`, `apps/web/src/ui/ThemeToggle.tsx`, `apps/web/src/ui/Avatar.tsx`, `apps/web/src/pages/notifications/index.tsx`                                                                                                                                                                                           | 13–15                    |
+| 13         | `apps/web/src/pages/auth-frame.tsx`, `apps/web/src/pages/login/index.tsx`, `apps/web/src/pages/register/index.tsx`, `apps/web/src/pages/invite/index.tsx`, `apps/web/src/pages/not-found.tsx`, `apps/web/src/ui/Button.tsx`, `apps/web/src/ui/Field.tsx`, `apps/web/src/ui/Menu.tsx`, `apps/web/src/ui/Confirm.tsx`, `apps/web/src/ui/Banner.tsx`, `apps/web/src/ui/Empty.tsx`, `apps/web/src/ui/HoverTip.tsx`, `apps/web/src/ui/HappenedAtField.tsx`, `apps/web/src/ui/Floating.tsx` | 14–15                    |
 
 ## Task 1: Repair the Web dependency link and establish a green build baseline
 
@@ -391,55 +393,57 @@ git add apps/web/src/pages/design-lab/index.tsx apps/web/src/pages/design-lab/de
 git commit -m "feat(web): add development design lab"
 ```
 
-## Task 9: Refactor Shell and Timeline structural primitives
+## Task 9: Migrate Shell, navigation and composer entry points
 
 **Files:**
 
 - Modify: `apps/web/src/shell/Shell.tsx`
-- Modify: `apps/web/src/timeline/timeline.tsx`
-- Modify: `apps/web/src/timeline/timeline-rail.tsx`
+- Modify: `apps/web/src/shell/user-menu.tsx`
+- Modify: `apps/web/src/shell/create-chain-dialog/index.tsx`
 - Modify: `apps/web/src/compose/composer-entry.tsx`
 - Modify: `apps/web/src/compose/compose-fab.tsx`
-- Create: `apps/web/src/timeline/timeline.test.tsx`
+- Create: `apps/web/src/shell/shell-navigation.test.tsx`
 
 **Interfaces:**
 
-- Consumes: Tasks 2–8 components; existing Timeline props and `MonthIndexEntry[]` data source.
-- Produces: the unchanged Timeline/TimelineRail public data props; wide `208px / 760px / 32px / 184px` adjacent workspace at >=1400px; 900–1399 top bar and centered 760px main column; <900px top bar with TimelineRail rendered through Sheet; year-section month index consuming existing entries.
+- Consumes: Tasks 2–8 public UI exports and the existing Shell outlet, navigation, auth and compose services.
+- Produces: token-backed Shell, user menu, create-chain dialog and composer entry/FAB; navigation, auth guards, chain-list loading and compose-session semantics remain unchanged. Timeline and page/timeline files are owned by Task 10 and are not modified here.
 
-- [ ] **Step 1: Write failing timeline structural tests.**
+- [ ] **Step 1: Write failing Shell/navigation tests.**
 
-In `timeline.test.tsx`, assert Timeline uses an `aria-label="日子线"` dashed stroke hook, `created_at` suppresses date knots, TimelineRail groups `MonthIndexEntry[]` by year with only one expanded historic year, and the mobile month trigger opens the Sheet rather than a fixed right drawer.
+In `shell-navigation.test.tsx`, assert authenticated navigation destinations, logout/theme actions, create-chain validation/service calls, and composer entry/FAB compose-session handoff.
 
-- [ ] **Step 2: Run tests before structural migration.**
+- [ ] **Step 2: Run tests before entry migration.**
 
-Run: `pnpm --filter @moment/web test -- timeline.test.tsx`
+Run: `pnpm --filter @moment/web test -- shell-navigation.test.tsx`
 
-Expected: FAIL because TimelineRail presents a flat list/fixed drawer and Timeline uses old knot/sticker semantics.
+Expected: FAIL because these callers still import legacy Button/Field/Menu/Banner APIs and use sticker/card layout hooks.
 
-- [ ] **Step 3: Implement the three layouts and time-reading structure.**
+- [ ] **Step 3: Migrate only Shell/navigation/composer entry points.**
 
-Change Shell grid only through token-backed layout classes: wide sidebar 208, main 760, 32 gap and neighboring 184 rail; top-bar navigation at 900–1399 and <900; no mobile bottom navigation. Retain chain navigation, avatar, context menu and ComposePanel mount. Make Timeline’s line dashed `--stroke`, today/yesterday/older knots semantic without content shadow, and swap first load/next page states to Task 7 skeleton/progress. Group existing month entries by year, expose current-month trigger on smaller screens, retain tag/order/filter and date-anchor semantics, and move only the presentation into Sheet.
+Replace old imports with `ui/button`, `ui/modal`, `ui/menu`, `ui/field` and `ui/feedback` exports; use token-backed Shell layout and existing top-bar breakpoints. Keep route links, auth visibility, chain-list state, create-chain service calls, compose-session events and ComposePanel mounting exactly as they are. Do not edit `timeline/**`, page files or any service file.
 
-- [ ] **Step 4: Verify structural contract.**
+- [ ] **Step 4: Verify the entry contract.**
 
-Run: `pnpm --filter @moment/web test -- timeline.test.tsx && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint`
+Run: `pnpm --filter @moment/web test -- shell-navigation.test.tsx && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint`
 
-Expected: PASS; `Shell.tsx`, `timeline.tsx`, and `timeline-rail.tsx` contain no `fixed right-0`, `shadow-sticker`, `border-t`, or private drawer overlay.
+Expected: PASS; only Task 9 Files change, no service path changes, and owned files contain no legacy UI imports or private overlay/layout escape hatches.
 
-- [ ] **Step 5: Commit Shell/Timeline foundations.**
+- [ ] **Step 5: Commit Shell/navigation/composer migration.**
 
 ```bash
-git add apps/web/src/shell/Shell.tsx apps/web/src/timeline/timeline.tsx apps/web/src/timeline/timeline-rail.tsx apps/web/src/compose/composer-entry.tsx apps/web/src/compose/compose-fab.tsx apps/web/src/timeline/timeline.test.tsx
-git commit -m "feat(web): rebuild shell and timeline structure"
+git add apps/web/src/shell/Shell.tsx apps/web/src/shell/user-menu.tsx apps/web/src/shell/create-chain-dialog/index.tsx apps/web/src/compose/composer-entry.tsx apps/web/src/compose/compose-fab.tsx apps/web/src/shell/shell-navigation.test.tsx
+git commit -m "feat(web): migrate shell navigation and composer entries"
 ```
 
-## Task 10: Deliver the single-chain sample page
+## Task 10: Migrate chain home, timeline and compose panel
 
 **Files:**
 
 - Modify: `apps/web/src/pages/chain-home/index.tsx`
 - Modify: `apps/web/src/pages/chain-home/chain-audience.tsx`
+- Modify: `apps/web/src/timeline/timeline.tsx`
+- Modify: `apps/web/src/timeline/timeline-rail.tsx`
 - Modify: `apps/web/src/timeline/moment-sheet.tsx`
 - Modify: `apps/web/src/timeline/reaction-bar.tsx`
 - Modify: `apps/web/src/compose/compose-panel/index.tsx`
@@ -447,8 +451,8 @@ git commit -m "feat(web): rebuild shell and timeline structure"
 
 **Interfaces:**
 
-- Consumes: Tasks 3–9 public UI/Timestamp APIs and existing `ChainHomeService`/`ComposePanelService` methods unchanged.
-- Produces: `/chains/:chainId` renders member cluster/visibility/kebab header, time-line MomentSheet, Sheet composer, `ReactionPopover`, and direct tags text flow; it preserves existing service calls, role conditions, tag filter/order query and date anchor.
+- Consumes: Tasks 3–9 public UI APIs and existing `ChainHomeService`/`ComposePanelService` methods unchanged.
+- Produces: timeline structure and `/chains/:chainId` composition with year-grouped rail, mobile Sheet rail, member header, MomentSheet, ReactionPopover and dirty-draft AlertDialog; service calls, role conditions, filters and date anchors remain unchanged.
 
 - [ ] **Step 1: Write failing sample-page tests.**
 
@@ -458,23 +462,23 @@ In `chain-home.test.tsx`, use a fixed ChainHomeService fixture and assert chain 
 
 Run: `pnpm --filter @moment/web test -- chain-home.test.tsx`
 
-Expected: FAIL because current MomentSheet separates tags, says “评论”, uses the old reaction bar and ComposePanel directly drops drafts on Escape.
+Expected: FAIL because the current timeline is flat/fixed, MomentSheet separates tags and says “评论”, and ComposePanel drops drafts on Escape.
 
-- [ ] **Step 3: Compose the sample without changing business ownership.**
+- [ ] **Step 3: Migrate only chain-home/timeline/compose-panel presentation.**
 
-Keep `hydrate(chainId)`, chain membership/visibility data, edit/delete callbacks, upload flow and filters intact. Render chain audience header with the member avatars, visibility and permission-gated right kebab; format pure text on `--surface` without shadow, media as its own base, tags before body in the same 16px text flow, left 30–32px emotion trigger and right response link. Convert ComposePanel to Sheet, reuse Field/Button/DateTimeField and show AlertDialog only when its current service state is dirty; preserve media replacement confirmation, progress/failure and submission refresh behavior.
+Keep `hydrate(chainId)`, chain membership/visibility data, edit/delete callbacks, upload flow and filters intact. Render chain audience header with member avatars, visibility and permission-gated kebab; format text on `--surface` without shadow, media as its own base, tags before body in one text flow, and the emotion/response controls. Convert ComposePanel to Sheet, reuse Field/Button/DateTimeField and show AlertDialog only when its current service state is dirty; make the timeline line dashed and semantic, group month entries by year, and preserve media replacement confirmation, progress/failure and submission refresh behavior. Do not edit Shell, navigation, other page groups or service files.
 
 - [ ] **Step 4: Verify the sample route.**
 
 Run: `pnpm --filter @moment/web test -- chain-home.test.tsx && pnpm --filter @moment/web typecheck`
 
-Expected: PASS; the changed page has no API client calls, direct fetch, service-to-service loads, or chain-source metadata in the single-chain variant.
+Expected: PASS; only Task 10 Files change, the single-chain variant has no chain-source metadata, and no API client calls, direct fetches or service-to-service loads are added.
 
 - [ ] **Step 5: Commit the sample page.**
 
 ```bash
-git add apps/web/src/pages/chain-home/index.tsx apps/web/src/pages/chain-home/chain-audience.tsx apps/web/src/timeline/moment-sheet.tsx apps/web/src/timeline/reaction-bar.tsx apps/web/src/compose/compose-panel/index.tsx apps/web/src/pages/chain-home/chain-home.test.tsx
-git commit -m "feat(web): redesign single chain timeline"
+git add apps/web/src/pages/chain-home/index.tsx apps/web/src/pages/chain-home/chain-audience.tsx apps/web/src/timeline/timeline.tsx apps/web/src/timeline/timeline-rail.tsx apps/web/src/timeline/moment-sheet.tsx apps/web/src/timeline/reaction-bar.tsx apps/web/src/compose/compose-panel/index.tsx apps/web/src/pages/chain-home/chain-home.test.tsx
+git commit -m "feat(web): migrate chain home timeline and composer"
 ```
 
 ## Task 11: Migrate feed, moment detail and public share
@@ -511,7 +515,7 @@ Implement the feed header with one `记下此刻` primary action, use the existi
 
 Run: `pnpm --filter @moment/web test -- timeline-variants.test.tsx && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint`
 
-Expected: PASS; source link appears only on feed, and no share change adds authentication, interaction, DTO, media URL, or share-token behavior.
+Expected: PASS; only Task 11 Files change, source link appears only on feed, and no share change adds authentication, interaction, DTO, media URL, or share-token behavior.
 
 - [ ] **Step 5: Commit feed/detail/share migration.**
 
@@ -520,7 +524,7 @@ git add apps/web/src/pages/feed-home/index.tsx apps/web/src/pages/moment/index.t
 git commit -m "feat(web): align feed detail and share views"
 ```
 
-## Task 12: Migrate settings, profile and notifications
+## Task 12: Migrate chain settings, profile and notifications
 
 **Files:**
 
@@ -550,13 +554,13 @@ Expected: FAIL because old sections use sticker cards/small buttons/Confirm and 
 
 - [ ] **Step 3: Apply the settings composition pattern.**
 
-Replace per-section card stacks, small entity buttons, private input styles and arbitrary confirmations with Field/Button/ResponsiveMenu/Banner/AlertDialog. Keep every existing service call, server error mapping and role guard exactly as is. Use a plain EmptyState where a settings sublist has no contents; make Me a quiet content stack retaining avatar upload/clear, three theme states and logout; make notification rows quiet with existing mark-read/load-more actions and structured loading/empty/error feedback.
+Replace per-section card stacks, small entity buttons, private input styles and arbitrary confirmations with Field/Button/ResponsiveMenu/Banner/AlertDialog. Keep every existing service call, server error mapping and role guard exactly as is. Use a plain EmptyState where a settings sublist has no contents; make Me a quiet content stack retaining avatar upload/clear, three theme states and logout; make notification rows quiet with existing mark-read/load-more actions and structured loading/empty/error feedback. Do not edit any service or page outside the Task 12 Files.
 
 - [ ] **Step 4: Verify role and feedback contracts.**
 
 Run: `pnpm --filter @moment/web test -- settings-account.test.tsx && pnpm --filter @moment/web typecheck`
 
-Expected: PASS; role branch output is unchanged except visual/components, and destructive outcomes do not add a duplicate Toast.
+Expected: PASS; only Task 12 Files change, role branch output is unchanged except visual/components, and destructive outcomes do not add a duplicate Toast.
 
 - [ ] **Step 5: Commit account/settings migration.**
 
@@ -565,7 +569,7 @@ git add apps/web/src/pages/chain-settings/index.tsx apps/web/src/pages/chain-set
 git commit -m "feat(web): redesign settings account and notifications"
 ```
 
-## Task 13: Migrate authentication, invitation and not-found entry states
+## Task 13: Migrate authentication, invitation, 404 and remove legacy UI
 
 **Files:**
 
@@ -573,13 +577,22 @@ git commit -m "feat(web): redesign settings account and notifications"
 - Modify: `apps/web/src/pages/login/index.tsx`
 - Modify: `apps/web/src/pages/register/index.tsx`
 - Modify: `apps/web/src/pages/invite/index.tsx`
-- Modify: `apps/web/src/App.tsx`
+- Create: `apps/web/src/pages/not-found.tsx`
 - Create: `apps/web/src/pages/entry-states.test.tsx`
+- Delete: `apps/web/src/ui/Button.tsx`
+- Delete: `apps/web/src/ui/Field.tsx`
+- Delete: `apps/web/src/ui/Menu.tsx`
+- Delete: `apps/web/src/ui/Confirm.tsx`
+- Delete: `apps/web/src/ui/Banner.tsx`
+- Delete: `apps/web/src/ui/Empty.tsx`
+- Delete: `apps/web/src/ui/HoverTip.tsx`
+- Delete: `apps/web/src/ui/HappenedAtField.tsx`
+- Delete: `apps/web/src/ui/Floating.tsx`
 
 **Interfaces:**
 
-- Consumes: Tasks 3, 5 and 7 public UI APIs; existing Login/Register/Invite services unchanged.
-- Produces: auth forms use TextField/PasswordField/Banner/Button; invite keeps `from` preservation and accepted-chain navigation; unauthenticated wildcard redirects to `/login`, authenticated wildcard remains the approved “没有这个页面” plain EmptyState; `/chains/:chainId/compose` redirect is unchanged.
+- Consumes: Tasks 3, 5 and 7 public UI APIs; existing Login/Register/Invite services unchanged; Task 8's App route owner consumes the new NotFound module without changing App.tsx ownership.
+- Produces: auth forms use TextField/PasswordField/Banner/Button; invite keeps `from` preservation and accepted-chain navigation; unauthenticated wildcard redirects to `/login`, authenticated wildcard renders the new plain EmptyState module; `/chains/:chainId/compose` redirect is unchanged. Legacy UI files are removed only after all callers migrate.
 
 - [ ] **Step 1: Write failing entry-flow tests.**
 
@@ -589,23 +602,36 @@ In `entry-states.test.tsx`, assert login/register inputs have `autocomplete="ema
 
 Run: `pnpm --filter @moment/web test -- entry-states.test.tsx`
 
-Expected: FAIL because legacy Field/Button composition and not-found paragraph do not meet the new semantics.
+Expected: FAIL because legacy Field/Button composition, old entry imports and the inline not-found paragraph do not meet the new semantics.
 
 - [ ] **Step 3: Recompose all entry surfaces without altering flows.**
 
-Use AuthFrame only for layout and shared tokens, TextField/PasswordField for native semantics, Banner for service errors and one explicit submit Button per form. Preserve the existing schemas, service calls, `from` redirect and invite accept behavior. Replace the raw NotFound paragraph with plain EmptyState (no fake error/Toast) while preserving both redirect branches and the compose redirect string verbatim.
+Use AuthFrame only for layout and shared tokens, TextField/PasswordField for native semantics, Banner for service errors and one explicit submit Button per form. Preserve the existing schemas, service calls, `from` redirect and invite accept behavior. Extract the authenticated 404 presentation into `pages/not-found.tsx` as plain EmptyState (no fake error/Toast); Task 8's existing App route owner only consumes that module. Before deletion, require a repository-wide old-import scan to pass; then delete every listed old file, with `git rm apps/web/src/ui/HoverTip.tsx` explicitly required.
 
 - [ ] **Step 4: Verify entry behavior and route preservation.**
 
 Run: `pnpm --filter @moment/web test -- entry-states.test.tsx && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint`
 
-Expected: PASS; route paths, params and redirect targets exactly match the pre-task App contract.
+Expected: PASS; only Task 13 Files change, route paths/params/redirect targets exactly match the pre-task App contract, and deletion gates report no old imports or ghost files.
 
-- [ ] **Step 5: Commit entry-state migration.**
+- [ ] **Step 5: Prove cleanup safety and remove legacy UI.**
+
+Run: `test "$(rg -l "@/ui/(Button|Field|Menu|Confirm|Banner|Empty|HoverTip|HappenedAtField|Floating)|from ['\"]\.\/(Button|Field|Menu|Confirm|Banner|Empty|HoverTip|HappenedAtField|Floating)" apps/web/src --glob '*.{ts,tsx}' | wc -l | tr -d ' ')" -eq 0 && git rm apps/web/src/ui/HoverTip.tsx && git rm apps/web/src/ui/Button.tsx apps/web/src/ui/Field.tsx apps/web/src/ui/Menu.tsx apps/web/src/ui/Confirm.tsx apps/web/src/ui/Banner.tsx apps/web/src/ui/Empty.tsx apps/web/src/ui/HappenedAtField.tsx apps/web/src/ui/Floating.tsx`
+
+Expected: the import scan exits 0 before deletion, `HoverTip.tsx` is removed through `git rm`, and no listed legacy path remains tracked.
+
+- [ ] **Step 6: Verify entry flows and cleanup ghosts.**
+
+Run: `pnpm --filter @moment/web test -- entry-states.test.tsx && pnpm --filter @moment/web typecheck && pnpm --filter @moment/web lint && ! rg -n "(shadow-sticker|control-sm|text-(today|knot)|@/ui/(Button|Field|Menu|Confirm|Banner|Empty|HoverTip|HappenedAtField|Floating))" apps/web/src --glob '*.{ts,tsx}'`
+
+Expected: PASS; no old imports, deleted ghost paths or legacy visual hooks remain, and service/API/DTO/RAB semantics are unchanged.
+
+- [ ] **Step 7: Commit entry migration and cleanup.**
 
 ```bash
-git add apps/web/src/pages/auth-frame.tsx apps/web/src/pages/login/index.tsx apps/web/src/pages/register/index.tsx apps/web/src/pages/invite/index.tsx apps/web/src/App.tsx apps/web/src/pages/entry-states.test.tsx
-git commit -m "feat(web): redesign authentication and entry states"
+git add apps/web/src/pages/auth-frame.tsx apps/web/src/pages/login/index.tsx apps/web/src/pages/register/index.tsx apps/web/src/pages/invite/index.tsx apps/web/src/pages/not-found.tsx apps/web/src/pages/entry-states.test.tsx
+git add -u apps/web/src/ui/Button.tsx apps/web/src/ui/Field.tsx apps/web/src/ui/Menu.tsx apps/web/src/ui/Confirm.tsx apps/web/src/ui/Banner.tsx apps/web/src/ui/Empty.tsx apps/web/src/ui/HoverTip.tsx apps/web/src/ui/HappenedAtField.tsx apps/web/src/ui/Floating.tsx
+git commit -m "feat(web): migrate entry states and remove legacy ui"
 ```
 
 ## Task 14: Add replayable CSI E2E and visual regression coverage
@@ -669,6 +695,7 @@ git commit -m "test(web): add design system visual regression"
 
 - Consumes: complete, serial Task 1–14 implementation and CSI command.
 - Produces: a verified Web design-system refactor with no API/DTO/RAB semantic drift, no prohibited visual escape hatches, and documented final command output.
+- Cleanup ownership: Task 13 is the sole owner of legacy UI deletion; Task 15 only verifies its post-cleanup invariant and never deletes or stages those paths again.
 
 - [ ] **Step 1: Run focused Web automated gates first.**
 
