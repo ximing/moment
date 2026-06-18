@@ -28,5 +28,28 @@ export default defineConfig({
     // 组件契约测试就近放在源码旁；支持 `pnpm test -- Button.test.tsx` 聚焦执行
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
+    // 修复双 React 实例：lockfile 里存在三份 react@19.2.8 物理副本
+    // （apps/web/node_modules、react-dom/node_modules、
+    // @testing-library/react/node_modules）。react-dom 与 RTL 都是 CJS，
+    // 无论 externalize（纯 Node 解析）还是 inline（module evaluator 给 CJS
+    // 注入的是 createRequire(模块自身路径)，见 vitest module-evaluator），
+    // 其内部 require('react') 都绕开 alias，命中各自嵌套副本 →
+    // 与源码经 alias 命中的 apps/web 副本不是同一份 → act 队列错位，
+    // RTL render 永不 flush（渲染为空）。
+    //
+    // 解法：开启 client 环境的依赖预打包（jsdom 测试跑在 client
+    // environment）。esbuild 把 react-dom 与 @testing-library/react 打成
+    // ESM chunk，react 被改写为 vite:cjs-external-facade（顶层
+    // import 'react'）→ 该 import 回到 runner 解析链，吃上面的 alias，
+    // 与源码、JSX runtime 统一落到 apps/web 那份 react，进程内只剩一个
+    // React 实例。嵌套副本从此不再被加载，安装布局变化也不影响结论。
+    deps: {
+      optimizer: {
+        client: {
+          enabled: true,
+          include: ['react-dom', 'react-dom/client', '@testing-library/react'],
+        },
+      },
+    },
   },
 });
