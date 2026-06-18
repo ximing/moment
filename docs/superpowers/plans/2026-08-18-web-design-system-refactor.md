@@ -17,7 +17,7 @@
 - 保留 `App.tsx` 现有路由集合与 `/chains/:chainId/compose` 重定向；页面从 `useParams` 调 `service.hydrate(id)`、跳转留在组件。
 - 组件颜色、尺寸、圆角、阴影、z-index 一律从 `apps/web/src/styles/tokens.css` 与 Tailwind 语义映射消费；业务页不得写十六进制、一次性 `px-[…]`、`h-[…]`、页面私有阴影或 `z-40/z-50`。
 - 页面网格只用 4/8/12/16/20/24/32px；动态业务内容用系统字体，固定“时刻/今天/昨天/记下此刻”才可使用 Smiley Sans；所有交互均有可见 `focus-visible`。
-- Web 测试不得运行 `pnpm test` 或 `resetDb()`；CSI 只用专用测试帐号和受控 seed，绝不依赖个人登录态或生产数据库。
+- Web 测试不得运行 `pnpm test` 或 `resetDb()`；CSI 只用专用测试帐号和受控 seed，绝不依赖个人登录态或生产数据库。CSI 运行器仅连接 `http://127.0.0.1:5173` 和 `http://127.0.0.1:3000/api`；`fixtures/seed.mjs` 必须在每次写入前拒绝非 loopback URL、缺少 `MOMENT_E2E=1` 或 `_e2e/preflight` 未回报 `{ mode: 'e2e', database: 'moment_e2e' }` 的目标。
 
 ---
 
@@ -25,7 +25,7 @@
 
 | Owner task | Exact shared files it alone may modify                                                                                                                                                                                                                                                                                                                                                                                                                                                | Consumers after it lands |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| 2          | `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/vitest.config.ts`, `apps/web/src/test/setup.ts`, `apps/web/src/styles/tokens.css`, `apps/web/src/styles/tokens.test.ts`, `apps/web/tailwind.config.js`, `.claude/rules/web-ui.md`                                                                                                                                                                                                                                                | 3–15                     |
+| 2          | `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/vitest.config.ts`, `apps/web/src/test/setup.ts`, `apps/web/src/styles/tokens.css`, `apps/web/src/styles/tokens.test.ts`, `apps/web/tailwind.config.js`, `.claude/rules/web-ui.md`, `.gitignore`                                                                                                                                                                                                                                  | 3–15                     |
 | 3          | `apps/web/src/ui/button/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 4–15                     |
 | 4          | `apps/web/src/ui/modal/**`                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 5–15                     |
 | 5          | `apps/web/src/ui/floating/**`, `apps/web/src/ui/menu/**`, `apps/web/src/ui/popover/**`, `apps/web/src/ui/tooltip/**`                                                                                                                                                                                                                                                                                                                                                                  | 6–15                     |
@@ -37,6 +37,7 @@
 | 11         | `apps/web/src/pages/feed-home/index.tsx`, `apps/web/src/pages/moment/index.tsx`, `apps/web/src/pages/share-album/index.tsx`, `apps/web/src/media/MediaBlock.tsx`, `apps/web/src/timeline/lightbox.tsx`                                                                                                                                                                                                                                                                                | 12–15                    |
 | 12         | `apps/web/src/pages/chain-settings/index.tsx`, `apps/web/src/pages/chain-settings/sections.tsx`, `apps/web/src/chain/ChainLookPicker.tsx`, `apps/web/src/pages/me/index.tsx`, `apps/web/src/ui/ThemeToggle.tsx`, `apps/web/src/ui/Avatar.tsx`, `apps/web/src/pages/notifications/index.tsx`                                                                                                                                                                                           | 13–15                    |
 | 13         | `apps/web/src/pages/auth-frame.tsx`, `apps/web/src/pages/login/index.tsx`, `apps/web/src/pages/register/index.tsx`, `apps/web/src/pages/invite/index.tsx`, `apps/web/src/pages/not-found.tsx`, `apps/web/src/ui/Button.tsx`, `apps/web/src/ui/Field.tsx`, `apps/web/src/ui/Menu.tsx`, `apps/web/src/ui/Confirm.tsx`, `apps/web/src/ui/Banner.tsx`, `apps/web/src/ui/Empty.tsx`, `apps/web/src/ui/HoverTip.tsx`, `apps/web/src/ui/HappenedAtField.tsx`, `apps/web/src/ui/Floating.tsx` | 14–15                    |
+| 14         | `apps/web/e2e/run.mjs`, `apps/web/e2e/lib/bridge.mjs`, `apps/web/e2e/lib/env.mjs`, `apps/web/e2e/fixtures/seed.mjs`, `apps/web/e2e/cases/design-system-regression.md`, `apps/web/e2e/suites/design-system-regression.mjs`, `apps/web/e2e/baselines/**/*.png`, `apps/web/e2e/README.md`                                                                                                                                                                                                | 15                       |
 
 ## Task 1: Repair the Web dependency link and establish a green build baseline
 
@@ -113,11 +114,12 @@ git commit -m "feat(web): make react-dom alias hoist-safe"
 - Modify: `apps/web/src/styles/tokens.css`
 - Modify: `apps/web/tailwind.config.js`
 - Modify: `.claude/rules/web-ui.md`
+- Modify: `.gitignore`
 
 **Interfaces:**
 
 - Consumes: Task 1 buildable Vite importer; existing `:root[data-theme='dark']` theme contract.
-- Produces: the sole Web owner for package test scripts, Vitest setup, CSS tokens and Tailwind semantic mappings; `pnpm --filter @moment/web test` runs Vitest in jsdom, and later UI tasks consume only the published token names.
+- Produces: the sole Web owner for package scripts, Vitest setup, CSS tokens, Tailwind semantic mappings and E2E runtime-ignore rules; `pnpm --filter @moment/web test` runs Vitest in jsdom, `pnpm --filter @moment/web e2e:design-system` runs `node e2e/run.mjs design-system-regression`, and later UI/E2E tasks consume only these published commands and token names.
 
 - [ ] **Step 1: Write the failing token and script contract.**
 
@@ -131,7 +133,7 @@ Expected: FAIL because the package has no test script, Vitest configuration, or 
 
 - [ ] **Step 3: Add the only package/test-script owner and complete the semantic token layer.**
 
-Add the Web testing dependencies and configure the single `test` script as `vitest run`, jsdom, setup and coverage-independent focused execution. Add the approved light/dark color, field, overlay, feedback, geometry and z-index tokens; retain only documented temporary aliases for old callers until Task 13 cleanup. Map every public semantic token in Tailwind and mark legacy mappings for removal by Task 15. Update `.claude/rules/web-ui.md` so no later task adds package scripts, test setup, tokens or legacy aliases.
+Add the Web testing dependencies, including the Node PNG comparison dependencies `pixelmatch` and `pngjs`, and configure `test` as `vitest run` plus `e2e:design-system` as `node e2e/run.mjs design-system-regression`; the latter may fail until Task 14 creates the runner. Configure jsdom, setup and coverage-independent focused execution. Add the approved light/dark color, field, overlay, feedback, geometry and z-index tokens; retain only documented temporary aliases for old callers until Task 13 cleanup. Map every public semantic token in Tailwind. Add `apps/web/e2e/artifacts/**` and `apps/web/e2e/baselines/**/*.actual.png` to `.gitignore`, while deliberately not ignoring `apps/web/e2e/baselines/**/*.png`. Update `.claude/rules/web-ui.md` so no later task adds package scripts, test setup, tokens, legacy aliases or E2E ignore rules.
 
 - [ ] **Step 4: Run the focused contract and baseline static gates.**
 
@@ -142,7 +144,7 @@ Expected: all exit 0; the package script, test setup and token contract are gree
 - [ ] **Step 5: Commit the infrastructure and token contract.**
 
 ```bash
-git add apps/web/package.json pnpm-lock.yaml apps/web/vitest.config.ts apps/web/src/test/setup.ts apps/web/src/styles/tokens.test.ts apps/web/src/styles/tokens.css apps/web/tailwind.config.js .claude/rules/web-ui.md
+git add apps/web/package.json pnpm-lock.yaml apps/web/vitest.config.ts apps/web/src/test/setup.ts apps/web/src/styles/tokens.test.ts apps/web/src/styles/tokens.css apps/web/tailwind.config.js .claude/rules/web-ui.md .gitignore
 git commit -m "feat(web): establish design system tokens and tests"
 ```
 
@@ -641,46 +643,103 @@ git commit -m "feat(web): migrate entry states and remove legacy ui"
 - Create: `apps/web/e2e/run.mjs`
 - Create: `apps/web/e2e/lib/bridge.mjs`
 - Create: `apps/web/e2e/lib/env.mjs`
+- Create: `apps/web/e2e/fixtures/seed.mjs`
 - Create: `apps/web/e2e/cases/design-system-regression.md`
 - Create: `apps/web/e2e/suites/design-system-regression.mjs`
-- Create: `apps/web/e2e/fixtures/design-system-seed.json`
-- Create: `apps/web/e2e/artifacts/.gitkeep`
-- Modify: `apps/web/package.json`
-- Create: `apps/web/README.md`
+- Create: `apps/web/e2e/baselines/**/*.png`
+- Create: `apps/web/e2e/README.md`
 
 **Interfaces:**
 
-- Consumes: Task 8 `/__design-lab`; Task 9–13 route/UI contracts; CSI daemon and a dedicated seed loader supplied by the local test environment.
-- Produces: `pnpm --filter @moment/web e2e:design-system` runs `node e2e/run.mjs design-system-regression`; fixture keys `ownerEmail`, `viewerEmail`, `chainId`, `momentId`, `shareToken`, `inviteToken`, `fixedNow`, `baseUrl`; evidence screenshots follow `{route}-{theme}-{width}.png` in `apps/web/e2e/artifacts/`.
+- Consumes: Task 2's package-owned `e2e:design-system` script, `pixelmatch`/`pngjs` dependencies and artifact-ignore rules; Task 8 `/__design-lab`; Task 9–13 route/UI contracts; a local `_e2e` fixture gateway at `http://127.0.0.1:3000/api/_e2e`; and a CSI daemon. Task 14 must not modify `apps/web/package.json`, `pnpm-lock.yaml`, `.gitignore`, app source, server source, or any legacy component path.
+- Produces: `node e2e/run.mjs design-system-regression [--update-baselines]`; `seed({ action: 'reset' | 'seed' | 'teardown' }): Promise<DesignSystemFixture>`; `fixture = { owner: { email, password }, viewer: { email, password }, chainId, momentId, shareToken, inviteToken, fixedNow, apiBaseUrl, webBaseUrl }`; `bridge.comparePng({ baselinePath, actualPath, threshold: 0.1, maxDiffPixels: 120 }): Promise<{ diffPixels: number; diffPath: string }>`; tracked baseline files at `apps/web/e2e/baselines/**/*.png`; and ignored run evidence at `apps/web/e2e/artifacts/**`. Only `--update-baselines` may write a tracked baseline; a normal run always writes actual/diff/log evidence only under `artifacts/`.
 
-- [ ] **Step 1: Write the executable scenario specification before automation.**
+- [ ] **Step 1: Write the failing protocol and natural-language case before automation.**
 
-In `e2e/cases/design-system-regression.md`, declare `baseUrl`, the exact dedicated test-account credentials and seed reset command from `fixtures/design-system-seed.json`, then enumerate each exact route/state and machine-checkable assertion: `/__design-lab`, `/`, `/chains/{chainId}`, `/chains/{chainId}?compose=1`, `/chains/{chainId}/settings`, `/moments/{momentId}`, `/me`, `/notifications`, `/share/{shareToken}`, `/invites/{inviteToken}`, `/login`, `/register`, and authenticated `*`; document 390×844, 1024×900, 1440×900 and 1895×900 under light and dark themes, keyboard/overlay checks, and reduced-motion verification.
+Create the case as a human-readable acceptance journey, not an automation implementation: it contains user actions and visible outcomes only, with no CSS selector, `data-*` selector, XPath, CSI `@e` reference, or locator syntax. It must name these exact fixture inputs and invariants:
 
-- [ ] **Step 2: Run the scenario command before its runner exists.**
+```text
+owner.email    = MOMENT_E2E_OWNER_EMAIL (default only for local .env.e2e: owner.e2e@moment.invalid)
+owner.password = MOMENT_E2E_OWNER_PASSWORD
+viewer.email   = MOMENT_E2E_VIEWER_EMAIL (default only for local .env.e2e: viewer.e2e@moment.invalid)
+viewer.password = MOMENT_E2E_VIEWER_PASSWORD
+chainId        = 00000000-0000-4000-8000-000000000014
+momentId       = 00000000-0000-4000-8000-000000000015
+shareToken     = e2e-design-system-share-token
+inviteToken    = e2e-design-system-invite-token
+fixedNow       = 2026-08-18T09:30:00.000Z
+apiBaseUrl     = http://127.0.0.1:3000/api
+webBaseUrl     = http://127.0.0.1:5173
+```
 
-Run: `pnpm --filter @moment/web e2e:design-system`
+Passwords and `MOMENT_E2E_RESET_SECRET` come only from ignored local `.env.e2e` or CI's non-production secret store: do not put a password, token secret, access token, or database URL in any tracked fixture, case, suite, screenshot name, terminal output, or README. The case says to first reset then seed; to visit `/__design-lab`, `/`, `/chains/{chainId}`, `/chains/{chainId}?compose=1`, `/chains/{chainId}/settings`, `/moments/{momentId}`, `/me`, `/notifications`, `/share/{shareToken}`, `/invites/{inviteToken}`, `/login`, `/register`, and authenticated wildcard; and to verify the visible role/read-only/invite-from, reaction/comment/edit/delete, tag/order/date-anchor, loading/error/empty, and no-business-semantics-drift states. Cover light and dark at 390×844, 1024×900, 1440×900 and 1895×900; keyboard and overlay behavior; reduced motion; and a separate 1440×900 light-theme 200% zoom journey with visible labels and no horizontal clipping.
 
-Expected: FAIL because package.json has no `e2e:design-system` script and no CSI suite.
+- [ ] **Step 2: Prove the package command exists but fails before the Task 14 runner exists.**
 
-- [ ] **Step 3: Implement the CSI replay suite and deterministic fixture protocol.**
+Run:
 
-Copy the CSI e2e scaffold into `apps/web/e2e/`; `run.mjs` discovers suites, `lib/bridge.mjs` sends one named `e2e-web-design-system-refactor` session to the daemon, and `lib/env.mjs` ensures the daemon, opens the page, polls observable readiness and writes evidence screenshots. Solidify `suites/design-system-regression.mjs` from the verified case using only stable aria/data/id selectors—never `@e` refs. It resets/loads `design-system-seed.json`, authenticates only with fixture accounts, waits for font/media/API idle, selects theme, sets each viewport, and saves/asserts named screenshots. For all overlay triggers, replay Tab/Shift+Tab, Escape, outside click, focus restoration, 768px Menu→ActionSheet behavior, Popover collision, AlertDialog safety and dirty Sheet protection. For every route, assert no changed business behavior: role visibility, share read-only mode, invite/from flow, reaction/comment/edit/delete permissions, tag/order/date-anchor filters, and no API/DTO mutation. Add the exact package script and concise README prerequisites (CSI daemon, local server, seed command).
+```bash
+pnpm --filter @moment/web e2e:design-system
+```
 
-- [ ] **Step 4: Capture and replay the approved matrix.**
+Expected: FAIL with Node's missing-module error for `apps/web/e2e/run.mjs`; the command itself resolves because Task 2, the sole `package.json` owner, already installed the script. Do not edit `package.json` to make this fail or pass.
 
-Run: `pnpm --filter @moment/web e2e:design-system -- --update-artifacts`
+- [ ] **Step 3: Implement the minimal safe seed, bridge, runner and suite.**
 
-Expected: creates only the documented evidence image names after human approval.
+`fixtures/seed.mjs` is the only seed/reset producer. Before every action it requires `MOMENT_E2E=1`, both base URLs to be HTTP loopback URLs with exactly ports 3000 and 5173, all four fixture credential variables, and `MOMENT_E2E_RESET_SECRET`; it calls `GET /api/_e2e/preflight` and rejects unless the JSON is exactly `{ mode: 'e2e', database: 'moment_e2e' }`. It then sends the secret only in `X-Moment-E2E-Secret` to `POST /api/_e2e/reset`, `POST /api/_e2e/seed`, and final `POST /api/_e2e/teardown`, with `{ fixedNow, ownerEmail, viewerEmail, chainId, momentId, shareToken, inviteToken }`; it never sends a password in a request body or writes secrets to disk. `reset` clears the dedicated e2e database, `seed` returns the exact `DesignSystemFixture`, and `teardown` invokes reset again. A failed preflight, reset, seed, or teardown is fatal and names only the endpoint/status, never a secret.
 
-Run: `pnpm --filter @moment/web e2e:design-system && pnpm --filter @moment/web e2e:design-system && node apps/web/e2e/run.mjs`
+`lib/env.mjs` exports `assertE2eEnvironment()`, `waitForReadiness()`, and `waitForVisualIdle()`. Its README commands are exact and must run in three terminals after sourcing ignored `.env.e2e` whose server database is `moment_e2e`:
 
-Expected: all three replay commands pass; the suite has no `@e` references and all 390/1024/1440/1895 × light/dark screenshots plus keyboard/overlay assertions match their machine-checkable case expectations.
+```bash
+# terminal 1: server; never use a production .env
+set -a; source .env.e2e; set +a
+MOMENT_E2E=1 NODE_ENV=test PORT=3000 pnpm --filter @moment/server exec tsx watch src/index.ts
+
+# terminal 2: Web uses Vite's existing same-origin /api proxy
+pnpm --filter @moment/web dev -- --host 127.0.0.1 --port 5173 --strictPort
+
+# terminal 3: readiness, deterministic reset/seed, replay, deterministic teardown
+until curl -fsS http://127.0.0.1:3000/api/health | rg -q '"status":"ok"'; do sleep 0.2; done
+until curl -fsS http://127.0.0.1:5173/ > /dev/null; do sleep 0.2; done
+MOMENT_E2E=1 node apps/web/e2e/fixtures/seed.mjs reset
+MOMENT_E2E=1 node apps/web/e2e/fixtures/seed.mjs seed
+pnpm --filter @moment/web e2e:design-system
+MOMENT_E2E=1 node apps/web/e2e/fixtures/seed.mjs teardown
+```
+
+The runner owns `try/finally` teardown, so the explicit final command is only the recovery/debug command and every normal, failure, interrupt, and `--update-baselines` run calls it. `run.mjs` accepts only the suite name and optional `--update-baselines`, rejects any other argument, resets and seeds before suite execution, and uses a single CSI session named `e2e-web-design-system-refactor`. `bridge.mjs` wraps the CSI daemon with `open`, `click`, `press`, `fill`, `evaluate`, `screenshot`, `setViewport`, `setPageScaleFactor`, `waitForNetworkIdle`, and PNG comparison; it records actual image, pixel diff and JSON assertion evidence in the ignored artifacts directory. The suite is the only file with stable locators: semantic role/name, label, or unique `id`/`data-testid` locators only; no classes, positional selectors, CSS layout selectors, XPath, or `@e` references.
+
+For each state, wait for `document.fonts.ready`, decoded rendered images/video poster promises, two `requestAnimationFrame` frames after layout, and no tracked fetch/XHR for 500 ms before the screenshot or comparison. Capture `baselines/{route}/{theme}/{width}.png` using the four required widths and both themes; compare with threshold `0.1` and `maxDiffPixels: 120`, fail on either exceeded value, and retain `artifacts/{runId}/{route}-{theme}-{width}.actual.png`, `.diff.png`, and `.json`. At 390 px assert focus order, Tab/Shift+Tab, Escape, outside click and focus restoration for each overlay; at 767 px assert ResponsiveMenu is an ActionSheet; at 768 px assert it is anchored; resize an open menu/sheet across the boundary and assert it closes and returns focus. Assert Popover collision, AlertDialog safe default/cancel flow, and dirty Sheet protection. At 200% call `setPageScaleFactor(2)`, assert `visualViewport.scale >= 1.99`, assert each tested control has `scrollWidth <= clientWidth` and an in-viewport bounding rectangle, and save both the screenshot and JSON scale/geometry evidence.
+
+- [ ] **Step 4: Capture approved tracked baselines once, then prove ordinary replay is read-only.**
+
+Run the baseline update only after human visual approval:
+
+```bash
+pnpm --filter @moment/web e2e:design-system -- --update-baselines
+git diff --name-only -- apps/web/e2e/baselines
+```
+
+Expected: only the reviewed `apps/web/e2e/baselines/**/*.png` matrix is added or changed; neither `artifacts/` nor a password/secret is tracked. Any unsupported artifact-update flag, a baseline auto-update, or a baseline write during a standard run is rejected.
+
+Then run the standard replay twice and prove the image ownership/invariants:
+
+```bash
+git diff --exit-code -- apps/web/e2e/baselines
+pnpm --filter @moment/web e2e:design-system
+pnpm --filter @moment/web e2e:design-system
+git diff --exit-code -- apps/web/e2e/baselines
+git check-ignore -q apps/web/e2e/artifacts/probe.actual.png
+! git check-ignore -q apps/web/e2e/baselines/chain-home/light/1440.png
+! rg -n '@e[0-9]+' apps/web/e2e --glob '*.{mjs,md}'
+```
+
+Expected: both ordinary runs pass, tracked baselines remain byte-identical, actual/diff/JSON evidence is ignored, no `@e` reference exists, and every required viewport/theme, overlay/responsive boundary, idle wait, and 200% zoom assertion has machine evidence.
 
 - [ ] **Step 5: Commit the replayable regression suite.**
 
 ```bash
-git add apps/web/e2e/run.mjs apps/web/e2e/lib/bridge.mjs apps/web/e2e/lib/env.mjs apps/web/e2e/cases/design-system-regression.md apps/web/e2e/suites/design-system-regression.mjs apps/web/e2e/fixtures/design-system-seed.json apps/web/e2e/artifacts/.gitkeep apps/web/package.json apps/web/README.md
+git add apps/web/e2e/run.mjs apps/web/e2e/lib/bridge.mjs apps/web/e2e/lib/env.mjs apps/web/e2e/fixtures/seed.mjs apps/web/e2e/cases/design-system-regression.md apps/web/e2e/suites/design-system-regression.mjs apps/web/e2e/baselines apps/web/e2e/README.md
 git commit -m "test(web): add design system visual regression"
 ```
 
@@ -688,13 +747,12 @@ git commit -m "test(web): add design system visual regression"
 
 **Files:**
 
-- Modify: `docs/superpowers/plans/2026-08-18-web-design-system-refactor.md` (check off only completed execution steps; no plan-content edits)
 - Verify: every tracked file changed by Tasks 1–14
 
 **Interfaces:**
 
-- Consumes: complete, serial Task 1–14 implementation and CSI command.
-- Produces: a verified Web design-system refactor with no API/DTO/RAB semantic drift, no prohibited visual escape hatches, and documented final command output.
+- Consumes: complete, serial Task 1–14 implementation; Task 2's package-owned commands and ignore rules; and Task 14's standard CSI command/baselines.
+- Produces: a verified Web design-system refactor with no API/DTO/RAB semantic drift, no prohibited visual escape hatches, no normal-run baseline mutation, ignored runtime evidence, and documented command output.
 - Cleanup ownership: Task 13 is the sole owner of legacy UI deletion; Task 15 only verifies its post-cleanup invariant and never deletes or stages those paths again.
 
 - [ ] **Step 1: Run focused Web automated gates first.**
@@ -707,7 +765,7 @@ Expected: every command exits 0; the build proves Task 1’s `react-dom/client` 
 
 Run: `pnpm --filter @moment/web e2e:design-system`
 
-Expected: exit 0 for 390/1024/1440/1895, light/dark, reduced motion, Tab/Shift+Tab, Escape, outside interactions, Modal/Sheet/AlertDialog/Menu/Popover/Tooltip layering, and the documented route states.
+Expected: exit 0 for 390/1024/1440/1895, light/dark, reduced motion, Tab/Shift+Tab, Escape, outside interactions, Modal/Sheet/AlertDialog/Menu/Popover/Tooltip layering, 767px ActionSheet/768px anchored behavior, resize-close/focus restoration, and documented 200% zoom evidence.
 
 - [ ] **Step 3: Scan for forbidden implementation drift.**
 
@@ -715,22 +773,29 @@ Run: `result_ui=0; result_config=0; rg -n "(#[0-9A-Fa-f]{3,8}|z-(40|50)|shadow-s
 
 Expected: both `rg` commands exit 1 with no matches; CSS token literal declarations are intentionally outside the scan.
 
-- [ ] **Step 4: Verify repository integrity and whole-workspace build.**
+- [ ] **Step 4: Verify baseline and repository integrity without cleanup work.**
 
-Run: `git diff --check && pnpm build && git status --short`
-
-Expected: exit 0 for diff/build; status lists only deliberate implementation files and approved CSI baseline images. Do not run `pnpm test`, because it reaches the server’s real test database.
-
-- [ ] **Step 5: Commit final acceptance metadata.**
+Run:
 
 ```bash
-git add docs/superpowers/plans/2026-08-18-web-design-system-refactor.md
-git commit -m "docs(web): record design system verification"
+git diff --check
+git diff --exit-code -- apps/web/e2e/baselines
+git check-ignore -q apps/web/e2e/artifacts/final-probe.actual.png
+! git check-ignore -q apps/web/e2e/baselines/chain-home/light/1440.png
+pnpm build
+git status --short
 ```
+
+Expected: diff/build exit 0; normal acceptance did not change a baseline; runtime artifacts are ignored and baselines are tracked; status lists only deliberate implementation files and approved CSI baseline images. Do not run `pnpm test`, because it reaches the server’s real test database. Do not delete, restore, stage, or otherwise clean up an old component path in this task.
+
+- [ ] **Step 5: Record the acceptance result without creating a cleanup or baseline commit.**
+
+Record the exact commands, exit codes, CSI run ID, baseline `git diff --exit-code` result, and 200% zoom evidence path in the execution handoff. Task 15 has no Files to modify and therefore makes no commit; any later documentation-only commit is owned by the coordinator, never used to stage legacy cleanup or generated artifacts.
 
 ## Self-review checklist
 
 - [ ] All 15 required deliveries map one-to-one to Tasks 1–15, including the broken `react-dom/client` baseline, test facility/tokens, all five component families, dev-only lab, Shell/Timeline, every requested page group, CSI replay, and final static/whole-site verification.
-- [ ] Tasks 2–10 declare their shared owner and no later task edits their owner-only files except explicitly listed Task 14 package script and Task 15 verification.
+- [ ] Tasks 2–14 declare their shared owner exactly once: Task 2 alone owns `apps/web/package.json`, `pnpm-lock.yaml` and `.gitignore`; Task 14 creates only its eight listed E2E paths; Task 15 verifies and owns no modified file.
 - [ ] All exported interfaces named by a later task are produced in an earlier task, and every state-changing page still delegates data/business semantics to its existing RAB Service.
 - [ ] No task uses placeholders, open-ended paths, “same as another task”, or a generic test instruction; each has files, consumes/produces interfaces, an initial failure, minimum implementation, passing command, and a commit.
+- [ ] Before handoff, run `pnpm exec prettier --check docs/superpowers/plans/2026-08-18-web-design-system-refactor.md`, scan the plan for prohibited placeholders, inspect the ownership map for duplicate Task 14 paths, and run `git diff --check`.
