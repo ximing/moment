@@ -145,6 +145,13 @@ describe('Toast 时钟与队列', () => {
     expect(region).toHaveAttribute('aria-atomic', 'true');
   });
 
+  it('ToastRegion 暴露带可访问名称的 region landmark', () => {
+    renderApp();
+    const region = screen.getByRole('region', { name: '通知' });
+    expect(region).toBe(screen.getByTestId('toast-region'));
+    expect(region).toHaveAttribute('aria-live', 'polite');
+  });
+
   it('普通 Toast 在精确 3500ms 退出', () => {
     renderApp();
     act(() => toast.show({ key: 'saved', message: '设置已保存' }));

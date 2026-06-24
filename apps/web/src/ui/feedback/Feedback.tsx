@@ -426,6 +426,8 @@ export function ToastRegion() {
   return (
     <div
       data-testid="toast-region"
+      role="region"
+      aria-label="通知"
       aria-live="polite"
       aria-atomic="true"
       className="pointer-events-none fixed inset-x-4 top-[max(var(--space-3),env(safe-area-inset-top))] z-toast flex justify-center md:inset-x-0 md:top-auto md:bottom-6"
