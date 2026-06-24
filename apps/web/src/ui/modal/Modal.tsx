@@ -7,8 +7,10 @@ import {
   ModalOverlay,
 } from 'react-aria-components';
 import { X } from 'lucide-react';
-// 注意：vitest 优化管线对目录裸指代 '../button' 会丢失部分命名导出，
-// 这里显式指向 barrel 文件（与 Button.test.tsx 的 './index' 约定一致）。
+// 注意：必须显式指向 barrel 文件。src/ui/ 下同时存在遗留的 Button.tsx
+// 与 button/ 目录，大小写不敏感文件系统上 '../button' 会优先解析到
+// 遗留 Button.tsx（只导出 Button，没有 IconButton），运行时直接崩；
+// 待遗留文件清理后才能改回裸目录导入。
 import { Button, IconButton } from '../button/index';
 
 // Modal 家族（规范：docs/superpowers/specs/2026-08-18-web-modal-dialog-sheet-design.md）
