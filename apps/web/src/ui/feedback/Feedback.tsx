@@ -396,7 +396,7 @@ function ToastView({ item }: { item: ToastItem }) {
       onMouseLeave={() => internal.setPaused('hover', false)}
       onFocus={() => internal.setPaused('focus', true)}
       onBlur={() => internal.setPaused('focus', false)}
-      className="pointer-events-auto flex min-h-toast w-full max-w-toast animate-[moment-toast-in_160ms_var(--ease-out)] items-center gap-toast rounded-toast bg-feedback-toast-bg px-toast py-2 text-sm text-ink shadow-toast"
+      className="pointer-events-auto flex min-h-toast w-full max-w-toast animate-[moment-toast-in_160ms_ease-out] items-center gap-toast rounded-toast bg-feedback-toast-bg px-toast py-2 text-sm text-ink shadow-toast"
     >
       <span className="min-w-0 flex-1">{item.message}</span>
       {item.action ? (
