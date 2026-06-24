@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { MonthIndexEntry, TagResponse } from '@moment/dto';
 import { monthBeforeParam, monthFromBefore } from '@/lib/time';
+import { Button } from '@/ui/button/index';
+import { Sheet } from '@/ui/modal/index';
 
 /** 右栏筛选值：before 为日期锚定（spec §4.2，仅 happened_at 序有意义）。 */
 export type RailFilter = {
@@ -11,10 +13,9 @@ export type RailFilter = {
 };
 
 /**
- * 时间索引 + 筛选右栏（spec §4），一个组件三种呈现：
- * - ≥1400px：flex 行内右侧 aside（上索引下筛选）；
- * - <1400px：主列顶部「筛选 / 索引」贴纸按钮点开右侧抽屉（按钮 order-first + w-full，
- *   依赖页面外层 flex flex-wrap；与右下 FAB 空间分离——按钮在主列顶部，不是悬浮球）。
+ * 时间索引 + 筛选右栏（C 端总规范 §7），一个组件两种呈现：
+ * - ≥1400px：视口右侧 fixed aside（宽 --rail，与 Shell 预留的 pr-[--rail] 对齐）；
+ * - <1400px：主列顶部月份入口按钮，点开 Sheet（与桌面同一份 RailContent，不另写数据）。
  * 跳转语义（spec §4.3）：点月份 → before = 该月下一月月初（本地）换算 UTC ISO，
  * 页面换 query key 重查，不做双向滚动；「回到最新」由页面渲染，清 before。
  * 纯受控（spec §2）：index/tags 数据由页面 Service 传入，组件不自查。
@@ -36,64 +37,46 @@ export function TimelineRail({
   onChange: (next: RailFilter) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const content = (
-    <RailContent
-      fixedChainId={fixedChainId}
-      index={index}
-      indexPending={indexPending}
-      tags={tags}
-      value={value}
-      onChange={onChange}
-    />
-  );
   return (
     <>
-      {/* <1400px：主列顶部触发按钮 */}
-      <div className="mb-3 flex justify-end min-[1400px]:hidden">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="rounded-sticker bg-surface px-3 py-1.5 text-[13px] text-ink elev-sm"
-        >
+      {/* <1400px：主列顶部月份入口（spec §7.2：入口显示当前月份） */}
+      <div className="mb-4 flex justify-end min-[1400px]:hidden">
+        <Button variant="secondary" onClick={() => setOpen(true)}>
           {new Date().getMonth() + 1}月
-        </button>
+        </Button>
       </div>
-      {/* <1400px：右侧抽屉（遮罩 30% 墨用 color-mix：var() 色值的 /30 修饰静默不生成） */}
-      {open && (
-        <div className="min-[1400px]:hidden">
-          <div
-            className="fixed inset-0 z-40 bg-[color-mix(in_srgb,var(--ink)_30%,transparent)]"
-            onClick={() => setOpen(false)}
-          />
-          <div className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] overflow-y-auto border-l border-stroke bg-bg p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <span className="text-lg font-medium">回到某个月</span>
-              <button type="button" className="text-sm text-muted" onClick={() => setOpen(false)}>
-                关闭
-              </button>
-            </div>
-            <div className="space-y-6">{content}</div>
-          </div>
-        </div>
-      )}
+      {/* <1400px：时间索引 Sheet（与桌面同一份内容） */}
+      <Sheet open={open} title="时间索引" onRequestClose={() => setOpen(false)}>
+        <RailContent
+          fixedChainId={fixedChainId}
+          index={index}
+          indexPending={indexPending}
+          tags={tags}
+          value={value}
+          onChange={onChange}
+        />
+      </Sheet>
       {/* ≥1400px：右侧栏 */}
-      <aside className="fixed inset-y-0 right-0 z-10 hidden w-[148px] overflow-y-auto px-3 pt-7 min-[1400px]:block">
-        {content}
+      <aside className="fixed inset-y-0 right-0 z-10 hidden w-rail overflow-y-auto px-4 pt-8 min-[1400px]:block">
+        <h2 className="mb-3 px-1 text-caption text-muted">时间索引</h2>
+        <RailContent
+          fixedChainId={fixedChainId}
+          index={index}
+          indexPending={indexPending}
+          tags={tags}
+          value={value}
+          onChange={onChange}
+        />
       </aside>
     </>
   );
 }
 
-/** '2026-08' → '2026年8月'（含数字，不用 font-display：得意黑子集无数字字形）。 */
-function monthLabel(month: string): string {
-  const [y, m] = month.split('-');
-  return `${y}年${Number(m)}月`;
-}
-
-const chip = 'rounded-sticker px-2.5 py-0.5 text-xs';
-const chipOn = 'bg-select text-select-fg';
-const chipOff = 'bg-surface text-ink shadow-sticker';
-
+/**
+ * 跨年结构（spec §7.1）：「年份是章节、月份是入口」。今年与当前查看年份
+ * （before 锚定月所在年）展开月份；其它年份折叠为一行，点击只展开一个
+ * 历史年份。跨年只靠字级与留白表达，不画横向分隔线。
+ */
 function RailContent({
   fixedChainId,
   index,
@@ -109,6 +92,9 @@ function RailContent({
   value: RailFilter;
   onChange: (next: RailFilter) => void;
 }) {
+  // 手动展开的历史年份：一次只展开一个（spec §7.1）
+  const [expandedYear, setExpandedYear] = useState<number | null>(null);
+
   // 标签 chips 仅在范围恰好一条链时显示：标签挂在单链上，「全部链」/多选下标签来源无定义
   //（本计划定稿规则，与 web-product「/ 无标签条」一致）
   const scopeChainId = fixedChainId ?? (value.chainIds?.length === 1 ? value.chainIds[0] : undefined);
@@ -121,43 +107,79 @@ function RailContent({
     // 切序即清锚定：before 仅 happened_at 语义（dto BEFORE_REQUIRES_HAPPENED_AT）
     onChange({ ...value, order: orderOn ? 'happened_at' : 'created_at', before: undefined });
 
+  const currentYear = new Date().getFullYear();
+  const anchoredYear = anchored ? Number(anchored.split('-')[0]) : undefined;
+  // index 按月份倒序到达，Map 归并保序 → 年份章节同样倒序
+  const years = new Map<number, MonthIndexEntry[]>();
+  for (const entry of index) {
+    const year = Number(entry.month.split('-')[0]);
+    const list = years.get(year);
+    if (list) list.push(entry);
+    else years.set(year, [entry]);
+  }
+  const isOpen = (year: number) => year === currentYear || year === anchoredYear || year === expandedYear;
+
   return (
     <>
       <section>
-        <h3 className="mb-2 px-1 text-[12px] text-muted">回到某个月</h3>
         {value.order === 'created_at' ? (
-          <p className="px-1 text-xs text-muted">按添加时间看的时候没有月份索引</p>
+          <p className="px-1 text-caption text-muted">按添加时间看的时候没有月份索引</p>
         ) : indexPending ? (
-          <p className="px-1 text-xs text-muted">索引加载中…</p>
+          <p className="px-1 text-caption text-muted">索引加载中…</p>
         ) : index.length === 0 ? (
-          <p className="px-1 text-xs text-muted">还没有月份可跳</p>
+          <p className="px-1 text-caption text-muted">还没有月份可跳</p>
         ) : (
-          <ul className="space-y-1.5">
-            {index.map((mo) => {
-              const active = anchored === mo.month;
-              return (
-                <li key={mo.month}>
-                  <button
-                    type="button"
-                    onClick={() => onChange({ ...value, before: monthBeforeParam(mo.month) })}
-                    className={`flex w-full items-baseline justify-between py-1.5 text-sm ${
-                      active ? 'font-semibold text-ink' : 'text-muted hover:text-ink'
-                    }`}
-                  >
-                    <span>{monthLabel(mo.month)}</span>
-                    <span className="text-xs text-muted">{mo.count}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="flex flex-col gap-4">
+            {[...years.entries()].map(([year, months]) =>
+              isOpen(year) ? (
+                <section key={year} aria-label={`${year}年`}>
+                  <h3 className="mb-1 flex items-baseline justify-between px-1">
+                    <span className="text-meta font-medium text-ink">{year}</span>
+                    {year === currentYear && <span className="text-caption text-muted">今年</span>}
+                  </h3>
+                  <ul className="flex flex-col gap-1">
+                    {months.map((mo) => {
+                      const active = anchored === mo.month;
+                      return (
+                        <li key={mo.month}>
+                          <button
+                            type="button"
+                            onClick={() => onChange({ ...value, before: monthBeforeParam(mo.month) })}
+                            className={`flex w-full items-baseline justify-between rounded-menu-item px-2 py-1.5 text-meta transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset ${
+                              active
+                                ? 'bg-[color-mix(in_srgb,var(--select)_24%,transparent)] font-semibold text-ink'
+                                : 'text-muted hover:bg-floating-hover hover:text-ink'
+                            }`}
+                          >
+                            {/* 年份已由章节承担，月份条目只写「N月」；含数字，不用 font-display */}
+                            <span>{Number(mo.month.split('-')[1])}月</span>
+                            <span className="text-caption tabular-nums text-muted">{mo.count}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ) : (
+                <button
+                  key={year}
+                  type="button"
+                  onClick={() => setExpandedYear(year)}
+                  className="flex w-full items-baseline justify-between rounded-menu-item px-2 py-1.5 text-meta text-muted transition-colors duration-[var(--ease)] hover:bg-floating-hover hover:text-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset"
+                >
+                  <span>{year}</span>
+                  <span aria-hidden>›</span>
+                </button>
+              ),
+            )}
+          </div>
         )}
       </section>
 
-      <section>
+      <section className="mt-6">
         {scopeChainId && tags.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
-            <h3 className="w-full px-1 text-[12px] text-muted">标签</h3>
+            <h3 className="w-full px-1 text-caption text-muted">标签</h3>
             <button
               type="button"
               onClick={() => onChange({ ...value, tagId: undefined })}
@@ -182,19 +204,25 @@ function RailContent({
           role="switch"
           aria-checked={orderOn}
           onClick={toggleOrder}
-          className="mt-3 flex w-full flex-col items-start gap-2 text-left text-sm text-muted"
+          className="mt-3 flex w-full items-center justify-between gap-2 text-left text-meta text-muted transition-colors duration-[var(--ease)] hover:text-ink focus-visible:outline-none focus-visible:ring-focus"
         >
           按记下的顺序看
           <span
             aria-hidden
-            className={`relative inline-flex h-5 w-[34px] items-center rounded-full ${
-              orderOn ? 'bg-[var(--today)]' : 'bg-line'
+            className={`flex h-5 w-8 shrink-0 items-center rounded-full px-0.5 transition-colors duration-[var(--ease)] ${
+              orderOn ? 'justify-end bg-action' : 'justify-start bg-line'
             }`}
           >
-            <span className={`h-4 w-4 rounded-full bg-surface shadow-sticker ${orderOn ? 'ml-3.5' : 'ml-0.5'}`} />
+            <span className="h-4 w-4 rounded-full bg-surface" />
           </span>
         </button>
       </section>
     </>
   );
 }
+
+/** 筛选 chips：选中 --select 轻强调色面、未选中 1px --line 描边；不复用正文内 Tag 样式（spec §10）。 */
+const chip =
+  'rounded-full border px-3 py-1 text-caption transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus';
+const chipOn = 'border-transparent bg-select text-select-fg';
+const chipOff = 'border-line text-ink hover:bg-floating-hover';
