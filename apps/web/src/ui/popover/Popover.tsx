@@ -207,7 +207,7 @@ export function ReactionPopover({
                       aria-label={emoji}
                       aria-pressed={value === emoji}
                       onClick={() => select(emoji)}
-                      className="flex h-icon-button w-icon-button items-center justify-center rounded-menu-item text-lg outline-none hover:bg-floating-hover focus-visible:bg-floating-hover focus-visible:ring-focus pointer-coarse:h-11 pointer-coarse:w-11"
+                      className="flex h-icon-button w-icon-button min-h-touch-control min-w-[var(--touch-control-min)] items-center justify-center rounded-menu-item text-lg outline-none hover:bg-floating-hover focus-visible:bg-floating-hover focus-visible:ring-focus"
                     >
                       {emoji}
                     </button>

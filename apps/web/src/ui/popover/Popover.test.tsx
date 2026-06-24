@@ -42,6 +42,17 @@ describe('ReactionPopover', () => {
     );
   });
 
+  it('表情按钮声明触控最小点击区类（spec §8.2：≥44px）', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: '加个表情' }));
+    await screen.findByRole('grid', { name: '选择表情' });
+
+    const emojiButton = screen.getByRole('button', { name: '👍' });
+    expect(emojiButton.className).toContain('min-h-touch-control');
+    expect(emojiButton.className).toContain('min-w-[var(--touch-control-min)]');
+  });
+
   it('没有当前表情时初始聚焦第一个表情', async () => {
     const user = userEvent.setup();
     render(<Harness />);
