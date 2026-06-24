@@ -43,11 +43,18 @@ export default defineConfig({
     // import 'react'）→ 该 import 回到 runner 解析链，吃上面的 alias，
     // 与源码、JSX runtime 统一落到 apps/web 那份 react，进程内只剩一个
     // React 实例。嵌套副本从此不再被加载，安装布局变化也不影响结论。
+    // react-aria-components 同理：它虽是 ESM，但 externalize 时 Node 会
+    // 命中其嵌套的 react 副本（Modal 等 hooks 报错），一并交给预打包。
     deps: {
       optimizer: {
         client: {
           enabled: true,
-          include: ['react-dom', 'react-dom/client', '@testing-library/react'],
+          include: [
+            'react-dom',
+            'react-dom/client',
+            '@testing-library/react',
+            'react-aria-components',
+          ],
         },
       },
     },
