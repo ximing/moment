@@ -1,146 +1,67 @@
-import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { observer, useService } from '@rabjs/react';
 import { AuthService } from '@/services/auth.service';
 import { Avatar } from '@/ui/Avatar';
-import { Menu, MenuItem } from '@/ui/Menu';
+// 必须显式指向 barrel：src/ui/ 下遗留 Menu.tsx 会截获裸目录导入（见 ui/menu/index.ts）
+import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
 
-/** 头像菜单：我 / 通知 / 退出。宽栏贴侧栏向上弹；窄栏用通用 Menu。 */
+/**
+ * 头像菜单：我的资料 / 通知 / 退出登录（Menu 规范 §14/§16 文案）。
+ * 宽栏与窄栏共用 ResponsiveMenu（≥768px 锚定 Menu，<768px ActionSheet），
+ * 侧栏 Trigger 允许等宽（Menu 规范 §5.2）；原侧栏私有浮层（手写层级、
+ * window 级 Escape、透明全屏关闭层）已全部退出。
+ */
 export const UserMenu = observer(function UserMenu({ unread, compact }: { unread: number; compact?: boolean }) {
   const auth = useService(AuthService);
   const user = auth.user;
   const navigate = useNavigate();
   if (!user) return null;
 
-  const trigger = (onClick?: () => void) => (
+  const trigger = (
     <button
       type="button"
-      onClick={onClick}
-      className={
-        compact
-          ? 'flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition duration-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)]'
-          : 'flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left transition duration-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)]'
-      }
+      aria-label={`${user.nickname} 的菜单`}
+      className={`flex items-center gap-2 rounded-menu-item px-2 py-1.5 text-left transition-colors duration-[var(--ease)] hover:bg-floating-hover focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset ${
+        compact ? '' : 'w-full'
+      }`}
     >
       <span className="relative">
         <Avatar name={user.nickname} color={user.avatarColor} icon={user.avatarIcon} src={user.avatarUrl} size={compact ? 32 : 24} />
         {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-action shadow-[0_0_0_2px_var(--bg)]" />
+          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-action ring-2 ring-bg" />
         )}
       </span>
       {!compact && <span className="truncate text-sm">{user.nickname}</span>}
     </button>
   );
 
-  if (compact) {
-    return (
-      <Menu align="right" placement="bottom" trigger={trigger()}>
-        {(close) => <UserMenuItems unread={unread} close={close} navigate={navigate} logout={auth.logout} />}
-      </Menu>
-    );
-  }
-
-  return <SidebarUserMenu unread={unread} user={user} navigate={navigate} logout={auth.logout} />;
+  return (
+    <ResponsiveMenu
+      aria-label="帐户菜单"
+      sheetTitle={user.nickname}
+      trigger={trigger}
+      onAction={(key) => {
+        if (key === 'profile') navigate('/me');
+        else if (key === 'notifications') navigate('/notifications');
+        // 退出走 AuthService.logout 既有单路径：tokenStore.clear 派发
+        // moment:auth-cleared 收敛内存态（Toast 清空由 Feedback 的监听承担）
+        else if (key === 'logout') void auth.logout().then(() => navigate('/login'));
+      }}
+    >
+      <MenuItem id="profile" textValue="我的资料">
+        我的资料
+      </MenuItem>
+      <MenuItem
+        id="notifications"
+        textValue="通知"
+        count={unread > 0 ? unread : undefined}
+      >
+        通知
+      </MenuItem>
+      {/* 退出登录可恢复，保持普通文字（Menu 规范 §7.3），不用 danger 色 */}
+      <MenuItem id="logout" textValue="退出登录">
+        退出登录
+      </MenuItem>
+    </ResponsiveMenu>
+  );
 });
-
-function SidebarUserMenu({
-  unread,
-  user,
-  navigate,
-  logout,
-}: {
-  unread: number;
-  user: NonNullable<AuthService['user']>;
-  navigate: ReturnType<typeof useNavigate>;
-  logout: () => Promise<unknown>;
-}) {
-  const box = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [boxPos, setBoxPos] = useState<{ left: number; width: number; bottom: number } | null>(null);
-  const close = () => setOpen(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
-
-  return (
-    <div ref={box} className="w-full">
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left transition duration-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)]"
-        onClick={() => {
-          const el = box.current;
-          if (!el) return;
-          const r = el.getBoundingClientRect();
-          setBoxPos({ left: r.left, width: r.width, bottom: window.innerHeight - r.top + 8 });
-          setOpen((v) => !v);
-        }}
-      >
-        <span className="relative">
-          <Avatar name={user.nickname} color={user.avatarColor} icon={user.avatarIcon} src={user.avatarUrl} size={24} />
-          {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-action shadow-[0_0_0_2px_var(--bg)]" />
-          )}
-        </span>
-        <span className="truncate text-sm">{user.nickname}</span>
-      </button>
-      {open && boxPos && (
-        <>
-          <button type="button" aria-label="关闭菜单" className="fixed inset-0 z-40 cursor-default" onClick={close} />
-          <div
-            className="fixed z-50 rounded-[14px] border border-line bg-bg p-1 shadow-sticker"
-            style={{ left: boxPos.left, width: boxPos.width, bottom: boxPos.bottom }}
-          >
-            <UserMenuItems unread={unread} close={close} navigate={navigate} logout={logout} />
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function UserMenuItems({
-  unread,
-  close,
-  navigate,
-  logout,
-}: {
-  unread: number;
-  close: () => void;
-  navigate: ReturnType<typeof useNavigate>;
-  logout: () => Promise<unknown>;
-}) {
-  return (
-    <>
-      <MenuItem
-        onClick={() => {
-          close();
-          navigate('/me');
-        }}
-      >
-        我
-      </MenuItem>
-      <MenuItem
-        onClick={() => {
-          close();
-          navigate('/notifications');
-        }}
-      >
-        通知{unread > 0 ? ` · ${unread > 99 ? '99+' : unread}` : ''}
-      </MenuItem>
-      <MenuItem
-        onClick={() => {
-          close();
-          void logout().then(() => navigate('/login'));
-        }}
-      >
-        退出
-      </MenuItem>
-    </>
-  );
-}
