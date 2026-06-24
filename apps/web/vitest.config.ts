@@ -45,6 +45,9 @@ export default defineConfig({
     // React 实例。嵌套副本从此不再被加载，安装布局变化也不影响结论。
     // react-aria-components 同理：它虽是 ESM，但 externalize 时 Node 会
     // 命中其嵌套的 react 副本（Modal 等 hooks 报错），一并交给预打包。
+    // react-router@7 同理：node_modules/react-router/node_modules/react@19.2.8
+    // 与 apps/web 的 react 同版本但不同物理路径，externalize 时其内部
+    // react 命中该嵌套副本 → 真实 App 首帧 useRef 读 null dispatcher。
     deps: {
       optimizer: {
         client: {
@@ -54,6 +57,7 @@ export default defineConfig({
             'react-dom/client',
             '@testing-library/react',
             'react-aria-components',
+            'react-router',
           ],
         },
       },
