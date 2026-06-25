@@ -45,6 +45,27 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   MEDIA_UPLOADING_TTL_HOURS: z.coerce.number().int().min(1).default(24),
   MOMENT_SOFT_DELETE_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
+  // E2E 视觉回归（plan Task 14）：默认关闭；=1 时 fixture CLI/seed 才被守卫放行，
+  // 且仍要求 NODE_ENV=test + MYSQL_DATABASE=moment_e2e + 私有 loopback 桶。
+  MOMENT_E2E: z.enum(['0', '1']).default('0'),
+  // E2E fixture 账号凭据：空串视为未配置；真实值只在 ignored 的 .env.e2e / CI 非生产 secret。
+  MOMENT_E2E_OWNER_EMAIL: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().email().optional(),
+  ),
+  // 与注册（dto auth registerSchema）同一最小长度 8。
+  MOMENT_E2E_OWNER_PASSWORD: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().min(8).max(72).optional(),
+  ),
+  MOMENT_E2E_VIEWER_EMAIL: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().email().optional(),
+  ),
+  MOMENT_E2E_VIEWER_PASSWORD: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().min(8).max(72).optional(),
+  ),
 });
 
 export const config = envSchema.parse(process.env);

@@ -1,0 +1,30 @@
+{
+  "suite": "design-system-regression",
+  "description": "24 tracked baselines: 3 routes × 2 themes × 4 viewports. Sole producer list; only --update-baselines writes one of these files.",
+  "cases": [
+    { "routeSlug": "design-lab", "route": "/__design-lab", "theme": "light", "viewport": { "width": 390, "height": 844 }, "requiredContent": [], "file": "design-lab/light/390.png" },
+    { "routeSlug": "design-lab", "route": "/__design-lab", "theme": "light", "viewport": { "width": 1024, "height": 900 }, "requiredContent": [], "file": "design-lab/light/1024.png" },
+    { "routeSlug": "design-lab", "route": "/__design-lab", "theme": "light", "viewport": { "width": 1440, "height": 900 }, "requiredContent": [], "file": "design-lab/light/1440.png" },
+    { "routeSlug": "design-lab", "route": "/__design-lab", "theme": "light", "viewport": { "width": 1895, "height": 900 }, "requiredContent": [], "file": "design-lab/light/1895.png" },
+    { "routeSlug": "design-lab", "route": "/__design-lab", "theme": "dark", "viewport": { "width": 390, "height": 844 }, "requiredContent": [], "file": "design-lab/dark/390.png" },
+    { "routeSlug": "design-lab", "route": "/__design-lab", "theme": "dark", "viewport": { "width": 1024, "height": 900 }, "requiredContent": [], "file": "design-lab/dark/1024.png" },
+    { "routeSlug": "design-lab", "route": "/__design-lab", "theme": "dark", "viewport": { "width": 1440, "height": 900 }, "requiredContent": [], "file": "design-lab/dark/1440.png" },
+    { "routeSlug": "design-lab", "route": "/__design-lab", "theme": "dark", "viewport": { "width": 1895, "height": 900 }, "requiredContent": [], "file": "design-lab/dark/1895.png" },
+    { "routeSlug": "feed-home", "route": "/", "theme": "light", "viewport": { "width": 390, "height": 844 }, "requiredContent": ["大家的日子", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "feed-home/light/390.png" },
+    { "routeSlug": "feed-home", "route": "/", "theme": "light", "viewport": { "width": 1024, "height": 900 }, "requiredContent": ["大家的日子", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "feed-home/light/1024.png" },
+    { "routeSlug": "feed-home", "route": "/", "theme": "light", "viewport": { "width": 1440, "height": 900 }, "requiredContent": ["大家的日子", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "feed-home/light/1440.png" },
+    { "routeSlug": "feed-home", "route": "/", "theme": "light", "viewport": { "width": 1895, "height": 900 }, "requiredContent": ["大家的日子", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "feed-home/light/1895.png" },
+    { "routeSlug": "feed-home", "route": "/", "theme": "dark", "viewport": { "width": 390, "height": 844 }, "requiredContent": ["大家的日子", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "feed-home/dark/390.png" },
+    { "routeSlug": "feed-home", "route": "/", "theme": "dark", "viewport": { "width": 1024, "height": 900 }, "requiredContent": ["大家的日子", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "feed-home/dark/1024.png" },
+    { "routeSlug": "feed-home", "route": "/", "theme": "dark", "viewport": { "width": 1440, "height": 900 }, "requiredContent": ["大家的日子", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "feed-home/dark/1440.png" },
+    { "routeSlug": "feed-home", "route": "/", "theme": "dark", "viewport": { "width": 1895, "height": 900 }, "requiredContent": ["大家的日子", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "feed-home/dark/1895.png" },
+    { "routeSlug": "chain-home", "route": "/chains/{chainId}", "theme": "light", "viewport": { "width": 390, "height": 844 }, "requiredContent": ["单链页", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "chain-home/light/390.png" },
+    { "routeSlug": "chain-home", "route": "/chains/{chainId}", "theme": "light", "viewport": { "width": 1024, "height": 900 }, "requiredContent": ["单链页", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "chain-home/light/1024.png" },
+    { "routeSlug": "chain-home", "route": "/chains/{chainId}", "theme": "light", "viewport": { "width": 1440, "height": 900 }, "requiredContent": ["单链页", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "chain-home/light/1440.png" },
+    { "routeSlug": "chain-home", "route": "/chains/{chainId}", "theme": "light", "viewport": { "width": 1895, "height": 900 }, "requiredContent": ["单链页", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "chain-home/light/1895.png" },
+    { "routeSlug": "chain-home", "route": "/chains/{chainId}", "theme": "dark", "viewport": { "width": 390, "height": 844 }, "requiredContent": ["单链页", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "chain-home/dark/390.png" },
+    { "routeSlug": "chain-home", "route": "/chains/{chainId}", "theme": "dark", "viewport": { "width": 1024, "height": 900 }, "requiredContent": ["单链页", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "chain-home/dark/1024.png" },
+    { "routeSlug": "chain-home", "route": "/chains/{chainId}", "theme": "dark", "viewport": { "width": 1440, "height": 900 }, "requiredContent": ["单链页", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "chain-home/dark/1440.png" },
+    { "routeSlug": "chain-home", "route": "/chains/{chainId}", "theme": "dark", "viewport": { "width": 1895, "height": 900 }, "requiredContent": ["单链页", "纯文字时刻", "单图时刻", "跨年索引", "长Tag", "长链名"], "file": "chain-home/dark/1895.png" }
+  ]
+}
