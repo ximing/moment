@@ -163,7 +163,9 @@ describe('Shell 认证导航', () => {
     for (const link of chainLinks) expect(link).toHaveAttribute('href', '/chains/chain-1');
 
     await user.click(chainLinks[0]);
-    expect(screen.getByTestId('location')).toHaveTextContent('/chains/chain-1');
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/chains/chain-1'),
+    );
   });
 
   it('链导航右键提供「链设置」命令并跳转到链设置页', async () => {
@@ -172,7 +174,9 @@ describe('Shell 认证导航', () => {
 
     fireEvent.contextMenu(screen.getAllByRole('link', { name: /宝宝成长/ })[0]);
     await user.click(await screen.findByRole('menuitem', { name: '链设置' }));
-    expect(screen.getByTestId('location')).toHaveTextContent('/chains/chain-1/settings');
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/chains/chain-1/settings'),
+    );
   });
 });
 
@@ -183,7 +187,9 @@ describe('头像菜单动作（退出 / 主题入口）', () => {
 
     await user.click(screen.getByRole('button', { name: /林晓满/ }));
     await user.click(await screen.findByRole('menuitem', { name: '我的资料' }));
-    expect(screen.getByTestId('location')).toHaveTextContent('/me');
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/me'),
+    );
   });
 
   it('「通知」携带未读计数并导航到 /notifications', async () => {
@@ -194,7 +200,9 @@ describe('头像菜单动作（退出 / 主题入口）', () => {
     const item = await screen.findByRole('menuitem', { name: /通知/ });
     expect(item).toHaveTextContent('3');
     await user.click(item);
-    expect(screen.getByTestId('location')).toHaveTextContent('/notifications');
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/notifications'),
+    );
   });
 
   it('「退出登录」走 AuthService.logout 既有路径并跳转 /login', async () => {
