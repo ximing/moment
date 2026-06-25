@@ -1,6 +1,8 @@
 import { CHAIN_COLORS, CHAIN_ICONS, type ChainColor, type ChainIcon } from '@moment/dto';
 import { CHAIN_COLOR_CSS } from '@/lib/chain-color';
 
+// 链身份颜色 / 图标选择（plan Task 12）：四色盘与 emoji 数据不变；几何回到
+// 8px 网格（32px 圆形），不再用 elev-sm 贴纸阴影，焦点走 ring-focus。
 export function ChainLookPicker({
   color,
   icon,
@@ -24,7 +26,9 @@ export function ChainLookPicker({
               aria-label={c}
               aria-pressed={color === c}
               onClick={() => onColor(c)}
-              className={`h-7 w-7 rounded-full ${color === c ? 'ring-2 ring-ink ring-offset-2 ring-offset-bg' : ''}`}
+              className={`h-8 w-8 rounded-full focus-visible:outline-none focus-visible:ring-focus ${
+                color === c ? 'ring-2 ring-ink ring-offset-2 ring-offset-bg' : ''
+              }`}
               style={{ background: CHAIN_COLOR_CSS[c] }}
             />
           ))}
@@ -38,7 +42,9 @@ export function ChainLookPicker({
             aria-label="只用色点"
             aria-pressed={icon === null}
             onClick={() => onIcon(null)}
-            className={`h-8 w-8 rounded-full text-sm ${icon === null ? 'bg-select' : 'bg-surface elev-sm'}`}
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm focus-visible:outline-none focus-visible:ring-focus ${
+              icon === null ? 'bg-select text-select-fg' : 'text-ink hover:bg-floating-hover'
+            }`}
           >
             ·
           </button>
@@ -49,7 +55,9 @@ export function ChainLookPicker({
               aria-label={i}
               aria-pressed={icon === i}
               onClick={() => onIcon(i)}
-              className={`h-8 w-8 rounded-full text-base ${icon === i ? 'bg-select' : 'bg-surface elev-sm'}`}
+              className={`flex h-8 w-8 items-center justify-center rounded-full text-base focus-visible:outline-none focus-visible:ring-focus ${
+                icon === i ? 'bg-select text-select-fg' : 'text-ink hover:bg-floating-hover'
+              }`}
             >
               {i}
             </button>

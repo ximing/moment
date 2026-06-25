@@ -22,8 +22,8 @@ export const ThemeToggle = observer(function ThemeToggle() {
             role="radio"
             aria-checked={active}
             onClick={() => theme.setChoice(o.value)}
-            className={`rounded-sticker px-3 py-1.5 text-sm ${
-              active ? 'bg-select text-select-fg' : 'text-muted hover:text-ink'
+            className={`rounded-full px-3 py-1.5 text-sm transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus ${
+              active ? 'bg-select text-select-fg' : 'text-muted hover:bg-floating-hover hover:text-ink'
             }`}
           >
             {o.label}

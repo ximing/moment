@@ -1,17 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { observer, useService } from '@rabjs/react';
+import { MoreHorizontal, X } from 'lucide-react';
 import type { ChainColor, ChainIcon, ShareLinkDto } from '@moment/dto';
 import { AuthService } from '@/services/auth.service';
 import { ChainLookPicker } from '@/chain/ChainLookPicker';
 import { humanError } from '@/lib/errors';
 import { canInvite, isOwner, roleLabel } from '@/lib/roles';
-import { Banner } from '@/ui/Banner';
-import { Button } from '@/ui/Button';
-import { Confirm } from '@/ui/Confirm';
-import { Field, Input, Textarea } from '@/ui/Field';
 import { Avatar } from '@/ui/Avatar';
+import { Button, IconButton } from '@/ui/button/index';
+import { Banner, EmptyState, useToast } from '@/ui/feedback/index';
+import { Field, Input, Select, SelectField, Textarea } from '@/ui/field/index';
+import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
+import { AlertDialog, Dialog } from '@/ui/modal/index';
 import { ChainSettingsService } from './chain-settings.service';
+
+// 链设置分区（plan Task 12）：service 调用、server 错误映射与 owner/editor/viewer
+// 角色门控原样保留；分区导航、输入、按钮与确认弹层全部改走设计系统基元
+// （Field/Button/ResponsiveMenu/Banner/AlertDialog），不再堆 sticker 卡片与小实体按钮。
+// 确认态（吊销链接 / 转让 / 删除）是纯 UI 确认态，留在组件本地 state，不进 service
+// （同 MomentPageContent 先例）；危险操作结果由 Banner / 列表变化表达，不重复弹 Toast。
 
 type Section = 'share' | 'members' | 'profile';
 
@@ -38,11 +46,11 @@ export const ChainSettingsSections = observer(function ChainSettingsSections() {
               key={i.key}
               type="button"
               onClick={() => setSection(i.key)}
-              className={
+              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus ${
                 section === i.key
-                  ? 'whitespace-nowrap rounded-sticker bg-select px-3 py-1.5 text-sm text-select-fg'
-                  : 'whitespace-nowrap rounded-sticker bg-surface px-3 py-1.5 text-sm text-muted elev-sm hover:text-ink'
-              }
+                  ? 'bg-select text-select-fg'
+                  : 'text-muted hover:bg-floating-hover hover:text-ink'
+              }`}
             >
               {i.label}
             </button>
@@ -57,9 +65,18 @@ export const ChainSettingsSections = observer(function ChainSettingsSections() {
   );
 });
 
+const SHARE_EXPIRE_OPTIONS = [
+  { value: 'never', label: '永不过期' },
+  { value: '7', label: '7 天' },
+  { value: '30', label: '30 天' },
+  { value: 'date', label: '指定日期' },
+];
+
 const ShareSection = observer(function ShareSection() {
   const service = useService(ChainSettingsService);
   const [copied, setCopied] = useState<string | null>(null);
+  // 待确认吊销的链接 id：纯 UI 确认态
+  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
   const error = service.$model.createShareLink.error ?? service.$model.revokeShareLink.error;
 
   function copy(link: ShareLinkDto) {
@@ -75,71 +92,84 @@ const ShareSection = observer(function ShareSection() {
       {/* 标题文字不在得意黑字形子集（scripts/font-glyphs.txt）内，不用 font-display */}
       <h2 className="text-lg font-medium">给长辈看这条链</h2>
       <p className="text-sm text-muted">生成一条链接，长辈不用登录就能顺着日子看。</p>
-      <div className="rounded-card border border-line bg-surface p-4">
-        <div className="flex flex-col gap-3 min-[560px]:flex-row min-[560px]:items-center">
-          <select
-            value={service.shareExpire}
-            onChange={(e) => (service.shareExpire = e.target.value as typeof service.shareExpire)}
-            className="h-10 min-w-0 rounded-sticker border border-line bg-bg px-3 text-sm text-ink focus:border-action"
-          >
-            <option value="never">永不过期</option>
-            <option value="7">7 天</option>
-            <option value="30">30 天</option>
-            <option value="date">指定日期</option>
-          </select>
-          {service.shareExpire === 'date' && (
-            <input
-              type="date"
-              value={service.shareDate}
-              onChange={(e) => (service.shareDate = e.target.value)}
-              className="h-10 min-w-0 rounded-sticker border border-line bg-bg px-3 text-sm text-ink focus:border-action"
-            />
-          )}
-          <Button
-            className="min-[560px]:ml-auto"
-            disabled={service.$model.createShareLink.loading}
-            onClick={() => void service.createShareLink()}
-          >
-            生成分享链接
-          </Button>
-        </div>
-      </div>
-      {error && <Banner>{humanError(error)}</Banner>}
-      <ul className="space-y-2">
-        {service.shareLinks.map((link) => {
-          const status = linkStatus(link);
-          return (
-            <li key={link.id} className={`flex flex-wrap items-center gap-2 rounded-card border p-3 text-sm ${SHARE_STATUS_CLASS[status]}`}>
-              <span className="min-w-0 text-muted">{new Date(link.createdAt).toLocaleString()}</span>
-              <span>{status}</span>
-              {link.expiresAt && <span className="text-muted">到期 {new Date(link.expiresAt).toLocaleDateString()}</span>}
-              <span className="ml-auto flex flex-wrap items-center gap-1.5">
-                {status === '有效' && (
-                  <Button variant="ghost" size="sm" onClick={() => copy(link)}>
-                    {copied === link.id ? '已复制' : '复制链接'}
-                  </Button>
-                )}
-                {status !== '已吊销' && (
-                  <Button variant="quiet" size="sm" onClick={() => (service.revokeLinkId = link.id)}>
-                    吊销
-                  </Button>
-                )}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      {service.revokeLinkId && (
-        <Confirm
-          title="吊销这条链接？"
-          body="长辈将立刻打不开这本相册。"
-          confirmLabel="吊销"
-          danger
-          busy={service.$model.revokeShareLink.loading}
-          onCancel={() => (service.revokeLinkId = null)}
-          onConfirm={() => void service.revokeShareLink(service.revokeLinkId!)}
+      <div className="flex flex-col gap-3 min-[560px]:flex-row min-[560px]:items-end">
+        <SelectField
+          label="有效期"
+          name="share-expire"
+          value={service.shareExpire}
+          onChange={(v) => (service.shareExpire = v as typeof service.shareExpire)}
+          options={SHARE_EXPIRE_OPTIONS}
+          className="min-w-0 flex-1"
         />
+        {service.shareExpire === 'date' && (
+          <Input
+            type="date"
+            aria-label="到期日期"
+            value={service.shareDate}
+            onChange={(e) => (service.shareDate = e.target.value)}
+            className="min-w-0 flex-1"
+          />
+        )}
+        <Button
+          className="min-[560px]:ml-auto"
+          loading={service.$model.createShareLink.loading}
+          onClick={() => void service.createShareLink().catch(() => undefined)} // 错误读 $model.createShareLink.error
+        >
+          生成分享链接
+        </Button>
+      </div>
+      {error && <Banner tone="error">{humanError(error)}</Banner>}
+      {service.shareLinks.length === 0 ? (
+        <EmptyState
+          variant="plain"
+          scope="section"
+          title="还没有分享链接"
+          description="生成一条链接，长辈不用登录就能顺着日子看。"
+        />
+      ) : (
+        <ul className="space-y-1">
+          {service.shareLinks.map((link) => {
+            const status = linkStatus(link);
+            return (
+              <li
+                key={link.id}
+                className={`flex flex-wrap items-center gap-2 py-2 text-sm ${status === '已吊销' ? 'text-muted' : ''}`}
+              >
+                <span className="min-w-0 text-muted">{new Date(link.createdAt).toLocaleString()}</span>
+                <span>{status}</span>
+                {link.expiresAt && <span className="text-muted">到期 {new Date(link.expiresAt).toLocaleDateString()}</span>}
+                <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                  {status === '有效' && (
+                    <Button variant="quiet" onClick={() => copy(link)}>
+                      {copied === link.id ? '已复制' : '复制链接'}
+                    </Button>
+                  )}
+                  {status !== '已吊销' && (
+                    <Button variant="quiet" onClick={() => setConfirmRevokeId(link.id)}>
+                      吊销
+                    </Button>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       )}
+      <AlertDialog
+        open={confirmRevokeId !== null}
+        title="吊销这条链接？"
+        body="长辈将立刻打不开这本相册。"
+        confirmLabel="吊销"
+        cancelLabel="取消"
+        danger
+        busy={service.$model.revokeShareLink.loading}
+        onCancel={() => setConfirmRevokeId(null)}
+        onConfirm={() => {
+          const id = confirmRevokeId;
+          setConfirmRevokeId(null);
+          if (id) void service.revokeShareLink(id).catch(() => undefined); // 错误读 $model.revokeShareLink.error
+        }}
+      />
     </div>
   );
 });
@@ -150,13 +180,10 @@ function linkStatus(link: ShareLinkDto): string {
   return '有效';
 }
 
-/** 分享链接贴纸卡三态色（spec §7：有效=薄荷、已过期=黄、已吊销=灰）。 */
-const SHARE_STATUS_CLASS: Record<string, string> = {
-  有效: 'bg-sticker-mint border-sticker-mint-line',
-  已过期: 'bg-select border-stroke',
-  // 灰系：spec 无灰 token，用 --line 低饱和表达；color-mix arbitrary（var() 色值的 /40 修饰静默不生成，硬约束）
-  已吊销: 'border-line bg-[color-mix(in_srgb,var(--line)_40%,transparent)] text-muted',
-};
+const MEMBER_ROLE_OPTIONS = [
+  { value: 'editor', label: '可记录' },
+  { value: 'viewer', label: '只看' },
+];
 
 const MembersSection = observer(function MembersSection() {
   const service = useService(ChainSettingsService);
@@ -166,6 +193,9 @@ const MembersSection = observer(function MembersSection() {
   const owner = isOwner(chain);
   const inviteOk = canInvite(chain);
   const [copied, setCopied] = useState<string | null>(null);
+  // 待确认转让的成员 id 与确认输入：纯 UI 确认态
+  const [confirmTransferId, setConfirmTransferId] = useState<string | null>(null);
+  const [transferName, setTransferName] = useState('');
   const error =
     service.$model.changeRole.error ??
     service.$model.removeMember.error ??
@@ -173,118 +203,155 @@ const MembersSection = observer(function MembersSection() {
     service.$model.transferChain.error ??
     service.$model.createInvite.error ??
     service.$model.revokeInvite.error;
+  const transferBusy = service.$model.transferChain.loading;
+
+  function closeTransfer() {
+    setConfirmTransferId(null);
+    setTransferName('');
+  }
 
   return (
     <div className="space-y-5">
       <h2 className="text-lg font-medium">成员</h2>
-      {error && <Banner>{humanError(error)}</Banner>}
-      <ul className="space-y-2">
+      {error && <Banner tone="error">{humanError(error)}</Banner>}
+      <ul className="space-y-1">
         {service.members.map((m) => (
-          <li key={m.userId} className="flex flex-wrap items-center gap-2 text-sm">
-            <Avatar name={m.nickname} src={m.avatarUrl} size={28} />
+          <li key={m.userId} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+            <Avatar name={m.nickname} src={m.avatarUrl} size={24} />
             <span>{m.nickname}</span>
             <span className="text-muted">{roleLabel(m.role)}</span>
             {owner && m.role !== 'owner' && (
-              <>
-                <select
+              <span className="ml-auto flex flex-wrap items-center gap-2">
+                <Select
+                  aria-label={`${m.nickname} 的角色`}
                   value={m.role}
-                  onChange={(e) => void service.changeRole(m.userId, e.target.value as 'editor' | 'viewer')}
-                  className="rounded-card border border-line bg-surface px-1 py-0.5 text-xs text-ink focus:border-action"
+                  onChange={(v) => void service.changeRole(m.userId, v as 'editor' | 'viewer').catch(() => undefined)}
+                  options={MEMBER_ROLE_OPTIONS}
+                />
+                <ResponsiveMenu
+                  aria-label={`管理 ${m.nickname}`}
+                  sheetTitle={m.nickname}
+                  trigger={<IconButton icon={MoreHorizontal} label={`管理 ${m.nickname}`} />}
+                  onAction={(key) => {
+                    if (key === 'remove') void service.removeMember(m.userId).catch(() => undefined);
+                    if (key === 'transfer') setConfirmTransferId(m.userId);
+                  }}
                 >
-                  <option value="editor">可记录</option>
-                  <option value="viewer">只看</option>
-                </select>
-                <Button variant="quiet" size="sm" onClick={() => void service.removeMember(m.userId)}>
-                  移除
-                </Button>
-                <Button variant="quiet" size="sm" onClick={() => (service.transferId = m.userId)}>
-                  转让给他
-                </Button>
-              </>
+                  <MenuItem id="remove" textValue="移除" tone="danger">
+                    移除
+                  </MenuItem>
+                  <MenuItem id="transfer" textValue="转让给他">
+                    转让给他
+                  </MenuItem>
+                </ResponsiveMenu>
+              </span>
             )}
           </li>
         ))}
       </ul>
       {auth.user && !owner && (
-        <Button
-          variant="ghost"
-          disabled={service.$model.leaveChain.loading}
-          onClick={() => void service.leaveChain(auth.user!.id).then(() => navigate('/'))}
-        >
-          离开这条链
-        </Button>
+        <div>
+          <Button
+            variant="quiet"
+            loading={service.$model.leaveChain.loading}
+            onClick={() => void service.leaveChain(auth.user!.id).then(() => navigate('/')).catch(() => undefined)}
+          >
+            离开这条链
+          </Button>
+        </div>
       )}
       {inviteOk && (
         <div>
           <h3 className="mb-2 text-sm text-muted">邀请家人</h3>
           <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-center">
             <Input
+              aria-label="邀请邮箱"
               value={service.inviteEmail}
               onChange={(e) => (service.inviteEmail = e.target.value)}
               placeholder="邮箱（可空，只生成链接）"
+              className="min-w-0 flex-1"
             />
             <Button
               className="w-full min-[520px]:w-auto"
-              disabled={service.$model.createInvite.loading}
-              onClick={() => void service.createInvite()}
+              loading={service.$model.createInvite.loading}
+              onClick={() => void service.createInvite().catch(() => undefined)}
             >
               生成邀请
             </Button>
           </div>
-          <ul className="mt-3 space-y-2">
-            {service.invites.map((inv) => (
-              <li key={inv.id} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-muted">{inv.email ?? '链接邀请'}</span>
-                <span>{roleLabel(inv.role)}</span>
-                {inv.acceptedAt ? (
-                  <span>已加入</span>
-                ) : (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(`${window.location.origin}/invites/${inv.token}`).then(() => {
-                          setCopied(inv.id);
-                          window.setTimeout(() => setCopied(null), 1500);
-                        });
-                      }}
-                    >
-                      {copied === inv.id ? '已复制' : '复制邀请'}
-                    </Button>
-                    <Button variant="quiet" size="sm" onClick={() => void service.revokeInvite(inv.id)}>
-                      吊销
-                    </Button>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
+          {service.invites.length > 0 && (
+            <ul className="mt-3 space-y-1">
+              {service.invites.map((inv) => (
+                <li key={inv.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                  <span className="text-muted">{inv.email ?? '链接邀请'}</span>
+                  <span>{roleLabel(inv.role)}</span>
+                  {inv.acceptedAt ? (
+                    <span>已加入</span>
+                  ) : (
+                    <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                      <Button
+                        variant="quiet"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(`${window.location.origin}/invites/${inv.token}`).then(() => {
+                            setCopied(inv.id);
+                            window.setTimeout(() => setCopied(null), 1500);
+                          });
+                        }}
+                      >
+                        {copied === inv.id ? '已复制' : '复制邀请'}
+                      </Button>
+                      <Button variant="quiet" onClick={() => void service.revokeInvite(inv.id).catch(() => undefined)}>
+                        吊销
+                      </Button>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
-      {service.transferId && (
-        <Confirm
-          title="把创建者交给这个人？"
-          body="请输入链的名字确认。"
-          confirmLabel="转让"
-          danger
-          prompt={{ label: chain.name, expect: chain.name }}
-          promptValue={service.transferName}
-          onPromptChange={(v) => (service.transferName = v)}
-          busy={service.$model.transferChain.loading}
-          onCancel={() => {
-            service.transferId = null;
-            service.transferName = '';
-          }}
-          onConfirm={() => void service.transferChain(service.transferId!)}
-        />
-      )}
+      {/* 转让需要输入链名确认：AlertDialog 无内容槽，走 Dialog + danger 终确认 */}
+      <Dialog
+        open={confirmTransferId !== null}
+        title="把创建者交给这个人？"
+        busy={transferBusy}
+        onRequestClose={closeTransfer}
+        footer={
+          <>
+            <Button variant="quiet" disabled={transferBusy} onClick={closeTransfer}>
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              disabled={transferName !== chain.name}
+              loading={transferBusy}
+              onClick={() => {
+                const id = confirmTransferId;
+                if (!id) return;
+                void service
+                  .transferChain(id)
+                  .then(closeTransfer)
+                  .catch(() => undefined); // 错误读 $model.transferChain.error
+              }}
+            >
+              转让
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-muted">转让后你不再是创建者。请输入链的名字确认。</p>
+        <Field label={`链的名字（${chain.name}）`}>
+          <Input value={transferName} onChange={(e) => setTransferName(e.target.value)} placeholder={chain.name} />
+        </Field>
+      </Dialog>
     </div>
   );
 });
 
 const ProfileSection = observer(function ProfileSection() {
   const service = useService(ChainSettingsService);
+  const toast = useToast();
   const error = service.$model.saveProfile.error ?? service.$model.addTag.error ?? service.$model.deleteTag.error;
 
   return (
@@ -302,35 +369,65 @@ const ProfileSection = observer(function ProfileSection() {
         onColor={(c: ChainColor) => (service.formColor = c)}
         onIcon={(i: ChainIcon | null) => (service.formIcon = i)}
       />
-      {error && <Banner>{humanError(error)}</Banner>}
-      <Button disabled={service.$model.saveProfile.loading} onClick={() => void service.saveProfile()}>
-        保存
-      </Button>
-      <div className="border-t border-line pt-4">
+      {error && <Banner tone="error">{humanError(error)}</Banner>}
+      <div>
+        <Button
+          loading={service.$model.saveProfile.loading}
+          onClick={() =>
+            void service
+              .saveProfile()
+              // 保存结果在页面上不可见：成功给结构化 Toast（Task 8 挂 Provider）；
+              // 失败由上方 Banner 表达，不弹 Toast
+              .then(() => toast.show({ key: 'settings-saved', message: '设置已保存' }))
+              .catch(() => undefined)
+          }
+        >
+          保存
+        </Button>
+      </div>
+      <div className="pt-4">
         <h3 className="mb-2 text-sm text-muted">标签</h3>
-        <ul className="space-y-1">
-          {service.tags.map((t) => (
-            <li key={t.id} className="flex items-center gap-2 text-sm">
-              #{t.name}
-              <button type="button" className="text-xs text-muted" onClick={() => void service.deleteTag(t.id)}>
-                删除
-              </button>
-            </li>
-          ))}
-        </ul>
+        {service.tags.length === 0 ? (
+          <EmptyState
+            variant="plain"
+            scope="section"
+            title="还没有标签"
+            description="给这条链的时刻加上标签，方便以后翻找。"
+          />
+        ) : (
+          <ul className="space-y-1">
+            {service.tags.map((t) => (
+              <li key={t.id} className="flex items-center gap-2 py-1 text-sm">
+                <span className="text-ink">#{t.name}</span>
+                <IconButton
+                  icon={X}
+                  label={`删除标签 ${t.name}`}
+                  onClick={() => void service.deleteTag(t.id).catch(() => undefined)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="mt-2 flex flex-col gap-2 min-[480px]:flex-row min-[480px]:items-center">
-          <Input value={service.newTagName} onChange={(e) => (service.newTagName = e.target.value)} placeholder="新标签" />
+          <Input
+            aria-label="新标签"
+            value={service.newTagName}
+            onChange={(e) => (service.newTagName = e.target.value)}
+            placeholder="新标签"
+            className="min-w-0 flex-1"
+          />
           <Button
-            variant="ghost"
+            variant="quiet"
             className="w-full min-[480px]:w-auto"
-            disabled={!service.newTagName.trim() || service.$model.addTag.loading}
-            onClick={() => void service.addTag()}
+            disabled={!service.newTagName.trim()}
+            loading={service.$model.addTag.loading}
+            onClick={() => void service.addTag().catch(() => undefined)}
           >
             添加
           </Button>
         </div>
       </div>
-      <div className="border-t border-line pt-4">
+      <div className="pt-4">
         <DangerSection />
       </div>
     </div>
@@ -343,29 +440,55 @@ const DangerSection = observer(function DangerSection() {
   const chain = service.chain!;
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState('');
+  const busy = service.$model.deleteChain.loading;
+
+  function close() {
+    setOpen(false);
+    setTyped('');
+  }
 
   return (
     <div className="space-y-3">
       <h2 className="text-sm text-muted">删除这条链</h2>
       <p className="text-sm text-muted">链里的时刻会一起消失。请输入链的名字确认。</p>
-      {service.$model.deleteChain.error && <Banner>{humanError(service.$model.deleteChain.error)}</Banner>}
-      <Button variant="danger" onClick={() => setOpen(true)}>
-        删除整条链
-      </Button>
-      {open && (
-        <Confirm
-          title="删除整条链？"
-          body="这一家的记录都会没有。"
-          confirmLabel="删除"
-          danger
-          prompt={{ label: chain.name, expect: chain.name }}
-          promptValue={typed}
-          onPromptChange={setTyped}
-          busy={service.$model.deleteChain.loading}
-          onCancel={() => setOpen(false)}
-          onConfirm={() => void service.deleteChain().then(() => navigate('/')).catch(() => undefined)}
-        />
-      )}
+      {service.$model.deleteChain.error && <Banner tone="error">{humanError(service.$model.deleteChain.error)}</Banner>}
+      <div>
+        {/* 危险入口用文字级 danger 链接触达（Button 规范 §3.1），实心 danger 只留给最终确认 */}
+        <button
+          type="button"
+          className="text-sm text-danger transition-colors duration-[var(--ease)] hover:text-ink focus-visible:outline-none focus-visible:ring-focus"
+          onClick={() => setOpen(true)}
+        >
+          删除整条链
+        </button>
+      </div>
+      {/* 删除需要输入链名确认：AlertDialog 无内容槽，走 Dialog + danger 终确认 */}
+      <Dialog
+        open={open}
+        title="删除整条链？"
+        busy={busy}
+        onRequestClose={close}
+        footer={
+          <>
+            <Button variant="quiet" disabled={busy} onClick={close}>
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              disabled={typed !== chain.name}
+              loading={busy}
+              onClick={() => void service.deleteChain().then(() => navigate('/')).catch(() => undefined)}
+            >
+              删除
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-muted">这一家的记录都会没有。请输入链的名字确认。</p>
+        <Field label={`链的名字（${chain.name}）`}>
+          <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={chain.name} />
+        </Field>
+      </Dialog>
     </div>
   );
 });

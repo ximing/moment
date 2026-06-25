@@ -1,7 +1,12 @@
 import { Link } from 'react-router';
 import { observer, useService } from '@rabjs/react';
+import { humanError } from '@/lib/errors';
 import { NotificationService } from '@/services/notification.service';
-import { Button } from '@/ui/Button';
+import { Button } from '@/ui/button/index';
+import { Banner, EmptyState, FeedSkeleton } from '@/ui/feedback/index';
+
+// 通知页（plan Task 12）：已读 / 分页 / 标记行为不变；行是安静文字流（无卡片阴影），
+// 未读点用行动色；加载 / 空 / 出错走结构化反馈基元。
 
 const TYPE_LABEL: Record<string, string> = {
   'moment.created': '新时刻',
@@ -30,26 +35,42 @@ export const NotificationsHome = observer(function NotificationsHome() {
   const notification = useService(NotificationService);
   const items = notification.items;
   const unread = notification.unreadCount;
+  const loadingFirst = notification.$model.loadFirst.loading;
+  const loadError = notification.$model.loadFirst.error;
 
   return (
     <div className="max-w-content">
       <div className="mb-6 flex items-center">
-        <h1 className="text-2xl font-medium">通知</h1>
+        <h1 className="text-page-title font-semibold text-ink">通知</h1>
         {unread > 0 && (
           <Button
-            variant="ghost"
+            variant="quiet"
             className="ml-auto"
-            disabled={notification.$model.markAllRead.loading}
-            onClick={() => void notification.markAllRead()}
+            loading={notification.$model.markAllRead.loading}
+            onClick={() => void notification.markAllRead().catch(() => undefined)}
           >
             全部标为已读
           </Button>
         )}
       </div>
-      {items.length === 0 && !notification.$model.loadFirst.loading && (
-        <p className="py-16 text-center text-muted">还没有新消息。记下一条，家里人就会在这儿看见。</p>
+      {items.length === 0 && loadingFirst && <FeedSkeleton />}
+      {items.length === 0 && !loadingFirst && loadError && (
+        <Banner
+          tone="error"
+          action={{ label: '重试', onPress: () => void notification.loadFirst().catch(() => undefined) }}
+        >
+          {humanError(loadError)}
+        </Banner>
       )}
-      <ul className="space-y-2">
+      {items.length === 0 && !loadingFirst && !loadError && (
+        <EmptyState
+          variant="plain"
+          scope="page"
+          title="还没有新消息"
+          description="记下一条，家里人就会在这儿看见。"
+        />
+      )}
+      <ul className="space-y-1">
         {items.map((n) => {
           const href = hrefOf(n.payload);
           const inner = (
@@ -60,9 +81,12 @@ export const NotificationsHome = observer(function NotificationsHome() {
             </>
           );
           return (
-            <li key={n.id} className="rounded-card bg-surface p-3 text-sm shadow-sticker">
+            <li key={n.id} className="py-2 text-sm">
               {href ? (
-                <Link to={href} className="flex items-center gap-2">
+                <Link
+                  to={href}
+                  className="flex items-center gap-2 rounded-button hover:bg-floating-hover focus-visible:outline-none focus-visible:ring-focus"
+                >
                   {inner}
                 </Link>
               ) : (
@@ -73,9 +97,14 @@ export const NotificationsHome = observer(function NotificationsHome() {
         })}
       </ul>
       {notification.hasMore && (
-        <button type="button" className="mt-4 text-sm text-muted" onClick={() => void notification.loadMore()}>
+        <Button
+          variant="quiet"
+          className="mt-4"
+          loading={notification.$model.loadMore.loading}
+          onClick={() => void notification.loadMore().catch(() => undefined)}
+        >
           更早
-        </button>
+        </Button>
       )}
     </div>
   );
