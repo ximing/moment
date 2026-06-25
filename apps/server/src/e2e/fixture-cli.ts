@@ -6,9 +6,16 @@
  *
  * 用法（README 三终端约定）：
  *   MOMENT_E2E=1 node --loader ts-node/esm apps/server/src/e2e/fixture-cli.ts preflight|reset|seed|teardown
+ *
+ * stdout 契约：仅一行结果 JSON。logger 在模块加载时捕获 LOG_LEVEL 决定最小级别，
+ * 非 error 级走 console.log（stdout）会污染该契约，故必须在任何 server 模块
+ * （config/seeder→storage/db→logger）求值之前压低级别——因此 config 走动态 import，
+ * 不能留在静态 import（ESM 提升会在本语句之前先求值静态依赖）。
  */
-import { config } from '../config.js';
-import { executeFixtureCli } from './fixture-cli-contract.js';
+process.env.LOG_LEVEL ??= 'error';
+
+const { config } = await import('../config.js');
+const { executeFixtureCli } = await import('./fixture-cli-contract.js');
 
 await executeFixtureCli({
   argv: process.argv.slice(2),
