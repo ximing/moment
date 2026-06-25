@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { MemoryRouter, useLocation } from 'react-router';
@@ -116,7 +116,9 @@ describe('App 全局 Toast 集成', () => {
 
     // 经真实路由跳转 /login → /register，provider/region 不重建、不叠加
     await user.click(screen.getByRole('link', { name: '注册' }));
-    expect(screen.getByTestId('location')).toHaveTextContent('/register');
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/register'),
+    );
     expect(toastRegions()).toHaveLength(1);
     first.unmount();
 
@@ -136,22 +138,26 @@ describe('App 全局 Toast 集成', () => {
     expect(toastRegions()).toHaveLength(1);
   });
 
-  it('未认证通配符重定向到 /login', () => {
+  it('未认证通配符重定向到 /login', async () => {
     renderApp('/no-such-page');
 
     const probe = screen.getByTestId('location');
-    expect(probe).toHaveTextContent('/login');
-    expect(probe).toHaveTextContent('from=/no-such-page');
+    await waitFor(() => {
+      expect(probe).toHaveTextContent('/login');
+      expect(probe).toHaveTextContent('from=/no-such-page');
+    });
     expect(toastRegions()).toHaveLength(1);
   });
 
-  it('ComposeRedirect 精确跳到 /chains/x?compose=1', () => {
+  it('ComposeRedirect 精确跳到 /chains/x?compose=1', async () => {
     renderApp('/chains/x/compose');
 
     // 未登录：/chains/x?compose=1 随即被 RequireAuth 踢到 /login，
     // state.from 精确保留 ComposeRedirect 的目标地址
     const probe = screen.getByTestId('location');
-    expect(probe).toHaveTextContent('/login');
-    expect(probe).toHaveTextContent('from=/chains/x?compose=1');
+    await waitFor(() => {
+      expect(probe).toHaveTextContent('/login');
+      expect(probe).toHaveTextContent('from=/chains/x?compose=1');
+    });
   });
 });
