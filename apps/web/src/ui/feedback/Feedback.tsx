@@ -391,6 +391,7 @@ function ToastView({ item }: { item: ToastItem }) {
 
   return (
     <div
+      data-toast-item
       data-testid="toast"
       onMouseEnter={() => internal.setPaused('hover', true)}
       onMouseLeave={() => internal.setPaused('hover', false)}
@@ -425,7 +426,7 @@ export function ToastRegion() {
   }
   return (
     <div
-      data-testid="toast-region"
+      data-toast-region
       role="region"
       aria-label="通知"
       aria-live="polite"

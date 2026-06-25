@@ -134,7 +134,9 @@ export const VISUAL_IDLE_SCRIPT = `(async () => {
   const images = Array.from(document.images ?? []);
   await Promise.all(
     images.map((img) => {
-      if (img.complete && img.naturalWidth > 0) return img.decode ? img.decode().catch(() => undefined) : undefined;
+      // blob: 图片的 decode() 在本 CSI/Chrome 组合下可能永不 settle（E2E 探针实证），
+      // complete + naturalWidth > 0 已证明解码完成，直接采信。
+      if (img.complete && img.naturalWidth > 0) return undefined;
       return new Promise((resolve) => {
         img.addEventListener('load', () => resolve(undefined), { once: true });
         img.addEventListener('error', () => resolve(undefined), { once: true });

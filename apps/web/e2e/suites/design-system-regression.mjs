@@ -185,10 +185,20 @@ async function hasByRoleName(bridge, role, name) {
     (() => __e2eFind(${quote(role)}, ${quote(name)}) !== null)()`);
 }
 
-async function enabledByRoleName(bridge, role, name) {
+/**
+ * 发布入口可用性：owner 在链页/feed 页必有一个可用的 compose 入口，
+ * viewer（任何链都不可写）全程不见（feed-home / chain-home 与 ComposeFab
+ * 共用 canCompose 抑制规则）。入口文案随页面形态不同：feed 页眉与空态是
+ * 「记下此刻」，日子线常驻入口 ComposerEntry 是「这一刻，记点什么…」，
+ * 滚动接力 FAB 是 aria-label「记下此刻」——任一命中即可。
+ */
+async function composeAffordanceEnabled(bridge) {
   return bridge.evaluate(`${PAGE_HELPERS}
     (() => {
-      const el = __e2eFind(${quote(role)}, ${quote(name)});
+      const names = ['记下此刻', '这一刻，记点什么'];
+      const el = __e2eAll().find((candidate) =>
+        __e2eRole(candidate) === 'button'
+        && names.some((name) => __e2eName(candidate).includes(name)));
       if (!el) return false;
       return !el.disabled && el.getAttribute('aria-disabled') !== 'true';
     })()`);
@@ -226,8 +236,8 @@ async function visibleLogout(bridge, env, nickname) {
   await clickByRoleName(bridge, 'menuitem', '退出登录');
   await waitForPath(bridge, `(path) => path.startsWith('/login')`);
   await waitFor(bridge, `(() => {
-    const region = document.querySelector('[data-testid="toast-region"]');
-    return region !== null && region.textContent.trim() === '';
+    const region = document.querySelector('[data-toast-region]');
+    return region !== null && region.querySelectorAll('[data-toast-item]').length === 0;
   })()`, { label: 'cleared ToastRegion' });
   // 登出后再访问受保护页应重新要求登录。
   await bridge.open(`${env.webBaseUrl}/`);
@@ -339,12 +349,21 @@ async function exerciseOverlayKeyboard(bridge, { openName, overlayProbe, closePr
   const trigger = await activeElementInfo(bridge);
   await clickByRoleName(bridge, 'button', openName);
   await waitFor(bridge, overlayProbe, { label: `${openName} overlay open` });
-  const focusInside = await bridge.evaluate(`(() => {
-    const active = document.activeElement;
-    if (!active || active === document.body) return false;
-    const overlay = document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]');
-    return overlay ? overlay.contains(active) || overlay === active : true;
-  })()`);
+  // 焦点判定枚举全部浮层而非 querySelector 首个（前后旅程的退出残留可能抢占
+  // 首个槽位），并允许 RAC FocusScope 的自动聚焦在打开后异步落定（短轮询）。
+  const focusInside = await waitFor(
+    bridge,
+    `(() => {
+      const active = document.activeElement;
+      if (!active || active === document.body) return false;
+      const overlays = Array.from(
+        document.querySelectorAll('[role="dialog"], [role="alertdialog"], [role="menu"]'),
+      );
+      if (overlays.length === 0) return true;
+      return overlays.some((overlay) => overlay.contains(active) || overlay === active);
+    })()`,
+    { timeoutMs: 3000, label: `${openName} focus inside overlay` },
+  ).then(() => true, () => false);
   await bridge.press('Tab');
   await bridge.press('Shift+Tab');
   await bridge.press('Escape');
@@ -404,12 +423,14 @@ async function runOverlayJourneys(context) {
   ).then(() => true, () => false);
   evidence.push({ openName: '打开 AlertDialog (safe default)', focused: focused.name, safeDefault, alertClosed, pass: safeDefault && alertClosed });
 
-  // Popover 碰撞：锚定内容必须完整落在视口内。
+  // Popover 碰撞：锚定内容必须完整落在视口内。定位目标是浮面本体——
+  // FloatingLayer 渲染 role="dialog" + aria-label="日期详情"（内容 <p> 无 role，
+  // 不在语义定位表内）；打开探针仍用内容文案。
   await clickByRoleName(bridge, 'button', '打开 Popover');
   await waitFor(bridge, `document.body.innerText.includes('Popover 锚定内容。')`, { label: 'popover open' });
   const collision = await bridge.evaluate(`${PAGE_HELPERS}
     (() => {
-      const el = __e2eAll().find((candidate) => __e2eName(candidate).includes('Popover 锚定内容。'));
+      const el = __e2eFind('dialog', '日期详情');
       if (!el) return { found: false, within: false };
       const rect = el.getBoundingClientRect();
       const within = rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight;
@@ -503,7 +524,11 @@ async function runDirtySheetJourney(context) {
   await new Promise((resolve) => setTimeout(resolve, 300));
   const protection = await bridge.evaluate(`(() => {
     const confirmVisible = document.querySelector('[role="alertdialog"], [role="dialog"]') !== null;
-    const draftKept = document.body.innerText.includes('不想丢掉的草稿');
+    // 草稿活在 textarea/input 的 value 里，innerText 覆盖不到表单值，必须显式读 value。
+    const draftKept = document.body.innerText.includes('不想丢掉的草稿')
+      || Array.from(document.querySelectorAll('textarea, input')).some(
+        (field) => typeof field.value === 'string' && field.value.includes('不想丢掉的草稿'),
+      );
     return { confirmVisible, draftKept, protected: confirmVisible || draftKept };
   })()`);
   // 收尾：取消保护对话/清空草稿，不给后续旅程留脏态。
@@ -548,20 +573,29 @@ async function runZoomJourney(context) {
   await waitForVisualIdle(bridge);
   await bridge.setPageScaleFactor(2);
   const scale = await bridge.evaluate(`window.visualViewport ? window.visualViewport.scale : 1`);
+  // 判定口径（对计划 872 行的校准）：200% 缩放下长页面不可能让全部控件同时
+  // 落在首屏——inViewport 校准为「可滚动达到」：逐控件 scrollIntoView 后必须
+  // 落入视口矩形；noHorizontalClip 口径不变，另加页面级横向溢出检查。
   const geometry = await bridge.evaluate(`${PAGE_HELPERS}
     (() => {
       const controls = __e2eFindAll('button').concat(__e2eFindAll('link'));
       const report = controls.slice(0, 40).map((el) => {
+        const noHorizontalClip = el.scrollWidth <= el.clientWidth + 1;
+        el.scrollIntoView({ block: 'center', inline: 'center' });
         const rect = el.getBoundingClientRect();
         return {
           name: __e2eName(el).slice(0, 40),
-          noHorizontalClip: el.scrollWidth <= el.clientWidth + 1,
+          noHorizontalClip,
           inViewport: rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.bottom > 0 && rect.top < window.innerHeight,
         };
       });
+      const pageNoHorizontalScroll = document.documentElement.scrollWidth <= window.innerWidth + 1;
+      // 截图回到页首，保证证据图与首屏一致。
+      window.scrollTo(0, 0);
       return {
         scale: window.visualViewport ? window.visualViewport.scale : 1,
         viewport: { width: window.innerWidth, height: window.innerHeight },
+        pageNoHorizontalScroll,
         controls: report,
       };
     })()`);
@@ -571,7 +605,8 @@ async function runZoomJourney(context) {
   await writeFile(evidencePath, `${JSON.stringify(geometry, null, 2)}\n`);
   await bridge.setPageScaleFactor(1);
   const scaleOk = Number(scale) >= 1.99;
-  const controlsOk = (geometry?.controls ?? []).every((control) => control.noHorizontalClip && control.inViewport);
+  const controlsOk = Boolean(geometry?.pageNoHorizontalScroll)
+    && (geometry?.controls ?? []).every((control) => control.noHorizontalClip && control.inViewport);
   return {
     journey: 'zoom-200',
     scale,
@@ -592,7 +627,9 @@ async function runRouteTour(context) {
     { path: '/me', expect: EXPECTED.ownerNickname },
     { path: '/notifications', expect: '通知' },
     { path: `/share/${fixture.shareToken}`, expect: EXPECTED.chainName },
-    { path: `/invites/${fixture.inviteToken}`, expect: EXPECTED.chainName },
+    // invite 落地页是产品设计的通用接受邀请界面（invite/index.tsx：「加入时光链」+
+    // 「接受邀请」），不展示链名——链名只在接受后跳转的链页出现。
+    { path: `/invites/${fixture.inviteToken}`, expect: '加入时光链' },
     { path: '/register', expect: '注册' },
     { path: '/definitely-not-a-route', expect: '' },
   ];
@@ -628,7 +665,7 @@ export async function run(context) {
   const viewerEvidence = {
     nickname: await hasByRoleName(bridge, 'button', `${EXPECTED.viewerNickname} 的菜单`),
     textMomentVisible: await bridge.evaluate(`document.body.innerText.includes(${quote(EXPECTED.textMoment)})`),
-    composeEnabled: await enabledByRoleName(bridge, 'button', '记下此刻'),
+    composeEnabled: await composeAffordanceEnabled(bridge),
   };
   viewerEvidence.readOnly = viewerEvidence.nickname && viewerEvidence.textMomentVisible && !viewerEvidence.composeEnabled;
   record('viewer-readonly', viewerEvidence, viewerEvidence.readOnly);
@@ -646,7 +683,7 @@ export async function run(context) {
   await waitForText(bridge, EXPECTED.chainName);
   const ownerEvidence = {
     nickname: await hasByRoleName(bridge, 'button', `${EXPECTED.ownerNickname} 的菜单`),
-    composeEnabled: await enabledByRoleName(bridge, 'button', '记下此刻'),
+    composeEnabled: await composeAffordanceEnabled(bridge),
   };
   record('owner-writable', ownerEvidence, ownerEvidence.nickname && ownerEvidence.composeEnabled);
 

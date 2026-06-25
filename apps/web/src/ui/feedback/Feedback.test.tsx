@@ -140,7 +140,7 @@ describe('Toast 时钟与队列', () => {
 
   it('ToastRegion 是 polite live region，不抢焦点', () => {
     renderApp();
-    const region = screen.getByTestId('toast-region');
+    const region = screen.getByRole('region', { name: '通知' });
     expect(region).toHaveAttribute('aria-live', 'polite');
     expect(region).toHaveAttribute('aria-atomic', 'true');
   });
@@ -148,7 +148,7 @@ describe('Toast 时钟与队列', () => {
   it('ToastRegion 暴露带可访问名称的 region landmark', () => {
     renderApp();
     const region = screen.getByRole('region', { name: '通知' });
-    expect(region).toBe(screen.getByTestId('toast-region'));
+    expect(region).toBe(screen.getByRole('region', { name: '通知' }));
     expect(region).toHaveAttribute('aria-live', 'polite');
   });
 

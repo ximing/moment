@@ -81,8 +81,12 @@ export function createBridge({
   return {
     request,
 
-    open(url) {
-      return request('navigate', { url });
+    async open(url) {
+      // 隐藏标签页里 requestAnimationFrame 被 Chrome 节流（E2E 探针实证：
+      // visibilityState=hidden 时 rAF 永不回调），导航后必须恢复到前台。
+      const result = await request('navigate', { url });
+      await request('cdp', { method: 'Page.bringToFront', params: {} });
+      return result;
     },
 
     click(selector) {

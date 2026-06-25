@@ -54,11 +54,19 @@ describe('bridge status preflight and envelope', () => {
     const { requests, fetchImpl } = fakeFetch();
     const bridge = createBridge({ fetchImpl });
     await bridge.open('http://127.0.0.1:5173/login');
-    assert.equal(requests.length, 2);
+    // open = navigate + Page.bringToFront（后台标签 rAF 节流修复），各一次 preflight+command
+    assert.equal(requests.length, 4);
     assert.equal(requests[0].method, 'GET');
     assert.equal(requests[0].url, `${CSI_DAEMON_URL}/status`);
     assert.equal(requests[1].method, 'POST');
     assert.equal(requests[1].url, `${CSI_DAEMON_URL}/command`);
+    assert.equal(requests[2].method, 'GET');
+    assert.equal(requests[3].method, 'POST');
+    assert.deepEqual(commandCalls(requests)[1].body, {
+      action: 'cdp',
+      args: { method: 'Page.bringToFront', params: {} },
+      session: CSI_SESSION,
+    });
     assert.equal(CSI_DAEMON_URL, 'http://127.0.0.1:10088');
   });
 
@@ -83,6 +91,7 @@ describe('bridge status preflight and envelope', () => {
     const { fetchImpl } = fakeFetch({
       commandResponses: [
         { success: true, data: { url: 'http://127.0.0.1:5173/' } },
+        { success: true, data: {} },
         { success: false, error: 'no tab' },
       ],
     });
