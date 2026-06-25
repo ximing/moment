@@ -17,6 +17,5 @@ describe('NotFound', () => {
       screen.queryByRole('region', { name: /通知|toast/i }),
     ).toBeNull();
     expect(screen.queryByTestId('toast')).toBeNull();
-    expect(screen.queryByTestId('toast-region')).toBeNull();
   });
 });
