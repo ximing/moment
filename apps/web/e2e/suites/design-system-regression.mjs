@@ -205,7 +205,25 @@ async function composeAffordanceEnabled(bridge) {
 }
 
 async function setTheme(bridge, theme) {
-  await bridge.evaluate(`document.documentElement.dataset.theme = ${quote(theme)}; true`);
+  // dataset.theme 直接驱动 tokens.css 的 :root[data-theme='dark'] 选择器。
+  // 但同一 document 上前一路由/前一案例可能排有 applyTheme() 的异步覆写
+  //（index.html 防 FOUC snippet、ThemeService subscribeSystemTheme、页面 effect），
+  // 所以写入后轮询确认计算背景色亮度与目标一致；被覆写时重设，5s 不一致硬失败。
+  const wantDark = theme === 'dark';
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    const applied = await bridge.evaluate(`(() => {
+      document.documentElement.dataset.theme = ${quote(theme)};
+      const bg = getComputedStyle(document.body).backgroundColor;
+      const m = bg.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+      if (!m) return false;
+      const lum = (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3;
+      return ${wantDark} ? lum < 128 : lum >= 128;
+    })()`);
+    if (applied) return;
+    if (Date.now() > deadline) throw new Error(`suite theme not applied: ${theme}`);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
 }
 
 async function activeElementInfo(bridge) {
@@ -317,6 +335,8 @@ async function captureBaselineCase(context, entry) {
   await setTheme(bridge, entry.theme);
   const contentEvidence = await assertRequiredContent(bridge, entry.requiredContent);
   await waitForVisualIdle(bridge);
+  // 视觉静默后二次确认主题未被 late mutation 覆写（截图前最后一道闸）。
+  await setTheme(bridge, entry.theme);
 
   if (updateBaselines) {
     const baselinePath = path.join(baselinesRoot, entry.file);
