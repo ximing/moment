@@ -448,9 +448,13 @@ async function runOverlayJourneys(context) {
     scrim.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     return true;
   })()`);
-  const closedByOutside = await bridge
-    .evaluate(`document.querySelector('[role="dialog"]') === null`)
-    .catch(() => false);
+  // 浮层有 ~120ms 退出动画（RAC useExitAnimation 延迟卸载），不能同步断言，
+  // 轮询等待卸载完成，超时给足余量。
+  const closedByOutside = await waitFor(
+    bridge,
+    `document.querySelector('[role="dialog"]') === null`,
+    { label: 'dialog closed by outside click', timeoutMs: 5000 },
+  ).then(() => true, () => false);
   evidence.push({ openName: '打开 Dialog (outside click)', pass: Boolean(closedByOutside) });
   // 确保无残留浮层。
   await bridge.press('Escape');
@@ -506,11 +510,13 @@ async function runResponsiveBoundaryJourneys(context) {
   evidence.push({ journey: 'responsive-767', expect: 'ActionSheet', pass: sheetAt767 });
 
   // 打开状态下跨越边界 → 浮层关闭且焦点归还触发器。
+  // 关闭带退出动画（延迟卸载），轮询等待而非固定 sleep 后同步断言。
   await bridge.setViewport(768, 900);
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const closedAcrossBoundary = await bridge.evaluate(
+  const closedAcrossBoundary = await waitFor(
+    bridge,
     `document.querySelector('[data-testid="action-sheet-scrim"]') === null && document.querySelector('[role="menu"]') === null`,
-  );
+    { label: 'overlay closed across boundary', timeoutMs: 5000 },
+  ).then(() => true, () => false);
   const focusAfterResize = await activeElementInfo(bridge);
   evidence.push({
     journey: 'responsive-resize-close',
