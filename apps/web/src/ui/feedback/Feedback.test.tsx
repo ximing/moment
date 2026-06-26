@@ -17,9 +17,11 @@ import {
 import type { EmptyStateProps, ToastController } from './index';
 
 // Feedback 家族行为契约（规范：docs/superpowers/specs/2026-08-18-web-feedback-design.md）
-// Toast 精确时钟：普通 3500ms、可撤销 6000ms；同 key 替换重置预算；
+// Toast 精确时钟：普通 3500ms、可撤销 6000ms 可见预算，预算耗尽后播 120ms 退出
+// 动画（data-exiting + moment-toast-out）再卸载晋级；同 key 替换重置预算；
 // hover / focus 独立暂停、恢复只计剩余毫秒；一显二候；满队列驱逐最老未展示普通确认、
-// 绝不驱逐可撤销；路由切换保持 provider 状态；moment:auth-cleared 与 clear() 同一实现。
+// 绝不驱逐可撤销；路由切换保持 provider 状态；moment:auth-cleared 与 clear() 同一实现
+// （同步清空，不播退出动画）。
 // usePending：180ms 延迟 + 280ms 最短可见；reduced-motion 只停 Skeleton 动画、不改计时。
 
 describe('Banner', () => {
@@ -152,18 +154,39 @@ describe('Toast 时钟与队列', () => {
     expect(region).toHaveAttribute('aria-live', 'polite');
   });
 
-  it('普通 Toast 在精确 3500ms 退出', () => {
+  it('普通 Toast 可见预算精确 3500ms，随后播 120ms 退出动画再卸载', () => {
     renderApp();
     act(() => toast.show({ key: 'saved', message: '设置已保存' }));
     expect(screen.getByText('设置已保存')).toBeInTheDocument();
 
     act(() => vi.advanceTimersByTime(3499));
     expect(screen.getByText('设置已保存')).toBeInTheDocument();
+    // 预算耗尽：进入退出阶段，Toast 仍在 DOM（规范 §5.6：120ms ease-in 淡出）
+    act(() => vi.advanceTimersByTime(1));
+    const exiting = screen.getByTestId('toast');
+    expect(exiting).toHaveAttribute('data-exiting');
+    expect(exiting.className).toContain('moment-toast-out');
+    act(() => vi.advanceTimersByTime(119));
+    expect(screen.getByText('设置已保存')).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
     expect(screen.queryByText('设置已保存')).toBeNull();
   });
 
-  it('可撤销 Toast 在精确 6000ms 退出', () => {
+  it('进入动画使用 moment-toast-in，退出才切到 moment-toast-out', () => {
+    renderApp();
+    act(() => toast.show({ key: 'saved', message: '设置已保存' }));
+    const item = screen.getByTestId('toast');
+    expect(item.className).toContain('moment-toast-in');
+    expect(item).not.toHaveAttribute('data-exiting');
+
+    act(() => vi.advanceTimersByTime(3500));
+    expect(screen.getByTestId('toast').className).toContain('moment-toast-out');
+    expect(screen.getByTestId('toast').className).not.toContain(
+      'moment-toast-in',
+    );
+  });
+
+  it('可撤销 Toast 可见预算精确 6000ms，随后 120ms 退出动画', () => {
     renderApp();
     act(() =>
       toast.show({
@@ -175,6 +198,11 @@ describe('Toast 时钟与队列', () => {
     act(() => vi.advanceTimersByTime(3500));
     expect(screen.getByText('已从汇总中隐藏')).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(2499));
+    expect(screen.getByText('已从汇总中隐藏')).toBeInTheDocument();
+    expect(screen.getByTestId('toast')).not.toHaveAttribute('data-exiting');
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByTestId('toast')).toHaveAttribute('data-exiting');
+    act(() => vi.advanceTimersByTime(119));
     expect(screen.getByText('已从汇总中隐藏')).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
     expect(screen.queryByText('已从汇总中隐藏')).toBeNull();
@@ -192,6 +220,8 @@ describe('Toast 时钟与队列', () => {
     act(() => vi.advanceTimersByTime(3499));
     expect(screen.getByText('第二版')).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByTestId('toast')).toHaveAttribute('data-exiting');
+    act(() => vi.advanceTimersByTime(120));
     expect(screen.queryByText('第二版')).toBeNull();
   });
 
@@ -208,6 +238,8 @@ describe('Toast 时钟与队列', () => {
     act(() => vi.advanceTimersByTime(2499));
     expect(screen.getByText('设置已保存')).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByTestId('toast')).toHaveAttribute('data-exiting');
+    act(() => vi.advanceTimersByTime(120));
     expect(screen.queryByText('设置已保存')).toBeNull();
   });
 
@@ -239,6 +271,8 @@ describe('Toast 时钟与队列', () => {
     act(() => vi.advanceTimersByTime(4999));
     expect(screen.getByText('已从汇总中隐藏')).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByTestId('toast')).toHaveAttribute('data-exiting');
+    act(() => vi.advanceTimersByTime(120));
     expect(screen.queryByText('已从汇总中隐藏')).toBeNull();
   });
 
@@ -253,13 +287,45 @@ describe('Toast 时钟与队列', () => {
     expect(screen.queryByText('乙')).toBeNull();
     expect(screen.queryByText('丙')).toBeNull();
 
+    // 甲预算耗尽 → 120ms 退出动画播完后乙才晋级（退出期间仍只显示一个）
     act(() => vi.advanceTimersByTime(3500));
+    expect(screen.queryByText('乙')).toBeNull();
+    act(() => vi.advanceTimersByTime(120));
     expect(screen.queryByText('甲')).toBeNull();
     expect(screen.getByText('乙')).toBeInTheDocument();
 
-    act(() => vi.advanceTimersByTime(3500));
+    act(() => vi.advanceTimersByTime(3500 + 120));
     expect(screen.queryByText('乙')).toBeNull();
     expect(screen.getByText('丙')).toBeInTheDocument();
+  });
+
+  it('退出动画期间到来的新 Toast 直接上位并重启完整预算', () => {
+    renderApp();
+    act(() => toast.show({ key: 'a', message: '甲' }));
+    act(() => vi.advanceTimersByTime(3500));
+    expect(screen.getByTestId('toast')).toHaveAttribute('data-exiting');
+
+    act(() => toast.show({ key: 'b', message: '乙' }));
+    const item = screen.getByTestId('toast');
+    expect(item).toHaveTextContent('乙');
+    expect(item).not.toHaveAttribute('data-exiting');
+
+    // 新条计完整 3500ms 预算，不受旧条退出计时影响
+    act(() => vi.advanceTimersByTime(3499));
+    expect(screen.getByText('乙')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByTestId('toast')).toHaveAttribute('data-exiting');
+  });
+
+  it('退出阶段不再响应 hover / focus 暂停', () => {
+    renderApp();
+    act(() => toast.show({ key: 'a', message: '甲' }));
+    act(() => vi.advanceTimersByTime(3500));
+    fireEvent.mouseOver(screen.getByTestId('toast'));
+    act(() => vi.advanceTimersByTime(119));
+    expect(screen.getByText('甲')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByText('甲')).toBeNull();
   });
 
   it('队列满时驱逐最老的未展示普通确认', () => {
@@ -271,10 +337,10 @@ describe('Toast 时钟与队列', () => {
       // 队列已满（乙、丙），丁到来 → 驱逐最老未展示普通确认（乙）
       toast.show({ key: 'd', message: '丁' });
     });
-    act(() => vi.advanceTimersByTime(3500));
+    act(() => vi.advanceTimersByTime(3500 + 120));
     expect(screen.getByText('丙')).toBeInTheDocument();
     expect(screen.queryByText('乙')).toBeNull();
-    act(() => vi.advanceTimersByTime(3500));
+    act(() => vi.advanceTimersByTime(3500 + 120));
     expect(screen.getByText('丁')).toBeInTheDocument();
   });
 
@@ -291,14 +357,14 @@ describe('Toast 时钟与队列', () => {
       // 满队列 [撤销甲, 普通乙] → 驱逐最老未展示普通确认（普通乙），保留可撤销
       toast.show({ key: 'z', message: '普通丙' });
     });
-    act(() => vi.advanceTimersByTime(3500)); // 可见退出 → 撤销甲晋级
+    act(() => vi.advanceTimersByTime(3500 + 120)); // 可见退出 → 撤销甲晋级
     expect(screen.getByText('撤销甲')).toBeInTheDocument();
-    act(() => vi.advanceTimersByTime(6000)); // 撤销甲退出 → 普通丙晋级
+    act(() => vi.advanceTimersByTime(6000 + 120)); // 撤销甲退出 → 普通丙晋级
     expect(screen.getByText('普通丙')).toBeInTheDocument();
     expect(screen.queryByText('普通乙')).toBeNull();
 
-    act(() => vi.advanceTimersByTime(3500)); // 普通丙退出
-    // 重建全可撤销队列
+    act(() => vi.advanceTimersByTime(3500)); // 普通丙进入退出阶段
+    // 重建全可撤销队列（退出中的条视为已离场，可见二直接上位）
     act(() => {
       toast.show({ key: 'v2', message: '可见二' });
       toast.show({
@@ -314,11 +380,11 @@ describe('Toast 时钟与队列', () => {
       // 全可撤销 → 新来普通确认被丢弃
       toast.show({ key: 'z2', message: '被丢弃' });
     });
-    act(() => vi.advanceTimersByTime(3500));
+    act(() => vi.advanceTimersByTime(3500 + 120));
     expect(screen.getByText('撤销二')).toBeInTheDocument();
-    act(() => vi.advanceTimersByTime(6000));
+    act(() => vi.advanceTimersByTime(6000 + 120));
     expect(screen.getByText('撤销三')).toBeInTheDocument();
-    act(() => vi.advanceTimersByTime(6000));
+    act(() => vi.advanceTimersByTime(6000 + 120));
     expect(screen.queryByText('被丢弃')).toBeNull();
   });
 
@@ -329,7 +395,7 @@ describe('Toast 时钟与队列', () => {
       toast.show({ key: 'b', message: '乙' });
       toast.show({ key: 'b', message: '乙改' });
     });
-    act(() => vi.advanceTimersByTime(3500));
+    act(() => vi.advanceTimersByTime(3500 + 120));
     expect(screen.getByText('乙改')).toBeInTheDocument();
     expect(screen.queryByText('乙')).toBeNull();
   });
@@ -348,7 +414,7 @@ describe('Toast 时钟与队列', () => {
     );
     expect(screen.getByTestId('route-child')).toHaveTextContent('/feed');
     expect(screen.getByText('甲')).toBeInTheDocument();
-    act(() => vi.advanceTimersByTime(3500));
+    act(() => vi.advanceTimersByTime(3500 + 120));
     expect(screen.getByText('乙')).toBeInTheDocument();
   });
 
@@ -379,7 +445,7 @@ describe('Toast 时钟与队列', () => {
     expect(screen.queryByText('乙')).toBeNull();
   });
 
-  it('action 执行后关闭 Toast 且不可重复触发', () => {
+  it('action 执行后进入退出动画且不可重复触发，120ms 后卸载', () => {
     renderApp();
     const onPress = vi.fn();
     act(() =>
@@ -391,6 +457,9 @@ describe('Toast 时钟与队列', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
     expect(onPress).toHaveBeenCalledTimes(1);
+    // 关闭走同一退出路径：先播 120ms 动画再卸载
+    expect(screen.getByTestId('toast')).toHaveAttribute('data-exiting');
+    act(() => vi.advanceTimersByTime(120));
     expect(screen.queryByText('已从汇总中隐藏')).toBeNull();
   });
 });

@@ -20,29 +20,23 @@ import { Button } from '../button/index';
 // min-h-inline-progress / h-inline-progress-track / rounded-inline-progress /
 // h|w-inline-progress-spinner，阴影只有 shadow-toast（规范 §3.1：内容反馈无阴影），
 // 层级 z-toast（65，Overlay 之上、嵌套 AlertDialog 之下）。
-// 计时集中在 ToastProvider（3500/6000ms）与 usePending（180/280ms），页面不复制定时器。
+// 计时集中在 ToastProvider（3500/6000ms 可见预算 + 120ms 退出动画）与
+// usePending（180/280ms），页面不复制定时器。
+// 动效（规范 §5.6）：进入 animate-[moment-toast-in_160ms_ease-out]（Opacity +
+// 4px 位移，reduced-motion 下 keyframes 仅透明度）、退出
+// animate-[moment-toast-out_120ms_ease-in]（仅透明度），keyframes 在 tokens.css。
 
 /* ---------------------------------------------------------------------------
- * 私有动效样式：Toast 进入（160ms ease-out，reduced-motion 仅透明度）与
- * Skeleton 低对比呼吸（--skeleton-cycle）。Tailwind 配置由 Task 2 锁定，
- * keyframes 以内联 <style> 随组件自携；Skeleton 动画另由 JS matchMedia 门控。
+ * 私有动效样式：Skeleton 低对比呼吸（--skeleton-cycle），由 JS matchMedia
+ * 门控，keyframes 以内联 <style> 随组件自携。Toast 进入/退出 keyframes
+ * （moment-toast-in / moment-toast-out）在 tokens.css 全局发布（规范 §5.6）。
  * ------------------------------------------------------------------------- */
 function FeedbackMotionStyles() {
   return (
     <style>{`
-@keyframes moment-toast-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 @keyframes moment-skeleton-breathe {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
-}
-@media (prefers-reduced-motion: reduce) {
-  @keyframes moment-toast-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
 }
 `}</style>
   );
@@ -194,6 +188,9 @@ export function EmptyState({
 const TOAST_NORMAL_MS = 3500;
 const TOAST_ACTIONABLE_MS = 6000;
 const TOAST_MAX_QUEUED = 2;
+// 规范 §5.6：退出 = Opacity 120ms ease-in。可见预算（3500/6000ms）结束后先播
+// 退出动画，再延迟卸载并晋级下一条；clear()（auth-cleared）不在此列，同步清空。
+const TOAST_EXIT_MS = 120;
 // 与 apps/web/src/api/client.ts tokenStore.clear() 派发的事件同名（规范 §5.4：退出登录清空队列）
 const AUTH_CLEARED_EVENT = 'moment:auth-cleared';
 
@@ -218,6 +215,8 @@ type ToastItem = ToastInput;
 type ToastState = {
   visible: ToastItem | null;
   queue: ToastItem[];
+  /** 退出动画播放中：Toast 仍在 DOM，预算已耗尽，只等 120ms 动画收尾 */
+  leaving: boolean;
 };
 
 /** 剩余时间时钟：paused 时 remaining 已折入流逝毫秒，恢复后只计剩余。 */
@@ -227,10 +226,13 @@ type ToastClock = {
   startedAt: number;
   hovering: boolean;
   focused: boolean;
+  /** 退出阶段不再响应 hover/focus 暂停 */
+  exiting: boolean;
 };
 
 type ToastInternal = {
   visible: ToastItem | null;
+  leaving: boolean;
   setPaused(kind: 'hover' | 'focus', paused: boolean): void;
   dismiss(): void;
 };
@@ -248,13 +250,18 @@ export function useToast(): ToastController {
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<ToastState>({ visible: null, queue: [] });
+  const [state, setState] = useState<ToastState>({
+    visible: null,
+    queue: [],
+    leaving: false,
+  });
   const clockRef = useRef<ToastClock>({
     timer: null,
     remaining: 0,
     startedAt: 0,
     hovering: false,
     focused: false,
+    exiting: false,
   });
   const visibleRef = useRef<ToastItem | null>(null);
 
@@ -266,32 +273,46 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // 可见条到期或被动作关闭：晋级下一条等待项（没有则清空可见槽）
-  const expire = useCallback(() => {
+  // 退出动画播完：卸载当前条并晋级下一条等待项（没有则清空可见槽）
+  const removeAndPromote = useCallback(() => {
     stopTimer();
     setState((s) => ({
       visible: s.queue[0] ?? null,
       queue: s.queue.slice(1),
+      leaving: false,
     }));
   }, [stopTimer]);
+
+  // 可见预算到期或被动作关闭：先播 120ms 退出动画（规范 §5.6），再卸载晋级
+  const beginExit = useCallback(() => {
+    stopTimer();
+    const clock = clockRef.current;
+    clock.exiting = true;
+    clock.hovering = false;
+    clock.focused = false;
+    setState((s) => (s.visible ? { ...s, leaving: true } : s));
+    clock.timer = setTimeout(removeAndPromote, TOAST_EXIT_MS);
+  }, [removeAndPromote, stopTimer]);
 
   const { visible } = state;
   useEffect(() => {
     visibleRef.current = visible;
-    if (!visible) return;
     const clock = clockRef.current;
+    clock.exiting = false;
+    if (!visible) return;
     stopTimer();
     clock.remaining = visible.action ? TOAST_ACTIONABLE_MS : TOAST_NORMAL_MS;
     clock.startedAt = Date.now();
     if (!clock.hovering && !clock.focused) {
-      clock.timer = setTimeout(expire, clock.remaining);
+      clock.timer = setTimeout(beginExit, clock.remaining);
     }
     return stopTimer;
-  }, [visible, expire, stopTimer]);
+  }, [visible, beginExit, stopTimer]);
 
   const setPaused = useCallback(
     (kind: 'hover' | 'focus', paused: boolean) => {
       const clock = clockRef.current;
+      if (clock.exiting) return;
       const wasPaused = clock.hovering || clock.focused;
       if (kind === 'hover') clock.hovering = paused;
       else clock.focused = paused;
@@ -307,10 +328,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       } else {
         // 恢复：只计剩余毫秒
         clock.startedAt = Date.now();
-        clock.timer = setTimeout(expire, clock.remaining);
+        clock.timer = setTimeout(beginExit, clock.remaining);
       }
     },
-    [expire, stopTimer],
+    [beginExit, stopTimer],
   );
 
   const show = useCallback((input: ToastInput) => {
@@ -320,6 +341,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       action: input.action,
     };
     setState((s) => {
+      // 正在退出的条视为已离场（120ms 动画不阻塞新反馈）：同 key 命中等待
+      // 队列仍原位替换；否则新条直接上位，重启完整预算（退出计时由 visible
+      // 身份变化时的时钟 effect 清理）。
+      if (s.leaving) {
+        const queuedIndex = s.queue.findIndex((t) => t.key === item.key);
+        if (queuedIndex !== -1) {
+          const queue = [...s.queue];
+          queue[queuedIndex] = item;
+          return { ...s, queue };
+        }
+        return { visible: item, queue: s.queue, leaving: false };
+      }
       // 相同 key 命中可见条：替换内容（条目身份变化 → 时钟 effect 重启精确预算）
       if (s.visible && s.visible.key === item.key) {
         return { ...s, visible: item };
@@ -331,7 +364,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         queue[queuedIndex] = item;
         return { ...s, queue };
       }
-      if (!s.visible) return { visible: item, queue: s.queue };
+      if (!s.visible) return { ...s, visible: item };
       if (s.queue.length < TOAST_MAX_QUEUED) {
         return { ...s, queue: [...s.queue, item] };
       }
@@ -342,13 +375,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // clear() 与 moment:auth-cleared 共用的同一实现：同步清可见 + 队列
+  // clear() 与 moment:auth-cleared 共用的同一实现：同步清可见 + 队列，
+  // 不播退出动画（应用级拆除，规范 §5.4）
   const clear = useCallback(() => {
     const clock = clockRef.current;
     stopTimer();
     clock.hovering = false;
     clock.focused = false;
-    setState({ visible: null, queue: [] });
+    clock.exiting = false;
+    setState({ visible: null, queue: [], leaving: false });
   }, [stopTimer]);
 
   useEffect(() => {
@@ -359,7 +394,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastControllerContext.Provider value={{ show, clear }}>
       <ToastInternalContext.Provider
-        value={{ visible, setPaused, dismiss: expire }}
+        value={{ visible, leaving: state.leaving, setPaused, dismiss: beginExit }}
       >
         {children}
       </ToastInternalContext.Provider>
@@ -367,13 +402,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function ToastView({ item }: { item: ToastItem }) {
+function ToastView({ item, leaving }: { item: ToastItem; leaving: boolean }) {
   const internal = useContext(ToastInternalContext);
   const [pending, setPending] = useState(false);
   if (!internal) return null;
 
   // 动作执行期间防重复；无论成败都关闭 Toast（失败由原任务区域 Banner 表达，规范 §5.5）。
-  // 同步 onPress 立即关闭；Promise 在 pending 期间由 Button loading 吞掉重复点击。
+  // 同步 onPress 立即进入退出；Promise 在 pending 期间由 Button loading 吞掉重复点击。
   const runAction = () => {
     if (!item.action || pending) return;
     try {
@@ -393,11 +428,17 @@ function ToastView({ item }: { item: ToastItem }) {
     <div
       data-toast-item
       data-testid="toast"
+      data-exiting={leaving || undefined}
       onMouseEnter={() => internal.setPaused('hover', true)}
       onMouseLeave={() => internal.setPaused('hover', false)}
       onFocus={() => internal.setPaused('focus', true)}
       onBlur={() => internal.setPaused('focus', false)}
-      className="pointer-events-auto flex min-h-toast w-full max-w-toast animate-[moment-toast-in_160ms_ease-out] items-center gap-toast rounded-toast bg-feedback-toast-bg px-toast py-2 text-sm text-ink shadow-toast"
+      className={`pointer-events-auto flex min-h-toast w-full max-w-toast items-center gap-toast rounded-toast bg-feedback-toast-bg px-toast py-2 text-sm text-ink shadow-toast ${
+        leaving
+          ? // 规范 §5.6：退出 Opacity 120ms ease-in（仅透明度，天然满足 reduced-motion）
+            'animate-[moment-toast-out_120ms_ease-in]'
+          : 'animate-[moment-toast-in_160ms_ease-out]'
+      }`}
     >
       <span className="min-w-0 flex-1">{item.message}</span>
       {item.action ? (
@@ -433,9 +474,12 @@ export function ToastRegion() {
       aria-atomic="true"
       className="pointer-events-none fixed inset-x-4 top-[max(var(--space-3),env(safe-area-inset-top))] z-toast flex justify-center md:inset-x-0 md:top-auto md:bottom-6"
     >
-      <FeedbackMotionStyles />
       {internal.visible ? (
-        <ToastView key={internal.visible.key} item={internal.visible} />
+        <ToastView
+          key={internal.visible.key}
+          item={internal.visible}
+          leaving={internal.leaving}
+        />
       ) : null}
     </div>
   );

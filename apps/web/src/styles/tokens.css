@@ -285,3 +285,38 @@
     --ease-in: 1ms linear;
   }
 }
+
+/* ---- 反馈动效 keyframes（Feedback 规范 §5.6）----
+   时长与缓动写死在消费类里（animate-[名_时长_缓动]），不从含时长的
+   token 变量拼接（会被解析成 animation-delay）。 */
+@keyframes moment-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes moment-toast-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* §5.6：reduced-motion 下入场也仅改变透明度，不出现 4px 位移 */
+  @keyframes moment-toast-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
