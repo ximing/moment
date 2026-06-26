@@ -15,8 +15,9 @@ export function Avatar({
   src?: string | null;
 }) {
   const ch = (name.trim()[0] ?? '·').toUpperCase();
+  // 前景色只消费 token（组件禁写十六进制）：链色点底用 action-fg，深色主题下自动反色
   const bg = color ? CHAIN_COLOR_CSS[color] : 'var(--select)';
-  const fg = color ? '#fff' : 'var(--select-fg)';
+  const fg = color ? 'var(--action-fg)' : 'var(--select-fg)';
   if (src) {
     return (
       <img

@@ -4,9 +4,42 @@ import { Play } from 'lucide-react';
 import { Icon } from '@/ui/Icon';
 import { useMediaObjectUrl } from './useMediaObjectUrl';
 
-function srcOf(m: MomentMedia, shareToken?: string): string {
-  if (shareToken) return `${m.url}?st=${encodeURIComponent(shareToken)}`;
-  return '';
+// 时刻媒体块（C 端总规范 §6.1 / §10）：0/1/2–9/视频都是一等分支。
+// 0 → 无媒体 DOM；1 图按声明宽高渲染（width/height 属性给出固有比例，现代浏览器
+// 由此推导 aspect-ratio）；2 图两列、3–9 图三列方形格，点击回报被点 index；
+// 视频先 16:9 播放面、点后出原生 controls。URL 语义不变：认证模式经
+// useMediaObjectUrl(media.id) 取 blob object URL；分享模式绝不请求 blob，用稳定
+// 相对 URL + ?st=encodeURIComponent(token)。视觉只消费 token：rounded-surface-lg
+// 媒体圆角、bg-feedback-skeleton 加载占位、bg-ink 播放面底色、ring-focus 焦点环。
+
+/** 分享页稳定入口：相对路径 + 分享 token，不走认证 blob 通道。 */
+function shareSrc(m: MomentMedia, shareToken: string): string {
+  return `${m.url}?st=${encodeURIComponent(shareToken)}`;
+}
+
+/* ---------------------------------------------------------------------------
+ * 媒体加载占位动效：与 Feedback Skeleton 同构的低对比呼吸（--skeleton-cycle）。
+ * Feedback 的 keyframes 是其目录私有实现，这里独立命名自携；reduced-motion
+ * 下重定义 keyframes 为静态（同 moment-toast-in 的覆写手法）。Tailwind 配置
+ * 由 Task 2 锁定，动画类走 arbitrary value。lightbox 复用同一份。
+ * ------------------------------------------------------------------------- */
+export const mediaSkeletonClass =
+  'animate-[moment-media-skeleton_var(--skeleton-cycle)_ease-in-out_infinite]';
+
+export function MediaSkeletonStyles() {
+  return (
+    <style>{`
+@keyframes moment-media-skeleton {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes moment-media-skeleton {
+    0%, 100% { opacity: 1; }
+  }
+}
+`}</style>
+  );
 }
 
 export function MediaBlock({
@@ -24,15 +57,15 @@ export function MediaBlock({
   }
   if (media.length === 1) {
     return (
-      <div className="elev overflow-hidden rounded-[20px] bg-[color:color-mix(in_srgb,var(--line)_55%,var(--surface))]">
+      <div className="overflow-hidden rounded-surface-lg">
         <ImageOne media={media[0]!} shareToken={shareToken} single onClick={() => onOpen?.(0)} />
       </div>
     );
   }
-  const cols = media.length <= 3 ? media.length : 3;
-  const grid = cols === 2 ? 'grid-cols-2' : 'grid-cols-3';
   return (
-    <div className={`elev grid ${grid} gap-[3px] overflow-hidden rounded-[20px] bg-[color:color-mix(in_srgb,var(--line)_55%,var(--surface))]`}>
+    <div
+      className={`grid ${media.length === 2 ? 'grid-cols-2' : 'grid-cols-3'} gap-1 overflow-hidden rounded-surface-lg`}
+    >
       {media.map((m, i) => (
         <ImageOne key={m.id} media={m} shareToken={shareToken} onClick={() => onOpen?.(i)} />
       ))}
@@ -52,15 +85,45 @@ function ImageOne({
   onClick?: () => void;
 }) {
   const blobUrl = useMediaObjectUrl(shareToken ? null : media.id);
-  const url = shareToken ? srcOf(media, shareToken) : blobUrl;
-  if (!url) return <div className={`animate-pulse bg-line ${single ? 'aspect-[4/3]' : 'aspect-square'}`} />;
+  const url = shareToken ? shareSrc(media, shareToken) : blobUrl;
+  if (!url) {
+    // 加载占位只消费 --feedback-skeleton；单图按声明宽高占位，多图按方形格
+    return (
+      <>
+        <MediaSkeletonStyles />
+        {single && media.width && media.height ? (
+          <div
+            aria-hidden
+            className={`w-full bg-feedback-skeleton ${mediaSkeletonClass}`}
+            style={{ aspectRatio: `${media.width} / ${media.height}` }}
+          />
+        ) : (
+          <div
+            aria-hidden
+            className={`bg-feedback-skeleton ${mediaSkeletonClass} ${single ? 'aspect-video' : 'aspect-square'}`}
+          />
+        )}
+      </>
+    );
+  }
   return (
-    <button type="button" onClick={onClick} className="block w-full overflow-hidden">
-      <img
-        src={url}
-        alt=""
-        className={single ? 'block h-auto max-h-[430px] w-full object-cover' : 'block aspect-square w-full object-cover'}
-      />
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full overflow-hidden focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset"
+    >
+      {single ? (
+        // 声明宽高比：width/height 属性即固有比例，w-full h-auto 让浏览器保比缩放
+        <img
+          src={url}
+          alt=""
+          width={media.width ?? undefined}
+          height={media.height ?? undefined}
+          className="block h-auto w-full"
+        />
+      ) : (
+        <img src={url} alt="" className="block aspect-square w-full object-cover" />
+      )}
     </button>
   );
 }
@@ -68,22 +131,33 @@ function ImageOne({
 function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
   const [on, setOn] = useState(Boolean(shareToken));
   const blobUrl = useMediaObjectUrl(!shareToken && on ? media.id : null);
-  const url = shareToken ? srcOf(media, shareToken) : blobUrl;
+  const url = shareToken ? shareSrc(media, shareToken) : blobUrl;
   if (!on) {
     return (
       <button
         type="button"
+        aria-label="播放视频"
         onClick={() => setOn(true)}
-        className="elev relative aspect-video w-full overflow-hidden rounded-[20px] bg-ink"
+        className="relative aspect-video w-full overflow-hidden rounded-surface-lg bg-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-offset-focus focus-visible:ring-offset-bg"
       >
         <span className="absolute inset-0 grid place-items-center">
-          <span className="grid h-[58px] w-[58px] place-items-center rounded-full bg-action text-xl text-action-fg shadow-fab">
-            <Icon icon={Play} size={22} className="ml-0.5 fill-current" />
+          <span className="grid h-12 w-12 place-items-center rounded-full bg-action text-action-fg">
+            <Icon icon={Play} size={20} className="ml-0.5 fill-current" />
           </span>
         </span>
       </button>
     );
   }
-  if (!url) return <div className="aspect-video w-full animate-pulse rounded-[20px] bg-line" />;
-  return <video controls src={url} className="elev w-full rounded-[20px] bg-ink" />;
+  if (!url) {
+    return (
+      <>
+        <MediaSkeletonStyles />
+        <div
+          aria-hidden
+          className={`aspect-video w-full rounded-surface-lg bg-feedback-skeleton ${mediaSkeletonClass}`}
+        />
+      </>
+    );
+  }
+  return <video controls src={url} className="aspect-video w-full rounded-surface-lg bg-ink" />;
 }

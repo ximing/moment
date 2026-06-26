@@ -4,13 +4,18 @@ import type { ChainColor, ChainIcon, MomentResponse } from '@moment/dto';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { dayHeading } from '@/lib/time';
 import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
-import { Banner } from '@/ui/Banner';
+import { Banner, InlineProgress, TimelineSkeleton } from '@/ui/feedback/index';
 import { MomentSheet } from './moment-sheet';
 import { groupMomentsByDate } from './group-by-date';
 
 /**
- * 日子线：虚线贯穿 + 日期结 + 按内容变形的时刻。
+ * 日子线（C 端总规范 §5）：--stroke 低强度虚线贯穿 + 日期结 + 按内容变形的日子。
  * hideSignature（order=created_at）时日期结收起，线仍在（发生日非单调，不是把线拆掉）。
+ *
+ * 几何（全部落在 4/8/12/16/20/24/32 网格）：内容列缩进 pl-8（32px），线心固定在
+ * 内容列左缘前 20px（left-3 + -translate-x-1/2），与 ComposerEntry 的 -left-7 圆点
+ * 钩子同心；日期结以 -left-5 -translate-x-1/2 居中到线心。结分三档：今天大结
+ * --action、昨天中结 --date、更早小结 --stroke；内容层一律无阴影（spec §2.4）。
  */
 export const Timeline = observer(function Timeline({
   moments,
@@ -53,7 +58,6 @@ export const Timeline = observer(function Timeline({
         chainIcon={chainLookById?.get(m.chainId)?.icon}
         shareToken={shareToken}
         readOnly={readOnly}
-        hideKnot
       />
     </div>
   );
@@ -61,32 +65,28 @@ export const Timeline = observer(function Timeline({
   const tail = (
     <>
       <div ref={sentinelRef} className="h-8" />
-      {isFetchingNextPage && <p className="text-center text-sm text-muted">加载更多…</p>}
+      {isFetchingNextPage && <InlineProgress variant="indeterminate" label="正在载入更多" />}
     </>
   );
 
   if (isPending) {
-    const skeletons = [0, 1, 2].map((i) => (
-      <div key={i} className="h-40 animate-pulse rounded-card bg-surface shadow-card" />
-    ));
-    return (
-      <div className="relative pl-9">
-        <Line />
-        <div className="space-y-4">{skeletons}</div>
-      </div>
-    );
+    return <TimelineSkeleton />;
   }
   if (isError) {
-    return <Banner action={onRetry ? { label: '重试', onClick: onRetry } : undefined}>没法刷新，点重试</Banner>;
+    return (
+      <Banner tone="error" action={onRetry ? { label: '重试', onPress: onRetry } : undefined}>
+        没法刷新，点重试
+      </Banner>
+    );
   }
   if (moments.length === 0) return <>{empty}</>;
 
   if (hideSignature) {
     return (
-      <div className="relative pl-9">
+      <div className="relative pl-8">
         <Line />
         {entry}
-        <div className="space-y-5">
+        <div className="flex flex-col gap-6">
           {moments.map(renderSheet)}
           {tail}
         </div>
@@ -96,30 +96,31 @@ export const Timeline = observer(function Timeline({
 
   const groups = groupMomentsByDate(moments);
   return (
-    <div className="relative pl-9">
+    <div className="relative pl-8">
       <Line />
       {entry}
       {groups.map((g) => {
         const day = dayHeading(g.date);
         return (
-          <section key={g.date} className="relative mb-2">
+          <section key={g.date} aria-label={day.title} className="relative mb-8">
             <span
               aria-hidden
               className={
                 day.kind === 'today'
-                  ? 'absolute -left-[30px] top-2 h-5 w-5 rounded-full bg-[var(--today)] shadow-[0_6px_16px_color-mix(in_srgb,var(--today)_45%,transparent)]'
+                  ? 'absolute -left-5 top-1 h-5 w-5 -translate-x-1/2 rounded-full bg-action'
                   : day.kind === 'yesterday'
-                    ? 'absolute -left-[27px] top-2.5 h-3.5 w-3.5 rounded-full bg-[var(--knot-yesterday)]'
-                    : 'absolute -left-[25px] top-3 h-2.5 w-2.5 rounded-full bg-[var(--knot-older)]'
+                    ? 'absolute -left-5 top-2 h-3 w-3 -translate-x-1/2 rounded-full bg-date'
+                    : 'absolute -left-5 top-3 h-2 w-2 -translate-x-1/2 rounded-full bg-stroke'
               }
             />
-            <h2 className="mb-4 leading-[1.1]">
-              <span className={day.kind === 'other' ? 'text-[28px] font-medium text-ink' : 'font-display text-[28px] text-ink'}>
+            <h2 className="mb-4">
+              {/* 「今天 / 昨天」是固定字形，可用得意黑；其它日期是动态内容，用系统字（spec §2.2） */}
+              <span className={day.kind === 'other' ? 'text-day-title font-medium text-ink' : 'font-display text-day-title text-ink'}>
                 {day.title}
               </span>
-              <small className="ml-2 align-[4px] text-[13px] font-normal tracking-normal text-muted">{day.sub}</small>
+              <small className="ml-2 text-meta font-normal text-muted">{day.sub}</small>
             </h2>
-            <div className="space-y-5 pb-8">{g.moments.map(renderSheet)}</div>
+            <div className="flex flex-col gap-6">{g.moments.map(renderSheet)}</div>
           </section>
         );
       })}
@@ -132,7 +133,7 @@ function Line() {
   return (
     <div
       aria-hidden
-      className="absolute bottom-2 left-[15px] top-2 border-l-2 border-dashed border-[color:color-mix(in_srgb,var(--line)_90%,transparent)]"
+      className="absolute inset-y-2 left-3 -translate-x-1/2 border-l-2 border-dashed border-[color:color-mix(in_srgb,var(--stroke)_72%,transparent)]"
     />
   );
 }

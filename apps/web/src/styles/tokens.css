@@ -1,41 +1,74 @@
+/* ==========================================================================
+   Moment Web 设计 Token 层（唯一真相源）
+   取值只来自已批准规范：
+   - 基础：docs/superpowers/specs/2026-08-17-web-c-end-redesign.md §2 / §3 / §8
+   - Button：2026-08-18-web-button-design.md §5 / §6
+   - Overlay：2026-08-18-web-modal-dialog-sheet-design.md §4 / §5 / §6
+   - Field：2026-08-18-web-field-input-design.md §4
+   - Floating：2026-08-18-web-menu-popover-tooltip-design.md §5 / §9 / §10
+   - Feedback：2026-08-18-web-feedback-design.md §3 / §4–§8
+   组件与页面只消费这里的语义 Token 与 Tailwind 映射，禁止写死色值 / 尺寸。
+   ========================================================================== */
+
 :root {
-  --bg: #fff4ee;
-  --surface: #fffcf9;
-  --ink: #2c1812;
-  --muted: #9a7264;
-  --line: #e4c7bb;
-  --stroke: #c4a094;
-  --shadow: rgba(44, 24, 18, 0.08);
-  --elev: 0 12px 32px rgba(44, 24, 18, 0.1);
-  --elev-sm: 0 4px 14px rgba(44, 24, 18, 0.08);
-  --action: #f0433a;
-  --action-fg: #fff8f5;
-  --today: #ff8a3a;
-  --knot-yesterday: #e07a6a;
-  --knot-older: #c4a094;
-  --select: #ffd4b0;
-  --select-fg: #2c1812;
-  --danger: #c93a2e;
-  /* 链点：饱和色，导航 / 长河链标用；贴纸底仍偏淡只作装饰 */
+  /* ---- 基础色彩（C 端总规范 §2.1，浅色） ---- */
+  --bg: #f6f1ec; /* 页面底，像自然光下的相纸 */
+  --surface: #fffdfb; /* 输入、文字内容、面板 */
+  --ink: #2b201c; /* 主文字 */
+  --muted: #6f5d54; /* 时间、说明、次级动作；普通小字满足 AA */
+  --line: #d8c9c0; /* 必要边界；禁止当分割线滥用 */
+  --stroke: #b79989; /* 日子线、圆环等时间结构 */
+  --action: #c94a3a; /* 记下、FAB、未读、主动作 */
+  --action-fg: #fffdfb; /* 动作色上的文字 */
+  --select: #f2b84b; /* 选中月份、当前链的轻强调来源色 */
+  --select-fg: #2b201c; /* 选中色上的文字 */
+  --date: #ded4ff; /* 日期结、轻情绪入口 */
+  --tag: #4b7562; /* 正文内 Tag；两主题普通文字均满足 AA */
+  --focus: #7656d8; /* 键盘焦点环；与页面底对比度不低于 4.5 */
+  --danger: #b83a30; /* 删除、退出等危险动作 */
+  --danger-fg: #fffdfb; /* 最终危险操作实心按钮前景 */
+
+  /* ---- 链身份四色点（确定性四色盘，只表达链身份） ---- */
   --dot-pink: #ff7aa2;
   --dot-blue: #5aa7d6;
   --dot-mint: #4cbe8a;
   --dot-purple: #9b8fd0;
-  --dot-gold: #e4b04a;
-  --sticker-pink: #ffd9e6;
-  --sticker-blue: #cfe8ff;
-  --sticker-mint: #bfe8d0;
-  --sticker-purple: #e6dbff;
-  --sticker-pink-line: var(--stroke);
-  --sticker-blue-line: var(--stroke);
-  --sticker-mint-line: var(--stroke);
-  --sticker-purple-line: var(--stroke);
-  --date-sticker-bg: var(--sticker-purple);
-  --date-sticker-line: var(--sticker-purple-line);
-  --date-sticker-fg: var(--ink);
-  --content: 720px;
-  --sidebar: 168px;
-  --rail: 148px;
+
+  /* ---- Field 色彩（Field 规范 §4.1） ---- */
+  --field-bg: #f0e9e4;
+  --field-bg-hover: #ebe2dc;
+  --field-bg-disabled: #f3eeea;
+  --field-placeholder: var(--muted);
+  --field-focus: var(--focus);
+  --field-danger: var(--danger);
+
+  /* ---- Overlay / Floating 色彩（Modal §6、Menu §5.1 / §9） ---- */
+  --scrim: rgb(43 32 28 / 36%);
+  --scrim-nested: rgb(43 32 28 / 22%);
+  --overlay-shadow: 0 24px 64px rgb(43 32 28 / 24%);
+  --floating-bg: var(--surface);
+  --floating-hover: color-mix(in srgb, var(--ink) 6%, transparent);
+  --floating-pressed: color-mix(in srgb, var(--ink) 9%, transparent);
+  --floating-danger-soft: color-mix(in srgb, var(--danger) 7%, transparent);
+  --floating-edge: transparent; /* 浅色浮层默认无描边 */
+  --floating-shadow: 0 18px 48px rgb(43 32 28 / 18%);
+  --action-sheet-shadow: 0 -18px 48px rgb(43 32 28 / 18%);
+  --tooltip-bg: var(--ink);
+  --tooltip-fg: var(--bg);
+
+  /* ---- Feedback 色彩（Feedback 规范 §3.2） ---- */
+  --feedback-error-bg: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  --feedback-warning-bg: color-mix(in srgb, var(--select) 18%, var(--surface));
+  --feedback-info-bg: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  --feedback-skeleton: color-mix(in srgb, var(--ink) 7%, transparent);
+  --feedback-toast-bg: var(--surface);
+  --feedback-toast-shadow: 0 16px 40px rgb(43 32 28 / 18%);
+  --feedback-toast-shadow-dark: 0 16px 40px rgb(0 0 0 / 42%);
+
+  /* ---- 页面网格与壳层（C 端总规范 §2.3、§3.1） ---- */
+  --content: 760px;
+  --sidebar: 208px;
+  --rail: 184px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -43,56 +76,329 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
+  --radius-md: 14px; /* 输入和内容色面圆角下缘 */
+  --radius-lg: 20px; /* 内容色面圆角上缘 */
+
+  /* ---- 控件与 Button 几何（Button 规范 §5） ---- */
   --control-h: 40px;
-  --control-h-sm: 32px;
+  --control-h-prominent: 44px;
   --control-h-fab: 48px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --button-px: 16px;
+  --button-pill-px: 20px;
+  --button-radius: 11px;
+  --button-icon-gap: 8px;
+  --icon-button-size: 40px;
+  --touch-control-min: 44px;
+  --focus-ring-w: 2px;
+  --focus-ring-offset: 2px;
+  --button-pressed-scale: 0.98;
+  --button-disabled-opacity: 0.42;
+
+  /* ---- Field 几何（Field 规范 §4.2；6/14/18px 为内部光学校准，不进页面网格） ---- */
+  --field-h: 44px;
+  --field-radius: 13px;
+  --field-px: 14px;
+  --field-text-size: 16px;
+  --field-label-size: 14px;
+  --field-support-size: 13px;
+  --field-label-gap: 6px;
+  --field-support-gap: 6px;
+  --field-stack-gap: 18px;
+  --field-stack-compact: 14px;
+  --textarea-min-h: 112px;
+  --field-icon-size: 16px;
+  --field-end-visual: 32px;
+  --field-end-hit: 40px;
+  --field-ring-w: 2px;
+
+  /* ---- Overlay 几何（Modal 规范 §5） ---- */
+  --dialog-w: 480px;
+  --alert-dialog-w: 400px;
+  --sheet-w: 520px;
+  --overlay-radius: 24px;
+  --sheet-mobile-radius: 24px 24px 0 0;
+  --overlay-gap: 12px;
+  --sheet-mobile-top-gap: 10px;
+  --overlay-padding: 24px;
+  --overlay-padding-mobile: 20px;
+  --overlay-action-gap: 8px;
+
+  /* ---- Menu / ActionSheet 几何（Menu 规范 §5.2 / §5.3） ---- */
+  --menu-min-w: 176px;
+  --menu-max-w: 280px;
+  --menu-radius: 18px;
+  --menu-padding: 6px;
+  --menu-offset: 8px;
+  --menu-item-h: 42px;
+  --menu-item-px: 12px;
+  --menu-item-radius: 12px;
+  --menu-icon-size: 16px;
+  --menu-icon-gap: 10px;
+  --menu-viewport-gap: 8px;
+  --action-sheet-radius: 24px 24px 0 0;
+  --action-sheet-padding: 12px;
+  --action-sheet-item-h: 48px;
+  --action-sheet-item-radius: 13px;
+  --action-sheet-cancel-gap: 8px;
+  --action-sheet-safe-bottom: env(safe-area-inset-bottom);
+
+  /* ---- Tooltip 几何（Menu 规范 §9） ---- */
+  --tooltip-radius: 9px;
+  --tooltip-py: 6px;
+  --tooltip-px: 9px;
+  --tooltip-text-size: 12px;
+
+  /* ---- Feedback 几何与计时（Feedback 规范 §4–§8） ---- */
+  --banner-radius: 14px;
+  --banner-py: 12px;
+  --banner-px: 14px;
+  --banner-gap: 12px;
+  --banner-icon-size: 16px;
+  --toast-min-h: 48px;
+  --toast-radius: 18px;
+  --toast-px: 14px;
+  --toast-max-w: 360px;
+  --toast-gap: 10px;
+  --empty-max-w: 320px;
+  --empty-page-py: 64px;
+  --empty-page-py-mobile: 48px;
+  --empty-section-py: 32px;
+  --empty-title-size: 16px; /* 600 字重由组件负责 */
+  --empty-title-lh: 24px;
+  --empty-body-size: 14px;
+  --empty-body-lh: 22px;
+  --empty-action-gap: 16px;
+  --skeleton-delay: 180ms;
+  --skeleton-min-visible: 280ms;
+  --skeleton-cycle: 1.4s;
+  --inline-progress-min-h: 44px;
+  --inline-progress-spinner: 16px;
+  --inline-progress-track-h: 4px;
+  --inline-progress-radius: 999px;
+
+  /* ---- 动效（C 端总规范 §8：160–220ms；reduced-motion 降至近零） ---- */
   --ease: 180ms ease;
+  --ease-out: 180ms ease-out; /* 浮层进入（Modal §11） */
+  --ease-in: 120ms ease-in; /* 轻反馈退出（Feedback §5.6） */
+
+  /* ---- z-index 层级（Modal §4、Menu §10、Feedback §3.2） ---- */
+  --z-floating: 50;
+  --z-overlay: 60;
+  --z-overlay-popover: 61; /* 与 --z-overlay-floating 同层（Modal §4 命名） */
+  --z-overlay-floating: 61;
+  --z-tooltip: 62;
+  --z-toast: 65;
+  --z-overlay-nested: 70;
+  --z-lightbox: 80;
+
+  /* ---- 过渡 alias：仅服务既有调用方，Task 13 统一清理，禁止新增调用 ---- */
+  --shadow: rgb(43 32 28 / 24%);
+  --elev: var(--overlay-shadow);
+  --elev-sm: var(--floating-shadow);
+  --today: var(--action);
+  --knot-yesterday: var(--date);
+  --knot-older: var(--stroke);
+  --date-sticker-bg: var(--date);
+  --date-sticker-line: var(--date);
+  --date-sticker-fg: var(--ink);
+  --dot-gold: var(--select);
+  --sticker-pink: color-mix(in srgb, var(--dot-pink) 24%, var(--surface));
+  --sticker-blue: color-mix(in srgb, var(--dot-blue) 24%, var(--surface));
+  --sticker-mint: color-mix(in srgb, var(--dot-mint) 24%, var(--surface));
+  --sticker-purple: color-mix(in srgb, var(--dot-purple) 24%, var(--surface));
+  --sticker-pink-line: color-mix(in srgb, var(--dot-pink) 48%, var(--surface));
+  --sticker-blue-line: color-mix(in srgb, var(--dot-blue) 48%, var(--surface));
+  --sticker-mint-line: color-mix(in srgb, var(--dot-mint) 48%, var(--surface));
+  --sticker-purple-line: color-mix(in srgb, var(--dot-purple) 48%, var(--surface));
+  --control-h-sm: var(--control-h); /* 旧 32px 小实体按钮已退出规范 */
+  --radius-sm: var(--button-radius);
+
   color-scheme: light;
 }
 
 :root[data-theme='dark'] {
-  /* 暖夜灯：炭灰底 + 灯下抬起的面。避免酱油黑糊成一团。 */
-  --bg: #141210;
-  --surface: #221e1b;
-  --ink: #f2ebe4;
-  --muted: #b3a69c;
-  --line: #3c362f;
-  --stroke: #c9bdb2;
-  --shadow: rgba(0, 0, 0, 0.5);
-  --elev: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 228, 200, 0.07);
-  --elev-sm: 0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 228, 200, 0.06);
-  --action: #ff7a66;
-  --action-fg: #1a1613;
-  --today: #ffb15a;
-  --knot-yesterday: #e08a7a;
-  --knot-older: #8a7d74;
-  --select: #3d3228;
-  --select-fg: #f6eee6;
-  --danger: #ff8d72;
+  /* 暖夜灯：炭灰底 + 灯下抬起的面，保持与浅色相同的层级关系 */
+
+  /* ---- 基础色彩（C 端总规范 §2.1，深色） ---- */
+  --bg: #171412;
+  --surface: #26211e;
+  --ink: #f7efe9;
+  --muted: #c3b5ad;
+  --line: #463c37;
+  --stroke: #76675f;
+  --action: #ff755e;
+  --action-fg: #241714;
+  --select: #f2b84b;
+  --select-fg: #2b201c;
+  --date: #433b5e;
+  --tag: #87c2a5;
+  --focus: #b59cff;
+  --danger: #ff8a72;
+  --danger-fg: #2b201c;
+
+  /* ---- 链身份四色点（深色） ---- */
   --dot-pink: #ff9bb8;
   --dot-blue: #86c4e4;
   --dot-mint: #78d4a8;
   --dot-purple: #c0b0e8;
-  --dot-gold: #f0cc72;
-  --sticker-pink: #4a343c;
-  --sticker-blue: #2e3c4c;
-  --sticker-mint: #2e443c;
-  --sticker-purple: #3c364c;
-  --sticker-pink-line: #d09aaa;
-  --sticker-blue-line: #8ab4d4;
-  --sticker-mint-line: #7ab89a;
-  --sticker-purple-line: #b0a4d8;
-  --date-sticker-bg: transparent;
-  --date-sticker-line: var(--today);
-  --date-sticker-fg: var(--today);
+
+  /* ---- Field 色彩（深色） ---- */
+  --field-bg: #1f1a17;
+  --field-bg-hover: #231d1a;
+  --field-bg-disabled: #201c19;
+  --field-placeholder: var(--muted);
+  --field-focus: var(--focus);
+  --field-danger: var(--danger);
+
+  /* ---- Overlay / Floating 色彩（深色） ---- */
+  --scrim: rgb(0 0 0 / 58%);
+  --scrim-nested: rgb(0 0 0 / 36%);
+  --overlay-shadow: 0 24px 64px rgb(0 0 0 / 48%);
+  --floating-bg: var(--surface);
+  --floating-hover: color-mix(in srgb, var(--ink) 8%, transparent);
+  --floating-pressed: color-mix(in srgb, var(--ink) 12%, transparent);
+  --floating-danger-soft: color-mix(in srgb, var(--danger) 10%, transparent);
+  --floating-edge: color-mix(in srgb, var(--line) 70%, transparent);
+  --floating-shadow: 0 18px 48px rgb(0 0 0 / 44%);
+  --action-sheet-shadow: 0 -18px 48px rgb(0 0 0 / 44%);
+  --tooltip-bg: var(--ink);
+  --tooltip-fg: var(--bg);
+
+  /* ---- Feedback 色彩（深色；color-mix 随主题色自适应，按规范显式声明） ---- */
+  --feedback-error-bg: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  --feedback-warning-bg: color-mix(in srgb, var(--select) 18%, var(--surface));
+  --feedback-info-bg: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  --feedback-skeleton: color-mix(in srgb, var(--ink) 7%, transparent);
+  --feedback-toast-bg: var(--surface);
+  --feedback-toast-shadow: var(--feedback-toast-shadow-dark);
+
+  /* 过渡 alias 的主题相关部分（其余在 :root 定义，随主题色自适应） */
+  --shadow: rgb(0 0 0 / 48%);
+
   color-scheme: dark;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --ease: 1ms linear;
+    --ease-out: 1ms linear;
+    --ease-in: 1ms linear;
+  }
+}
+
+/* ---- 反馈动效 keyframes（Feedback 规范 §5.6）----
+   时长与缓动写死在消费类里（animate-[名_时长_缓动]），不从含时长的
+   token 变量拼接（会被解析成 animation-delay）。 */
+@keyframes moment-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes moment-toast-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* §5.6：reduced-motion 下入场也仅改变透明度，不出现 4px 位移 */
+  @keyframes moment-toast-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/* ---- Modal 族动效 keyframes（Modal 规范 §11）----
+   挂在 react-aria-components 的 data-entering / data-exiting 态上；时长与
+   缓动写死在消费类里。reduced-motion 由消费类的 motion-reduce:animate-none
+   直接取消位移与缩放，只留近乎即时显隐。 */
+@keyframes moment-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes moment-scrim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes moment-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes moment-dialog-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* 移动端 Sheet：底部进出 */
+@keyframes moment-sheet-in-bottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes moment-sheet-out-bottom {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* 桌面 Sheet：右侧进出 */
+@keyframes moment-sheet-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes moment-sheet-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
   }
 }

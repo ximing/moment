@@ -4,36 +4,31 @@ paths:
   - "apps/web/src/**/*.css"
 ---
 
-# Web Design System
+# Web Design System 入口
 
-暖纸色板已定（`tokens.css`）。这里管 **尺度和对齐**。禁止再写 `px-[18px]` / `h-[52px]` / `-mx-3.5` 这种一次性尺寸。
+以下文件是 `apps/web` 视觉与组件行为的唯一真相源；所有页面和组件开发必须遵循它们，不得在本规则或业务页面另立 Button、浮层、输入或反馈样式：
 
-## 尺度（只准用这些）
+- `docs/superpowers/specs/2026-08-17-web-c-end-redesign.md`
+- `docs/superpowers/specs/2026-08-18-web-button-design.md`
+- `docs/superpowers/specs/2026-08-18-web-modal-dialog-sheet-design.md`
+- `docs/superpowers/specs/2026-08-18-web-field-input-design.md`
+- `docs/superpowers/specs/2026-08-18-web-menu-popover-tooltip-design.md`
+- `docs/superpowers/specs/2026-08-18-web-feedback-design.md`
 
-| token | 值 | 用途 |
-|---|---|---|
-| `--space-1` … `--space-8` | 4 / 8 / 12 / 16 / 20 / 24 / 32 | 间距。Tailwind `p-1`…`p-8` 即此档 |
-| `--control-h` / `--control-h-sm` | 40 / 32 | 按钮、单行输入、select |
-| `--control-h-fab` | 48 | 右下「记下」 |
-| `--radius-lg` / `rounded-card` | 20 | 气泡、面板、composer |
-| `rounded-sticker` | 满圆 | 药丸按钮、FAB |
-| `--sidebar` / `--rail` | 168 / 148 | 左右栏 |
+## 跨页面约束
 
-控件高度用已有 Tailwind 档：`h-10`（40）、`h-8`（32）、FAB 用 `h-12`（48）。侧栏宽用 `w-[var(--sidebar)]`。不要发明 `h-control` 这类尚未进产物的自定义 utility。
+- 颜色、字号、间距、圆角、阴影和控件尺寸一律复用 `apps/web/src/styles/tokens.css` 与对应语义组件；禁止页面写十六进制颜色、一次性尺寸（如 `px-[18px]`、`h-[52px]`）或负边距通栏。
+- 布局和内容间距只使用 4 / 8 / 12 / 16 / 20 / 24 / 32px 档位；宽屏壳层、日子线、响应式断点与页面级对齐以 C 端总规范为准。
+- 时刻内容保持 `[头像 32] + gap 12 + [内容列]`：作者、正文、媒体、Tag 和互动共用内容列边缘。纯文字可使用 `--surface` 色面，但内容层不得添加卡片阴影；媒体自行作为底。
+- 一行内输入使用 `min-w-0`、动作使用 `shrink-0`；空间不足时改为合理换行或纵向布局，不挤压文案。
+- 图标使用 Lucide；反应继续使用 DTO emoji。所有可交互元素都要有可见的 `focus-visible` 状态。
 
-## 对齐网格
+## 设计体系基座的唯一 Owner（2026-08-18 起）
 
-- **侧栏**：`px-3 pt-6`。导航 `flex-1`，用户钉在左栏最底下。头像 24，和链标同一列、`px-2 py-1.5`。分隔线拉满侧栏，线到用户、用户到窗口各 16px。菜单在侧栏内向上弹。
-- **时间线一条时刻**：`[头像 32] + gap-3 + [内容列]`。名字、正文/图、表情、评论数、评论列表全部在内容列里，左缘同一条线。禁止文字气泡内再塞表情（会比图片那条多缩进 16px）。
-- **文字**：只有正文进软气泡（`rounded-card bg-surface px-4 py-3 shadow-sticker`——贴纸同款投影，深色下靠 1px 暖描边与 `--bg` 拉开）。图/视频自己当底。
-- **FAB**：`bottom-6 right-6`，`h-fab px-5 gap-2`。
+以下基座文件已在「Establish the Web test scripts and token owner」一次性建立，之后的任务只能消费、不得回写：
 
-## 控件
-
-- 只走 `Button`：`primary` / `ghost`（细线） / `quiet`（无框） / `danger`。`md`=40，`sm`=32。
-- 图标只走 `Icon`（Lucide）。反应仍用 dto emoji。
-- 一行里：输入 `min-w-0`，按钮 `shrink-0`。挤不下就 `flex-col`，不要让按钮贴边或把字挤换行。
-
-## Menu
-
-- 默认 `inline-block`。侧栏用户行用 `fullWidth`，宽度等于导航项，不是 aside 外沿。
+- `apps/web/package.json` scripts：测试统一走 `pnpm --filter @moment/web test`（Vitest + jsdom），视觉回归走 `pnpm --filter @moment/web e2e:design-system`；不得新增或修改 package scripts。
+- `apps/web/vitest.config.ts` 与 `apps/web/src/test/setup.ts`：不得新增或替换测试 setup；组件测试就近放源码旁（`*.test.ts(x)`），用 `-- <file>` 聚焦执行。
+- `apps/web/src/styles/tokens.css` 与 `apps/web/tailwind.config.js`：不得新增 token、改 token 值或新增 Tailwind 语义映射；组件颜色、几何、z-index 只能消费已发布的语义 token。
+- `tokens.css` 中的 legacy 过渡 alias（`--today`、`--knot-*`、`--sticker-*`、`--dot-gold`、`--elev`、`--elev-sm`、`--control-h-sm`、`--radius-sm` 及对应 Tailwind `card` / `sticker` 映射）只服务既有调用方，由 Task 13 统一清理；新代码禁止调用。
+- `.gitignore` 的 `apps/web/e2e/artifacts/**`：E2E 运行时产物的唯一 ignore 规则；`e2e/baselines/**` 与 manifest 是受控基线，必须保持入库；不得新增其它 E2E ignore 规则。
