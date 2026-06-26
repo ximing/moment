@@ -19,7 +19,14 @@ import { Button, IconButton } from '../button/index';
 // 几何 max-w-dialog / max-w-alert-dialog / w-sheet、rounded-overlay /
 // rounded-sheet-mobile、p-overlay / p-overlay-mobile、gap-overlay-action、
 // top-sheet-mobile-top / top-overlay-gap / right-overlay-gap / bottom-overlay-gap，
-// 阴影 shadow-overlay，动效 duration var(--ease-out)（reduced-motion 下 token 降为 1ms）。
+// 阴影 shadow-overlay。
+// 动效（规范 §11）挂在 RAC 的 data-entering / data-exiting 态上，keyframes 在
+// tokens.css：Scrim 透明度 160ms；Dialog/AlertDialog 上移 8px + scale 0.98→1
+// 180ms（退出 120ms 略快）；Sheet <768px 底部、≥768px 右侧 220ms（退出 160ms）。
+// RAC Modal 的 useExitAnimation 通过 getAnimations() 自动延迟卸载到退出动画
+// 播完，业务把 open 置 false 才会进入退出（不在业务完成前提前卸载）；
+// reduced-motion 由 motion-reduce:animate-none 取消位移与缩放，只留即时显隐
+// （此时 getAnimations 为空，RAC 同步卸载）。
 // 行为层全部落在 react-aria-components 的 Modal/Dialog：portal、焦点圈禁与恢复、
 // 背景 inert、滚动锁由它统一负责；本目录不挂任何 window 级键盘监听，
 // Escape 通过浮层内的 React keydown 链转译为关闭原因。
@@ -115,16 +122,35 @@ function ModalSurface({
       ? 'rounded-sheet-mobile md:rounded-overlay'
       : 'rounded-overlay';
 
+  // 动效（规范 §11）：Scrim 透明度 160ms 双向；Dialog/AlertDialog 上移 8px +
+  // scale 0.98→1，进入 180ms ease-out、退出 120ms ease-in；Sheet 移动端底部、
+  // 桌面右侧进出，进入 220ms、退出 160ms。reduced-motion 取消位移与缩放。
+  const scrimMotionClass =
+    'data-[entering]:animate-[moment-scrim-in_160ms_ease-out] ' +
+    'data-[exiting]:animate-[moment-scrim-out_160ms_ease-in] ' +
+    'motion-reduce:data-[entering]:animate-none motion-reduce:data-[exiting]:animate-none';
+
+  const modalMotionClass =
+    variant === 'sheet'
+      ? 'data-[entering]:animate-[moment-sheet-in-bottom_220ms_ease-out] ' +
+        'md:data-[entering]:animate-[moment-sheet-in-right_220ms_ease-out] ' +
+        'data-[exiting]:animate-[moment-sheet-out-bottom_160ms_ease-in] ' +
+        'md:data-[exiting]:animate-[moment-sheet-out-right_160ms_ease-in] ' +
+        'motion-reduce:data-[entering]:animate-none motion-reduce:data-[exiting]:animate-none'
+      : 'data-[entering]:animate-[moment-dialog-in_180ms_ease-out] ' +
+        'data-[exiting]:animate-[moment-dialog-out_120ms_ease-in] ' +
+        'motion-reduce:data-[entering]:animate-none motion-reduce:data-[exiting]:animate-none';
+
   return (
     <ModalOverlay
       isOpen={open}
       isDismissable={dismissable && !busy}
       isKeyboardDismissDisabled
       onOpenChange={handleOpenChange}
-      className={`fixed top-0 left-0 h-dvh w-screen ${overlayClass}`}
+      className={`fixed top-0 left-0 h-dvh w-screen ${overlayClass} ${scrimMotionClass}`}
       data-testid="modal-scrim"
     >
-      <Modal className={`${modalClass} outline-none`}>
+      <Modal className={`${modalClass} ${modalMotionClass} outline-none`}>
         <AriaDialog
           ref={dialogRef}
           role={variant === 'alert' ? 'alertdialog' : undefined}

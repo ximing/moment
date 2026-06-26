@@ -1,15 +1,20 @@
 import { useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { AlertDialog, Dialog, Sheet } from './index';
 import type { CloseReason } from './index';
 
-// Modal 家族行为契约（Modal/Dialog/Sheet 规范 §9 / §10 / §14）：
+// Modal 家族行为契约（Modal/Dialog/Sheet 规范 §9 / §10 / §11 / §14）：
 // 受控 open；onRequestClose 只报告 close-button / escape / outside 意图；
 // busy 抑制一切关闭请求；关闭后焦点回到触发按钮；AlertDialog 初始聚焦
 // 更安全的取消操作、Escape 等价 onCancel、外部点击不关闭；Sheet 是单一
 // 组件，用 768px 媒体查询类切换桌面右侧浮层与移动端底部近全高形态。
+// 动效（§11）挂在 RAC data-entering / data-exiting 态上：Scrim 透明度 160ms，
+// Dialog/AlertDialog 上移 8px + scale 0.98→1（180ms 进 / 120ms 出），Sheet
+// 移动端底部 / 桌面右侧进出（220ms 进 / 160ms 出）；reduced-motion 取消位移
+// 与缩放。RAC 经 getAnimations() 自动延迟卸载到退出动画播完；jsdom 无
+// getAnimations，卸载同步发生，这里只断言动效类挂载。
 
 type HarnessProps = {
   busy?: boolean;
@@ -131,6 +136,84 @@ describe('Dialog', () => {
     await user.click(screen.getByRole('button', { name: '关闭' }));
     expect(onRequestClose).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('Modal 动效（规范 §11）', () => {
+  it('Scrim 挂 160ms 透明度进出动画，reduced-motion 下取消', () => {
+    render(<DialogHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '开一条新的链' }));
+    const scrim = screen.getByTestId('modal-scrim');
+    expect(scrim.className).toContain(
+      'data-[entering]:animate-[moment-scrim-in_160ms_ease-out]',
+    );
+    expect(scrim.className).toContain(
+      'data-[exiting]:animate-[moment-scrim-out_160ms_ease-in]',
+    );
+    expect(scrim.className).toContain('motion-reduce:data-[entering]:animate-none');
+    expect(scrim.className).toContain('motion-reduce:data-[exiting]:animate-none');
+  });
+
+  it('Dialog 挂上移 8px + scale 0.98→1 进出动画', () => {
+    render(<DialogHarness />);
+    fireEvent.click(screen.getByRole('button', { name: '开一条新的链' }));
+    const dialog = screen.getByRole('dialog', { name: '开一条新的链' });
+    const modal = dialog.parentElement as HTMLElement;
+    expect(modal.className).toContain(
+      'data-[entering]:animate-[moment-dialog-in_180ms_ease-out]',
+    );
+    expect(modal.className).toContain(
+      'data-[exiting]:animate-[moment-dialog-out_120ms_ease-in]',
+    );
+    expect(modal.className).toContain('motion-reduce:data-[entering]:animate-none');
+  });
+
+  it('AlertDialog 与 Dialog 共用同一组进出动画', () => {
+    render(<AlertHarness />);
+    const alert = screen.getByRole('alertdialog', { name: '放弃这次记录？' });
+    const modal = alert.parentElement as HTMLElement;
+    expect(modal.className).toContain('moment-dialog-in_180ms_ease-out');
+    expect(modal.className).toContain('moment-dialog-out_120ms_ease-in');
+  });
+
+  it('Sheet 移动端底部、桌面右侧进出，各 220ms 进 / 160ms 出', () => {
+    render(
+      <Sheet open title="记下此刻" onRequestClose={() => {}}>
+        <p>记录内容</p>
+      </Sheet>,
+    );
+    const sheet = screen.getByRole('dialog', { name: '记下此刻' });
+    const modal = sheet.parentElement as HTMLElement;
+    // <768px 底部进出；≥768px 经 md: 切换为右侧进出（单一组件媒体查询切换）
+    expect(modal.className).toContain(
+      'data-[entering]:animate-[moment-sheet-in-bottom_220ms_ease-out]',
+    );
+    expect(modal.className).toContain(
+      'md:data-[entering]:animate-[moment-sheet-in-right_220ms_ease-out]',
+    );
+    expect(modal.className).toContain(
+      'data-[exiting]:animate-[moment-sheet-out-bottom_160ms_ease-in]',
+    );
+    expect(modal.className).toContain(
+      'md:data-[exiting]:animate-[moment-sheet-out-right_160ms_ease-in]',
+    );
+    expect(modal.className).toContain('motion-reduce:data-[entering]:animate-none');
+    expect(modal.className).toContain('motion-reduce:data-[exiting]:animate-none');
+  });
+
+  it('open 转 false 后 RAC 完成退出才卸载（jsdom 无 getAnimations，同步卸载）', () => {
+    const { rerender } = render(
+      <Dialog open title="开一条新的链" onRequestClose={() => {}}>
+        <p>链名称表单</p>
+      </Dialog>,
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    rerender(
+      <Dialog open={false} title="开一条新的链" onRequestClose={() => {}}>
+        <p>链名称表单</p>
+      </Dialog>,
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 
