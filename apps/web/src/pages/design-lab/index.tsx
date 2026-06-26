@@ -4,7 +4,7 @@ import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 // 注意：ui 下同族 barrel 一律显式指向 index——遗留 Button.tsx / Field.tsx /
 // Menu.tsx 在大小写不敏感文件系统上会截获裸目录导入。
 import { Button, IconButton } from '@/ui/button/index';
-import { DateTimeField, PasswordField, TextField } from '@/ui/field/index';
+import { DateTimeField, PasswordField, TextareaField, TextField } from '@/ui/field/index';
 import { AlertDialog, Dialog, Sheet } from '@/ui/modal/index';
 import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
 import { Popover } from '@/ui/popover/index';
@@ -150,6 +150,13 @@ function FieldSection(): JSX.Element {
           defaultValue="not-an-email"
         />
         <PasswordField label="密码" name="lab-password" defaultValue="moment-lab" />
+        <TextareaField
+          label="一句话"
+          name="lab-bio"
+          description="会显示在链资料页"
+          maxLength={120}
+          defaultValue="这条链留给周末的早饭。"
+        />
         <DateTimeField
           value={happenedAt}
           onChange={setHappenedAt}

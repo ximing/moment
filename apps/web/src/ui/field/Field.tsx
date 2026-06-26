@@ -140,6 +140,33 @@ function FieldSupport({
   return null;
 }
 
+/** 接近硬上限的阈值（规范 §7.4：读屏提示只在接近上限时进入）。 */
+const CHARACTER_COUNT_NEAR_RATIO = 0.9;
+
+/**
+ * Character Count（规范 §3/§7.4）：Support 区右侧、不覆盖控件内容，
+ * 只由存在明确 maxLength 的字段渲染。视觉常显；读屏节流——只有达到
+ * 90% 才挂载 polite live region 状态文本，避免逐字播报。
+ */
+function CharacterCount({ value, max }: { value: number; max: number }) {
+  const nearLimit = value >= max * CHARACTER_COUNT_NEAR_RATIO;
+  return (
+    <span
+      data-character-count
+      className={`${SUPPORT_CLASS} shrink-0 tabular-nums text-muted`}
+    >
+      <span aria-hidden="true">
+        {value}/{max}
+      </span>
+      {nearLimit ? (
+        <span role="status" className="sr-only">
+          {`还可输入 ${max - value} 字`}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export type FieldProps = {
   label: string;
   isRequired?: boolean;
@@ -148,6 +175,8 @@ export type FieldProps = {
   /** 与 errorMessage 成对使用：仅有错误文案不绕过 invalid 状态（规范 §8） */
   isInvalid?: boolean;
   errorMessage?: string;
+  /** Support 区右侧槽位（规范 §3：Character Count）；不进入 aria-describedby */
+  supportEnd?: ReactNode;
   /** 只承担 Field 外部宽度与布局，不覆盖内部色面、圆角、高度、间距与状态 */
   className?: string;
   children: ReactNode;
@@ -156,7 +185,8 @@ export type FieldProps = {
 /**
  * 基础 Field：Label、可选标记、Description/Error 与控件的稳定 ID 关联
  * 由 react-aria-components TextField 上下文提供。结构顺序固定
- * Label → Control → Support（规范 §3）。
+ * Label → Control → Support（规范 §3）；Support 区内 Description/Error
+ * 居左，supportEnd（如 Character Count）居右，同一行位不堆叠。
  */
 export function Field({
   label,
@@ -165,9 +195,11 @@ export function Field({
   description,
   isInvalid,
   errorMessage,
+  supportEnd,
   className = '',
   children,
 }: FieldProps) {
+  const hasSupport = !!(isInvalid && errorMessage) || !!description;
   return (
     <RACTextField
       isRequired={isRequired}
@@ -176,11 +208,18 @@ export function Field({
     >
       <FieldLabelRow label={label} isOptional={isOptional} />
       {children}
-      <FieldSupport
-        description={description}
-        isInvalid={isInvalid}
-        errorMessage={errorMessage}
-      />
+      {hasSupport || supportEnd ? (
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="min-w-0 flex-1">
+            <FieldSupport
+              description={description}
+              isInvalid={isInvalid}
+              errorMessage={errorMessage}
+            />
+          </span>
+          {supportEnd}
+        </span>
+      ) : null}
     </RACTextField>
   );
 }
@@ -395,6 +434,13 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
     // Clear：只在启用（非 disabled/readOnly）且有值时出现（规范 §7.2）
     const showClear = !!isClearable && !disabled && !readOnly && !!value;
 
+    // Character Count（规范 §7.4）：计数从受控 value 派生；非受控时跟踪
+    // defaultValue 与后续输入。只在存在明确 maxLength 时显示。
+    const [uncontrolledLength, setUncontrolledLength] = useState(
+      () => (defaultValue ?? '').length,
+    );
+    const length = value !== undefined ? value.length : uncontrolledLength;
+
     return (
       <Field
         label={label}
@@ -403,6 +449,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         description={description}
         isInvalid={isInvalid}
         errorMessage={errorMessage}
+        supportEnd={
+          maxLength !== undefined ? (
+            <CharacterCount value={length} max={maxLength} />
+          ) : null
+        }
         className={className}
       >
         <span className="relative">
@@ -422,7 +473,12 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
             defaultValue={defaultValue}
             onBlur={onBlur}
             onChange={
-              onChange ? (event) => onChange(event.target.value) : undefined
+              onChange || maxLength !== undefined
+                ? (event) => {
+                    setUncontrolledLength(event.target.value.length);
+                    onChange?.(event.target.value);
+                  }
+                : undefined
             }
             className={showClear ? 'pe-[var(--field-end-hit)]' : ''}
           />
@@ -491,6 +547,12 @@ export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>
     },
     ref,
   ) {
+    // Character Count（规范 §7.4）：同 TextField，只在明确 maxLength 时显示
+    const [uncontrolledLength, setUncontrolledLength] = useState(
+      () => (defaultValue ?? '').length,
+    );
+    const length = value !== undefined ? value.length : uncontrolledLength;
+
     return (
       <Field
         label={label}
@@ -499,6 +561,11 @@ export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>
         description={description}
         isInvalid={isInvalid}
         errorMessage={errorMessage}
+        supportEnd={
+          maxLength !== undefined ? (
+            <CharacterCount value={length} max={maxLength} />
+          ) : null
+        }
         className={className}
       >
         <Textarea
@@ -514,7 +581,12 @@ export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>
           defaultValue={defaultValue}
           onBlur={onBlur}
           onChange={
-            onChange ? (event) => onChange(event.target.value) : undefined
+            onChange || maxLength !== undefined
+              ? (event) => {
+                  setUncontrolledLength(event.target.value.length);
+                  onChange?.(event.target.value);
+                }
+              : undefined
           }
         />
       </Field>

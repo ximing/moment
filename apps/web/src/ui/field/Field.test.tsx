@@ -317,3 +317,105 @@ describe('TextareaField', () => {
     expect(textarea).toHaveAttribute('maxlength', '120');
   });
 });
+
+describe('Character Count（规范 §7.4）', () => {
+  it('只在存在明确 maxLength 时显示，位于 Support 区', () => {
+    const { container, rerender } = render(
+      <TextareaField label="一句话" name="bio" value="" onChange={() => {}} />,
+    );
+    expect(container.querySelector('[data-character-count]')).toBeNull();
+
+    rerender(
+      <TextareaField
+        label="一句话"
+        name="bio"
+        maxLength={120}
+        value=""
+        onChange={() => {}}
+      />,
+    );
+    const count = container.querySelector('[data-character-count]');
+    expect(count).not.toBeNull();
+    expect(count).toHaveTextContent('0/120');
+  });
+
+  it('计数从受控 value 派生；非受控时跟随输入', async () => {
+    const user = userEvent.setup();
+    const { container, rerender } = render(
+      <TextareaField
+        label="一句话"
+        name="bio"
+        maxLength={120}
+        value="早饭"
+        onChange={() => {}}
+      />,
+    );
+    expect(container.querySelector('[data-character-count]')).toHaveTextContent(
+      '2/120',
+    );
+
+    rerender(
+      <TextField label="昵称" name="nick" maxLength={10} defaultValue="" />,
+    );
+    await user.type(screen.getByRole('textbox', { name: '昵称' }), 'abc');
+    expect(container.querySelector('[data-character-count]')).toHaveTextContent(
+      '3/10',
+    );
+  });
+
+  it('与 Description 同区共存，Error 出现时也不消失', () => {
+    const { container, rerender } = render(
+      <TextareaField
+        label="一句话"
+        name="bio"
+        description="会显示在链资料页"
+        maxLength={120}
+        value=""
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('会显示在链资料页')).toBeInTheDocument();
+    expect(container.querySelector('[data-character-count]')).not.toBeNull();
+
+    rerender(
+      <TextareaField
+        label="一句话"
+        name="bio"
+        description="会显示在链资料页"
+        isInvalid
+        errorMessage="请补充一句话介绍"
+        maxLength={120}
+        value=""
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('请补充一句话介绍')).toBeInTheDocument();
+    expect(container.querySelector('[data-character-count]')).not.toBeNull();
+  });
+
+  it('视觉常显但读屏节流：低于 90% 无 live 提示，达到 90% 出现 status 文本', () => {
+    const { rerender } = render(
+      <TextareaField
+        label="一句话"
+        name="bio"
+        maxLength={10}
+        value="12345678"
+        onChange={() => {}}
+      />,
+    );
+    // 8/10 < 90%：视觉计数对辅助技术隐藏，不逐字播报
+    expect(screen.queryByRole('status')).toBeNull();
+
+    rerender(
+      <TextareaField
+        label="一句话"
+        name="bio"
+        maxLength={10}
+        value="123456789"
+        onChange={() => {}}
+      />,
+    );
+    // 9/10 ≥ 90%：进入读屏提示
+    expect(screen.getByRole('status')).toHaveTextContent('还可输入 1 字');
+  });
+});
