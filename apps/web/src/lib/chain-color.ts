@@ -1,9 +1,5 @@
 import { CHAIN_COLORS, type ChainColor } from '@moment/dto';
 
-export type StickerColor = 'pink' | 'blue' | 'mint' | 'purple';
-
-const LEGACY: readonly StickerColor[] = ['pink', 'blue', 'mint', 'purple'];
-
 function fnv(chainId: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < chainId.length; i++) {
@@ -22,25 +18,14 @@ export function resolveChainColor(chainId: string, color?: ChainColor | null): C
   return color ?? fallbackChainColor(chainId);
 }
 
-/** @deprecated 仅贴纸底仍用四色盘 */
-export function chainColor(chainId: string): StickerColor {
-  return LEGACY[fnv(chainId) % LEGACY.length]!;
-}
-
-export const stickerClasses: Record<StickerColor, string> = {
-  pink: 'bg-sticker-pink border-sticker-pink-line',
-  blue: 'bg-sticker-blue border-sticker-blue-line',
-  mint: 'bg-sticker-mint border-sticker-mint-line',
-  purple: 'bg-sticker-purple border-sticker-purple-line',
-};
-
+// 直接消费语义 token，不再经 tokens.css 的过渡 alias 段中转
 export const CHAIN_COLOR_CSS: Record<ChainColor, string> = {
   coral: 'var(--action)',
-  orange: 'var(--today)',
+  orange: 'var(--action)',
   pink: 'var(--dot-pink)',
   mint: 'var(--dot-mint)',
   sky: 'var(--dot-blue)',
   purple: 'var(--dot-purple)',
-  cocoa: 'var(--knot-older)',
-  gold: 'var(--dot-gold)',
+  cocoa: 'var(--stroke)',
+  gold: 'var(--select)',
 };
