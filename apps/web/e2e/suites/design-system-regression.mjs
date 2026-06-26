@@ -210,18 +210,24 @@ async function setTheme(bridge, theme) {
   //（index.html 防 FOUC snippet、ThemeService subscribeSystemTheme、页面 effect），
   // 所以写入后轮询确认计算背景色亮度与目标一致；被覆写时重设，5s 不一致硬失败。
   const wantDark = theme === 'dark';
-  const deadline = Date.now() + 5000;
+  const deadline = Date.now() + 20000;
   for (;;) {
     const applied = await bridge.evaluate(`(() => {
       document.documentElement.dataset.theme = ${quote(theme)};
       const bg = getComputedStyle(document.body).backgroundColor;
-      const m = bg.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-      if (!m) return false;
-      const lum = (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3;
+      const m = bg.match(/[0-9]+/g);
+      if (!m || m.length < 3) return false;
+      const lum = (Number(m[0]) + Number(m[1]) + Number(m[2])) / 3;
       return ${wantDark} ? lum < 128 : lum >= 128;
     })()`);
     if (applied) return;
-    if (Date.now() > deadline) throw new Error(`suite theme not applied: ${theme}`);
+    if (Date.now() > deadline) {
+      const dbg = await bridge.evaluate(`(() => {
+        const bg = getComputedStyle(document.body).backgroundColor;
+        return bg + ' dt=' + document.documentElement.dataset.theme + ' url=' + location.href;
+      })()`);
+      throw new Error(`suite theme not applied: ${theme} (actual: ${dbg})`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 120));
   }
 }
@@ -332,8 +338,19 @@ async function captureBaselineCase(context, entry) {
   await bridge.setViewport(entry.viewport.width, entry.viewport.height);
   await bridge.open(`${env.webBaseUrl}${resolveRoute(entry.route, fixture)}`);
   await installTracker(bridge);
+  // 先等首屏主题/防 FOUC snippet 等初始 mutation 稳定，再写目标主题——
+  // 过早轮询会把"snippet 尚未应用当前 dataset.theme"误判为目标主题已生效。
+  await waitForVisualIdle(bridge);
   await setTheme(bridge, entry.theme);
+  // feed/chain 页的 FeedService 数据晚于视觉静默到达：以确定性时刻文案为数据落地信号。
+  if (entry.routeSlug !== 'design-lab') {
+    await waitForText(bridge, EXPECTED.imageMoment);
+  }
   const contentEvidence = await assertRequiredContent(bridge, entry.requiredContent);
+  const missing = contentEvidence.filter((e) => !e.ok);
+  if (missing.length > 0) {
+    throw new Error(`suite requiredContent missing for ${name}: ${missing.map((e) => e.label).join(', ')}`);
+  }
   await waitForVisualIdle(bridge);
   // 视觉静默后二次确认主题未被 late mutation 覆写（截图前最后一道闸）。
   await setTheme(bridge, entry.theme);
@@ -386,8 +403,16 @@ async function exerciseOverlayKeyboard(bridge, { openName, overlayProbe, closePr
   ).then(() => true, () => false);
   await bridge.press('Tab');
   await bridge.press('Shift+Tab');
-  await bridge.press('Escape');
-  await waitFor(bridge, closeProbe, { label: `${openName} overlay closed` });
+  // CSI send_keys 的 Escape 在 react-aria 浮层上不触发 React keydown 合成
+  //（探针实证 send_keys 后浮层残留，合成 dispatchEvent 可正常关闭），
+  // 故键盘关闭路径用合成事件驱动。
+  await bridge.evaluate(`(() => {
+    const overlay = document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]');
+    if (!overlay) return false;
+    overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    return true;
+  })()`);
+  await waitFor(bridge, closeProbe, { label: `${openName} overlay closed`, timeoutMs: 20000 });
   const restored = await activeElementInfo(bridge);
   return { openName, focusInside, restoredTo: restored.name, triggerWas: trigger.name, pass: focusInside };
 }
@@ -398,9 +423,9 @@ async function runOverlayJourneys(context) {
   await bridge.setViewport(390, 844);
   await bridge.open(`${env.webBaseUrl}/__design-lab`);
   await installTracker(bridge);
-  await setTheme(bridge, 'light');
   await waitForText(bridge, 'Design Lab');
   await waitForVisualIdle(bridge);
+  await setTheme(bridge, 'light');
 
   evidence.push(await exerciseOverlayKeyboard(bridge, {
     openName: '打开 Dialog',
@@ -588,6 +613,7 @@ async function runZoomJourney(context) {
   await bridge.setViewport(1440, 900);
   await bridge.open(`${env.webBaseUrl}/`);
   await installTracker(bridge);
+  await waitForVisualIdle(bridge);
   await setTheme(bridge, 'light');
   await waitForText(bridge, EXPECTED.feedTitle);
   await waitForVisualIdle(bridge);
@@ -710,6 +736,9 @@ export async function run(context) {
   // 场景 3：路由旅程。
   const tour = await runRouteTour(context);
   record('route-tour', tour, tour.every((entry) => entry.ok));
+
+  // 路由旅程访问过 /share/（applyTheme 强制浅色），为基线矩阵恢复 owner 主题偏好。
+  await bridge.evaluate(`(() => { try { localStorage.setItem('moment:theme', 'light'); } catch { /* ignore */ } document.documentElement.dataset.theme = 'light'; true })()`);
 
   // 场景 4：24 条基线矩阵（只迭代 manifest，绝不计算或接受调用方给定的基线路径）。
   for (const entry of manifest) {

@@ -150,11 +150,20 @@ export const VISUAL_IDLE_SCRIPT = `(async () => {
       video.addEventListener('error', () => resolve(undefined), { once: true });
     }))),
   );
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined))));
+  // 后台/被抢占标签页 rAF 永不回调；bringToFront 在隐藏标签上也不保证生效。
+  // 用 rAF 与 800ms 竞速：可见时两帧即 resolve，隐藏时按超时放行（截图语义由
+  // fonts/decode/network-idle 保证，rAF 仅作布局缓冲）。
+  await Promise.race([
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))),
+    new Promise((resolve) => setTimeout(resolve, 800)),
+  ]);
   return true;
 })()`;
 
 export async function waitForVisualIdle(bridge) {
+  // 多 session 共享同一物理标签页时，本标签随时可能被抢回后台
+  //（hidden 下 requestAnimationFrame 永不回调），每次视觉等待前重确认前台。
+  await bridge.bringToFront();
   await bridge.evaluate(VISUAL_IDLE_SCRIPT);
   await bridge.waitForNetworkIdle();
 }

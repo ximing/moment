@@ -82,11 +82,16 @@ export function createBridge({
     request,
 
     async open(url) {
-      // 隐藏标签页里 requestAnimationFrame 被 Chrome 节流（E2E 探针实证：
-      // visibilityState=hidden 时 rAF 永不回调），导航后必须恢复到前台。
       const result = await request('navigate', { url });
-      await request('cdp', { method: 'Page.bringToFront', params: {} });
+      await this.bringToFront();
       return result;
+    },
+
+    bringToFront() {
+      // 隐藏标签页里 requestAnimationFrame 被 Chrome 节流（E2E 探针实证：
+      // visibilityState=hidden 时 rAF 永不回调）。多 session 共享同一物理
+      // 标签页时前台会被抢走，故暴露为独立操作供每个视觉等待前重确认。
+      return request('cdp', { method: 'Page.bringToFront', params: {} });
     },
 
     click(selector) {
