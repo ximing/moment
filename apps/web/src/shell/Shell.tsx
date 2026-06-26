@@ -62,7 +62,8 @@ export const Shell = observer(function Shell() {
             开一条新的链
           </button>
         </nav>
-        <div className="shrink-0 border-t border-line py-4">
+        {/* 底部用户区与导航之间不留分割横线（不要重分割感），用留白分隔 */}
+        <div className="shrink-0 py-4">
           <UserMenu unread={unread} />
         </div>
       </aside>
