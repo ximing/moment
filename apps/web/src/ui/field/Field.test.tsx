@@ -418,4 +418,21 @@ describe('Character Count（规范 §7.4）', () => {
     // 9/10 ≥ 90%：进入读屏提示
     expect(screen.getByRole('status')).toHaveTextContent('还可输入 1 字');
   });
+
+  it('受控 value 超出 maxLength：读屏剩余数钳到 0，视觉计数保持真实值', () => {
+    const { container } = render(
+      <TextareaField
+        label="一句话"
+        name="bio"
+        maxLength={10}
+        value="12345678901"
+        onChange={() => {}}
+      />,
+    );
+    // 11/10：视觉计数如实显示，读屏不出现负数
+    expect(container.querySelector('[data-character-count]')).toHaveTextContent(
+      '11/10',
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('还可输入 0 字');
+  });
 });

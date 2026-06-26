@@ -160,7 +160,8 @@ function CharacterCount({ value, max }: { value: number; max: number }) {
       </span>
       {nearLimit ? (
         <span role="status" className="sr-only">
-          {`还可输入 ${max - value} 字`}
+          {/* 受控 value 可能超出 maxLength：读屏剩余数钳到 0，视觉计数保持真实值 */}
+          {`还可输入 ${Math.max(0, max - value)} 字`}
         </span>
       ) : null}
     </span>
