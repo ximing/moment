@@ -1,5 +1,5 @@
 import { Service } from '@rabjs/react';
-import { MAX_IMAGE_BYTES, type MediaCompleteResponse, type MomentType } from '@moment/dto';
+import { MAX_IMAGE_BYTES, type MediaCompleteResponse, type MomentResponse, type MomentType, type PatchMomentInput } from '@moment/dto';
 import { ApiError } from '@moment/api-client';
 import { client } from '../../lib/api';
 import { compressImage, pickImages, pickVideo, validateVideo, type PickedVideo, type ReadyImage } from '../../lib/media';
@@ -40,10 +40,46 @@ export class ComposeService extends Service {
 
   tagNames: { id: string; name: string }[] = [];
 
-  /** 路由 param 进来（?chainId=）；compose 是 modal 路由，bindServices 实例随页面生灭，不挡幂等。 */
-  hydrate(chainId: string | undefined): void {
+  /** 编辑态：被编辑的 moment（spec §2）。非 null 时类型/链/媒体锁定，提交走 PATCH。 */
+  edit: MomentResponse | null = null;
+  /** 记录时区墙钟毫秒 = Date.parse(edit.happenedAt) − happenedTzOffset·60_000。
+   *  只作数值参与换算，绝不当设备本地时间用（spec §2 review C1）。 */
+  private editWallMs = 0;
+  /** 设备时区偏移（getTimezoneOffset 分钟），loadForEdit 采样一次、提交复用同一值（防 DST 期间偏移漂移）。 */
+  private editDeviceOffset = 0;
+
+  get isEdit(): boolean {
+    return this.edit !== null;
+  }
+
+  /** 路由 param 进来（?chainId= / ?momentId=）；compose 是 modal 路由，bindServices 实例随页面生灭，不挡幂等。 */
+  hydrate(chainId: string | undefined, momentId?: string): void {
+    if (momentId) {
+      // 编辑分支：加载/失败态单通道走 $model.loadForEdit
+      void this.loadForEdit(momentId).catch(() => undefined);
+      return;
+    }
     this.chainId = chainId;
     void this.loadTags().catch(() => undefined);
+  }
+
+  /** 编辑预填：content/tagIds/type/isBackfill + 发生时间两次平移（spec §2）。
+   *  链固定为 edit.chainId（见 activeChainId），不回退可编辑链，防标签载错链 → TAG_NOT_IN_CHAIN。 */
+  async loadForEdit(momentId: string): Promise<void> {
+    const m = await client.getMoment(momentId);
+    this.edit = m;
+    this.chainId = m.chainId;
+    this.type = m.type;
+    this.content = m.content;
+    this.tagIds = m.tags.map((t) => t.id);
+    this.isBackfill = m.isBackfill;
+    // 时区换算（spec 公式，禁止走 Date 本地字段捷径）：
+    // wallMs 是记录时区的墙钟毫秒；picker 按设备本地字段渲染 Date，
+    // 所以显示值 = wallMs + deviceOffset，使该 Date 的设备本地字段恰好等于记录时区墙钟。
+    this.editDeviceOffset = new Date().getTimezoneOffset();
+    this.editWallMs = Date.parse(m.happenedAt) - m.happenedTzOffset * 60_000;
+    this.happenedAt = new Date(this.editWallMs + this.editDeviceOffset * 60_000);
+    await this.loadTags();
   }
 
   /** 实时读全局链列表（与 FeedService.chainList 同款 getter），无一次性快照的过期窗口。 */
@@ -53,8 +89,10 @@ export class ComposeService extends Service {
       .map((c) => ({ id: c.id, name: c.name }));
   }
 
-  /** 路由参数的链若是 viewer 链（不在 editable 集合），回退到第一条可编辑链。 */
+  /** 编辑态链恒为 edit.chainId（spec §2：不回退可编辑链，防 TAG_NOT_IN_CHAIN）；
+   *  新建态：路由参数的链若是 viewer 链（不在 editable 集合），回退到第一条可编辑链。 */
   get activeChainId(): string | undefined {
+    if (this.edit) return this.edit.chainId;
     if (this.chainId && this.editableChains.some((c) => c.id === this.chainId)) return this.chainId;
     return this.editableChains[0]?.id;
   }
@@ -114,8 +152,28 @@ export class ComposeService extends Service {
     this.tagIds = this.tagIds.includes(id) ? this.tagIds.filter((t) => t !== id) : [...this.tagIds, id];
   }
 
-  /** 提交：串行上传（进度聚合）→ createMoment → emit。前置校验失败抛 Error（中文 message）。 */
+  /** 发生时间是否被改过（spec §2 判断式：还原成墙钟毫秒再比，不能直接比 getTime()）。 */
+  private get timeEdited(): boolean {
+    if (!this.edit) return false;
+    return this.happenedAt.getTime() - this.editDeviceOffset * 60_000 !== this.editWallMs;
+  }
+
+  /** picker 变更入口：编辑态按「记录时区还原的真实毫秒」重算补发标记（对齐 web：abs > 5min，未来也算补发）；
+   *  新建态沿用原有本地毫秒口径。 */
+  onHappenedAtChange(d: Date): void {
+    this.happenedAt = d;
+    if (this.edit) {
+      const newMs = d.getTime() - this.editDeviceOffset * 60_000 + this.edit.happenedTzOffset * 60_000;
+      this.isBackfill = Math.abs(newMs - Date.now()) > 5 * 60_000;
+    } else {
+      this.isBackfill = d.getTime() < Date.now() - 10 * 60_000;
+    }
+  }
+
+  /** 提交：编辑态走 PATCH（submitEdit）；新建态串行上传（进度聚合）→ createMoment → emit。
+   *  前置校验失败抛 Error（中文 message）。 */
   async submit(): Promise<void> {
+    if (this.edit) return this.submitEdit();
     const activeChainId = this.activeChainId;
     if (!activeChainId) throw new Error('请选择要发布到的链（需要编辑权限）');
     // 角色前置校验：viewer 链（含深链/旧参数）挡在媒体上传之前，避免全量上传后才被服务端 403
@@ -166,6 +224,33 @@ export class ComposeService extends Service {
       this.emit('moment:changed', { momentId: created.id, chainId: activeChainId, op: 'create' }, 'global');
     } finally {
       this.progressLabel = null; // 失败路径也复位，避免「上传中 N%」「发布中…」永久停留
+    }
+  }
+
+  /** 编辑提交（spec §2）：patch 基础 { content, tagIds }；时间被改过才传 happenedAt
+   *  （按记录时区还原 ISO）并重算 isBackfill；媒体/类型/链不可改，不进 patch。 */
+  private async submitEdit(): Promise<void> {
+    const edit = this.edit;
+    if (!edit) return;
+    if (edit.type === 'text' && this.content.trim().length === 0) throw new Error('文字类型需要内容');
+    if (this.content.length > 5000) throw new Error('正文最多 5000 字');
+
+    const patch: PatchMomentInput = { content: this.content, tagIds: this.tagIds };
+    if (this.timeEdited) {
+      // 还原：newWallMs = picker − deviceOffset；iso = newWallMs + 记录时区偏移（spec 公式）
+      const newWallMs = this.happenedAt.getTime() - this.editDeviceOffset * 60_000;
+      const newMs = newWallMs + edit.happenedTzOffset * 60_000;
+      patch.happenedAt = new Date(newMs).toISOString();
+      // 对齐 web compose-panel：未来时间也算补发（review I4）
+      patch.isBackfill = Math.abs(newMs - Date.now()) > 5 * 60_000;
+    }
+
+    try {
+      this.progressLabel = '保存中…';
+      await client.updateMoment(edit.id, patch);
+      this.emit('moment:changed', { momentId: edit.id, chainId: edit.chainId, op: 'update' }, 'global');
+    } finally {
+      this.progressLabel = null;
     }
   }
 }

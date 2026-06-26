@@ -8,15 +8,17 @@ import { humanError } from '../../lib/errors';
 import { Screen } from '../../components/Screen';
 import { SegmentBar } from '../../components/SegmentBar';
 import { RequireAuth } from '../../components/RequireAuth';
+import { Loading } from '../../components/Loading';
+import { MediaGrid } from '../../components/MediaGrid';
 import { ComposeService } from './compose.service';
 
 const ComposeContent = observer(function ComposeContent() {
-  const params = useLocalSearchParams<{ chainId?: string }>();
+  const params = useLocalSearchParams<{ chainId?: string; momentId?: string }>();
   const service = useService(ComposeService);
 
   useEffect(() => {
-    service.hydrate(params.chainId);
-  }, [service, params.chainId]);
+    service.hydrate(params.chainId, params.momentId);
+  }, [service, params.chainId, params.momentId]);
 
   async function onPickImages(): Promise<void> {
     try {
@@ -36,33 +38,54 @@ const ComposeContent = observer(function ComposeContent() {
   }
 
   async function onSubmit(): Promise<void> {
+    const isEdit = service.isEdit;
     try {
       await service.submit();
-      Alert.alert('已发布', '可在时刻流中查看');
+      Alert.alert(isEdit ? '已保存' : '已发布', isEdit ? '' : '可在时刻流中查看');
       router.back();
     } catch (err) {
       // 前置校验（Error 中文 message）直接展示；API 错误走 humanError
-      Alert.alert('发布失败', err instanceof Error && !(err instanceof ApiError) ? err.message : humanError(err));
+      Alert.alert(isEdit ? '保存失败' : '发布失败', err instanceof Error && !(err instanceof ApiError) ? err.message : humanError(err));
     }
+  }
+
+  // 编辑态加载/失败单通道（$model.loadForEdit）：404/410 给「已被删除」区别文案（spec §5）
+  if (params.momentId && !service.edit) {
+    if (service.$model.loadForEdit.loading) return <Loading />;
+    const err = service.$model.loadForEdit.error;
+    if (err) {
+      const gone = err instanceof ApiError && (err.code === 'MOMENT_NOT_FOUND' || err.code === 'MOMENT_DELETED');
+      return (
+        <Screen>
+          <View style={styles.centerBox}>
+            <Text style={styles.errorText}>{gone ? '该时刻可能已被删除' : humanError(err)}</Text>
+            <Button title="返回" onPress={() => router.back()} />
+          </View>
+        </Screen>
+      );
+    }
+    return <Loading />;
   }
 
   return (
     <Screen scroll>
-      <SegmentBar<string>
-        options={[
-          { value: 'text', label: '文字' },
-          { value: 'media', label: '图文' },
-          { value: 'video', label: '视频' },
-        ]}
-        value={service.type}
-        onChange={(t) => {
-          service.type = t as typeof service.type;
-          service.images = [];
-          service.video = null;
-        }}
-      />
+      {service.isEdit ? null : (
+        <SegmentBar<string>
+          options={[
+            { value: 'text', label: '文字' },
+            { value: 'media', label: '图文' },
+            { value: 'video', label: '视频' },
+          ]}
+          value={service.type}
+          onChange={(t) => {
+            service.type = t as typeof service.type;
+            service.images = [];
+            service.video = null;
+          }}
+        />
+      )}
 
-      {service.editableChains.length > 1 ? (
+      {!service.isEdit && service.editableChains.length > 1 ? (
         <View style={styles.chipRow}>
           {service.editableChains.map((c) => (
             <Pressable key={c.id} style={[styles.chip, service.activeChainId === c.id && styles.chipActive]} onPress={() => service.setChain(c.id)}>
@@ -81,7 +104,9 @@ const ComposeContent = observer(function ComposeContent() {
         multiline
       />
 
-      {service.type === 'media' ? (
+      {service.isEdit && service.edit && service.edit.media.length > 0 ? <MediaGrid media={service.edit.media} /> : null}
+
+      {!service.isEdit && service.type === 'media' ? (
         <View style={styles.mediaBar}>
           <Button title={`选图（${service.images.length}/9）`} onPress={() => void onPickImages()} />
           {service.images.length > 0 ? (
@@ -89,11 +114,11 @@ const ComposeContent = observer(function ComposeContent() {
           ) : null}
         </View>
       ) : null}
-      {service.type === 'media' && service.images.length > 0 ? (
+      {!service.isEdit && service.type === 'media' && service.images.length > 0 ? (
         <Text style={styles.mediaHint}>已压缩 {service.images.length} 张（最长边 ≤2048px），共 {Math.round(service.images.reduce((s, i) => s + i.size, 0) / 1024)}KB</Text>
       ) : null}
 
-      {service.type === 'video' ? (
+      {!service.isEdit && service.type === 'video' ? (
         <View style={styles.mediaBar}>
           <Button title={service.video ? '重选视频' : '选择视频'} onPress={() => void onPickVideo()} />
           {service.video ? (
@@ -101,7 +126,7 @@ const ComposeContent = observer(function ComposeContent() {
           ) : null}
         </View>
       ) : null}
-      {service.type === 'video' && service.video ? (
+      {!service.isEdit && service.type === 'video' && service.video ? (
         <Text style={styles.mediaHint}>
           {Math.round(service.video.size / 1024 / 1024)}MB · {Math.floor(service.video.durationSeconds / 60)}分{service.video.durationSeconds % 60}秒 · 分片上传可断点重试
         </Text>
@@ -119,10 +144,7 @@ const ComposeContent = observer(function ComposeContent() {
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           onChange={(_e, d) => {
             service.showPicker = Platform.OS === 'ios';
-            if (d) {
-              service.happenedAt = d;
-              service.isBackfill = d.getTime() < Date.now() - 10 * 60_000;
-            }
+            if (d) service.onHappenedAtChange(d);
           }}
         />
       ) : null}
@@ -138,7 +160,11 @@ const ComposeContent = observer(function ComposeContent() {
       ) : null}
 
       {service.progressLabel ? <Text style={styles.progress}>{service.progressLabel}</Text> : null}
-      <Button title={service.$model.submit.loading ? '处理中…' : '发布'} onPress={() => void onSubmit()} disabled={service.$model.submit.loading} />
+      <Button
+        title={service.$model.submit.loading ? '处理中…' : service.isEdit ? '保存' : '发布'}
+        onPress={() => void onSubmit()}
+        disabled={service.$model.submit.loading}
+      />
     </Screen>
   );
 });
@@ -165,4 +191,6 @@ const styles = StyleSheet.create({
   dateBtn: { padding: 12, borderRadius: 8, backgroundColor: '#f2f2f2' },
   dateText: { fontSize: 14, color: '#333' },
   progress: { color: '#4a90d9', textAlign: 'center' },
+  centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 48 },
+  errorText: { fontSize: 14, color: '#888' },
 });
