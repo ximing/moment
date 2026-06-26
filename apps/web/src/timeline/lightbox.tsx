@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useMediaObjectUrl } from '@/media/useMediaObjectUrl';
+import { MediaSkeletonStyles, mediaSkeletonClass } from '@/media/MediaBlock';
 import { IconButton } from '@/ui/button/index';
 
 // 灯箱（Task 11）：受控 index，上一张/下一张按钮与 ArrowLeft/ArrowRight 都环绕；
@@ -74,11 +75,15 @@ function LightboxMedia({ media, shareToken }: { media: MomentMedia; shareToken?:
   const blobUrl = useMediaObjectUrl(shareToken ? null : media.id);
   const url = shareToken ? `${media.url}?st=${encodeURIComponent(shareToken)}` : blobUrl;
   if (!url) {
+    // 加载占位与 MediaBlock 同一呼吸动效（reduced-motion 静态化），保持骨架语言一致
     return (
-      <div
-        aria-hidden
-        className="h-64 w-64 animate-pulse rounded-surface-md bg-[color:color-mix(in_srgb,var(--bg)_12%,transparent)]"
-      />
+      <>
+        <MediaSkeletonStyles />
+        <div
+          aria-hidden
+          className={`h-64 w-64 rounded-surface-md bg-[color:color-mix(in_srgb,var(--bg)_12%,transparent)] ${mediaSkeletonClass}`}
+        />
+      </>
     );
   }
   if (media.mime.startsWith('video/')) {

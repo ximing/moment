@@ -17,6 +17,31 @@ function shareSrc(m: MomentMedia, shareToken: string): string {
   return `${m.url}?st=${encodeURIComponent(shareToken)}`;
 }
 
+/* ---------------------------------------------------------------------------
+ * 媒体加载占位动效：与 Feedback Skeleton 同构的低对比呼吸（--skeleton-cycle）。
+ * Feedback 的 keyframes 是其目录私有实现，这里独立命名自携；reduced-motion
+ * 下重定义 keyframes 为静态（同 moment-toast-in 的覆写手法）。Tailwind 配置
+ * 由 Task 2 锁定，动画类走 arbitrary value。lightbox 复用同一份。
+ * ------------------------------------------------------------------------- */
+export const mediaSkeletonClass =
+  'animate-[moment-media-skeleton_var(--skeleton-cycle)_ease-in-out_infinite]';
+
+export function MediaSkeletonStyles() {
+  return (
+    <style>{`
+@keyframes moment-media-skeleton {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes moment-media-skeleton {
+    0%, 100% { opacity: 1; }
+  }
+}
+`}</style>
+  );
+}
+
 export function MediaBlock({
   media,
   shareToken,
@@ -63,14 +88,22 @@ function ImageOne({
   const url = shareToken ? shareSrc(media, shareToken) : blobUrl;
   if (!url) {
     // 加载占位只消费 --feedback-skeleton；单图按声明宽高占位，多图按方形格
-    return single && media.width && media.height ? (
-      <div
-        aria-hidden
-        className="w-full animate-pulse bg-feedback-skeleton"
-        style={{ aspectRatio: `${media.width} / ${media.height}` }}
-      />
-    ) : (
-      <div aria-hidden className={`animate-pulse bg-feedback-skeleton ${single ? 'aspect-video' : 'aspect-square'}`} />
+    return (
+      <>
+        <MediaSkeletonStyles />
+        {single && media.width && media.height ? (
+          <div
+            aria-hidden
+            className={`w-full bg-feedback-skeleton ${mediaSkeletonClass}`}
+            style={{ aspectRatio: `${media.width} / ${media.height}` }}
+          />
+        ) : (
+          <div
+            aria-hidden
+            className={`bg-feedback-skeleton ${mediaSkeletonClass} ${single ? 'aspect-video' : 'aspect-square'}`}
+          />
+        )}
+      </>
     );
   }
   return (
@@ -116,7 +149,15 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
     );
   }
   if (!url) {
-    return <div aria-hidden className="aspect-video w-full animate-pulse rounded-surface-lg bg-feedback-skeleton" />;
+    return (
+      <>
+        <MediaSkeletonStyles />
+        <div
+          aria-hidden
+          className={`aspect-video w-full rounded-surface-lg bg-feedback-skeleton ${mediaSkeletonClass}`}
+        />
+      </>
+    );
   }
   return <video controls src={url} className="aspect-video w-full rounded-surface-lg bg-ink" />;
 }
