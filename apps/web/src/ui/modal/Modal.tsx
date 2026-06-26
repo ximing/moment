@@ -16,7 +16,7 @@ import { Button, IconButton } from '../button/index';
 // Modal 家族（规范：docs/superpowers/specs/2026-08-18-web-modal-dialog-sheet-design.md）
 // 视觉只消费 styles/tokens.css 经 Tailwind 语义映射发布的 overlay token：
 // 遮罩 bg-scrim / bg-scrim-nested，层级 z-overlay / z-overlay-nested，
-// 几何 max-w-dialog / max-w-alert-dialog / w-sheet、rounded-overlay /
+// 几何 max-w-dialog / max-w-alert-dialog / max-w-sheet、rounded-overlay /
 // rounded-sheet-mobile、p-overlay / p-overlay-mobile、gap-overlay-action、
 // top-sheet-mobile-top / top-overlay-gap / right-overlay-gap / bottom-overlay-gap，
 // 阴影 shadow-overlay。
@@ -112,9 +112,12 @@ function ModalSurface({
   // Sheet 是单一组件（规范 §5.2 / §5.3）：<768px 底部近全高、只留顶部圆角与
   // 10px 呼吸区；≥768px 经 md: 媒体查询类切换为右侧 12px 间距的 520px 浮层。
   // 页面不传 side，也不自行判断设备。
+  // 桌面宽度链 = md:w-full + md:max-w-sheet（同 Dialog 的 w-full + max-w-dialog）：
+  // sheet-w 只发布在 maxWidth 映射上，写 md:w-sheet 不会生成任何 CSS，
+  // 绝对定位下宽度退化为 shrink-to-fit（实测 1440px 视口仅 ~260px）。
   const modalClass =
     variant === 'sheet'
-      ? 'absolute inset-x-0 bottom-0 top-sheet-mobile-top flex flex-col md:left-auto md:top-overlay-gap md:right-overlay-gap md:bottom-overlay-gap md:w-sheet'
+      ? 'absolute inset-x-0 bottom-0 top-sheet-mobile-top flex flex-col md:left-auto md:top-overlay-gap md:right-overlay-gap md:bottom-overlay-gap md:w-full md:max-w-sheet'
       : `flex max-h-full w-full flex-col ${variant === 'alert' ? 'max-w-alert-dialog' : 'max-w-dialog'}`;
 
   const surfaceClass =

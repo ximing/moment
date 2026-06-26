@@ -236,6 +236,21 @@ describe('Sheet', () => {
     expect(sheets[0].className).toContain('rounded-sheet-mobile');
     expect(sheets[0].className).toContain('md:rounded-overlay');
   });
+
+  it('桌面宽度链是 md:w-full + md:max-w-sheet（规范 §5.2：min(520px, 100vw-24px)）', () => {
+    render(
+      <Sheet open title="记下此刻" onRequestClose={() => {}}>
+        <p>记录内容</p>
+      </Sheet>,
+    );
+    const sheet = screen.getByRole('dialog', { name: '记下此刻' });
+    const modal = sheet.parentElement as HTMLElement;
+    // sheet-w 只发布在 maxWidth 映射上：必须经 max-w-sheet 消费；
+    // 曾经写成 md:w-sheet（无对应工具类、不生成 CSS），桌面宽度退化为 shrink-to-fit
+    expect(modal.className).toContain('md:w-full');
+    expect(modal.className).toContain('md:max-w-sheet');
+    expect(modal.className).not.toContain('md:w-sheet');
+  });
 });
 
 describe('AlertDialog', () => {
