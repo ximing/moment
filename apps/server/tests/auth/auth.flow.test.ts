@@ -98,4 +98,57 @@ describe('auth 全流程', () => {
     const me = await request(app).get('/api/auth/me');
     expect(me.status).toBe(401);
   });
+
+  it('change-password：旧密码错误 400 INVALID_OLD_PASSWORD；成功后全端下线', async () => {
+    const reg = await request(app).post('/api/auth/register').send(alice);
+    const { accessToken, refreshToken } = reg.body.tokens as { accessToken: string; refreshToken: string };
+
+    // 无 token 401
+    const noAuth = await request(app)
+      .post('/api/auth/change-password')
+      .send({ oldPassword: alice.password, newPassword: 'new-secret-123' });
+    expect(noAuth.status).toBe(401);
+
+    // 旧密码错误 400（不是 401：避免客户端 refresh+重放误清登录态）
+    const wrongOld = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ oldPassword: 'wrong-old', newPassword: 'new-secret-123' });
+    expect(wrongOld.status).toBe(400);
+    expect(wrongOld.body.error.code).toBe('INVALID_OLD_PASSWORD');
+
+    // 新密码规则同 register：过短 400 VALIDATION_ERROR
+    const weakNew = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ oldPassword: alice.password, newPassword: 'short' });
+    expect(weakNew.status).toBe(400);
+    expect(weakNew.body.error.code).toBe('VALIDATION_ERROR');
+
+    // 等待 1s+：passwordChangedAt（秒精度）必须严格晚于 access token 的 iat，旧 token 才失效
+    await new Promise((r) => setTimeout(r, 1100));
+    const ok = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ oldPassword: alice.password, newPassword: 'new-secret-123' });
+    expect(ok.status).toBe(204);
+
+    // 旧 access token 失效（passwordChangedAt > iat）
+    const meAfter = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${accessToken}`);
+    expect(meAfter.status).toBe(401);
+
+    // 全部 refresh token 吊销（含当前会话）
+    const refAfter = await request(app).post('/api/auth/refresh').send({ refreshToken });
+    expect(refAfter.status).toBe(401);
+
+    // 旧密码不可登录，新密码可登录
+    const oldLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: alice.email, password: alice.password });
+    expect(oldLogin.status).toBe(401);
+    const newLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: alice.email, password: 'new-secret-123' });
+    expect(newLogin.status).toBe(200);
+  });
 });

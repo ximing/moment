@@ -1,4 +1,5 @@
 import {
+  changePasswordInputSchema,
   loginInputSchema,
   refreshInputSchema,
   registerInputSchema,
@@ -58,5 +59,14 @@ export class AuthController {
   @Authorized()
   updateMe(@CurrentUser() user: UserProfile, @Body() body: unknown): Promise<UserProfile> {
     return this.auth.updateMe(user.id, updateMeInputSchema.parse(body));
+  }
+
+  /** 改密即全端下线：passwordChangedAt 使旧 access token 失效 + 吊销全部 refresh token。 */
+  @Post('/change-password')
+  @HttpCode(204)
+  @OnUndefined(204)
+  @Authorized()
+  changePassword(@CurrentUser() user: UserProfile, @Body() body: unknown): Promise<void> {
+    return this.auth.changePassword(user.id, changePasswordInputSchema.parse(body));
   }
 }

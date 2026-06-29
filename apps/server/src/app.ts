@@ -31,6 +31,8 @@ export function createApp(): express.Express {
 
   app.use('/api/auth/login', loginRateLimiter);
   app.use('/api/auth/register', authRateLimiter);
+  // 改密校验旧密码，同 register 档限流防在线爆破
+  app.use('/api/auth/change-password', authRateLimiter);
   app.use('/api/public', publicShareRateLimiter);
 
   // 在 routing-controllers 路由前解析 Bearer token 并填充 request.user：

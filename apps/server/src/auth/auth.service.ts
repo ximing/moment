@@ -7,6 +7,7 @@ import {
   type AuthResponse,
   type ChainColor,
   type ChainIcon,
+  type ChangePasswordInput,
   type LoginInput,
   type RegisterInput,
   type UpdateMeInput,
@@ -78,6 +79,23 @@ export class AuthService {
 
   async logout(raw: string): Promise<void> {
     await this.tokens.revokeRefreshToken(raw);
+  }
+
+  /**
+   * 修改密码：校验旧密码 → 更新哈希 + passwordChangedAt（旧 access token 即刻失效，
+   * 见 authorization.ts）→ 吊销全部 refresh token。改密即全端下线（含当前会话），客户端需重新登录。
+   * 旧密码错误返回 400 而非 401：401 会触发 api-client 的 refresh+重放，误清登录态。
+   */
+  async changePassword(userId: string, input: ChangePasswordInput): Promise<void> {
+    const user = await this.getUserEntity(userId);
+    if (!(await verifyPassword(input.oldPassword, user.passwordHash))) {
+      throw new BadRequestError('INVALID_OLD_PASSWORD');
+    }
+    await db
+      .update(users)
+      .set({ passwordHash: await hashPassword(input.newPassword), passwordChangedAt: new Date() })
+      .where(eq(users.id, user.id));
+    await this.tokens.revokeAllForUser(userId);
   }
 
   async getUserEntity(userId: string): Promise<User> {
