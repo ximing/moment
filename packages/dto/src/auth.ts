@@ -21,6 +21,13 @@ export const refreshInputSchema = z.object({
 });
 export type RefreshInput = z.infer<typeof refreshInputSchema>;
 
+export const changePasswordInputSchema = z.object({
+  oldPassword: z.string().min(1).max(72),
+  /** 与 register 密码规则一致 */
+  newPassword: z.string().min(8).max(72),
+});
+export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;

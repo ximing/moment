@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { loginInputSchema, registerInputSchema, updateMeInputSchema } from './auth.js';
+import { changePasswordInputSchema, loginInputSchema, registerInputSchema, updateMeInputSchema } from './auth.js';
 
 test('registerInputSchema 归一化 email（trim + lowercase）', () => {
   const input = registerInputSchema.parse({
@@ -43,4 +43,12 @@ test('updateMeInputSchema：拒绝空 patch；接受头像色/图标与 mediaId'
 test('loginInputSchema 同样归一化 email', () => {
   const input = loginInputSchema.parse({ email: 'Bob@Example.com', password: 'x' });
   assert.equal(input.email, 'bob@example.com');
+});
+
+test('changePasswordInputSchema：新密码对齐 register 规则（8–72），旧密码非空即可', () => {
+  const ok = changePasswordInputSchema.parse({ oldPassword: 'x', newPassword: 'new-secret-1' });
+  assert.equal(ok.newPassword, 'new-secret-1');
+  assert.throws(() => changePasswordInputSchema.parse({ oldPassword: '', newPassword: 'new-secret-1' }));
+  assert.throws(() => changePasswordInputSchema.parse({ oldPassword: 'x', newPassword: 'short' }));
+  assert.throws(() => changePasswordInputSchema.parse({ oldPassword: 'x', newPassword: 'a'.repeat(73) }));
 });
