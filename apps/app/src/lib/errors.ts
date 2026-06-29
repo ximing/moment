@@ -2,6 +2,7 @@ import { ApiError } from '@moment/api-client';
 
 const COPY: Record<string, string> = {
   INVALID_CREDENTIALS: '邮箱或密码不对',
+  INVALID_OLD_PASSWORD: '旧密码不对',
   EMAIL_ALREADY_REGISTERED: '该邮箱已注册',
   UNAUTHORIZED: '登录过期了，请重新登录',
   CHAIN_NOT_FOUND: '看不到这条链，或它已经不在了',

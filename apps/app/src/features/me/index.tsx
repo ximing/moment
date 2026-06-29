@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Alert, Button, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { ApiError } from '@moment/api-client';
+import { Field } from '../../components/Field';
 import { humanError } from '../../lib/errors';
 import { AuthService } from '../../services/auth.service';
 import { MeService } from './me.service';
@@ -55,8 +56,62 @@ const MeContent = observer(function MeContent() {
       <Text style={styles.sectionTitle}>邮箱</Text>
       <Text style={styles.muted}>{user.email}</Text>
 
+      <Text style={styles.sectionTitle}>修改密码</Text>
+      <ChangePasswordForm service={service} onSuccess={() => void auth.logout().catch(() => undefined)} />
+
       <View style={styles.spacer} />
       <Button title="退出登录" color="#d33" onPress={onLogout} />
+    </View>
+  );
+});
+
+/** 修改密码：成功后服务端已全端下线——先提示，确认后 logout 收敛本地态（踢回 /login）。 */
+const ChangePasswordForm = observer(function ChangePasswordForm({
+  service,
+  onSuccess,
+}: {
+  service: MeService;
+  onSuccess: () => void;
+}) {
+  function submit(): void {
+    void service
+      .changePassword()
+      .then(() => {
+        Alert.alert('密码已修改', '所有设备已退出登录，请用新密码重新登录', [{ text: '好', onPress: onSuccess }]);
+      })
+      .catch((err) =>
+        Alert.alert('修改失败', err instanceof Error && !(err instanceof ApiError) ? err.message : humanError(err))
+      );
+  }
+
+  return (
+    <View style={styles.passwordForm}>
+      <Field
+        label="旧密码"
+        secureTextEntry
+        value={service.oldPasswordDraft}
+        onChangeText={(v) => (service.oldPasswordDraft = v)}
+        placeholder="当前密码"
+      />
+      <Field
+        label="新密码"
+        secureTextEntry
+        value={service.newPasswordDraft}
+        onChangeText={(v) => (service.newPasswordDraft = v)}
+        placeholder="8–72 位"
+      />
+      <Field
+        label="确认新密码"
+        secureTextEntry
+        value={service.confirmPasswordDraft}
+        onChangeText={(v) => (service.confirmPasswordDraft = v)}
+        placeholder="再输一遍新密码"
+      />
+      <Button
+        title={service.$model.changePassword.loading ? '提交中…' : '确认修改'}
+        disabled={service.$model.changePassword.loading}
+        onPress={submit}
+      />
     </View>
   );
 });
@@ -95,6 +150,7 @@ const styles = StyleSheet.create({
   nicknameRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   input: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#fff' },
   muted: { color: '#888', fontSize: 14 },
+  passwordForm: { gap: 8 },
   link: { color: '#4a90d9', fontSize: 14 },
   spacer: { flex: 1 },
 });
