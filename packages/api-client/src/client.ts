@@ -3,6 +3,7 @@ import type {
   AuthResponse,
   ChainDto,
   ChainMemberDto,
+  ChangePasswordInput,
   CommentDto,
   CommentListResponse,
   CreateChainInput,
@@ -57,6 +58,8 @@ export interface MomentClient {
   logout(refreshToken: string): Promise<void>;
   me(): Promise<UserProfile>;
   updateMe(input: UpdateMeInput): Promise<UserProfile>;
+  /** 204；改密即全端下线（含当前会话），调用方成功后应本地清会话并跳登录 */
+  changePassword(input: ChangePasswordInput): Promise<void>;
 
   listChains(): Promise<ChainDto[]>;
   getChain(chainId: string): Promise<ChainDto>;
@@ -128,6 +131,7 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
       http.request('/api/auth/logout', { method: 'POST', body: { refreshToken }, skipAuthRefresh: true }),
     me: () => http.request('/api/auth/me'),
     updateMe: (input) => http.request('/api/auth/me', { method: 'PATCH', body: input }),
+    changePassword: (input) => http.request('/api/auth/change-password', { method: 'POST', body: input }),
 
     listChains: () => http.request('/api/chains'),
     getChain: (chainId) => http.request(`/api/chains/${chainId}`),
