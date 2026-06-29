@@ -5,10 +5,14 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
+import { AuthService } from '../../services/auth.service';
+import { showMomentActions } from '../compose/moment-actions';
 import { FeedService } from './feed.service';
 
 const FeedContent = observer(function FeedContent() {
   const service = useService(FeedService);
+  const auth = useService(AuthService);
+  const myId = auth.user?.id; // 在 observer 渲染内取值，renderItem 闭包复用（禁解构 observable）
 
   if (service.moments.length === 0 && service.$model.loadFirst.loading) return <Loading />;
 
@@ -44,7 +48,19 @@ const FeedContent = observer(function FeedContent() {
         onEndReachedThreshold={0.4}
         onEndReached={() => void service.loadMore().catch(() => undefined)}
         renderItem={({ item }: { item: MomentResponse }) => (
-          <MomentCard moment={item} onPress={() => router.push(`/moments/${item.id}`)} />
+          <MomentCard
+            moment={item}
+            onPress={() => router.push(`/moments/${item.id}`)}
+            onLongPress={
+              // spec §4.2：长按编辑/删除仅作者本人的卡片生效
+              myId === item.author.id
+                ? () =>
+                    showMomentActions(item, () =>
+                      router.push({ pathname: '/compose', params: { momentId: item.id } }),
+                    )
+                : undefined
+            }
+          />
         )}
         ListEmptyComponent={
           <View style={styles.empty}>

@@ -8,11 +8,15 @@ import { humanError } from '../../lib/errors';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { SegmentBar } from '../../components/SegmentBar';
+import { AuthService } from '../../services/auth.service';
+import { showMomentActions } from '../compose/moment-actions';
 import { ChainHomeService, type ChainSegment } from './chain-home.service';
 
 const Content = observer(function Content() {
   const { chainId } = useLocalSearchParams<{ chainId: string }>();
   const service = useService(ChainHomeService);
+  const auth = useService(AuthService);
+  const myId = auth.user?.id; // 在 observer 渲染内取值，renderItem 闭包复用（禁解构 observable）
   const [segment, setSegment] = useState<ChainSegment>('timeline');
 
   useEffect(() => {
@@ -52,7 +56,19 @@ const Content = observer(function Content() {
           onEndReachedThreshold={0.4}
           onEndReached={() => void service.loadMore().catch(() => undefined)}
           renderItem={({ item }: { item: MomentResponse }) => (
-            <MomentCard moment={item} onPress={() => router.push(`/moments/${item.id}`)} />
+            <MomentCard
+              moment={item}
+              onPress={() => router.push(`/moments/${item.id}`)}
+              onLongPress={
+                // spec §4.2：长按编辑/删除仅作者本人的卡片生效
+                myId === item.author.id
+                  ? () =>
+                      showMomentActions(item, () =>
+                        router.push({ pathname: '/compose', params: { momentId: item.id } }),
+                      )
+                  : undefined
+              }
+            />
           )}
           ListEmptyComponent={<Text style={styles.empty}>还没有时刻</Text>}
         />

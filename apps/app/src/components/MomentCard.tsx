@@ -3,9 +3,18 @@ import type { MomentResponse } from '@moment/dto';
 import { formatMomentTime } from '../lib/format';
 import { MediaGrid } from './MediaGrid';
 
-export function MomentCard({ moment, onPress }: { moment: MomentResponse; onPress: () => void }) {
+/** spec §4.2：onLongPress 可选（Pressable 原生支持）；权限判断在列表侧，组件不含。 */
+export function MomentCard({
+  moment,
+  onPress,
+  onLongPress,
+}: {
+  moment: MomentResponse;
+  onPress: () => void;
+  onLongPress?: () => void;
+}) {
   return (
-    <Pressable style={styles.card} onPress={onPress}>
+    <Pressable style={styles.card} onPress={onPress} onLongPress={onLongPress}>
       <View style={styles.head}>
         <Text style={styles.author}>{moment.author.nickname}</Text>
         <Text style={styles.time}>
