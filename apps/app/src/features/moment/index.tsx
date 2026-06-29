@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { Alert, Button, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { REACTION_EMOJIS, type MomentMedia } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { formatMomentTime, formatRelative } from '../../lib/format';
 import { Loading } from '../../components/Loading';
 import { useMediaUri } from '../../lib/use-media-uri';
+import { AuthService } from '../../services/auth.service';
 import { MomentPageService } from './moment.service';
 
 function MomentImage({ media }: { media: MomentMedia }) {
@@ -32,6 +33,7 @@ function VideoBlock({ media }: { media: MomentMedia }) {
 const MomentContent = observer(function MomentContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const service = useService(MomentPageService);
+  const auth = useService(AuthService);
 
   useEffect(() => {
     service.hydrate(id);
@@ -53,11 +55,28 @@ const MomentContent = observer(function MomentContent() {
 
   const m = service.moment;
   const myEmoji = m.myReaction; // ReactionSummary = { emoji, count } 无 mine；我的表情在 myReaction
+  const isAuthor = auth.user?.id === m.author.id; // spec §4.1：编辑/删除入口仅作者本人可见
 
   function onEmoji(emoji: string): void {
     void service
       .setReaction(myEmoji === emoji ? null : emoji)
       .catch((err) => onError(err, '操作失败'));
+  }
+
+  function onDelete(): void {
+    Alert.alert('删除这条时刻？', '删除后不可恢复', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: () => {
+          void service
+            .deleteMoment()
+            .then(() => router.back()) // 刚删的是本页目标，回退比停留占位更顺（spec §3）
+            .catch((err) => onError(err, '删除失败'));
+        },
+      },
+    ]);
   }
 
   return (
@@ -70,6 +89,16 @@ const MomentContent = observer(function MomentContent() {
             {m.isBackfill ? ' · 补发' : ''} · 发布于 {formatRelative(m.createdAt)}
           </Text>
         </View>
+        {isAuthor ? (
+          <View style={styles.actionRow}>
+            <Pressable onPress={() => router.push({ pathname: '/compose', params: { momentId: m.id } })}>
+              <Text style={styles.actionEdit}>编辑</Text>
+            </Pressable>
+            <Pressable onPress={onDelete}>
+              <Text style={styles.actionDelete}>删除</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {m.content.length > 0 ? <Text style={styles.content}>{m.content}</Text> : null}
         {m.media.map((media) =>
           media.mime.startsWith('video/') ? (
@@ -155,6 +184,9 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   author: { fontWeight: '600', fontSize: 16 },
   time: { color: '#999', fontSize: 12 },
+  actionRow: { flexDirection: 'row', gap: 16 },
+  actionEdit: { color: '#4a90d9', fontSize: 14 },
+  actionDelete: { color: '#d33', fontSize: 14 },
   content: { fontSize: 16, lineHeight: 24 },
   image: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8, backgroundColor: '#eee' },
   video: { width: '100%', aspectRatio: 16 / 9, borderRadius: 8, backgroundColor: '#000' },

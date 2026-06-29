@@ -1,5 +1,6 @@
 import { Service } from '@rabjs/react';
 import type { CommentDto, MomentResponse } from '@moment/dto';
+import { ApiError } from '@moment/api-client';
 import { client } from '../../lib/api';
 import type { CommentChangedPayload, MomentChangedPayload } from '../../lib/events';
 
@@ -94,6 +95,20 @@ export class MomentPageService extends Service {
   async deleteComment(id: string): Promise<void> {
     await client.deleteComment(id);
     this.emit('comment:changed', { momentId: this.momentId }, 'global');
+  }
+
+  /** 删除本条 → emit moment:changed(op:'delete')（本页构造器监听器据此置 deleted 占位；
+   *  组件在成功回调里 router.back()——作者刚删的是本页目标，回退比停留占位更顺，spec §3）。
+   *  重试幂等（spec §5）：首次成功但响应丢失后重试会收 404/410，按已删除处理（照常 emit），不报错。 */
+  async deleteMoment(): Promise<void> {
+    const chainId = this.moment?.chainId ?? '';
+    try {
+      await client.deleteMoment(this.momentId);
+    } catch (err) {
+      const gone = err instanceof ApiError && (err.code === 'MOMENT_NOT_FOUND' || err.code === 'MOMENT_DELETED');
+      if (!gone) throw err;
+    }
+    this.emit('moment:changed', { momentId: this.momentId, chainId, op: 'delete' }, 'global');
   }
 
   /** emoji null = 取消自己的表情；成功 emit moment:changed(op:'react')。 */
