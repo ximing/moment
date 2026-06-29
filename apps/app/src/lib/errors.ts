@@ -23,6 +23,8 @@ const COPY: Record<string, string> = {
   INVITE_EXPIRED: '邀请已过期',
   INVITE_ALREADY_ACCEPTED: '邀请已被使用',
   INVITE_EMAIL_MISMATCH: '该邀请限定了其他邮箱',
+  MOMENT_NOT_FOUND: '该时刻可能已被删除',
+  MOMENT_DELETED: '该时刻可能已被删除',
   NETWORK_ERROR: '网络不太好，请重试',
   EMPTY_PATCH: '没有要保存的修改',
   CONTENT_REQUIRED: '先写一句此刻吧',
