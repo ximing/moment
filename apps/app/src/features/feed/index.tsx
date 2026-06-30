@@ -7,6 +7,7 @@ import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { AuthService } from '../../services/auth.service';
 import { showMomentActions } from '../compose/moment-actions';
+import { MemoriesEntryBar } from '../memories';
 import { FeedService } from './feed.service';
 
 const FeedContent = observer(function FeedContent() {
@@ -18,6 +19,8 @@ const FeedContent = observer(function FeedContent() {
 
   return (
     <View style={styles.flex}>
+      {/* 那年今日入口条（spec memories-today §5）：筛选条之上，有内容才渲染 */}
+      <MemoriesEntryBar />
       <View style={styles.filters}>
         <Chip label="全部链" active={service.chainId == null} onPress={() => service.setChainFilter(undefined)} />
         {service.chainList.map((c) => (
