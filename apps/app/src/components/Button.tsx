@@ -73,6 +73,7 @@ export function Button({
   const height = prominent ? t.controlHProminent : t.controlH;
   // 命中区不足 touchMin 时以 hitSlop 纵向补齐（spec §3.2 触控目标 44pt）
   const hitSlop = Math.max(0, (t.touchMin - height) / 2);
+  // loading 只禁点不灰化（对齐 web Button spec：Loading ≠ Disabled 静态样式）；disabled 才降透明度
   const inactive = disabled || loading;
 
   const labelStyle: StyleProp<TextStyle> = [
@@ -100,7 +101,7 @@ export function Button({
         variant === 'danger' && styles.danger,
         // 实心 variant 的 pressed 反馈走透明度；色面 variant 已在上面换色面
         pressed && (variant === 'primary' || variant === 'danger') && styles.solidPressed,
-        inactive && styles.disabled,
+        disabled && styles.disabled,
         style,
       ]}
     >
