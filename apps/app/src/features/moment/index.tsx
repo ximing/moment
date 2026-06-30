@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Alert, Button, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useLocalSearchParams, router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
@@ -7,12 +7,17 @@ import { REACTION_EMOJIS, type MomentMedia } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { formatMomentTime, formatRelative } from '../../lib/format';
 import { Loading } from '../../components/Loading';
+import { Button } from '../../components/Button';
 import { useMediaUri } from '../../lib/use-media-uri';
 import { AuthService } from '../../services/auth.service';
+import type { Theme } from '../../theme/theme';
+import { useTheme } from '../../theme/use-theme';
 import { MomentPageService } from './moment.service';
 
 function MomentImage({ media }: { media: MomentMedia }) {
   const uri = useMediaUri(media.id);
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
   if (!uri) return <View style={styles.image} />;
   return <Image source={{ uri }} style={styles.image} resizeMode="contain" />;
 }
@@ -21,11 +26,15 @@ function ReadyVideo({ uri }: { uri: string }) {
   const player = useVideoPlayer(uri, (p) => {
     p.loop = false;
   });
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
   return <VideoView player={player} contentFit="contain" style={styles.video} allowsFullscreen />;
 }
 
 function VideoBlock({ media }: { media: MomentMedia }) {
   const uri = useMediaUri(media.id);
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
   if (!uri) return <View style={styles.video} />;
   return <ReadyVideo uri={uri} />;
 }
@@ -34,6 +43,8 @@ const MomentContent = observer(function MomentContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const service = useService(MomentPageService);
   const auth = useService(AuthService);
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
 
   useEffect(() => {
     service.hydrate(id);
@@ -121,7 +132,7 @@ const MomentContent = observer(function MomentContent() {
             const active = myEmoji === emoji;
             return (
               <Pressable key={emoji} style={[styles.reaction, active && styles.reactionActive]} onPress={() => onEmoji(emoji)}>
-                <Text style={styles.reactionText}>
+                <Text style={[styles.reactionText, active && styles.reactionTextActive]}>
                   {emoji}
                   {summary && summary.count > 0 ? ` ${summary.count}` : ''}
                 </Text>
@@ -148,9 +159,13 @@ const MomentContent = observer(function MomentContent() {
         {service.comments.length === 0 ? <Text style={styles.noComment}>还没有评论</Text> : null}
         {service.hasMore ? (
           <Button
-            title={service.$model.loadMoreComments.loading ? '加载中…' : '加载更多评论'}
+            variant="secondary"
+            loading={service.$model.loadMoreComments.loading}
+            loadingText="加载中…"
             onPress={() => void service.loadMoreComments().catch((err) => onError(err, '加载失败'))}
-          />
+          >
+            加载更多评论
+          </Button>
         ) : null}
         <View />
       </ScrollView>
@@ -161,14 +176,16 @@ const MomentContent = observer(function MomentContent() {
           value={service.draft}
           onChangeText={(v) => (service.draft = v)}
           placeholder="写评论…（1000 字内）"
-          placeholderTextColor="#aaa"
+          placeholderTextColor={t.muted}
           multiline
         />
         <Button
-          title="发送"
-          disabled={service.$model.submitComment.loading || service.draft.trim().length === 0}
+          loading={service.$model.submitComment.loading}
+          disabled={service.draft.trim().length === 0}
           onPress={() => void service.submitComment().catch((err) => onError(err, '发送失败'))}
-        />
+        >
+          发送
+        </Button>
       </View>
     </KeyboardAvoidingView>
   );
@@ -176,34 +193,36 @@ const MomentContent = observer(function MomentContent() {
 
 export const MomentPage = bindServices(MomentContent, [MomentPageService]);
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  deleted: { color: '#999' },
-  body: { padding: 16, gap: 12 },
-  head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  author: { fontWeight: '600', fontSize: 16 },
-  time: { color: '#999', fontSize: 12 },
-  actionRow: { flexDirection: 'row', gap: 16 },
-  actionEdit: { color: '#4a90d9', fontSize: 14 },
-  actionDelete: { color: '#d33', fontSize: 14 },
-  content: { fontSize: 16, lineHeight: 24 },
-  image: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8, backgroundColor: '#eee' },
-  video: { width: '100%', aspectRatio: 16 / 9, borderRadius: 8, backgroundColor: '#000' },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tag: { color: '#4a90d9', fontSize: 13 },
-  reactionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  reaction: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: '#f2f2f2' },
-  reactionActive: { backgroundColor: '#dcebff' },
-  reactionText: { fontSize: 14 },
-  sectionTitle: { fontWeight: '600', fontSize: 15, marginTop: 8 },
-  comment: { backgroundColor: '#fafafa', borderRadius: 8, padding: 10 },
-  commentHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  commentAuthor: { fontWeight: '600', fontSize: 13 },
-  commentTime: { color: '#999', fontSize: 12, flex: 1 },
-  commentDelete: { color: '#d33', fontSize: 12 },
-  commentBody: { fontSize: 14, marginTop: 4, lineHeight: 20 },
-  noComment: { color: '#999', fontSize: 13 },
-  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#eee' },
-  input: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 8, maxHeight: 100 },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    flex: { flex: 1, backgroundColor: t.bg },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.space8 },
+    deleted: { color: t.muted },
+    body: { padding: t.space4, gap: t.space3 },
+    head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    author: { fontWeight: '600', fontSize: t.fontInput, color: t.ink },
+    time: { color: t.muted, fontSize: t.fontCaption },
+    actionRow: { flexDirection: 'row', gap: t.space4 },
+    actionEdit: { color: t.action, fontSize: t.fontLabel },
+    actionDelete: { color: t.danger, fontSize: t.fontLabel },
+    content: { fontSize: t.fontInput, lineHeight: 24, color: t.ink },
+    image: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8, backgroundColor: t.feedbackSkeleton },
+    video: { width: '100%', aspectRatio: 16 / 9, borderRadius: 8, backgroundColor: t.ink },
+    tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
+    tag: { color: t.tag, fontSize: t.fontSupport },
+    reactionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    reaction: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },
+    reactionActive: { backgroundColor: t.select },
+    reactionText: { fontSize: t.fontLabel, color: t.ink },
+    reactionTextActive: { color: t.selectFg },
+    sectionTitle: { fontWeight: '600', fontSize: t.fontBody, color: t.ink, marginTop: t.space2 },
+    comment: { backgroundColor: t.surface, borderRadius: 8, padding: 10 },
+    commentHead: { flexDirection: 'row', alignItems: 'center', gap: t.space2 },
+    commentAuthor: { fontWeight: '600', fontSize: t.fontSupport, color: t.ink },
+    commentTime: { color: t.muted, fontSize: t.fontCaption, flex: 1 },
+    commentDelete: { color: t.danger, fontSize: t.fontCaption },
+    commentBody: { fontSize: t.fontLabel, marginTop: t.space1, lineHeight: 20, color: t.ink },
+    noComment: { color: t.muted, fontSize: t.fontSupport },
+    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: t.space2, padding: t.space3, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line },
+    input: { flex: 1, borderWidth: 1, borderColor: t.line, borderRadius: 8, paddingHorizontal: 10, paddingTop: t.space2, paddingBottom: t.space2, maxHeight: 100, color: t.ink },
+  });

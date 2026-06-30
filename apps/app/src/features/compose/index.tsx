@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Alert, Button, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
@@ -10,11 +10,16 @@ import { SegmentBar } from '../../components/SegmentBar';
 import { RequireAuth } from '../../components/RequireAuth';
 import { Loading } from '../../components/Loading';
 import { MediaGrid } from '../../components/MediaGrid';
+import { Button } from '../../components/Button';
+import type { Theme } from '../../theme/theme';
+import { useTheme } from '../../theme/use-theme';
 import { ComposeService } from './compose.service';
 
 const ComposeContent = observer(function ComposeContent() {
   const params = useLocalSearchParams<{ chainId?: string; momentId?: string }>();
   const service = useService(ComposeService);
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
 
   useEffect(() => {
     service.hydrate(params.chainId, params.momentId);
@@ -59,7 +64,7 @@ const ComposeContent = observer(function ComposeContent() {
         <Screen>
           <View style={styles.centerBox}>
             <Text style={styles.errorText}>{gone ? '该时刻可能已被删除' : humanError(err)}</Text>
-            <Button title="返回" onPress={() => router.back()} />
+            <Button variant="secondary" onPress={() => router.back()}>返回</Button>
           </View>
         </Screen>
       );
@@ -100,7 +105,7 @@ const ComposeContent = observer(function ComposeContent() {
         value={service.content}
         onChangeText={(v) => (service.content = v)}
         placeholder={service.type === 'text' ? '记录这一刻…' : '配文（可选）'}
-        placeholderTextColor="#aaa"
+        placeholderTextColor={t.muted}
         multiline
       />
 
@@ -108,9 +113,9 @@ const ComposeContent = observer(function ComposeContent() {
 
       {!service.isEdit && service.type === 'media' ? (
         <View style={styles.mediaBar}>
-          <Button title={`选图（${service.images.length}/9）`} onPress={() => void onPickImages()} />
+          <Button variant="secondary" onPress={() => void onPickImages()}>选图（{service.images.length}/9）</Button>
           {service.images.length > 0 ? (
-            <Button title="清空" color="#d33" onPress={() => (service.images = [])} />
+            <Button variant="quiet" onPress={() => (service.images = [])}>清空</Button>
           ) : null}
         </View>
       ) : null}
@@ -120,9 +125,9 @@ const ComposeContent = observer(function ComposeContent() {
 
       {!service.isEdit && service.type === 'video' ? (
         <View style={styles.mediaBar}>
-          <Button title={service.video ? '重选视频' : '选择视频'} onPress={() => void onPickVideo()} />
+          <Button variant="secondary" onPress={() => void onPickVideo()}>{service.video ? '重选视频' : '选择视频'}</Button>
           {service.video ? (
-            <Button title="移除" color="#d33" onPress={() => (service.video = null)} />
+            <Button variant="quiet" onPress={() => (service.video = null)}>移除</Button>
           ) : null}
         </View>
       ) : null}
@@ -161,10 +166,13 @@ const ComposeContent = observer(function ComposeContent() {
 
       {service.progressLabel ? <Text style={styles.progress}>{service.progressLabel}</Text> : null}
       <Button
-        title={service.$model.submit.loading ? '处理中…' : service.isEdit ? '保存' : '发布'}
+        fullWidth
+        loading={service.$model.submit.loading}
+        loadingText="处理中…"
         onPress={() => void onSubmit()}
-        disabled={service.$model.submit.loading}
-      />
+      >
+        {service.isEdit ? '保存' : '发布'}
+      </Button>
     </Screen>
   );
 });
@@ -179,18 +187,20 @@ export function ComposePage() {
   );
 }
 
-const styles = StyleSheet.create({
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#f2f2f2' },
-  chipActive: { backgroundColor: '#4a90d9' },
-  chipText: { fontSize: 13, color: '#444' },
-  chipTextActive: { color: '#fff' },
-  content: { minHeight: 100, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 15, textAlignVertical: 'top' },
-  mediaBar: { flexDirection: 'row', gap: 12 },
-  mediaHint: { color: '#888', fontSize: 12 },
-  dateBtn: { padding: 12, borderRadius: 8, backgroundColor: '#f2f2f2' },
-  dateText: { fontSize: 14, color: '#333' },
-  progress: { color: '#4a90d9', textAlign: 'center' },
-  centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 48 },
-  errorText: { fontSize: 14, color: '#888' },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    // 选中态对齐 SegmentBar：ink 色面 + bg 文字（primary 只留给发布/保存）
+    chip: { paddingHorizontal: t.space3, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },
+    chipActive: { backgroundColor: t.ink },
+    chipText: { fontSize: t.fontSupport, color: t.muted },
+    chipTextActive: { color: t.bg },
+    content: { minHeight: 100, borderWidth: 1, borderColor: t.line, borderRadius: 8, padding: t.space3, fontSize: t.fontBody, color: t.ink, textAlignVertical: 'top' },
+    mediaBar: { flexDirection: 'row', gap: t.space3 },
+    mediaHint: { color: t.muted, fontSize: t.fontCaption },
+    dateBtn: { padding: t.space3, borderRadius: 8, backgroundColor: t.fieldBg },
+    dateText: { fontSize: t.fontLabel, color: t.ink },
+    progress: { color: t.action, textAlign: 'center' },
+    centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.space3, paddingVertical: 48 },
+    errorText: { fontSize: t.fontLabel, color: t.muted },
+  });
