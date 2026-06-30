@@ -2,6 +2,7 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import { ArrowLeft } from 'lucide-react';
 import { ComposerEntry } from '@/compose/composer-entry';
 import { canCompose } from '@/lib/roles';
+import { MemoriesEntry } from '@/memories/memories-entry';
 import { ChainListService } from '@/services/chain-list.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { Timeline } from '@/timeline/timeline';
@@ -49,6 +50,9 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
           </Button>
         )}
       </header>
+
+      {/* 那年今日入口条（spec memories-today §4）：有周年内容才渲染，点击展开同页内嵌面板 */}
+      <MemoriesEntry chainLookById={looks} />
 
       <TimelineRail
         index={service.monthIndex}
