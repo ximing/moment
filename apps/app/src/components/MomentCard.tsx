@@ -1,6 +1,9 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MomentResponse } from '@moment/dto';
 import { formatMomentTime } from '../lib/format';
+import type { Theme } from '../theme/theme';
+import { useTheme } from '../theme/use-theme';
 import { MediaGrid } from './MediaGrid';
 
 /** spec §4.2：onLongPress 可选（Pressable 原生支持）；权限判断在列表侧，组件不含。 */
@@ -13,6 +16,8 @@ export function MomentCard({
   onPress: () => void;
   onLongPress?: () => void;
 }) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
   return (
     <Pressable style={styles.card} onPress={onPress} onLongPress={onLongPress}>
       <View style={styles.head}>
@@ -25,9 +30,9 @@ export function MomentCard({
       {moment.content.length > 0 ? <Text style={styles.content}>{moment.content}</Text> : null}
       <MediaGrid media={moment.media} />
       <View style={styles.footer}>
-        {moment.tags.map((t) => (
-          <Text key={t.id} style={styles.tag}>
-            #{t.name}
+        {moment.tags.map((tag) => (
+          <Text key={tag.id} style={styles.tag}>
+            #{tag.name}
           </Text>
         ))}
         <Text style={styles.counts}>
@@ -38,13 +43,14 @@ export function MomentCard({
   );
 }
 
-const styles = StyleSheet.create({
-  card: { padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eee', backgroundColor: '#fff' },
-  head: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  author: { fontWeight: '600', fontSize: 15 },
-  time: { color: '#999', fontSize: 12 },
-  content: { fontSize: 15, lineHeight: 22, color: '#222' },
-  footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 8 },
-  tag: { color: '#4a90d9', fontSize: 13 },
-  counts: { color: '#999', fontSize: 13, marginLeft: 'auto' },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    card: { padding: t.space4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.line, backgroundColor: t.surface },
+    head: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+    author: { fontWeight: '600', fontSize: t.fontBody, color: t.ink },
+    time: { color: t.muted, fontSize: t.fontCaption },
+    content: { fontSize: t.fontBody, lineHeight: 22, color: t.ink },
+    footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.space2, marginTop: t.space2 },
+    tag: { color: t.tag, fontSize: t.fontSupport },
+    counts: { color: t.muted, fontSize: t.fontSupport, marginLeft: 'auto' },
+  });

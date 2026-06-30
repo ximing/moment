@@ -8,6 +8,8 @@ const config: ExpoConfig = {
   slug: 'moment',
   scheme: 'moment',
   version: '0.1.0',
+  // 缺省时 @expo/prebuild-config 回退 'light'，iOS 真机包深色主题不激活（spec §3.3）
+  userInterfaceStyle: 'automatic',
   platforms: ['ios', 'android'],
   ios: { bundleIdentifier: 'com.moment.app', supportsTablet: false },
   android: { package: 'com.moment.app' },

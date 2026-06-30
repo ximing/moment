@@ -1,8 +1,13 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
+import type { Theme } from '../theme/theme';
+import { useTheme } from '../theme/use-theme';
 
 export function ErrorText({ message }: { message: string | null }) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
   if (!message) return null;
   return <Text style={styles.error}>{message}</Text>;
 }
 
-const styles = StyleSheet.create({ error: { color: '#d33', fontSize: 13 } });
+const createStyles = (t: Theme) => StyleSheet.create({ error: { color: t.danger, fontSize: t.fontSupport } });
