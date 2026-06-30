@@ -1,15 +1,20 @@
-import { useEffect } from 'react';
-import { Alert, Button, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { ApiError } from '@moment/api-client';
 import { Field } from '../../components/Field';
+import { Button } from '../../components/Button';
 import { humanError } from '../../lib/errors';
 import { AuthService } from '../../services/auth.service';
+import type { Theme } from '../../theme/theme';
+import { useTheme } from '../../theme/use-theme';
 import { MeService } from './me.service';
 
 const MeContent = observer(function MeContent() {
   const auth = useService(AuthService);
   const service = useService(MeService);
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
 
   useEffect(() => {
     service.hydrateFromUser();
@@ -47,7 +52,9 @@ const MeContent = observer(function MeContent() {
         <Text style={styles.link}>换头像</Text>
       </Pressable>
       {user.avatarUrl ? (
-        <Button title="清除头像" color="#d33" disabled={service.$model.clearAvatar.loading} onPress={() => void service.clearAvatar().catch((err) => onError(err, '清除失败'))} />
+        <Pressable style={styles.centerBtn} disabled={service.$model.clearAvatar.loading} onPress={() => void service.clearAvatar().catch((err) => onError(err, '清除失败'))}>
+          <Text style={styles.danger}>清除头像</Text>
+        </Pressable>
       ) : null}
 
       <Text style={styles.sectionTitle}>昵称</Text>
@@ -60,7 +67,9 @@ const MeContent = observer(function MeContent() {
       <ChangePasswordForm service={service} onSuccess={() => void auth.logout().catch(() => undefined)} />
 
       <View style={styles.spacer} />
-      <Button title="退出登录" color="#d33" onPress={onLogout} />
+      <Button variant="quiet" style={styles.centerBtn} onPress={onLogout}>
+        退出登录
+      </Button>
     </View>
   );
 });
@@ -73,6 +82,9 @@ const ChangePasswordForm = observer(function ChangePasswordForm({
   service: MeService;
   onSuccess: () => void;
 }) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
+
   function submit(): void {
     void service
       .changePassword()
@@ -107,17 +119,17 @@ const ChangePasswordForm = observer(function ChangePasswordForm({
         onChangeText={(v) => (service.confirmPasswordDraft = v)}
         placeholder="再输一遍新密码"
       />
-      <Button
-        title={service.$model.changePassword.loading ? '提交中…' : '确认修改'}
-        disabled={service.$model.changePassword.loading}
-        onPress={submit}
-      />
+      <Button loading={service.$model.changePassword.loading} loadingText="提交中…" onPress={submit}>
+        确认修改
+      </Button>
     </View>
   );
 });
 
 /** 昵称输入行：TextInput 直接受控绑 service.nicknameDraft（点保存不依赖 blur 提交）。 */
 const TextInputRow = observer(function TextInputRow({ service }: { service: MeService }) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
   return (
     <View style={styles.nicknameRow}>
       <TextInput
@@ -125,32 +137,37 @@ const TextInputRow = observer(function TextInputRow({ service }: { service: MeSe
         value={service.nicknameDraft}
         onChangeText={(v) => (service.nicknameDraft = v)}
         placeholder="昵称（1–50 字）"
-        placeholderTextColor="#aaa"
+        placeholderTextColor={t.muted}
         maxLength={50}
       />
       <Button
-        title={service.$model.saveNickname.loading ? '保存中…' : '保存'}
-        disabled={service.$model.saveNickname.loading}
+        loading={service.$model.saveNickname.loading}
+        loadingText="保存中…"
         onPress={() => void service.saveNickname().catch((err) => Alert.alert('失败', err instanceof Error && !(err instanceof ApiError) ? err.message : humanError(err)))}
-      />
+      >
+        保存
+      </Button>
     </View>
   );
 });
 
 export const MePage = bindServices(MeContent, [MeService]);
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  body: { flex: 1, padding: 16, gap: 10 },
-  avatarBox: { alignItems: 'center', gap: 8, paddingVertical: 16 },
-  avatar: { width: 80, height: 80, borderRadius: 40 },
-  avatarPlaceholder: { backgroundColor: '#e5e5e5', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 32, color: '#888' },
-  sectionTitle: { fontWeight: '600', fontSize: 15, marginTop: 12 },
-  nicknameRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  input: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#fff' },
-  muted: { color: '#888', fontSize: 14 },
-  passwordForm: { gap: 8 },
-  link: { color: '#4a90d9', fontSize: 14 },
-  spacer: { flex: 1 },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    flex: { flex: 1, backgroundColor: t.bg },
+    body: { flex: 1, padding: t.space4, gap: 10, backgroundColor: t.bg },
+    avatarBox: { alignItems: 'center', gap: t.space2, paddingVertical: t.space4 },
+    avatar: { width: 80, height: 80, borderRadius: 40 },
+    avatarPlaceholder: { backgroundColor: t.fieldBg, alignItems: 'center', justifyContent: 'center' },
+    avatarText: { fontSize: 32, color: t.muted },
+    sectionTitle: { fontWeight: '600', fontSize: t.fontBody, color: t.ink, marginTop: t.space3 },
+    nicknameRow: { flexDirection: 'row', gap: t.space2, alignItems: 'center' },
+    input: { flex: 1, borderWidth: 1, borderColor: t.line, borderRadius: 8, paddingHorizontal: t.space3, paddingVertical: t.space2, backgroundColor: t.surface, color: t.ink },
+    muted: { color: t.muted, fontSize: t.fontLabel },
+    passwordForm: { gap: t.space2 },
+    link: { color: t.action, fontSize: t.fontLabel },
+    danger: { color: t.danger, fontSize: t.fontLabel },
+    centerBtn: { alignSelf: 'center', paddingVertical: t.space1 },
+    spacer: { flex: 1 },
+  });

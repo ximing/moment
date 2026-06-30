@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
@@ -5,6 +6,9 @@ import { observer, useService } from '@rabjs/react';
 import type { NotificationDto } from '@moment/dto';
 import { NotificationService } from '../../services/notification.service';
 import { formatRelative } from '../../lib/format';
+import { Button } from '../../components/Button';
+import type { Theme } from '../../theme/theme';
+import { useTheme } from '../../theme/use-theme';
 
 const TYPE_LABEL: Record<string, string> = {
   'moment.created': '新时刻',
@@ -38,6 +42,8 @@ function payloadTitle(n: NotificationDto): string {
 
 export const NotificationsPage = observer(function NotificationsPage() {
   const service = useService(NotificationService);
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
 
   function onOpen(n: NotificationDto): void {
     const { momentId, chainId } = targetOf(n);
@@ -49,11 +55,15 @@ export const NotificationsPage = observer(function NotificationsPage() {
   return (
     <View style={styles.flex}>
       {service.unreadCount > 0 ? (
-        <Pressable style={styles.markAll} onPress={() => void service.markAllRead().catch(() => undefined)}>
-          <Text style={styles.markAllText}>
-            {service.$model.markAllRead.loading ? '标记中…' : `全部标为已读（${service.unreadCount}）`}
-          </Text>
-        </Pressable>
+        <Button
+          variant="quiet"
+          style={styles.markAll}
+          loading={service.$model.markAllRead.loading}
+          loadingText="标记中…"
+          onPress={() => void service.markAllRead().catch(() => undefined)}
+        >
+          全部标为已读（{service.unreadCount}）
+        </Button>
       ) : null}
       <FlashList
         data={service.items}
@@ -85,17 +95,17 @@ export const NotificationsPage = observer(function NotificationsPage() {
   );
 });
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#f6f6f6' },
-  markAll: { padding: 12 },
-  markAllText: { color: '#4a90d9', textAlign: 'center', fontSize: 14 },
-  list: { padding: 12 },
-  loadingMore: { textAlign: 'center', color: '#999', padding: 12 },
-  item: { padding: 12, borderRadius: 8, backgroundColor: '#fff', marginBottom: 8 },
-  unread: { backgroundColor: '#eef5ff' },
-  title: { fontWeight: '600', fontSize: 15 },
-  body: { color: '#444', fontSize: 14, marginTop: 2 },
-  time: { color: '#999', fontSize: 12, marginTop: 4 },
-  empty: { padding: 32, alignItems: 'center' },
-  emptyText: { color: '#999' },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    flex: { flex: 1, backgroundColor: t.bg },
+    markAll: { alignSelf: 'center', marginVertical: t.space2 },
+    list: { padding: t.space3 },
+    loadingMore: { textAlign: 'center', color: t.muted, padding: t.space3 },
+    item: { padding: t.space3, borderRadius: 8, backgroundColor: t.surface, marginBottom: t.space2 },
+    unread: { backgroundColor: t.hoverSoft },
+    title: { fontWeight: '600', fontSize: t.fontBody, color: t.ink },
+    body: { color: t.ink, fontSize: t.fontLabel, marginTop: 2 },
+    time: { color: t.muted, fontSize: t.fontCaption, marginTop: t.space1 },
+    empty: { padding: t.space8, alignItems: 'center' },
+    emptyText: { color: t.muted },
+  });

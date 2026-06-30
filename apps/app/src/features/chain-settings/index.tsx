@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Alert, Button, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { CHAIN_COLORS, CHAIN_ICONS } from '@moment/dto';
@@ -9,6 +9,9 @@ import { AuthService } from '../../services/auth.service';
 import { formatRelative } from '../../lib/format';
 import { Loading } from '../../components/Loading';
 import { RequireAuth } from '../../components/RequireAuth';
+import { Button } from '../../components/Button';
+import type { Theme } from '../../theme/theme';
+import { useTheme } from '../../theme/use-theme';
 import { ChainSettingsService } from './chain-settings.service';
 
 const ROLE_LABEL: Record<string, string> = { owner: '主理人', editor: '编辑', viewer: '只读' };
@@ -17,6 +20,8 @@ const Content = observer(function Content() {
   const { chainId } = useLocalSearchParams<{ chainId: string }>();
   const service = useService(ChainSettingsService);
   const auth = useService(AuthService);
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
 
   useEffect(() => {
     service.hydrate(chainId);
@@ -31,7 +36,9 @@ const Content = observer(function Content() {
     return (
       <View style={styles.center}>
         <Text style={styles.muted}>链加载失败</Text>
-        <Button title="重试" onPress={() => void service.loadChain().catch(() => undefined)} />
+        <Button variant="secondary" style={styles.centerBtn} onPress={() => void service.loadChain().catch(() => undefined)}>
+          重试
+        </Button>
       </View>
     );
   }
@@ -110,14 +117,14 @@ const Content = observer(function Content() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.body}>
+    <ScrollView style={styles.flex} contentContainerStyle={styles.body}>
       <Stack.Screen options={{ title: '链设置' }} />
 
       <Text style={styles.sectionTitle}>资料{isOwner ? '' : '（仅主理人可修改）'}</Text>
       {isOwner ? (
         <>
-          <TextInput style={styles.input} value={service.formName} onChangeText={(v) => (service.formName = v)} placeholder="链名（1–100 字）" placeholderTextColor="#aaa" />
-          <TextInput style={styles.input} value={service.formDescription} onChangeText={(v) => (service.formDescription = v)} placeholder="描述（可选）" placeholderTextColor="#aaa" multiline />
+          <TextInput style={styles.input} value={service.formName} onChangeText={(v) => (service.formName = v)} placeholder="链名（1–100 字）" placeholderTextColor={t.muted} />
+          <TextInput style={styles.input} value={service.formDescription} onChangeText={(v) => (service.formDescription = v)} placeholder="描述（可选）" placeholderTextColor={t.muted} multiline />
           <View style={styles.chipRow}>
             {CHAIN_COLORS.map((c) => (
               <Pressable key={c} style={[styles.chip, service.formColor === c && styles.chipActive]} onPress={() => (service.formColor = c)}>
@@ -132,14 +139,18 @@ const Content = observer(function Content() {
               </Pressable>
             ))}
           </View>
-          <Button title={service.$model.saveProfile.loading ? '保存中…' : '保存资料'} disabled={service.$model.saveProfile.loading} onPress={() => void service.saveProfile().catch((err) => onError(err, '保存失败'))} />
+          <Button loading={service.$model.saveProfile.loading} loadingText="保存中…" onPress={() => void service.saveProfile().catch((err) => onError(err, '保存失败'))}>
+            保存资料
+          </Button>
         </>
       ) : (
         <>
           <Text style={styles.row}>{service.chain.name}</Text>
           {service.chain.description ? <Text style={styles.muted}>{service.chain.description}</Text> : null}
           {myUserId ? (
-            <Button title="退出这条链" color="#d33" onPress={() => void service.leaveChain(myUserId).then(() => router.back()).catch((err) => onError(err, '退出失败'))} />
+            <Pressable style={styles.textBtn} onPress={() => void service.leaveChain(myUserId).then(() => router.back()).catch((err) => onError(err, '退出失败'))}>
+              <Text style={styles.danger}>退出这条链</Text>
+            </Pressable>
           ) : null}
         </>
       )}
@@ -150,7 +161,7 @@ const Content = observer(function Content() {
           <Text style={styles.row}>{m.nickname}</Text>
           <View style={styles.rowSide}>
             {isOwner && m.role !== 'owner' ? (
-              <Pressable onPress={() => onTransfer(m.userId, m.nickname)}>
+              <Pressable style={styles.textBtn} onPress={() => onTransfer(m.userId, m.nickname)}>
                 <Text style={styles.link}>转让</Text>
               </Pressable>
             ) : null}
@@ -163,15 +174,17 @@ const Content = observer(function Content() {
         <>
           <Text style={styles.sectionTitle}>邀请</Text>
           <Button
-            title="生成邀请链接（编辑）"
-            disabled={service.$model.createInvite.loading}
+            variant="secondary"
+            loading={service.$model.createInvite.loading}
             onPress={() =>
               void service
                 .createInvite()
                 .then((token) => onShare(`邀请你加入「${service.chain?.name ?? ''}」时光链：moment://invites/${token}`))
                 .catch((err) => onError(err, '生成邀请失败'))
             }
-          />
+          >
+            生成邀请链接（编辑）
+          </Button>
         </>
       ) : null}
 
@@ -186,7 +199,7 @@ const Content = observer(function Content() {
                 </Text>
               </View>
               {i.acceptedAt ? null : (
-                <Pressable onPress={() => void service.revokeInvite(i.id).catch((err) => onError(err, '吊销失败'))}>
+                <Pressable style={styles.textBtn} onPress={() => void service.revokeInvite(i.id).catch((err) => onError(err, '吊销失败'))}>
                   <Text style={styles.danger}>吊销</Text>
                 </Pressable>
               )}
@@ -206,10 +219,13 @@ const Content = observer(function Content() {
             </Pressable>
           </View>
           <Button
-            title={service.$model.createShareLink.loading ? '创建中…' : '创建分享链接'}
-            disabled={service.$model.createShareLink.loading}
+            variant="secondary"
+            loading={service.$model.createShareLink.loading}
+            loadingText="创建中…"
             onPress={() => void service.createShareLink().catch((err) => onError(err, '创建失败'))}
-          />
+          >
+            创建分享链接
+          </Button>
           {service.shareLinks.map((s) => (
             <View key={s.id} style={styles.rowBox}>
               <View style={styles.rowMain}>
@@ -220,10 +236,10 @@ const Content = observer(function Content() {
               </View>
               {s.revokedAt ? null : (
                 <View style={styles.rowSide}>
-                  <Pressable onPress={() => void onShare(`${webUrl}/share/${s.token}`)}>
+                  <Pressable style={styles.textBtn} onPress={() => void onShare(`${webUrl}/share/${s.token}`)}>
                     <Text style={styles.link}>发送</Text>
                   </Pressable>
-                  <Pressable onPress={() => void service.revokeShareLink(s.id).catch((err) => onError(err, '吊销失败'))}>
+                  <Pressable style={styles.textBtn} onPress={() => void service.revokeShareLink(s.id).catch((err) => onError(err, '吊销失败'))}>
                     <Text style={styles.danger}>吊销</Text>
                   </Pressable>
                 </View>
@@ -232,7 +248,9 @@ const Content = observer(function Content() {
           ))}
 
           <Text style={styles.sectionTitle}>危险区</Text>
-          <Button title="删除这条链" color="#d33" disabled={service.$model.deleteChain.loading} onPress={onDeleteChain} />
+          <Button variant="danger" loading={service.$model.deleteChain.loading} onPress={onDeleteChain}>
+            删除这条链
+          </Button>
         </>
       ) : null}
       <View />
@@ -250,21 +268,25 @@ export function ChainSettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
-  body: { padding: 16, gap: 10 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  sectionTitle: { fontWeight: '600', fontSize: 15, marginTop: 12 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#fff' },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#f2f2f2' },
-  chipActive: { backgroundColor: '#4a90d9' },
-  chipText: { fontSize: 13, color: '#444' },
-  chipTextActive: { color: '#fff' },
-  rowBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 8, padding: 14 },
-  rowMain: { flex: 1 },
-  rowSide: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  row: { fontSize: 15 },
-  link: { color: '#4a90d9', fontSize: 13 },
-  danger: { color: '#d33', fontSize: 13 },
-  muted: { color: '#999', fontSize: 12, marginTop: 2 },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    flex: { flex: 1, backgroundColor: t.bg },
+    body: { padding: t.space4, gap: 10 },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: t.bg, padding: t.space8, gap: t.space3 },
+    centerBtn: { alignSelf: 'center' },
+    sectionTitle: { fontWeight: '600', fontSize: t.fontBody, color: t.ink, marginTop: t.space3 },
+    input: { borderWidth: 1, borderColor: t.line, borderRadius: 8, paddingHorizontal: t.space3, paddingVertical: t.space2, backgroundColor: t.surface, color: t.ink },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    chip: { paddingHorizontal: t.space3, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },
+    chipActive: { backgroundColor: t.ink },
+    chipText: { fontSize: t.fontSupport, color: t.muted },
+    chipTextActive: { color: t.bg },
+    rowBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: t.surface, borderRadius: 8, padding: 14 },
+    rowMain: { flex: 1 },
+    rowSide: { flexDirection: 'row', alignItems: 'center', gap: t.space3 },
+    row: { fontSize: t.fontBody, color: t.ink },
+    textBtn: { alignSelf: 'flex-start', paddingVertical: t.space1 },
+    link: { color: t.action, fontSize: t.fontSupport },
+    danger: { color: t.danger, fontSize: t.fontSupport },
+    muted: { color: t.muted, fontSize: t.fontCaption, marginTop: 2 },
+  });
