@@ -9,6 +9,7 @@ import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
+import { wallDateOf } from '../../src/moments/wall-date.js';
 
 const app = createApp();
 
@@ -50,6 +51,7 @@ async function insertFlatMoments(): Promise<string[]> {
         content: `m-${t}-${k}`,
         happenedAt: new Date(base - t * 3600_000),
         happenedTzOffset: -480,
+        wallDate: wallDateOf(new Date(base - t * 3600_000), -480),
       });
     }
   }
@@ -136,6 +138,7 @@ describe('GET /api/chains/:chainId/moments（复合游标分页）', () => {
       content: '将删除',
       happenedAt: new Date(Date.UTC(2026, 7, 15, 6)),
       happenedTzOffset: -480,
+      wallDate: wallDateOf(new Date(Date.UTC(2026, 7, 15, 6)), -480),
       deletedAt: new Date(),
     });
 
@@ -171,6 +174,7 @@ describe('GET /api/moments/:id', () => {
       content: '详情',
       happenedAt: new Date(Date.UTC(2026, 7, 15, 1)),
       happenedTzOffset: -480,
+      wallDate: wallDateOf(new Date(Date.UTC(2026, 7, 15, 1)), -480),
     });
     expect(
       (await request(app).get(`/api/moments/${id}`).set('Authorization', `Bearer ${carol.token}`)).status
@@ -201,6 +205,7 @@ describe('PATCH /api/moments/:id', () => {
       content: '原内容',
       happenedAt: new Date(Date.UTC(2026, 7, 15, 2)),
       happenedTzOffset: -480,
+      wallDate: wallDateOf(new Date(Date.UTC(2026, 7, 15, 2)), -480),
     });
     const res = await request(app)
       .patch(`/api/moments/${id}`)
@@ -228,6 +233,7 @@ describe('PATCH /api/moments/:id', () => {
       content: 'bob 的',
       happenedAt: new Date(Date.UTC(2026, 7, 15, 3)),
       happenedTzOffset: -480,
+      wallDate: wallDateOf(new Date(Date.UTC(2026, 7, 15, 3)), -480),
     });
     const res = await request(app)
       .patch(`/api/moments/${id}`)
@@ -249,6 +255,7 @@ describe('DELETE /api/moments/:id', () => {
       content: '待删',
       happenedAt: new Date(Date.UTC(2026, 7, 15, 4)),
       happenedTzOffset: -480,
+      wallDate: wallDateOf(new Date(Date.UTC(2026, 7, 15, 4)), -480),
     });
     const res = await request(app)
       .delete(`/api/moments/${id}`)
@@ -276,6 +283,7 @@ describe('DELETE /api/moments/:id', () => {
       content: 'bob 的',
       happenedAt: new Date(Date.UTC(2026, 7, 15, 5)),
       happenedTzOffset: -480,
+      wallDate: wallDateOf(new Date(Date.UTC(2026, 7, 15, 5)), -480),
     });
     const denied = await request(app)
       .delete(`/api/moments/${id}`)
@@ -321,6 +329,7 @@ describe('DELETE /api/chains/:id（Phase 3 级联，兑现 Phase 2 事务锚点�
       content: '纯文本',
       happenedAt: new Date(Date.UTC(2026, 7, 15, 7)),
       happenedTzOffset: -480,
+      wallDate: wallDateOf(new Date(Date.UTC(2026, 7, 15, 7)), -480),
     });
     // uploader 名下未绑定的 tmp media：不属任何链，不得被级联误删
     const unboundId = randomUUID();
@@ -367,6 +376,7 @@ describe('DELETE /api/chains/:id（Phase 3 级联，兑现 Phase 2 事务锚点�
       content: '打标瞬间',
       happenedAt: new Date(Date.UTC(2026, 7, 15, 8)),
       happenedTzOffset: -480,
+      wallDate: wallDateOf(new Date(Date.UTC(2026, 7, 15, 8)), -480),
     });
     await db.insert(momentTags).values({ momentId, tagId });
 
@@ -390,6 +400,7 @@ describe('DELETE /api/chains/:id（Phase 3 级联，兑现 Phase 2 事务锚点�
       content: '有互动',
       happenedAt: new Date(Date.UTC(2026, 7, 15, 9)),
       happenedTzOffset: -480,
+      wallDate: wallDateOf(new Date(Date.UTC(2026, 7, 15, 9)), -480),
     });
 
     const commentRes = await request(app)

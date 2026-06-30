@@ -15,6 +15,7 @@ import type { StorageMetadata } from '../storage/base.adapter.js';
 import { replaceMomentTags } from '../tags/replace-moment-tags.js';
 import { logger } from '../utils/logger.js';
 import { serializeMoments } from './moment-serializer.js';
+import { wallDateOf } from './wall-date.js';
 
 @Service()
 export class MomentService {
@@ -67,6 +68,8 @@ export class MomentService {
         content: input.content,
         happenedAt,
         happenedTzOffset: input.happenedTzOffset,
+        // wall_date 冗余投影随 happenedAt/happenedTzOffset 一并写入（spec memories-today §1）
+        wallDate: wallDateOf(happenedAt, input.happenedTzOffset),
         isBackfill: input.isBackfill,
       });
 
@@ -156,12 +159,18 @@ export class MomentService {
     if (m.authorId !== userId) throw new ForbiddenError('NOT_MOMENT_AUTHOR');
 
     const updatedRow = await db.transaction(async (tx) => {
+      // happenedAt 或 happenedTzOffset 任一变更即按全量新值重算 wall_date（spec memories-today §1；
+      // 单独改 tzOffset 不改时间点也会改墙钟归日，必须重算）
+      const recomputeWallDate = input.happenedAt !== undefined || input.happenedTzOffset !== undefined;
+      const nextHappenedAt = input.happenedAt !== undefined ? new Date(input.happenedAt) : m.happenedAt;
+      const nextTzOffset = input.happenedTzOffset ?? m.happenedTzOffset;
       await tx
         .update(moments)
         .set({
           ...(input.content !== undefined ? { content: input.content } : {}),
-          ...(input.happenedAt !== undefined ? { happenedAt: new Date(input.happenedAt) } : {}),
+          ...(input.happenedAt !== undefined ? { happenedAt: nextHappenedAt } : {}),
           ...(input.happenedTzOffset !== undefined ? { happenedTzOffset: input.happenedTzOffset } : {}),
+          ...(recomputeWallDate ? { wallDate: wallDateOf(nextHappenedAt, nextTzOffset) } : {}),
           ...(input.isBackfill !== undefined ? { isBackfill: input.isBackfill } : {}),
           updatedAt: new Date(),
         })

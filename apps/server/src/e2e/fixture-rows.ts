@@ -17,6 +17,8 @@ import type {
 import type { StorageMetadata } from '../storage/base.adapter.js';
 import type { E2eFixtureCredentials } from './fixture-cli-contract.js';
 import { FIXTURE_IMAGE_MIME, FIXTURE_IMAGE_PNG, FIXTURE_IMAGE_STORAGE_KEY } from './fixture-asset.js';
+// 纯函数（无 config/DB/storage 依赖），与本文件 DB-free 约束兼容；wall_date 必须与写路径同公式
+import { wallDateOf } from '../moments/wall-date.js';
 
 export const ownerId = '00000000-0000-4000-8000-000000000011';
 export const viewerId = '00000000-0000-4000-8000-000000000012';
@@ -126,6 +128,7 @@ export async function buildFixtureRows(
         content: FIXTURE_TEXT_MOMENT_CONTENT,
         happenedAt: new Date('2025-12-31T15:30:00.000Z'),
         happenedTzOffset: -480,
+        wallDate: wallDateOf(new Date('2025-12-31T15:30:00.000Z'), -480),
         isBackfill: true,
         createdAt: fixedNow,
         updatedAt: fixedNow,
@@ -139,6 +142,7 @@ export async function buildFixtureRows(
         content: FIXTURE_IMAGE_MOMENT_CONTENT,
         happenedAt: new Date('2026-01-01T00:30:00.000Z'),
         happenedTzOffset: -480,
+        wallDate: wallDateOf(new Date('2026-01-01T00:30:00.000Z'), -480),
         isBackfill: true,
         createdAt: fixedNow,
         updatedAt: fixedNow,

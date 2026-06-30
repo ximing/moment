@@ -1,4 +1,4 @@
-import { index, mysqlEnum, mysqlTable, char, int, text, timestamp, boolean } from 'drizzle-orm/mysql-core';
+import { date, index, mysqlEnum, mysqlTable, char, int, text, timestamp, boolean } from 'drizzle-orm/mysql-core';
 import type { AnyMySqlColumn } from 'drizzle-orm/mysql-core';
 import { chains } from './chains.js';
 import { users } from './users.js';
@@ -20,12 +20,19 @@ export const moments = mysqlTable(
     happenedAt: timestamp('happened_at', { mode: 'date', fsp: 3 }).notNull(),
     /** 提交时时区偏移（分钟，供展示），如东八区 = -480 */
     happenedTzOffset: int('happened_tz_offset').notNull(),
+    /** 发生地墙钟日期（'YYYY-MM-DD'）= DATE(happened_at − INTERVAL happened_tz_offset MINUTE)，
+        写路径（create/update）随 happenedAt/happenedTzOffset 一并维护的纯冗余投影（那年今日 spec §1）；
+        展示仍用 happened_at + happened_tz_offset */
+    wallDate: date('wall_date', { mode: 'string' }).notNull(),
     isBackfill: boolean('is_backfill').notNull().default(false),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow().onUpdateNow(),
     deletedAt: timestamp('deleted_at', { mode: 'date' }),
   },
-  (t) => [index('idx_moments_chain_happened').on(t.chainId, t.happenedAt, t.id)]
+  (t) => [
+    index('idx_moments_chain_happened').on(t.chainId, t.happenedAt, t.id),
+    index('idx_moments_wall_date').on(t.wallDate),
+  ]
 );
 
 export type Moment = typeof moments.$inferSelect;

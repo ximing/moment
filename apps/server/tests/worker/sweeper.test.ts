@@ -5,6 +5,7 @@ import { media, moments, users } from '../../src/db/schema.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
+import { wallDateOf } from '../../src/moments/wall-date.js';
 import { handleMomentDeleted, handlers } from '../../src/worker/handlers.js';
 import { sweepSoftDeletedMomentMedia, sweepStaleUploadingMedia } from '../../src/worker/sweeper.js';
 
@@ -38,6 +39,7 @@ async function insertMomentWithMedia(opts: {
     content: 'x',
     happenedAt: new Date(),
     happenedTzOffset: 0,
+    wallDate: wallDateOf(new Date(), 0),
     deletedAt: opts.momentDeletedAt ?? null,
   });
   const mediaId = randomUUID();

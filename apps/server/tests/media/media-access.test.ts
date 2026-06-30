@@ -8,6 +8,7 @@ import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
+import { wallDateOf } from '../../src/moments/wall-date.js';
 
 const app = createApp();
 
@@ -53,6 +54,7 @@ async function insertMoment(chainId: string, authorId: string, deleted = false):
     content: 'with photo',
     happenedAt: new Date('2026-08-15T10:00:00Z'),
     happenedTzOffset: -480,
+    wallDate: wallDateOf(new Date('2026-08-15T10:00:00Z'), -480),
     deletedAt: deleted ? new Date() : null,
   });
   return id;

@@ -3,6 +3,7 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
 import { chainMembers, chains, momentTags, moments } from '../../src/db/schema.js';
+import { wallDateOf } from '../../src/moments/wall-date.js';
 
 export const app = createApp();
 
@@ -49,6 +50,7 @@ export async function insertMoment(opts: {
 }): Promise<string> {
   const id = randomUUID();
   const at = opts.createdAt ?? new Date();
+  const tzOffset = opts.happenedTzOffset ?? 0;
   await db.insert(moments).values({
     id,
     chainId: opts.chainId,
@@ -56,7 +58,9 @@ export async function insertMoment(opts: {
     type: 'text',
     content: opts.content ?? '内容',
     happenedAt: opts.happenedAt,
-    happenedTzOffset: opts.happenedTzOffset ?? 0,
+    happenedTzOffset: tzOffset,
+    // 写路径第四处（spec memories-today §1 review I2）：夹具必须与 create/update 同一公式补 wall_date
+    wallDate: wallDateOf(opts.happenedAt, tzOffset),
     isBackfill: opts.isBackfill ?? false,
     createdAt: at,
     updatedAt: at,

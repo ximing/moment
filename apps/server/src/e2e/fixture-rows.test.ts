@@ -155,6 +155,8 @@ describe('buildFixtureRows', () => {
           content: '2025 年最后一天：一起把这一年的温柔收好。',
           happenedAt: new Date('2025-12-31T15:30:00.000Z'),
           happenedTzOffset: -480,
+          // 东八区墙钟：UTC 15:30 + 8h = 23:30 → 当日
+          wallDate: '2025-12-31',
           isBackfill: true,
           createdAt: fixedNow,
           updatedAt: fixedNow,
@@ -168,6 +170,8 @@ describe('buildFixtureRows', () => {
           content: '2026 年第一天：新年的第一束光。',
           happenedAt: new Date('2026-01-01T00:30:00.000Z'),
           happenedTzOffset: -480,
+          // 东八区墙钟：UTC 00:30 + 8h = 08:30 → 当日
+          wallDate: '2026-01-01',
           isBackfill: true,
           createdAt: fixedNow,
           updatedAt: fixedNow,
