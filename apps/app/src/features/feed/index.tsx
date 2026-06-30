@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Link, router } from 'expo-router';
@@ -6,6 +7,8 @@ import type { MomentResponse } from '@moment/dto';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { AuthService } from '../../services/auth.service';
+import type { Theme } from '../../theme/theme';
+import { useTheme } from '../../theme/use-theme';
 import { showMomentActions } from '../compose/moment-actions';
 import { MemoriesEntryBar } from '../memories';
 import { FeedService } from './feed.service';
@@ -14,6 +17,8 @@ const FeedContent = observer(function FeedContent() {
   const service = useService(FeedService);
   const auth = useService(AuthService);
   const myId = auth.user?.id; // 在 observer 渲染内取值，renderItem 闭包复用（禁解构 observable）
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
 
   if (service.moments.length === 0 && service.$model.loadFirst.loading) return <Loading />;
 
@@ -82,6 +87,8 @@ const FeedContent = observer(function FeedContent() {
 });
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
   return (
     <Pressable style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
       <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
@@ -93,29 +100,31 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
 
 export const FeedPage = bindServices(FeedContent, [FeedService]);
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#f6f6f6' },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingVertical: 6 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e5e5' },
-  chipActive: { backgroundColor: '#4a90d9', borderColor: '#4a90d9' },
-  chipText: { fontSize: 13, color: '#444' },
-  chipTextActive: { color: '#fff' },
-  list: { paddingBottom: 16 },
-  empty: { padding: 48, alignItems: 'center' },
-  emptyText: { color: '#999' },
-  loadingMore: { textAlign: 'center', color: '#999', padding: 12 },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#4a90d9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-  },
-  fabText: { color: '#fff', fontSize: 28, lineHeight: 32 },
-  errorBanner: { color: '#d33', textAlign: 'center', padding: 8 },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    flex: { flex: 1, backgroundColor: t.bg },
+    filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: t.space3, paddingVertical: 6 },
+    // 选中态对齐 SegmentBar：ink 色面 + bg 文字（中性、不抢 FAB 唯一实心高强调）
+    chip: { paddingHorizontal: t.space3, paddingVertical: 6, borderRadius: 16, backgroundColor: t.surface, borderWidth: 1, borderColor: t.line },
+    chipActive: { backgroundColor: t.ink, borderColor: t.ink },
+    chipText: { fontSize: t.fontSupport, color: t.ink },
+    chipTextActive: { color: t.bg },
+    list: { paddingBottom: t.space4 },
+    empty: { padding: 48, alignItems: 'center' },
+    emptyText: { color: t.muted },
+    loadingMore: { textAlign: 'center', color: t.muted, padding: t.space3 },
+    fab: {
+      position: 'absolute',
+      right: 20,
+      bottom: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: t.action,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: 4,
+    },
+    fabText: { color: t.actionFg, fontSize: 28, lineHeight: 32 },
+    errorBanner: { color: t.danger, textAlign: 'center', padding: t.space2 },
+  });

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
+import type { Theme } from '../../theme/theme';
+import { useTheme } from '../../theme/use-theme';
 import { MemoriesService } from './memories.service';
 import { isDateKey, memoriesBarText, todayKey, yearGroupText } from './text';
 
@@ -16,6 +18,8 @@ export const MemoriesEntryBar = bindServices(
   observer(function MemoriesEntryBar() {
     const service = useService(MemoriesService);
     const [date] = useState(() => todayKey()); // 挂载时定格为字符串（spec §5 跨午夜不漂移）
+    const t = useTheme();
+    const styles = useMemo(() => createStyles(t), [t]);
     useEffect(() => {
       service.hydrate(date);
     }, [service, date]);
@@ -43,6 +47,8 @@ const MemoriesContent = observer(function MemoriesContent() {
   // hydrate 时定格：入口条带来的 date 优先（不合法/缺省回退设备本地今天）；
   // useState 初值保证页面存活跨午夜不漂移。
   const [date] = useState(() => (params.date && isDateKey(params.date) ? params.date : todayKey()));
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
   useEffect(() => {
     service.hydrate(date);
   }, [service, date]);
@@ -103,29 +109,30 @@ const MemoriesContent = observer(function MemoriesContent() {
 
 export const MemoriesTodayPage = bindServices(MemoriesContent, [MemoriesService]);
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#f6f6f6' },
-  bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 2,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-  },
-  barText: { flex: 1, fontSize: 14, color: '#222' },
-  barArrow: { fontSize: 14, color: '#999', marginLeft: 8 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  errorText: { color: '#d33', fontSize: 14 },
-  action: { color: '#4a90d9', fontSize: 15, paddingVertical: 4 },
-  empty: { color: '#999' },
-  list: { paddingBottom: 24 },
-  group: { marginTop: 12 },
-  groupHead: { paddingHorizontal: 16, paddingVertical: 6, fontSize: 14, fontWeight: '600', color: '#444' },
-  groupBody: { backgroundColor: '#fff' },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    flex: { flex: 1, backgroundColor: t.bg },
+    bar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginHorizontal: t.space3,
+      marginTop: t.space2,
+      marginBottom: 2,
+      paddingHorizontal: t.space3,
+      paddingVertical: 10,
+      borderRadius: 10,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.line,
+    },
+    barText: { flex: 1, fontSize: t.fontLabel, color: t.ink },
+    barArrow: { fontSize: t.fontLabel, color: t.muted, marginLeft: t.space2 },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.space8, gap: t.space3 },
+    errorText: { color: t.danger, fontSize: t.fontLabel },
+    action: { color: t.action, fontSize: t.fontBody, paddingVertical: t.space1 },
+    empty: { color: t.muted },
+    list: { paddingBottom: t.space6 },
+    group: { marginTop: t.space3 },
+    groupHead: { paddingHorizontal: t.space4, paddingVertical: 6, fontSize: t.fontLabel, fontWeight: '600', color: t.ink },
+    groupBody: { backgroundColor: t.surface },
+  });
