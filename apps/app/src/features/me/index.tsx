@@ -52,7 +52,12 @@ const MeContent = observer(function MeContent() {
         <Text style={styles.link}>换头像</Text>
       </Pressable>
       {user.avatarUrl ? (
-        <Pressable style={styles.centerBtn} disabled={service.$model.clearAvatar.loading} onPress={() => void service.clearAvatar().catch((err) => onError(err, '清除失败'))}>
+        <Pressable
+          style={[styles.centerBtn, service.$model.clearAvatar.loading && styles.btnDisabled]}
+          disabled={service.$model.clearAvatar.loading}
+          hitSlop={{ top: 10, bottom: 10 }}
+          onPress={() => void service.clearAvatar().catch((err) => onError(err, '清除失败'))}
+        >
           <Text style={styles.danger}>清除头像</Text>
         </Pressable>
       ) : null}
@@ -67,7 +72,7 @@ const MeContent = observer(function MeContent() {
       <ChangePasswordForm service={service} onSuccess={() => void auth.logout().catch(() => undefined)} />
 
       <View style={styles.spacer} />
-      <Button variant="quiet" style={styles.centerBtn} onPress={onLogout}>
+      <Button variant="quiet" style={styles.centerOnly} onPress={onLogout}>
         退出登录
       </Button>
     </View>
@@ -169,5 +174,8 @@ const createStyles = (t: Theme) =>
     link: { color: t.action, fontSize: t.fontLabel },
     danger: { color: t.danger, fontSize: t.fontLabel },
     centerBtn: { alignSelf: 'center', paddingVertical: t.space1 },
+    // Button 的 style 契约只承担宽度与外部对齐，padding 一律不进（spec §4.2）
+    centerOnly: { alignSelf: 'center' },
+    btnDisabled: { opacity: t.disabledOpacity },
     spacer: { flex: 1 },
   });

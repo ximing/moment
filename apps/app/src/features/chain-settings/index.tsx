@@ -16,6 +16,13 @@ import { ChainSettingsService } from './chain-settings.service';
 
 const ROLE_LABEL: Record<string, string> = { owner: '主理人', editor: '编辑', viewer: '只读' };
 
+/**
+ * 文字入口（textBtn：fontSupport + paddingVertical space1 ≈ 26pt）命中区不足 touchMin 44pt，
+ * 只纵向 hitSlop 补齐——不动视觉 padding，避免改变行内布局；
+ * 横向不扩，防止 rowSide 内相邻文字按钮命中区交叠（spec §6 拍板项 4）。
+ */
+const textBtnHitSlop = { top: 10, bottom: 10 } as const;
+
 const Content = observer(function Content() {
   const { chainId } = useLocalSearchParams<{ chainId: string }>();
   const service = useService(ChainSettingsService);
@@ -148,7 +155,7 @@ const Content = observer(function Content() {
           <Text style={styles.row}>{service.chain.name}</Text>
           {service.chain.description ? <Text style={styles.muted}>{service.chain.description}</Text> : null}
           {myUserId ? (
-            <Pressable style={styles.textBtn} onPress={() => void service.leaveChain(myUserId).then(() => router.back()).catch((err) => onError(err, '退出失败'))}>
+            <Pressable style={styles.textBtn} hitSlop={textBtnHitSlop} onPress={() => void service.leaveChain(myUserId).then(() => router.back()).catch((err) => onError(err, '退出失败'))}>
               <Text style={styles.danger}>退出这条链</Text>
             </Pressable>
           ) : null}
@@ -161,7 +168,7 @@ const Content = observer(function Content() {
           <Text style={styles.row}>{m.nickname}</Text>
           <View style={styles.rowSide}>
             {isOwner && m.role !== 'owner' ? (
-              <Pressable style={styles.textBtn} onPress={() => onTransfer(m.userId, m.nickname)}>
+              <Pressable style={styles.textBtn} hitSlop={textBtnHitSlop} onPress={() => onTransfer(m.userId, m.nickname)}>
                 <Text style={styles.link}>转让</Text>
               </Pressable>
             ) : null}
@@ -199,7 +206,7 @@ const Content = observer(function Content() {
                 </Text>
               </View>
               {i.acceptedAt ? null : (
-                <Pressable style={styles.textBtn} onPress={() => void service.revokeInvite(i.id).catch((err) => onError(err, '吊销失败'))}>
+                <Pressable style={styles.textBtn} hitSlop={textBtnHitSlop} onPress={() => void service.revokeInvite(i.id).catch((err) => onError(err, '吊销失败'))}>
                   <Text style={styles.danger}>吊销</Text>
                 </Pressable>
               )}
@@ -236,10 +243,10 @@ const Content = observer(function Content() {
               </View>
               {s.revokedAt ? null : (
                 <View style={styles.rowSide}>
-                  <Pressable style={styles.textBtn} onPress={() => void onShare(`${webUrl}/share/${s.token}`)}>
+                  <Pressable style={styles.textBtn} hitSlop={textBtnHitSlop} onPress={() => void onShare(`${webUrl}/share/${s.token}`)}>
                     <Text style={styles.link}>发送</Text>
                   </Pressable>
-                  <Pressable style={styles.textBtn} onPress={() => void service.revokeShareLink(s.id).catch((err) => onError(err, '吊销失败'))}>
+                  <Pressable style={styles.textBtn} hitSlop={textBtnHitSlop} onPress={() => void service.revokeShareLink(s.id).catch((err) => onError(err, '吊销失败'))}>
                     <Text style={styles.danger}>吊销</Text>
                   </Pressable>
                 </View>
