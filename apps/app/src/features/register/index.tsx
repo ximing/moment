@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Button, StyleSheet, Text } from 'react-native';
+import { useMemo, useState } from 'react';
+import { StyleSheet, Text } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { registerInputSchema } from '@moment/dto';
@@ -7,12 +7,17 @@ import { humanError } from '../../lib/errors';
 import { Screen } from '../../components/Screen';
 import { Field } from '../../components/Field';
 import { ErrorText } from '../../components/ErrorText';
+import { Button } from '../../components/Button';
+import type { Theme } from '../../theme/theme';
+import { useTheme } from '../../theme/use-theme';
 import { RegisterService } from './register.service';
 
 const RegisterContent = observer(function RegisterContent() {
   const service = useService(RegisterService);
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
 
   function onSubmit(): void {
     const parsed = registerInputSchema.safeParse({
@@ -44,17 +49,16 @@ const RegisterContent = observer(function RegisterContent() {
       <Field label="密码（8–72 位）" value={service.password} onChangeText={(v) => (service.password = v)} secureTextEntry />
       <ErrorText message={error} />
       <ErrorText message={service.$model.submit.error ? humanError(service.$model.submit.error) : null} />
-      <Button
-        title={service.$model.submit.loading ? '注册中…' : '注册'}
-        onPress={onSubmit}
-        disabled={service.$model.submit.loading}
-      />
+      <Button fullWidth loading={service.$model.submit.loading} loadingText="注册中…" onPress={onSubmit}>
+        注册
+      </Button>
     </Screen>
   );
 });
 
 export const RegisterPage = bindServices(RegisterContent, [RegisterService]);
 
-const styles = StyleSheet.create({
-  title: { fontSize: 24, fontWeight: '700', textAlign: 'center', marginVertical: 16 },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    title: { fontSize: 24, fontWeight: '700', color: t.ink, textAlign: 'center', marginVertical: t.space4 },
+  });

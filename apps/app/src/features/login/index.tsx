@@ -1,18 +1,23 @@
-import { useState } from 'react';
-import { Button, Pressable, StyleSheet, Text } from 'react-native';
-import { Link, Stack, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { StyleSheet, Text } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { loginInputSchema } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { Screen } from '../../components/Screen';
 import { Field } from '../../components/Field';
 import { ErrorText } from '../../components/ErrorText';
+import { Button } from '../../components/Button';
+import type { Theme } from '../../theme/theme';
+import { useTheme } from '../../theme/use-theme';
 import { LoginService } from './login.service';
 
 const LoginContent = observer(function LoginContent() {
   const service = useService(LoginService);
   const router = useRouter();
   const [error, setError] = useState<string | null>(null); // 仅 schema 前置校验
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
 
   function onSubmit(): void {
     const parsed = loginInputSchema.safeParse({ email: service.email, password: service.password });
@@ -36,23 +41,20 @@ const LoginContent = observer(function LoginContent() {
       <Field label="密码" value={service.password} onChangeText={(v) => (service.password = v)} secureTextEntry />
       <ErrorText message={error} />
       <ErrorText message={service.$model.submit.error ? humanError(service.$model.submit.error) : null} />
-      <Button
-        title={service.$model.submit.loading ? '登录中…' : '登录'}
-        onPress={onSubmit}
-        disabled={service.$model.submit.loading}
-      />
-      <Link href="/register" asChild>
-        <Pressable>
-          <Text style={styles.link}>没有账号？注册</Text>
-        </Pressable>
-      </Link>
+      <Button fullWidth loading={service.$model.submit.loading} loadingText="登录中…" onPress={onSubmit}>
+        登录
+      </Button>
+      <Button variant="quiet" style={styles.registerLink} onPress={() => router.push('/register')}>
+        没有账号？注册
+      </Button>
     </Screen>
   );
 });
 
 export const LoginPage = bindServices(LoginContent, [LoginService]);
 
-const styles = StyleSheet.create({
-  title: { fontSize: 28, fontWeight: '700', textAlign: 'center', marginVertical: 24 },
-  link: { color: '#4a90d9', textAlign: 'center', marginTop: 16 },
-});
+const createStyles = (t: Theme) =>
+  StyleSheet.create({
+    title: { fontSize: 28, fontWeight: '700', color: t.ink, textAlign: 'center', marginVertical: t.space6 },
+    registerLink: { alignSelf: 'center', marginTop: t.space4 },
+  });
