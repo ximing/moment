@@ -17,6 +17,7 @@ import type {
   MediaPartsResponse,
   MediaPresignInput,
   MediaPresignResponse,
+  MemoriesTodayResponse,
   MomentResponse,
   MonthIndexResponse,
   NotificationListResponse,
@@ -83,6 +84,8 @@ export interface MomentClient {
   deleteMoment(momentId: string): Promise<void>;
   getFeed(query?: FeedQuery): Promise<FeedResponse>;
   getMonthIndex(query: { chainIds?: string[]; tagId?: string; tzOffset: number }): Promise<MonthIndexResponse>;
+  /** 那年今日：date = 查看者本地日期 YYYY-MM-DD（两套时钟语义见 dto memories schema 注释） */
+  getMemoriesToday(date: string): Promise<MemoriesTodayResponse>;
 
   listTags(chainId: string): Promise<TagListResponse>;
   createTag(chainId: string, name: string): Promise<TagResponse>;
@@ -183,6 +186,8 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
           tz_offset: query.tzOffset,
         },
       }),
+    getMemoriesToday: (date) =>
+      http.request('/api/memories/today', { query: { date } }),
 
     listTags: (chainId) => http.request(`/api/chains/${chainId}/tags`),
     createTag: (chainId, name) => http.request(`/api/chains/${chainId}/tags`, { method: 'POST', body: { name } }),

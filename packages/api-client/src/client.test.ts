@@ -209,6 +209,14 @@ test('feed before 与 month-index 路径/查询参数', async () => {
   );
 });
 
+test('getMemoriesToday 路径与 date 查询参数', async () => {
+  const { client, calls } = harness();
+  await client.getMemoriesToday('2026-08-18');
+  assert.deepEqual(calls.map((c) => `${c.method} ${c.url}`), [
+    'GET http://x/api/memories/today?date=2026-08-18',
+  ]);
+});
+
 describe('share 方法', () => {
   const anonTokenStore = {
     getAccessToken: () => null,
