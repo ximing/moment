@@ -56,15 +56,18 @@
   ],
   "views": [
     { "type": "curve", "label": "成长曲线", "source": { "kind": "metric" } },
-    { "type": "map",   "label": "足迹地图", "source": { "field": "geo" } }
+    { "type": "map",   "label": "足迹地图", "source": { "field": "geo" } },
+    { "type": "timeline", "label": "行程", "groupBy": "trips" }
   ],
   "milestoneCatalog": [ /* 仅声明需要目录的 kind：内置选项，用户可自定义追加 */ ]
 }
 ```
 
+`views[].groupBy`（可选，词表值，当前仅 `'trips'`、仅 `timeline` 视图可用）：渲染器按链 `payload.trips` 把时刻分章节展示。
+
 ### 1.4 dto 包的单一真相
 
-- `packages/dto` 新增 `templates/` 目录：manifest 的 TS 类型 + manifest 自身的 JSON Schema + 词表枚举。
+- `packages/dto` 新增单文件 `src/templates.ts`（+ 同目录 `templates.test.ts`）：manifest 的 TS 类型 + manifest 自身的 JSON Schema + 词表枚举。单文件布局的理由：dto「每业务域一文件」约定 + 测试 glob 只匹配 `src/*.test.ts`。
 - **TS 类型从 JSON Schema 生成**（`json-schema-to-ts` 的 `FromSchema`），不手写平行类型，避免两套真相漂移。
 - 三个 official 模板的 manifest 以 TS 常量定义在 dto 包（类型安全），server 迁移时 seed 入库；入库后 server 运行时只读 DB，不读常量（常量仅作 seed 源与测试基准）。
 - server 用 **ajv** 校验 moment/chain payload 与 manifest 本身；api-client 透传。
@@ -142,11 +145,13 @@
 
 | 模板 | 链级 payload | kinds | momentFields | views |
 |---|---|---|---|---|
-| `baby` 宝宝成长 | `{baby_name?, birthdate?, gender?}` | `milestone`（payload: `{catalog_key? 或 custom_label, note?}`）、`metric`（payload: `{metric: 'height'\|'weight', value, unit}`） | 无 | `milestone-axis`、`curve`（metric） |
-| `travel` 旅行 | `{trips: [{name, start, end, cover_media_id?}]}` | 无 | `geo`（type=geo，payload: `{lat, lng, place_name?}`） | `map`、按行程分章节的 `timeline` 变体 |
+| `baby` 宝宝成长 | `{baby_name?, birthdate?, gender?: boy/girl/unknown}` | `milestone`（payload: `{catalog_key? 或 custom_label, note?}`）、`metric`（payload: `{metric: 'height'\|'weight', value, unit}`） | 无 | `milestone-axis`、`curve`（metric） |
+| `travel` 旅行 | `{trips: [{name, start, end, cover_media_id?}]}` | 无 | `geo`（type=geo，payload: `{lat, lng, place_name?}`） | `map`、`timeline`（`groupBy: 'trips'`，按行程分章节） |
 | `daily` 日常生活 | 无 | 无 | `mood`（type=emoji-picker） | `moodline` |
 
 年龄自动标注（「1 岁 2 个月」）是 baby 模板的**展示层能力**：由 `birthdate` + `happened_at` 计算，不落库。
+
+baby 里程碑目录（内置 8 项，用户发 moment 时可自定义追加 custom_label）：first-smile 第一次微笑 😊 / first-roll 第一次翻身 🔄 / first-sit 第一次独坐 🪑 / first-crawl 第一次爬 🐾 / first-stand 第一次站立 🧍 / first-steps 第一次走路 👣 / first-word 第一次开口 💬 / first-tooth 第一颗牙 🦷。
 
 ## 5. 各端 UX 要点
 

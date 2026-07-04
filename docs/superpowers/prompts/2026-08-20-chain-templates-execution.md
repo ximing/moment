@@ -14,8 +14,9 @@
 2. 每个 Task 走串行流水线：**实现 SubAgent → 独立复审 SubAgent（≠ 实现者）→ 有阻塞/高危问题派 fixer SubAgent → 你终验 → 你 commit**。一次只跑一个 Task，禁止并行改共享文件。
 3. 实现 SubAgent 的输入：本文件中该 Task 的边界（含 owner 文件清单与接口契约）+ spec 路径 + CONVENTIONS.md 路径。复审 SubAgent 的输入：git diff + spec + 任务边界，只输出问题清单（按 阻塞/高危/建议 分级）。两者不得是同一会话。
 4. 实现/fixer 越界（改了 owner 清单外的文件、改了契约语义）必须停手报告，由你裁决；**任何 SubAgent 都不得自行 commit**，commit 由你在验收通过后执行（conventional commits，每 Task 一个）。
-5. 每个 "done/pass" 必须有真实证据：门禁命令的 exit code、测试通过数、build 结果。凭 agent 自述不算数。
-6. 用 TaskList 维护 T1–T7 状态，每完成一个 Task 向用户同步一行进度。
+5. plan 文档内嵌的 commit 步骤由你（编排者）在验收后执行；实现/fixer SubAgent 跳过该步并报告待提交文件清单。commit 粒度按 plan 的 Task，可细于本编排的 T1–T7。
+6. 每个 "done/pass" 必须有真实证据：门禁命令的 exit code、测试通过数、build 结果。凭 agent 自述不算数。
+7. 用 TaskList 维护 T1–T7 状态，每完成一个 Task 向用户同步一行进度。
 
 ## 1. 环境事实与全局硬约束
 
@@ -43,8 +44,8 @@ T1 dto 模板域 → T2 server 模板注册表 → T3 server chains/moments 接�
 ### T1 — dto：模板域类型与官方模板定义
 
 **Owner 文件**：
-- Create `packages/dto/src/templates/{vocab.ts, manifest-schema.ts, official-templates.ts, index.ts, templates.test.ts}`
-- Modify `packages/dto/src/index.ts`（re-export）；`packages/dto/package.json`（如需加 `json-schema-to-ts` 依赖）
+- Create `packages/dto/src/templates.ts`、`packages/dto/src/templates.test.ts`（单文件布局：dto「每业务域一文件」约定 + 测试 glob 只匹配 `src/*.test.ts`）
+- Modify `packages/dto/src/index.ts`（re-export）；`packages/dto/package.json`（加 `json-schema-to-ts` 进 dependencies、`ajv` 进 devDependencies）
 
 **Consumes**：spec §1.2–1.4、§4。
 **Produces**（后续 Task 引用的精确符号，不得改名）：
