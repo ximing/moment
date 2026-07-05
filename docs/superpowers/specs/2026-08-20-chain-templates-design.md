@@ -124,7 +124,7 @@
 ### 3.2 链与 moment 的契约变化（breaking）
 
 - `POST /chains`：**必传 `template`**。`PATCH /chains` 拒绝改 template → `TEMPLATE_IMMUTABLE`；允许改 `payload`（按链模板的 `chainPayloadSchema` 校验，如补录宝宝生日、编辑行程列表）。
-- `POST /chains/:id/moments` / `PATCH /moments/:id`：可传 `kind`（默认 `standard`）与 `payload`；server 按**该链模板**的 manifest 校验：kind 必须在模板 kinds 内、payload 过对应 JSON Schema、普通 moment 的 payload 只允许模板 momentFields 声明的 key。不匹配 → `MOMENT_PAYLOAD_INVALID`。
+- `POST /chains/:id/moments` / `PATCH /moments/:id`：可传 `kind`（默认 `standard`）与 `payload`；server 按**该链模板**的 manifest 校验：kind 必须在模板 kinds 内、payload 过对应 JSON Schema、普通 moment 的 payload 只允许模板 momentFields 声明的 key。不匹配 → `MOMENT_PAYLOAD_INVALID`（链 payload 非法用并列的 `CHAIN_PAYLOAD_INVALID`）。
 - 响应 DTO：`Chain` 增 `template`、`payload`；`Moment` 增 `kind`、`payload`；另返 `templateManifest`（链详情里内嵌，客户端不必二次请求）。
 - 聚合视图统一端点：`GET /chains/:id/aggregate?view=<视图类型>&kind=<kind>&field=<字段>`（成员权限，viewer 可读），返回视图无关的投影数据（如 curve → `[{happened_at, value, unit}]`；map → `[{moment_id, lat, lng, place_name, happened_at}]`；milestone-axis → milestone moments 序列；moodline → 按日心情分布）。**渲染是各端词表渲染器的事，server 只出数据。**
 - 分享页：`GET /public/share/:token` 响应附带链模板 manifest 与聚合投影（只读），长辈可见里程碑轴/地图。

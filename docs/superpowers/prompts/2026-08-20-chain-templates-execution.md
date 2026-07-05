@@ -92,7 +92,7 @@ T1 dto 模板域 → T2 server 模板注册表 → T3 server chains/moments 接�
 **Consumes**：T2 的模板查询能力；spec §2.2–2.4、§3.2–3.3、§8。
 **Produces**：
 - 迁移（三阶段，spec §2.3）：`chains.template`（NULL→回填 `'daily'`→NOT NULL）+ `chains.payload json NULL`；`moments.kind varchar NOT NULL DEFAULT 'standard'` + `moments.payload json NULL`
-- `validateChainPayload(template: TemplateManifest, payload: unknown): void`、`validateMomentPayload(template: TemplateManifest, kind: string, payload: unknown): void`——kind 必须在模板 kinds 内、payload 过对应 JSON Schema、standard moment 的 payload 只允许 momentFields 声明的 key；失败抛 `BadRequestError('MOMENT_PAYLOAD_INVALID')`
+- `validateChainPayload(template: TemplateManifest, payload: unknown): Record<string, unknown> | null`、`validateMomentPayload(template: TemplateManifest, kind: string, payload: unknown): Record<string, unknown> | null`——kind 必须在模板 kinds 内、payload 过对应 JSON Schema、standard moment 的 payload 只允许 momentFields 声明的 key；失败抛 `BadRequestError('MOMENT_PAYLOAD_INVALID')` / `BadRequestError('CHAIN_PAYLOAD_INVALID')`（链 payload）
 - `POST /api/chains` **必传 template**（dto 的 createChainInputSchema 加必填字段）；`PATCH /api/chains` 改 template → `BadRequestError('TEMPLATE_IMMUTABLE')`，允许改 payload（过 chainPayloadSchema 校验）
 - moments create/update 接受 `kind`（默认 `standard`）与 `payload`，过 `validateMomentPayload`
 - 响应 DTO：`Chain` 增 `template`/`payload`，链详情内嵌 `templateManifest`；`Moment` 增 `kind`/`payload`（momentSerializer 唯一出口处加）
@@ -110,7 +110,7 @@ T1 dto 模板域 → T2 server 模板注册表 → T3 server chains/moments 接�
 
 **Consumes**：T3 的 moments 列与模板 manifest；spec §3.2、§5。
 **Produces**：
-- `GET /api/chains/:chainId/aggregate?view=<type>&kind=<key>&field=<key>`——`requireChainRole('viewer')`；按链模板 manifest 中声明的视图取投影，未声明的 view → `BadRequestError('INVALID_AGGREGATE_VIEW')`；剔除软删 moment。投影 shape（spec §3.2）：curve → `[{happened_at, value, unit}]`；map → `[{moment_id, lat, lng, place_name, happened_at}]`；milestone-axis → milestone moments 序列；moodline → 按日心情分布
+- `GET /api/chains/:chainId/aggregate?view=<type>&kind=<key>&field=<key>`——`requireChainRole('viewer')`；按链模板 manifest 中声明的视图取投影，未声明的 view → `BadRequestError('INVALID_AGGREGATE_VIEW')`；剔除软删 moment。**timeline 不走聚合端点**：`view=timeline` 由前端用 moments 列表 + manifest 的 `groupBy` 分章实现，请求聚合端点同样 `INVALID_AGGREGATE_VIEW`。投影 shape（spec §3.2）：curve → `[{happened_at, value, unit}]`；map → `[{moment_id, lat, lng, place_name, happened_at}]`；milestone-axis → milestone moments 序列；moodline → 按日心情分布
 - `GET /api/public/share/:token` 响应附带链模板 manifest + 各视图投影（只读）
 
 **验收门禁**：server 测试全绿（四种投影正确性、软删剔除、viewer 可读、非成员 404、未声明视图 400）。
