@@ -104,6 +104,7 @@ src/storage/factory.ts        → getStorage(): UnifiedStorageAdapter（按 conf
 | Phase 4 | `/api/chains/:chainId/tags*`、`/api/tags/:id`（仅 DELETE）、`/api/feed` |
 | Phase 5 | `/api/moments/:id/comments*`、`/api/comments/:id`、`/api/moments/:id/reaction`、`/api/notifications*`、`/api/devices/push-token` |
 | Phase 8 | `/api/chains/:chainId/share-links*`、`/api/share-links/:id`、`/api/public/share/:token` |
+| 模板系统（2026-08-20-templates） | `/api/templates*` |
 
 ## 4. 各端测试策略
 

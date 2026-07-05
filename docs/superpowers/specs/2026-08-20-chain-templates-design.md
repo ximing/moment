@@ -79,7 +79,7 @@
 | 列 | 说明 |
 |---|---|
 | id | 主键 |
-| key | 全局唯一。official：保留 slug（`baby`/`travel`/`daily`，不含 `/`）；user：server 分配 `u/<nanoid>`，用户只填 name，不选 key（避免撞名与抢注官方命名空间） |
+| key | 全局唯一。official：保留 slug（`baby`/`travel`/`daily`，不含 `/`）；user：server 分配 `u_<21 位十六进制随机>`，用户只填 name，不选 key（避免撞名与抢注官方命名空间）。**用 `u_` 不用 `u/`**：`:key` 路由参数不匹配含 `/` 的路径段，斜杠 key 无法被 `GET/PATCH/DELETE /api/templates/:key` 寻址 |
 | scope | enum(`official`,`user`) |
 | owner_id | user 模板的创建者；official 为 NULL |
 | name / description / icon | 展示信息（icon 从词表选，禁止 URL） |
@@ -100,7 +100,7 @@
 
 ### 2.3 迁移（三阶段，沿用 wall_date 迁移先例）
 
-1. `templates` 建表 + seed 三个 official 模板（迁移内插数据，与 share_links 迁移先例同性质）。
+1. `templates` 建表（纯 DDL）；official seed 由 `migrate.ts` 迁移完成后调 `seedOfficialTemplates()` 幂等 upsert——数据源是 dto 的 TS 常量 `OFFICIAL_TEMPLATES`，SQL 迁移无法 import；`resetDb()` 清表后同样重 seed，保证测试前置数据。
 2. `chains`：`ADD COLUMN template varchar NULL` → `UPDATE chains SET template='daily'` → `MODIFY template varchar NOT NULL`；`ADD COLUMN payload json NULL`。
 3. `moments`：`ADD COLUMN kind varchar NOT NULL DEFAULT 'standard'`（有默认值可一步到位）、`ADD COLUMN payload json NULL`。
 
@@ -133,11 +133,13 @@
 
 - 发布带 kind 的 moment：仍是 editor 及以上（chainPolicy 无需新增动作，payload 校验在 controller 边界之后、service 之内）。
 - 模板 CRUD：登录即可建；改/删仅 owner 本人；official 模板对所有人只读（seed 管理，无运行时写 API）。
+- `GET /templates/:key` 对他人的 user 模板同样可读：manifest 是纯结构定义、不含用户数据；可见性控制由 list 承担（只列 official + 我的），详情接口不额外设防。
 - viewer 对聚合视图只读可见。
 
 ### 3.4 模板编辑规则（版本语义）
 
 - user 模板可被 owner 编辑，但**仅允许增量变更**：新增 kind/字段/视图/里程碑目录项；禁止删除或收窄（改字段类型、缩 enum 选项、删 kind）——存量链的 payload 可能已依赖旧定义。server 校验非增量编辑 → `TEMPLATE_EDIT_NOT_ADDITIVE`。
+- v1 实现取保守冻结：`chainPayloadSchema` 与既存 kind 的 `payloadSchema` 整体冻结（含 publisher 与目录项的 label/icon），比「禁止收窄」更严；后续确需「schema 加 optional 字段」「改目录项文案」再按需放宽。
 - 每次编辑 `version + 1`；链不 pin 版本（增量规则保证向后兼容，pin 无收益）。
 - archive：存量链照常使用（模板定义快照语义 = 读时按当前 manifest，archive 只阻止**新建链**选用）。不物理删除。
 

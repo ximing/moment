@@ -65,15 +65,16 @@ T1 dto 模板域 → T2 server 模板注册表 → T3 server chains/moments 接�
 ### T2 — server：templates 表 + CRUD + manifest 校验器
 
 **Owner 文件**：
-- Create `apps/server/src/db/schema/templates.ts`；`apps/server/src/templates/{manifest-validator.ts, template.service.ts, template.controller.ts}`；测试文件按 `apps/server/src/chains/` 既有模块的测试布局照抄
-- Modify `apps/server/src/db/schema.ts`（barrel）、`apps/server/src/app.ts`（注册 controller）、`apps/server/tests/helpers/db.ts`（resetDb）、`apps/server/package.json`（如需加 `ajv` 依赖）
+- Create `apps/server/src/db/schema/templates.ts`；`apps/server/src/templates/{manifest-validator.ts, template.service.ts, template.controller.ts, official-templates.seed.ts}`；测试文件按 `apps/server/src/chains/` 既有模块的测试布局照抄
+- Modify `apps/server/src/db/schema.ts`（barrel）、`apps/server/src/app.ts`（注册 controller）、`apps/server/tests/helpers/db.ts`（resetDb）、`apps/server/package.json`（加 `ajv` 依赖）、`apps/server/src/db/migrate.ts`（迁移后 seed 钩子）、`apps/server/src/middlewares/error-handler.ts`（HttpError 分支透传 `details`）
+- Modify `packages/dto/src/templates.ts` + `packages/dto/src/templates.test.ts`（追加字段值派生表 `momentFieldPayloadJsonSchema`——server/各端共享单一真相，评审 S4 立项）
 
 **Consumes**：T1 的 dto 符号；spec §2.1、§3.1、§3.4。
 **Produces**：
-- `templates` 表（列严格按 spec §2.1）；迁移内含三份 official 模板 seed（数据来自 dto 的 `OFFICIAL_TEMPLATES`，幂等）
-- `validateManifest(raw: unknown): TemplateManifest`——ajv 校验 + 词表白名单 + 嵌套 payloadSchema 本身是合法 JSON Schema；失败抛 `BadRequestError('TEMPLATE_MANIFEST_INVALID')`（details 附 ajv 错误路径）
-- `assertAdditiveEdit(prev: TemplateManifest, next: TemplateManifest): void`——仅允许新增 kind/字段/视图/目录项，禁止删除或收窄；违反抛 `BadRequestError('TEMPLATE_EDIT_NOT_ADDITIVE')`
-- 路由（spec §3.1）：`GET/POST /api/templates`、`GET/PATCH/DELETE /api/templates/:key`（DELETE = archive）。user 模板 key = `u/` + nanoid（仓库无 nanoid 依赖则用 randomUUID 去横线截断 21 位并在报告中说明）；PATCH 仅 owner 本人且过 `assertAdditiveEdit`，version+1；official 模板只读
+- `templates` 表（列严格按 spec §2.1）；official seed 由 `migrate.ts` 迁移完成后调 `seedOfficialTemplates()` 幂等 upsert（数据源是 dto 的 `OFFICIAL_TEMPLATES` TS 常量，SQL 迁移无法 import；`resetDb()` 清表后同样重 seed）
+- `validateManifest(raw: unknown): TemplateManifest`——ajv 校验 + 词表白名单 + key 去重（S5）+ options 约束 + 嵌套 payloadSchema 本身是合法 JSON Schema；失败抛 `BadRequestError('TEMPLATE_MANIFEST_INVALID')`（details 附 ajv 错误路径）
+- `assertAdditiveEdit(prev: TemplateManifest, next: TemplateManifest): void`——仅允许新增 kind/字段/视图/目录项，禁止删除或收窄；v1 取保守冻结（chainPayloadSchema 与既存 kind 的 payloadSchema 整体冻结，含 publisher 与目录项 label/icon）；违反抛 `BadRequestError('TEMPLATE_EDIT_NOT_ADDITIVE')`
+- 路由（spec §3.1）：`GET/POST /api/templates`、`GET/PATCH/DELETE /api/templates/:key`（DELETE = archive）。user 模板 key = `u_` + 21 位十六进制随机（randomUUID 去横线截取；**不是 `u/`**——`:key` 路由参数不匹配含 `/` 的路径段）；PATCH 仅 owner 本人且过 `assertAdditiveEdit`，version+1；official 模板只读
 - 错误码：`TEMPLATE_MANIFEST_INVALID` / `TEMPLATE_NOT_FOUND` / `TEMPLATE_FORBIDDEN` / `TEMPLATE_EDIT_NOT_ADDITIVE`
 
 **验收门禁**：迁移在测试库跑通（jest globalSetup）；`pnpm --filter @moment/server test` 全绿（含校验器全矩阵单测、CRUD 权限测试）；seed 幂等测试（重复迁移不重复插）。
