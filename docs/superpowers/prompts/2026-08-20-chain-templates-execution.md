@@ -12,7 +12,7 @@
 
 1. **你只做事：任务边界定义、派发、验收、状态同步、commit。你不写任何实现代码、不亲自修 bug。**
 2. 每个 Task 走串行流水线：**实现 SubAgent → 独立复审 SubAgent（≠ 实现者）→ 有阻塞/高危问题派 fixer SubAgent → 你终验 → 你 commit**。一次只跑一个 Task，禁止并行改共享文件。
-3. 实现 SubAgent 的输入：本文件中该 Task 的边界（含 owner 文件清单与接口契约）+ spec 路径 + CONVENTIONS.md 路径。复审 SubAgent 的输入：git diff + spec + 任务边界，只输出问题清单（按 阻塞/高危/建议 分级）。两者不得是同一会话。
+3. 实现 SubAgent 的输入：**对应 plan 文件（唯一工作内容真相源，见 §2 映射表）** + 本文件中该 Task 的边界摘要 + spec 路径 + CONVENTIONS.md 路径。复审 SubAgent 的输入：git diff + plan + spec + 任务边界，只输出问题清单（按 阻塞/高危/建议 分级）。两者不得是同一会话。
 4. 实现/fixer 越界（改了 owner 清单外的文件、改了契约语义）必须停手报告，由你裁决；**任何 SubAgent 都不得自行 commit**，commit 由你在验收通过后执行（conventional commits，每 Task 一个）。
 5. plan 文档内嵌的 commit 步骤由你（编排者）在验收后执行；实现/fixer SubAgent 跳过该步并报告待提交文件清单。commit 粒度按 plan 的 Task，可细于本编排的 T1–T7。
 6. 每个 "done/pass" 必须有真实证据：门禁命令的 exit code、测试通过数、build 结果。凭 agent 自述不算数。
@@ -38,6 +38,19 @@ T1 dto 模板域 → T2 server 模板注册表 → T3 server chains/moments 接�
 ```
 
 全部串行。T5/T6 虽无代码依赖仍串行执行（共享 spec 解释权，串行让 T6 复用 T5 的裁决结论）。
+
+**实施计划已就位（2026-08-21 全部评审通过）——每个 Task 的完整实现内容以对应 plan 文件为唯一真相源**，本编排只保留边界、契约摘要与验收口径；两者不一致时以 plan 为准并上报：
+
+| Task | Plan 文件 |
+|---|---|
+| T1 | `docs/superpowers/plans/2026-08-20-templates-p1-dto.md` |
+| T2 | `docs/superpowers/plans/2026-08-20-templates-p2-server-registry.md` |
+| T3+T4 | `docs/superpowers/plans/2026-08-20-templates-p3-server-integration.md` |
+| T5 | `docs/superpowers/plans/2026-08-20-templates-p4-web.md` |
+| T6 | `docs/superpowers/plans/2026-08-20-templates-p5-app.md` |
+| T7 | `docs/superpowers/plans/2026-08-20-templates-p6-e2e.md` |
+
+实现 SubAgent 的输入 = 对应 plan 文件（逐 Task 逐步执行，含完整代码）+ spec + CONVENTIONS.md；本编排的 T 节用于你（编排者）把握边界与验收。
 
 ---
 
@@ -144,9 +157,9 @@ T1 dto 模板域 → T2 server 模板注册表 → T3 server chains/moments 接�
 
 ### T7 — e2e 与收尾
 
-**Owner 文件**：`apps/server/src/e2e/`（或既有 e2e 布局）、两份 spec 文档头部状态。
+**Owner 文件**：`apps/server/tests/templates/`（e2e 落 tests/ 布局，`src/e2e/` 是设计系统截图 fixture CLI，不在 jest roots 内）、`docs/superpowers/specs/2026-08-20-chain-templates-design.md` 头部状态。
 - e2e：API 建 user 模板（增量编辑被拒的负例也要）→ 建链 → 发 milestone/metric/带 geo/带 mood 的 moment → 聚合端点断言 → 分享 token 匿名断言 manifest+投影
-- 两份 spec 头部「状态」改为「已实现」；spec §8 breaking 清单逐项核对已在 T3 落实
+- **只回写 chain-templates 一份 spec 的「状态」为「已实现」**（编排者裁决：ai-recap spec 尚未实施，标已实现是假陈述，不动）；spec §8 breaking 清单逐项核对已在 T3 落实
 - **最终 DoD**：`pnpm build` 全仓绿、`pnpm --filter @moment/server test` 全绿（报告测试总数）、`pnpm lint` 通过
 
 **Commit**：`test(server): add template system e2e`（docs 状态变更并入此 commit 或单独 `docs:` commit）
