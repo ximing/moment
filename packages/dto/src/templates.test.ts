@@ -5,6 +5,7 @@ import {
   TEMPLATE_FIELD_TYPES,
   TEMPLATE_VIEW_TYPES,
   manifestJsonSchema,
+  momentFieldPayloadJsonSchema,
   OFFICIAL_TEMPLATES,
   createTemplateInputSchema,
   updateTemplateInputSchema,
@@ -96,4 +97,41 @@ test('updateTemplateInputSchema：拒绝空 patch；description 可显式置 nul
   assert.equal(ok.description, null);
   const withManifest = updateTemplateInputSchema.parse({ manifest: { version: 2 } });
   assert.deepEqual(withManifest.manifest, { version: 2 });
+});
+
+const ajvValue = new Ajv2020({ allErrors: true });
+
+test('派生表：text / date / number-unit 的值 schema', () => {
+  const text = ajvValue.compile(momentFieldPayloadJsonSchema({ key: 't', type: 'text', label: 'T' }));
+  assert.equal(text('hello'), true);
+  assert.equal(text(42), false);
+
+  const date = ajvValue.compile(momentFieldPayloadJsonSchema({ key: 'd', type: 'date', label: 'D' }));
+  assert.equal(date('2026-08-20'), true);
+  assert.equal(date('2026/08/20'), false);
+  assert.equal(date(20260820), false);
+
+  const nu = ajvValue.compile(momentFieldPayloadJsonSchema({ key: 'n', type: 'number-unit', label: 'N' }));
+  assert.equal(nu({ value: 62, unit: 'cm' }), true);
+  assert.equal(nu({ value: 62 }), false);
+  assert.equal(nu({ value: '62', unit: 'cm' }), false);
+  assert.equal(nu({ value: 62, unit: 'cm', extra: 1 }), false);
+});
+
+test('派生表：geo 经纬度边界与可选 place_name', () => {
+  const geo = ajvValue.compile(momentFieldPayloadJsonSchema({ key: 'g', type: 'geo', label: 'G' }));
+  assert.equal(geo({ lat: 39.9, lng: 116.4 }), true);
+  assert.equal(geo({ lat: 39.9, lng: 116.4, place_name: '北京' }), true);
+  assert.equal(geo({ lat: 91, lng: 0 }), false);
+  assert.equal(geo({ lat: 0, lng: 181 }), false);
+  assert.equal(geo({ lat: 39.9 }), false);
+});
+
+test('派生表：enum/emoji-picker 收敛到 options；缺 options 抛错', () => {
+  const mood = ajvValue.compile(
+    momentFieldPayloadJsonSchema({ key: 'm', type: 'emoji-picker', label: 'M', options: ['😄', '😭'] }),
+  );
+  assert.equal(mood('😄'), true);
+  assert.equal(mood('🤯'), false);
+  assert.throws(() => momentFieldPayloadJsonSchema({ key: 'e', type: 'enum', label: 'E' }));
 });

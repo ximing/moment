@@ -102,6 +102,9 @@ importers:
       '@moment/dto':
         specifier: workspace:*
         version: link:../../packages/dto
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
       bcrypt:
         specifier: ^5.1.1
         version: 5.1.1

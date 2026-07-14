@@ -20,8 +20,14 @@ export class ErrorHandlerMiddleware implements ExpressErrorMiddlewareInterface {
       // 约定：业务代码抛 HttpError 系错误时，message 承载 UPPER_SNAKE 机器码；
       // 框架自带错误（如 AuthorizationRequiredError）message 是自然语言，退回用 name 做 code。
       const isMachineCode = /^[A-Z0-9_]+$/.test(error.message);
+      // ManifestInvalidError 等自定义错误可携带 details（spec §3.1：TEMPLATE_MANIFEST_INVALID 附 ajv 错误路径）
+      const details = (error as { details?: unknown }).details;
       res.status(error.httpCode).json({
-        error: { code: isMachineCode ? error.message : error.name, message: error.message },
+        error: {
+          code: isMachineCode ? error.message : error.name,
+          message: error.message,
+          ...(details !== undefined ? { details } : {}),
+        },
       });
       return;
     }

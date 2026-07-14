@@ -273,7 +273,7 @@ export type UpdateTemplateInput = z.infer<typeof updateTemplateInputSchema>;
 
 export interface TemplateDto {
   id: string;
-  /** official：保留 slug（baby/travel/daily）；user：server 分配 `u/<nanoid>` */
+  /** official：保留 slug（baby/travel/daily）；user：server 分配 `u_` + 21 位十六进制随机 */
   key: string;
   scope: TemplateScope;
   /** user 模板创建者；official 为 null */
@@ -288,4 +288,54 @@ export interface TemplateDto {
   createdAt: string;
   /** ISO 8601 */
   updatedAt: string;
+}
+
+// ---------- 字段值派生表（spec §1.3：manifest 不携带值 schema，由 type(+options) 派生） ----------
+
+/** momentFields 数组项类型（从 TemplateManifest 取，不手写平行定义）。 */
+export type TemplateMomentField = NonNullable<TemplateManifest['momentFields']>[number];
+
+/** YYYY-MM-DD；不用 JSON Schema 的 format:'date'（ajv 需额外 ajv-formats 依赖，pattern 零依赖等价）。 */
+const DATE_VALUE_PATTERN = '^\\d{4}-\\d{2}-\\d{2}$';
+
+/**
+ * 按 momentField 的 type(+options) 派生「字段值」的 JSON Schema。
+ * server payload 校验（P3）与各端发布器共用此函数，禁止各自另写一份。
+ * enum/emoji-picker 缺 options 属于 manifest 非法（server validateManifest 也会拦），此处抛错兜底。
+ */
+export function momentFieldPayloadJsonSchema(field: TemplateMomentField): Record<string, unknown> {
+  switch (field.type) {
+    case 'text':
+      return { type: 'string', maxLength: 500 };
+    case 'number-unit':
+      return {
+        type: 'object',
+        required: ['value', 'unit'],
+        additionalProperties: false,
+        properties: {
+          value: { type: 'number' },
+          unit: { type: 'string', minLength: 1, maxLength: 16 },
+        },
+      };
+    case 'enum':
+    case 'emoji-picker':
+      if (!field.options || field.options.length === 0) {
+        throw new Error(`momentField '${field.key}' (${field.type}) requires non-empty options`);
+      }
+      return { type: 'string', enum: [...field.options] };
+    case 'date':
+      return { type: 'string', pattern: DATE_VALUE_PATTERN };
+    case 'geo':
+      return {
+        type: 'object',
+        required: ['lat', 'lng'],
+        additionalProperties: false,
+        properties: {
+          lat: { type: 'number', minimum: -90, maximum: 90 },
+          lng: { type: 'number', minimum: -180, maximum: 180 },
+          place_name: { type: 'string', maxLength: 200 },
+        },
+      };
+  }
+  throw new Error(`unknown momentField type: ${JSON.stringify(field)}`);
 }

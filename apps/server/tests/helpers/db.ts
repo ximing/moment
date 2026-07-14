@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { db, pool } from '../../src/db/index.js';
 import {
   chainInvites,
@@ -14,6 +15,7 @@ import {
   refreshTokens,
   shareLinks,
   tags,
+  templates,
   users,
 } from '../../src/db/schema.js';
 
@@ -32,6 +34,7 @@ export async function resetDb(): Promise<void> {
   await db.delete(chainMembers);
   await db.delete(shareLinks);
   await db.delete(chains);
+  await db.delete(templates).where(eq(templates.scope, 'user'));
   await db.delete(refreshTokens);
   await db.delete(users);
 }
