@@ -8,3 +8,4 @@ export * from './comments.js';
 export * from './notifications.js';
 export * from './share.js';
 export * from './memories.js';
+export * from './templates.js';
