@@ -1,4 +1,4 @@
-import { date, index, mysqlEnum, mysqlTable, char, int, text, timestamp, boolean } from 'drizzle-orm/mysql-core';
+import { boolean, char, date, index, int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
 import type { AnyMySqlColumn } from 'drizzle-orm/mysql-core';
 import { chains } from './chains.js';
 import { users } from './users.js';
@@ -14,6 +14,10 @@ export const moments = mysqlTable(
       .notNull()
       .references((): AnyMySqlColumn => users.id),
     type: mysqlEnum('type', ['text', 'media', 'video']).notNull(),
+    /** 语义类别（spec §1.1）：standard 或链模板 kinds 声明的 key；不进核心索引（spec §2.2） */
+    kind: varchar('kind', { length: 64 }).notNull().default('standard'),
+    /** 结构化数据（kind 的 payload 或 standard 的扩展字段 mood/geo 等） */
+    payload: json('payload').$type<Record<string, unknown>>(),
     content: text('content').notNull(),
     /** 事件发生时间（UTC 存储的时间点，spec §5.6）。fsp=3 保留毫秒：MySQL timestamp 默认 fsp=0 会截断毫秒，
         导致 create 响应（内存 Date 含 ms）与落库后读回不一致 */

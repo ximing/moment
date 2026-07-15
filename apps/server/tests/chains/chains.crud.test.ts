@@ -25,7 +25,7 @@ describe('POST /api/chains', () => {
     const res = await request(app)
       .post('/api/chains')
       .set('Authorization', auth(owner))
-      .send({ name: '宝宝成长', description: '记录每一天' });
+      .send({ name: '宝宝成长', description: '记录每一天', template: 'daily' });
     expect(res.status).toBe(201);
     const chain = res.body as ChainDto;
     expect(chain.name).toBe('宝宝成长');
@@ -47,7 +47,7 @@ describe('POST /api/chains', () => {
     const res = await request(app)
       .post('/api/chains')
       .set('Authorization', auth(owner))
-      .send({ name: '旅行', color: 'sky', icon: '✈️' });
+      .send({ name: '旅行', color: 'sky', icon: '✈️', template: 'daily' });
     expect(res.status).toBe(201);
     expect(res.body.color).toBe('sky');
     expect(res.body.icon).toBe('✈️');
@@ -55,7 +55,7 @@ describe('POST /api/chains', () => {
 
   it('未登录 401；空 name 400 VALIDATION_ERROR', async () => {
     expect((await request(app).post('/api/chains').send({ name: 'x' })).status).toBe(401);
-    const bad = await request(app).post('/api/chains').set('Authorization', auth(owner)).send({ name: '' });
+    const bad = await request(app).post('/api/chains').set('Authorization', auth(owner)).send({ name: '', template: 'daily' });
     expect(bad.status).toBe(400);
     expect(bad.body.error.code).toBe('VALIDATION_ERROR');
   });
@@ -220,7 +220,7 @@ describe('ChainDto membersPreview', () => {
     const res = await request(app)
       .post('/api/chains')
       .set('Authorization', auth(owner))
-      .send({ name: '预览链' });
+      .send({ name: '预览链', template: 'daily' });
     expect(res.status).toBe(201);
     const chain = res.body as ChainDto;
     expect(chain.memberCount).toBe(1);

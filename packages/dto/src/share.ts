@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AggregateResponse, TemplateManifest } from './templates.js';
 import type { MomentResponse } from './moments.js';
 
 /** owner 创建分享链接：expiresAt 缺省 = 永不过期（spec §1：可设过期） */
@@ -39,6 +40,11 @@ export interface PublicShareChainInfo {
 /** 匿名只读视图：计数只读展示（commentCount/reactions），myReaction 恒 null */
 export interface PublicShareResponse {
   chain: PublicShareChainInfo;
+  /** 链模板 key 与内嵌 manifest（spec §3.2：长辈可见里程碑轴/地图，渲染需要 manifest） */
+  template: string;
+  templateManifest: TemplateManifest;
+  /** 该链模板声明的全部聚合投影（timeline 除外，由 moments 列表分章） */
+  aggregates: AggregateResponse[];
   moments: MomentResponse[];
   nextCursor: string | null;
 }

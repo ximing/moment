@@ -34,7 +34,7 @@ async function insertMember(id: string, role: 'owner' | 'editor' | 'viewer'): Pr
 beforeEach(async () => {
   await resetDb();
   await db.insert(users).values({ id: 'u-owner', email: 'owner@t.com', passwordHash: 'x', nickname: 'o' });
-  await db.insert(chains).values({ id: 'chain-1', name: 'c', ownerId: 'u-owner' });
+  await db.insert(chains).values({ id: 'chain-1', name: 'c', ownerId: 'u-owner', template: 'daily' });
 });
 afterAll(closeDb);
 

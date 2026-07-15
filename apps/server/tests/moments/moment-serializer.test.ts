@@ -5,6 +5,8 @@ const moment = {
   chainId: 'c-1',
   authorId: 'u-1',
   type: 'media' as const,
+  kind: 'standard',
+  payload: null,
   content: '九张图',
   happenedAt: new Date('2026-08-15T02:00:00Z'),
   happenedTzOffset: -480,

@@ -23,6 +23,10 @@ export const createMomentInputSchema = z
     isBackfill: z.boolean().default(false),
     mediaIds: z.array(z.string().min(1)).default([]),
     tagIds: momentTagIdsSchema.optional(),
+    /** 语义类别（spec §1.1）；standard = 普通 moment，其余由链模板 kinds 声明 */
+    kind: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64).default('standard'),
+    /** 结构化数据；standard moment 只允许模板 momentFields 声明的 key，kind moment 按 kind 的 payloadSchema（server 校验） */
+    payload: z.record(z.unknown()).nullish(),
   })
   .superRefine((val, ctx) => {
     if (val.type === 'text') {
@@ -53,6 +57,8 @@ export const patchMomentInputSchema = z
     happenedTzOffset: z.number().int().min(-840).max(840).optional(),
     isBackfill: z.boolean().optional(),
     tagIds: momentTagIdsSchema.optional(),
+    kind: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64).optional(),
+    payload: z.record(z.unknown()).nullable().optional(),
   })
   .strict() // 未知键（含 mediaIds/type）直接 VALIDATION_ERROR，而非静默剥离
   .refine((val) => Object.values(val).some((v) => v !== undefined), { message: 'EMPTY_PATCH' });
@@ -84,6 +90,10 @@ export interface MomentResponse {
   author: AuthorSummary;
   type: MomentType;
   content: string;
+  /** 语义类别（默认 standard） */
+  kind: string;
+  /** 结构化数据（milestone/metric 的 payload，或 standard 的 mood/geo 等扩展字段）；无为 null */
+  payload: Record<string, unknown> | null;
   happenedAt: string;
   happenedTzOffset: number;
   isBackfill: boolean;

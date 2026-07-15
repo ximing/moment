@@ -5,9 +5,9 @@ import { db } from '../../src/db/index.js';
 import { chainMembers } from '../../src/db/schema.js';
 import { auth, type TestUser } from './auth.js';
 
-/** 走真实 API 建链，返回 ChainDto。 */
-export async function createChain(app: Express, owner: TestUser, name = '测试链'): Promise<ChainDto> {
-  const res = await request(app).post('/api/chains').set('Authorization', auth(owner)).send({ name });
+/** 走真实 API 建链，返回 ChainDto。template 默认 daily（spec §2.3：存量与测试默认模板）。 */
+export async function createChain(app: Express, owner: TestUser, name = '测试链', template = 'daily'): Promise<ChainDto> {
+  const res = await request(app).post('/api/chains').set('Authorization', auth(owner)).send({ name, template });
   if (res.status !== 201) {
     throw new Error(`createChain failed: ${res.status} ${JSON.stringify(res.body)}`);
   }

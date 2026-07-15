@@ -11,15 +11,15 @@ import {
 } from './chains.js';
 
 test('createChainInputSchema：visibility 默认 private，name trim', () => {
-  const input = createChainInputSchema.parse({ name: '  宝宝成长  ' });
+  const input = createChainInputSchema.parse({ name: '  宝宝成长  ', template: 'daily' });
   assert.equal(input.name, '宝宝成长');
   assert.equal(input.visibility, 'private');
   assert.equal(input.description, undefined);
 });
 
 test('createChainInputSchema：拒绝空 name 与非法 visibility', () => {
-  assert.throws(() => createChainInputSchema.parse({ name: '' }));
-  assert.throws(() => createChainInputSchema.parse({ name: 'x', visibility: 'friends' }));
+  assert.throws(() => createChainInputSchema.parse({ name: '', template: 'daily' }));
+  assert.throws(() => createChainInputSchema.parse({ name: 'x', template: 'daily', visibility: 'friends' }));
 });
 
 test('updateChainInputSchema：拒绝空 patch；description 可显式置 null', () => {
@@ -29,11 +29,11 @@ test('updateChainInputSchema：拒绝空 patch；description 可显式置 null',
 });
 
 test('create/update 接受预设色与图标，拒绝非法值', () => {
-  const created = createChainInputSchema.parse({ name: '宝宝', color: 'mint', icon: '👶' });
+  const created = createChainInputSchema.parse({ name: '宝宝', template: 'daily', color: 'mint', icon: '👶' });
   assert.equal(created.color, 'mint');
   assert.equal(created.icon, '👶');
-  assert.throws(() => createChainInputSchema.parse({ name: 'x', color: 'neon' }));
-  assert.throws(() => createChainInputSchema.parse({ name: 'x', icon: '💩' }));
+  assert.throws(() => createChainInputSchema.parse({ name: 'x', template: 'daily', color: 'neon' }));
+  assert.throws(() => createChainInputSchema.parse({ name: 'x', template: 'daily', icon: '💩' }));
   const cleared = updateChainInputSchema.parse({ icon: null, color: 'gold' });
   assert.equal(cleared.icon, null);
   assert.equal(cleared.color, 'gold');
@@ -72,4 +72,23 @@ test('ChainMemberPreview 只有四字段；ChainDto 要求 membersPreview + memb
   };
   assert.equal(slice.memberCount, 1);
   assert.equal(slice.membersPreview[0].role, 'owner');
+});
+
+test('createChainInputSchema：template 必填；payload 仅接受对象或 null', () => {
+  assert.throws(() => createChainInputSchema.parse({ name: 'x' })); // 缺 template
+  const ok = createChainInputSchema.parse({ name: 'x', template: 'baby', payload: { birthdate: '2025-01-01' } });
+  assert.equal(ok.template, 'baby');
+  assert.deepEqual(ok.payload, { birthdate: '2025-01-01' });
+  assert.throws(() => createChainInputSchema.parse({ name: 'x', template: 'baby', payload: 'nope' }));
+});
+
+test('updateChainInputSchema：payload 可改、可显式置 null；schema 不含 template 键', () => {
+  const ok = updateChainInputSchema.parse({ payload: { birthdate: '2025-01-01' } });
+  assert.deepEqual(ok.payload, { birthdate: '2025-01-01' });
+  const cleared = updateChainInputSchema.parse({ payload: null });
+  assert.equal(cleared.payload, null);
+  // template 不在 schema 内（zod 默认剥离未知键）；改 template 的 TEMPLATE_IMMUTABLE 由 server controller 检测原始 body（Task 4）。
+  // 注意：updateChainInputSchema 带 .refine()，类型是 ZodEffects 没有 .shape——用 parse 行为断言（传入 template 被剥离）
+  const stripped = updateChainInputSchema.parse({ name: '改名', template: 'baby' });
+  assert.equal('template' in stripped, false);
 });

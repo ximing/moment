@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { TemplateManifest } from './templates.js';
 
 export const chainVisibilitySchema = z.enum(['private', 'link', 'public']);
 export type ChainVisibility = z.infer<typeof chainVisibilitySchema>;
@@ -26,6 +27,10 @@ export const createChainInputSchema = z.object({
   visibility: chainVisibilitySchema.default('private'),
   color: chainColorSchema.optional(),
   icon: chainIconSchema.nullish(),
+  /** 链模板 key（spec §3.2：创建必传、不可改）；official 为 baby/travel/daily，user 模板为 u_<21位> */
+  template: z.string().min(1).max(64),
+  /** 链级模板数据（宝宝生日、行程列表等），按模板 manifest 的 chainPayloadSchema 在 server 校验 */
+  payload: z.record(z.unknown()).nullish(),
 });
 export type CreateChainInput = z.infer<typeof createChainInputSchema>;
 
@@ -36,6 +41,8 @@ export const updateChainInputSchema = z
     visibility: chainVisibilitySchema.optional(),
     color: chainColorSchema.optional(),
     icon: chainIconSchema.nullable().optional(),
+    // template 刻意不在此 schema：改 template 由 server controller 检测原始 body 抛 TEMPLATE_IMMUTABLE（spec §3.2）
+    payload: z.record(z.unknown()).nullable().optional(),
     // coverMediaId 的校验依赖 media 归属判断，属 Phase 3，本阶段不支持改封面。
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
@@ -69,6 +76,10 @@ export interface ChainDto {
   /** 未选图标时为 null，只画色点 */
   icon: ChainIcon | null;
   visibility: ChainVisibility;
+  /** 链模板 key（创建时选定，不可改，spec §0） */
+  template: string;
+  /** 链级模板数据；未填为 null */
+  payload: Record<string, unknown> | null;
   ownerId: string;
   /** 当前请求用户在该链中的角色；仅在「我参与的链」语境下返回 */
   myRole?: ChainRole;
@@ -118,4 +129,9 @@ export interface AcceptInviteResponse {
   role: ChainRole;
   /** true = 已是成员（幂等返回），未做任何写入 */
   alreadyMember: boolean;
+}
+
+/** 链详情 = ChainDto + 内嵌模板 manifest（spec §3.2：客户端不必二次请求模板） */
+export interface ChainDetailDto extends ChainDto {
+  templateManifest: TemplateManifest;
 }

@@ -29,7 +29,7 @@ async function insertMomentWithMedia(opts: {
   await db.insert(users).values({ id: userId, email: `${userId}@test.com`, passwordHash: 'x', nickname: 'u' });
   const chainId = randomUUID();
   const { chains } = await import('../../src/db/schema.js');
-  await db.insert(chains).values({ id: chainId, name: 'c', ownerId: userId, visibility: 'private' });
+  await db.insert(chains).values({ id: chainId, name: 'c', ownerId: userId, visibility: 'private', template: 'daily' });
   const momentId = randomUUID();
   await db.insert(moments).values({
     id: momentId,

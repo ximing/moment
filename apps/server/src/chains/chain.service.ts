@@ -4,6 +4,7 @@ import {
   type AcceptInviteResponse,
   type ChainColor,
   type ChainDto,
+  type ChainDetailDto,
   type ChainIcon,
   type ChainMemberDto,
   type ChainMemberPreview,
@@ -23,6 +24,8 @@ import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { chainInvites, chainMembers, chains, comments, media, momentTags, moments, reactions, shareLinks, tags, users, type Chain, type ChainInvite } from '../db/schema.js';
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
+import { TemplateService } from '../templates/template.service.js';
+import { validateChainPayload } from '../templates/payload-validator.js';
 
 function isChainColor(v: string | null): v is ChainColor {
   return v !== null && (CHAIN_COLORS as readonly string[]).includes(v);
@@ -34,10 +37,13 @@ function isChainIcon(v: string | null): v is ChainIcon {
 
 @Service()
 export class ChainService {
-  constructor(private policy: ChainPolicy) {}
+  constructor(private policy: ChainPolicy, private templates: TemplateService) {}
 
   /** 创建链：同事务把创建者写为 owner 成员（spec §3 事务边界）。 */
   async create(userId: string, input: CreateChainInput): Promise<ChainDto> {
+    // 模板必须存在且 active（archived 阻止新建链选用，spec §3.4）；payload 按 chainPayloadSchema 校验
+    const template = await this.templates.getActiveByKey(input.template);
+    const payload = validateChainPayload(template.manifest, input.payload ?? null);
     const id = randomUUID();
     await db.transaction(async (tx) => {
       await tx.insert(chains).values({
@@ -48,6 +54,8 @@ export class ChainService {
         color: input.color ?? null,
         icon: input.icon ?? null,
         ownerId: userId,
+        template: input.template,
+        payload,
       });
       await tx.insert(chainMembers).values({ chainId: id, userId, role: 'owner' });
     });
@@ -66,17 +74,27 @@ export class ChainService {
   }
 
   /** 详情：service 层过 ChainPolicy（读接口同样验成员身份，防 IDOR）。 */
-  async getById(userId: string, chainId: string): Promise<ChainDto> {
+  async getById(userId: string, chainId: string): Promise<ChainDetailDto> {
     const role = await this.policy.require(userId, chainId, 'viewer');
     const [chain] = await db.select().from(chains).where(eq(chains.id, chainId)).limit(1);
     if (!chain) throw new NotFoundError('CHAIN_NOT_FOUND'); // policy 已保证存在，防御性兜底
     const [dto] = await this.attachPreviews([{ chain, role }]);
-    return dto;
+    // 详情内嵌模板 manifest（spec §3.2）；getByKey 任意 status 可读——archived 模板的存量链照常展示
+    const template = await this.templates.getByKey(chain.template);
+    return { ...dto, templateManifest: template.manifest };
   }
 
   /** owner 改链设置（coverMediaId 属 Phase 3，本阶段不可改）。 */
   async update(userId: string, chainId: string, input: UpdateChainInput): Promise<ChainDto> {
     await this.policy.require(userId, chainId, 'owner');
+    const [current] = await db.select().from(chains).where(eq(chains.id, chainId)).limit(1);
+    if (!current) throw new NotFoundError('CHAIN_NOT_FOUND'); // policy 已保证存在，防御性兜底
+    // payload 显式出现在输入里才校验/写入（undefined = 不动；null = 清空，validateChainPayload 放行 null）
+    let payloadSet: { payload?: Record<string, unknown> | null } = {};
+    if (input.payload !== undefined) {
+      const template = await this.templates.getByKey(current.template);
+      payloadSet = { payload: validateChainPayload(template.manifest, input.payload) };
+    }
     await db
       .update(chains)
       .set({
@@ -85,6 +103,7 @@ export class ChainService {
         ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
         ...(input.color !== undefined ? { color: input.color } : {}),
         ...(input.icon !== undefined ? { icon: input.icon } : {}),
+        ...payloadSet,
         updatedAt: new Date(),
       })
       .where(eq(chains.id, chainId));
@@ -288,6 +307,8 @@ export class ChainService {
       color: isChainColor(chain.color) ? chain.color : null,
       icon: isChainIcon(chain.icon) ? chain.icon : null,
       visibility: chain.visibility,
+      template: chain.template,
+      payload: chain.payload,
       ownerId: chain.ownerId,
       ...(myRole ? { myRole } : {}),
       createdAt: chain.createdAt.toISOString(),

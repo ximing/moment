@@ -14,6 +14,8 @@ import { db } from '../db/index.js';
 import { chains, shareLinks, type ShareLink } from '../db/schema.js';
 import { queryMomentPage } from '../feed/moment-query.js';
 import { serializeMoments } from '../moments/moment-serializer.js';
+import { AggregateService } from '../templates/aggregate.service.js';
+import { TemplateService } from '../templates/template.service.js';
 
 function toDto(row: ShareLink): ShareLinkDto {
   return {
@@ -28,7 +30,11 @@ function toDto(row: ShareLink): ShareLinkDto {
 
 @Service()
 export class ShareLinkService {
-  constructor(private readonly policy: ChainPolicy) {}
+  constructor(
+    private readonly policy: ChainPolicy,
+    private readonly templates: TemplateService,
+    private readonly aggregates: AggregateService,
+  ) {}
 
   /**
    * 创建（owner 鉴权在 requireChainRole 中间件完成，CONVENTIONS §3.1：controller 内禁止手写角色判断）。
@@ -86,7 +92,7 @@ export class ShareLinkService {
     if (!link) throw new NotFoundError('SHARE_NOT_FOUND');
 
     const [chain] = await db
-      .select({ name: chains.name, description: chains.description })
+      .select({ name: chains.name, description: chains.description, template: chains.template })
       .from(chains)
       .where(eq(chains.id, link.chainId))
       .limit(1);
@@ -98,8 +104,12 @@ export class ShareLinkService {
       limit: query.limit,
       cursor: query.cursor,
     });
+    const manifest = (await this.templates.getByKey(chain.template)).manifest;
     return {
       chain: { name: chain.name, description: chain.description },
+      template: chain.template,
+      templateManifest: manifest,
+      aggregates: await this.aggregates.projectAll(link.chainId, manifest),
       moments: await serializeMoments(page.rows),
       nextCursor: page.nextCursor,
     };

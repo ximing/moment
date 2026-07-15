@@ -103,3 +103,19 @@ test('listMomentsQuerySchema 既有行为不回退：cursor/limit 原样', () =>
   assert.equal(q.limit, '50'); // limit 仍是 string，service 层解析（INVALID_LIMIT 语义不动）
   assert.throws(() => listMomentsQuerySchema.parse({ cursor: '' }));
 });
+
+test('createMomentInputSchema：kind 默认 standard、非法 kind 拒绝、payload 仅对象', () => {
+  const base = { type: 'text' as const, content: 'x', happenedAt: new Date().toISOString(), happenedTzOffset: -480 };
+  const def = createMomentInputSchema.parse(base);
+  assert.equal(def.kind, 'standard');
+  assert.equal(def.payload, undefined);
+  assert.equal(createMomentInputSchema.parse({ ...base, kind: 'milestone', payload: { catalog_key: 'first-smile' } }).kind, 'milestone');
+  assert.throws(() => createMomentInputSchema.parse({ ...base, kind: 'Milestone' }));
+  assert.throws(() => createMomentInputSchema.parse({ ...base, payload: 'nope' }));
+});
+
+test('patchMomentInputSchema：kind/payload 可选，strict 仍拒未知键', () => {
+  const ok = patchMomentInputSchema.parse({ payload: { mood: '😄' } });
+  assert.deepEqual(ok.payload, { mood: '😄' });
+  assert.throws(() => patchMomentInputSchema.parse({ kind: 'milestone', hacker: 1 }));
+});

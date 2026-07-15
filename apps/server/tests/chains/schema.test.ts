@@ -8,7 +8,7 @@ afterAll(closeDb);
 describe('chains 域三表', () => {
   it('可写入并读回；默认值/枚举/联合主键生效', async () => {
     await db.insert(users).values({ id: 'u1', email: 'u1@t.com', passwordHash: 'x', nickname: 'u1' });
-    await db.insert(chains).values({ id: 'c1', name: '链', ownerId: 'u1' });
+    await db.insert(chains).values({ id: 'c1', name: '链', ownerId: 'u1', template: 'daily' });
     await db.insert(chainMembers).values({ chainId: 'c1', userId: 'u1', role: 'owner' });
     await db.insert(chainInvites).values({
       id: 'i1',

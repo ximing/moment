@@ -15,7 +15,7 @@ beforeEach(async () => {
     { id: 'user-viewer', email: 'v@t.com', passwordHash: 'x', nickname: 'v' },
     { id: 'user-stranger', email: 's@t.com', passwordHash: 'x', nickname: 's' },
   ]);
-  await db.insert(chains).values({ id: 'chain-1', name: 'c', ownerId: 'user-owner' });
+  await db.insert(chains).values({ id: 'chain-1', name: 'c', ownerId: 'user-owner', template: 'daily' });
   await db.insert(chainMembers).values([
     { chainId: 'chain-1', userId: 'user-owner', role: 'owner' },
     { chainId: 'chain-1', userId: 'user-editor', role: 'editor' },

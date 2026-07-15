@@ -22,6 +22,7 @@ import {
   Patch,
   Post,
   UseBefore,
+  BadRequestError,
 } from 'routing-controllers';
 import { Service } from 'typedi';
 import { ChainService } from './chain.service.js';
@@ -57,6 +58,11 @@ export class ChainsController {
     @Param('chainId') chainId: string,
     @Body() body: unknown
   ): Promise<ChainDto> {
+    // template 创建后不可改（spec §3.2/§8.3）：updateChainInputSchema 不含 template 键会被 zod 静默剥离，
+    // 必须在 parse 前检测原始 body
+    if (body !== null && typeof body === 'object' && 'template' in body) {
+      throw new BadRequestError('TEMPLATE_IMMUTABLE');
+    }
     return this.chainService.update(user.id, chainId, updateChainInputSchema.parse(body));
   }
 

@@ -10,6 +10,8 @@ export interface MomentLike {
   chainId: string;
   authorId: string;
   type: 'text' | 'media' | 'video';
+  kind: string;
+  payload: Record<string, unknown> | null;
   content: string;
   happenedAt: Date;
   happenedTzOffset: number;
@@ -48,6 +50,8 @@ export function momentSerializer(m: MomentLike, extras: SerializerExtras): Momen
     chainId: m.chainId,
     author: extras.author,
     type: m.type,
+    kind: m.kind,
+    payload: m.payload,
     content: m.content,
     happenedAt: m.happenedAt.toISOString(),
     happenedTzOffset: m.happenedTzOffset,

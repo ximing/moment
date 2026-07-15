@@ -7,6 +7,7 @@ import {
   manifestJsonSchema,
   momentFieldPayloadJsonSchema,
   OFFICIAL_TEMPLATES,
+  aggregateQuerySchema,
   createTemplateInputSchema,
   updateTemplateInputSchema,
 } from './templates.js';
@@ -134,4 +135,11 @@ test('派生表：enum/emoji-picker 收敛到 options；缺 options 抛错', () 
   assert.equal(mood('😄'), true);
   assert.equal(mood('🤯'), false);
   assert.throws(() => momentFieldPayloadJsonSchema({ key: 'e', type: 'enum', label: 'E' }));
+});
+
+test('aggregateQuerySchema：view 词表校验，kind/field 可选', () => {
+  assert.equal(aggregateQuerySchema.parse({ view: 'curve' }).view, 'curve');
+  assert.equal(aggregateQuerySchema.parse({ view: 'map', field: 'geo' }).field, 'geo');
+  assert.throws(() => aggregateQuerySchema.parse({ view: 'pie' }));
+  assert.throws(() => aggregateQuerySchema.parse({}));
 });

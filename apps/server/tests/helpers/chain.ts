@@ -17,6 +17,7 @@ export async function createChainWithMembers(
     coverMediaId: null,
     ownerId,
     visibility: 'private',
+    template: 'daily',
   });
   await db.insert(chainMembers).values([
     { chainId, userId: ownerId, role: 'owner', joinedAt: new Date() },

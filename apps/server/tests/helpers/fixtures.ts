@@ -21,10 +21,10 @@ export async function registerUser(): Promise<{ id: string; token: string }> {
   return { id: res.body.user.id, token: res.body.tokens.accessToken };
 }
 
-/** 直插链 + owner 成员行（绕过邀请流程，测试只关心权限判定本身）。 */
-export async function createChain(ownerId: string, name = '测试链'): Promise<string> {
+/** 直插链 + owner 成员行（绕过邀请流程，测试只关心权限判定本身）。template 默认 daily（spec §2.3）。 */
+export async function createChain(ownerId: string, name = '测试链', template = 'daily'): Promise<string> {
   const id = randomUUID();
-  await db.insert(chains).values({ id, name, ownerId, visibility: 'private' });
+  await db.insert(chains).values({ id, name, ownerId, visibility: 'private', template });
   await db.insert(chainMembers).values({ chainId: id, userId: ownerId, role: 'owner', joinedAt: new Date() });
   return id;
 }
@@ -47,6 +47,8 @@ export async function insertMoment(opts: {
   content?: string;
   isBackfill?: boolean;
   deletedAt?: Date;
+  kind?: string;
+  payload?: Record<string, unknown> | null;
 }): Promise<string> {
   const id = randomUUID();
   const at = opts.createdAt ?? new Date();
@@ -62,6 +64,8 @@ export async function insertMoment(opts: {
     // 写路径第四处（spec memories-today §1 review I2）：夹具必须与 create/update 同一公式补 wall_date
     wallDate: wallDateOf(opts.happenedAt, tzOffset),
     isBackfill: opts.isBackfill ?? false,
+    kind: opts.kind ?? 'standard',
+    payload: opts.payload ?? null,
     createdAt: at,
     updatedAt: at,
     deletedAt: opts.deletedAt ?? null,

@@ -6,7 +6,9 @@ import { Service } from 'typedi';
 import type { CreateMomentInput, MomentListResponse, MomentResponse, PatchMomentInput } from '@moment/dto';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
-import { media, moments, type Media } from '../db/schema.js';
+import { chains, media, moments, type Media } from '../db/schema.js';
+import { TemplateService } from '../templates/template.service.js';
+import { validateMomentPayload } from '../templates/payload-validator.js';
 import { queryMomentPage } from '../feed/moment-query.js';
 import { emitOutbox } from '../outbox/outbox.js';
 import { OUTBOX_MOMENT_CREATED, OUTBOX_MOMENT_DELETED } from '../outbox/types.js';
@@ -19,7 +21,14 @@ import { wallDateOf } from './wall-date.js';
 
 @Service()
 export class MomentService {
-  constructor(private readonly policy: ChainPolicy) {}
+  constructor(private readonly policy: ChainPolicy, private readonly templates: TemplateService) {}
+
+  /** 取链模板 manifest（任意 status：archived 模板的存量链照常发布/编辑，spec §3.4）。 */
+  private async manifestOf(chainId: string) {
+    const [chain] = await db.select({ template: chains.template }).from(chains).where(eq(chains.id, chainId)).limit(1);
+    if (!chain) throw new NotFoundError('CHAIN_NOT_FOUND'); // policy 已保证存在，防御性兜底
+    return (await this.templates.getByKey(chain.template)).manifest;
+  }
 
   /**
    * 创建 moment（spec §3 事务边界）：校验 media 归属/状态 → tmp→final copy（按行上 storage_meta，
@@ -29,6 +38,8 @@ export class MomentService {
    */
   async create(userId: string, chainId: string, input: CreateMomentInput): Promise<MomentResponse> {
     await this.policy.require(userId, chainId, 'editor');
+    const manifest = await this.manifestOf(chainId);
+    const payload = validateMomentPayload(manifest, input.kind, input.payload ?? null);
     const momentId = randomUUID();
     const happenedAt = new Date(input.happenedAt);
     const storage = getStorage();
@@ -65,6 +76,8 @@ export class MomentService {
         chainId,
         authorId: userId,
         type: input.type,
+        kind: input.kind,
+        payload,
         content: input.content,
         happenedAt,
         happenedTzOffset: input.happenedTzOffset,
@@ -158,6 +171,22 @@ export class MomentService {
     if (m.deletedAt) throw new HttpError(410, 'MOMENT_DELETED');
     if (m.authorId !== userId) throw new ForbiddenError('NOT_MOMENT_AUTHOR');
 
+    // kind/payload 合并校验（spec §3.2）：任一变更即按「合并后的有效值」整体校验——
+    // 只改 payload 用既存 kind 校验，只改 kind 用既存 payload 校验。
+    // 推论（评审 S4，P4/P5 继承此约束）：只改 kind 不改 payload 的 PATCH 会被拒——
+    // 旧 payload 按新 kind 的 schema 校验不过；前端切 kind 时必须同时显式传 payload（新值或 null）。
+    let kindPayloadSet: { kind?: string; payload?: Record<string, unknown> | null } = {};
+    if (input.kind !== undefined || input.payload !== undefined) {
+      const manifest = await this.manifestOf(m.chainId);
+      const effectiveKind = input.kind ?? m.kind;
+      const effectivePayload = input.payload !== undefined ? input.payload : m.payload;
+      const payload = validateMomentPayload(manifest, effectiveKind, effectivePayload);
+      kindPayloadSet = {
+        ...(input.kind !== undefined ? { kind: input.kind } : {}),
+        payload,
+      };
+    }
+
     const updatedRow = await db.transaction(async (tx) => {
       // happenedAt 或 happenedTzOffset 任一变更即按全量新值重算 wall_date（spec memories-today §1；
       // 单独改 tzOffset 不改时间点也会改墙钟归日，必须重算）
@@ -172,6 +201,7 @@ export class MomentService {
           ...(input.happenedTzOffset !== undefined ? { happenedTzOffset: input.happenedTzOffset } : {}),
           ...(recomputeWallDate ? { wallDate: wallDateOf(nextHappenedAt, nextTzOffset) } : {}),
           ...(input.isBackfill !== undefined ? { isBackfill: input.isBackfill } : {}),
+          ...kindPayloadSet,
           updatedAt: new Date(),
         })
         .where(eq(moments.id, momentId));

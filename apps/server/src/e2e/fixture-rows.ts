@@ -110,6 +110,7 @@ export async function buildFixtureRows(
         color: null,
         icon: null,
         visibility: 'private',
+        template: 'daily',
         ownerId,
         createdAt: fixedNow,
         updatedAt: fixedNow,

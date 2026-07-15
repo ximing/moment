@@ -71,6 +71,13 @@
       "when": 1787274035481,
       "tag": "0009_friendly_young_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1787283074167,
+      "tag": "0010_closed_blacklash",
+      "breakpoints": true
     }
   ]
 }

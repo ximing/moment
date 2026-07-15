@@ -339,3 +339,55 @@ export function momentFieldPayloadJsonSchema(field: TemplateMomentField): Record
   }
   throw new Error(`unknown momentField type: ${JSON.stringify(field)}`);
 }
+
+// ---------- 聚合视图投影（spec §3.2：server 只出数据，渲染归各端词表渲染器） ----------
+
+/** curve 投影点；metric 随点返回（baby 的 height/weight 两条线由前端按 metric 拆分） */
+export interface AggregateCurvePoint {
+  /** ISO 8601 */
+  happenedAt: string;
+  metric: string;
+  value: number;
+  unit: string;
+}
+
+export interface AggregateMapPoint {
+  momentId: string;
+  /** ISO 8601 */
+  happenedAt: string;
+  lat: number;
+  lng: number;
+  placeName: string | null;
+}
+
+export interface AggregateMilestoneItem {
+  momentId: string;
+  /** ISO 8601 */
+  happenedAt: string;
+  /** catalog_key 解析自 milestoneCatalog，或 custom_label 原文 */
+  label: string;
+  icon: string | null;
+  note: string | null;
+}
+
+/** 按墙钟日（wall_date）聚合的心情分布 */
+export interface AggregateMoodlineDay {
+  /** YYYY-MM-DD */
+  date: string;
+  mood: string;
+  count: number;
+}
+
+export type AggregateResponse =
+  | { view: 'curve'; points: AggregateCurvePoint[] }
+  | { view: 'map'; points: AggregateMapPoint[] }
+  | { view: 'milestone-axis'; items: AggregateMilestoneItem[] }
+  | { view: 'moodline'; days: AggregateMoodlineDay[] };
+
+/** 聚合端点 query；timeline 可被 parse 但 server 拒绝（INVALID_AGGREGATE_VIEW，见 P3 Global Constraints） */
+export const aggregateQuerySchema = z.object({
+  view: z.enum(TEMPLATE_VIEW_TYPES),
+  kind: z.string().max(64).optional(),
+  field: z.string().max(64).optional(),
+});
+export type AggregateQuery = z.infer<typeof aggregateQuerySchema>;
