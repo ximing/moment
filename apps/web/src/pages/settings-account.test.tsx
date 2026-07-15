@@ -99,6 +99,8 @@ const CHAIN_BASE: Omit<ChainDto, 'myRole'> = {
   color: 'coral',
   icon: null,
   visibility: 'private',
+  template: 'daily',
+  payload: null,
   ownerId: 'user-1',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',

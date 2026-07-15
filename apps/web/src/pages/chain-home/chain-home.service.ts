@@ -1,5 +1,5 @@
 import { Service } from '@rabjs/react';
-import type { ChainDto, MonthIndexEntry, MomentResponse, TagResponse } from '@moment/dto';
+import type { AggregateResponse, ChainDetailDto, MonthIndexEntry, MomentResponse, TagResponse } from '@moment/dto';
 import { client } from '@/api/client';
 import { currentTzOffset } from '@/lib/time';
 import { feedQuery } from '@/lib/feed';
@@ -9,13 +9,17 @@ import type { ChainChangedPayload } from '@/lib/events';
 /** 链页状态（spec §4.3）：getFeed 恒带 chainIds:[chainId]；hydrate 由路由 param 驱动。 */
 export class ChainHomeService extends Service {
   chainId = '';
-  chain: ChainDto | null = null;
+  chain: ChainDetailDto | null = null;
   filter: RailFilter = { order: 'happened_at' };
   moments: MomentResponse[] = [];
   nextCursor: string | null = null;
   monthIndex: MonthIndexEntry[] = [];
   indexPending = false;
   tags: TagResponse[] = [];
+  /** 当前聚合视图（'timeline' = 主时间线；其余为 manifest.views 声明的 type） */
+  activeView = 'timeline';
+  /** 当前视图的投影数据（timeline/trips 不用端点，为 null） */
+  aggregate: AggregateResponse | null = null;
   private gen = 0;
   private loadingMore = false;
 
@@ -26,6 +30,7 @@ export class ChainHomeService extends Service {
       () => {
         void this.loadFirst();
         void this.loadMeta();
+        if (this.activeView !== 'timeline' && this.activeView !== 'trips') void this.loadAggregate().catch(() => undefined);
       },
       'global',
     );
@@ -51,6 +56,8 @@ export class ChainHomeService extends Service {
     this.chain = null;
     this.filter = { order: 'happened_at', chainIds: [chainId] };
     this.moments = [];
+    this.activeView = 'timeline';
+    this.aggregate = null;
     void this.loadChain();
     void this.loadFirst();
     void this.loadMeta();
@@ -123,5 +130,24 @@ export class ChainHomeService extends Service {
     } finally {
       this.indexPending = false;
     }
+  }
+
+  /** 切视图（链眉下 tab）。tab id 约定见 Produces：'timeline' 主时间线 / 'trips' 行程分章 / 其余为视图 type。 */
+  setActiveView(view: string): void {
+    this.activeView = view;
+    this.aggregate = null;
+    if (view !== 'timeline' && view !== 'trips') void this.loadAggregate().catch(() => undefined);
+  }
+
+  async loadAggregate(): Promise<void> {
+    const manifest = this.chain?.templateManifest;
+    const viewDef = (manifest?.views ?? []).find((v) => v.type === this.activeView);
+    if (!this.chainId || !viewDef) return;
+    if (viewDef.type === 'timeline') return; // groupBy 分章走已加载 moments，不打端点
+    this.aggregate = await client.getAggregate(this.chainId, {
+      view: viewDef.type,
+      kind: viewDef.source?.kind,
+      field: viewDef.source?.field,
+    });
   }
 }

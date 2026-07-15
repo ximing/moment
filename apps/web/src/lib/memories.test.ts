@@ -10,6 +10,8 @@ function moment(id: string): MomentResponse {
     chainId: 'chain-1',
     author: { id: 'user-1', nickname: '林晓满', avatarUrl: null },
     type: 'text',
+    kind: 'standard',
+    payload: null,
     content: id,
     happenedAt: '2025-08-19T02:00:00.000Z',
     happenedTzOffset: -480,

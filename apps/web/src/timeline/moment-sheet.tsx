@@ -6,9 +6,10 @@ import { MoreHorizontal } from 'lucide-react';
 import { AuthService } from '@/services/auth.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { humanError } from '@/lib/errors';
-import type { ChainColor, ChainIcon } from '@moment/dto';
+import type { ChainColor, ChainIcon, TemplateManifest } from '@moment/dto';
 import { ChainMark } from '@/chain/ChainMark';
 import { formatHappenedClock } from '@/lib/time';
+import { resolveMilestoneLabel, summarizePayload } from '@/lib/template';
 import { MediaBlock } from '@/media/MediaBlock';
 import { Avatar } from '@/ui/Avatar';
 import { Icon } from '@/ui/Icon';
@@ -37,6 +38,8 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   chainIcon,
   shareToken,
   readOnly,
+  templateManifest,
+  ageLabel,
 }: {
   moment: MomentResponse;
   chainName?: string;
@@ -44,6 +47,9 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   chainIcon?: ChainIcon | null;
   shareToken?: string;
   readOnly?: boolean;
+  templateManifest?: TemplateManifest | null;
+  /** baby 年龄标注（「1 岁 2 个月」）；由调用方按链 payload.birthdate 计算 */
+  ageLabel?: string;
 }) {
   const service = useService(MomentSheetService);
   const auth = useService(AuthService);
@@ -126,6 +132,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
             <span className="font-semibold text-ink">{moment.author.nickname}</span>
             <span className="text-muted">{formatHappenedClock(moment.happenedAt, moment.happenedTzOffset)}</span>
             {moment.isBackfill && <span className="text-muted">补记</span>}
+            {ageLabel && <span className="text-muted">{ageLabel}</span>}
             {chainName && !shareToken && (
               <Link to={`/chains/${moment.chainId}`} className="inline-flex items-center gap-1 text-muted hover:text-ink">
                 <ChainMark chainId={moment.chainId} color={chainColor} icon={chainIcon} size={14} />
@@ -163,6 +170,21 @@ export const MomentSheetContent = observer(function MomentSheetContent({
             <div className="rounded-surface-md bg-surface px-4 py-3">{copy}</div>
           )
         )}
+        {moment.kind !== 'standard' && templateManifest && (() => {
+          const p = moment.payload ?? {};
+          // 与 Task 4 兜底同一函数：判重基准与兜底 content 逐字同源，不会出现「判定不一致导致重复显示」
+          const summaryText = summarizePayload(templateManifest, moment.kind, p);
+          if (!summaryText || moment.content.trim() === summaryText) return null; // H1 判重
+          const { icon } = resolveMilestoneLabel(templateManifest, p); // metric 无 catalog_key → icon 恒 null
+          return <p className="mt-1 text-meta text-muted">{icon ? `${icon} ${summaryText}` : summaryText}</p>;
+        })()}
+        {moment.kind === 'standard' && typeof moment.payload?.mood === 'string' && (
+          <span className="mt-1 inline-block text-body" aria-label="心情">{moment.payload.mood}</span>
+        )}
+        {(() => {
+          const geo = moment.payload?.geo as { place_name?: string } | undefined;
+          return geo?.place_name ? <p className="mt-1 text-meta text-muted">📍 {geo.place_name}</p> : null;
+        })()}
         {acts}
         {service.showComments && !readOnly && (
           <div className="mt-3 flex flex-col gap-2">

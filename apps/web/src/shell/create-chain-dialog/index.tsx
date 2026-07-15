@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { ChainLookPicker } from '@/chain/ChainLookPicker';
@@ -17,6 +17,10 @@ const CreateChainDialogContent = observer(function CreateChainDialogContent({ on
   const service = useService(CreateChainDialogService);
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null); // 名字为空等本地校验错误
+  useEffect(() => {
+    void service.loadTemplates().catch(() => undefined); // 失败静默：选择器不渲染，默认 daily
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载时一次性加载
+  }, []);
   const submitting = service.$model.submit.loading;
 
   function onSubmit(e: FormEvent) {
@@ -54,6 +58,30 @@ const CreateChainDialogContent = observer(function CreateChainDialogContent({ on
       }
     >
       <form id={FORM_ID} onSubmit={onSubmit} className="flex flex-col gap-field-stack">
+        {service.templates.length > 0 && (
+          <Field label="这条链记什么" description="模板选定后不可更改">
+            <div className="grid grid-cols-3 gap-2">
+              {service.templates.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  aria-pressed={service.template === t.key}
+                  onClick={() => (service.template = t.key)}
+                  className={`flex flex-col items-start gap-1 rounded-surface-md border px-3 py-2 text-left transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus ${
+                    service.template === t.key
+                      ? 'border-action bg-bg'
+                      : 'border-line bg-surface hover:bg-floating-hover'
+                  }`}
+                >
+                  <span className="text-body">
+                    {t.icon} {t.name}
+                  </span>
+                  {t.description && <span className="text-caption text-muted">{t.description}</span>}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
         <Field label="名字">
           <Input value={service.name} onChange={(e) => (service.name = e.target.value)} placeholder="比如「宝宝成长」" autoFocus />
         </Field>

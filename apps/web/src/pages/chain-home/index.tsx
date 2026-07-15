@@ -4,7 +4,11 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import { ArrowLeft, MoreHorizontal } from 'lucide-react';
 import { ComposerEntry } from '@/compose/composer-entry';
 import { ComposeSessionService } from '@/services/compose-session.service';
+import { AggregateView } from '@/chain/aggregate-views';
+import { MapView } from '@/chain/map-view';
+import { babyAgeLabel } from '@/lib/template';
 import { canCompose } from '@/lib/roles';
+import { humanError } from '@/lib/errors';
 import { Timeline } from '@/timeline/timeline';
 import { TimelineRail } from '@/timeline/timeline-rail';
 import { Button, IconButton } from '@/ui/button/index';
@@ -71,6 +75,37 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
         {chain.description && <p className="mt-1 text-meta text-muted">{chain.description}</p>}
       </header>
 
+      {(() => {
+        const views = chain.templateManifest.views ?? [];
+        if (views.length === 0) return null;
+        // 主时间线 tab 恒在首位；groupBy 的 timeline 视图 id 映射为 'trips'（防与主时间线撞 key）
+        const tabs = [
+          { id: 'timeline', label: '时间线' },
+          ...views
+            .filter((v) => v.type !== 'timeline' || v.groupBy === 'trips')
+            .map((v) => ({ id: v.type === 'timeline' ? 'trips' : v.type, label: v.label })),
+        ];
+        return (
+          <nav className="mb-4 flex flex-wrap gap-2" aria-label="链视图">
+            {tabs.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                aria-pressed={service.activeView === v.id}
+                onClick={() => service.setActiveView(v.id)}
+                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus ${
+                  service.activeView === v.id
+                    ? 'bg-select text-select-fg'
+                    : 'text-muted hover:bg-floating-hover hover:text-ink'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </nav>
+        );
+      })()}
+
       <TimelineRail
         fixedChainId={chain.id}
         index={service.monthIndex}
@@ -89,40 +124,59 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
         </div>
       )}
 
-      <Timeline
-        moments={service.moments}
-        hideSignature={service.filter.order === 'created_at'}
-        isPending={service.$model.loadFirst.loading}
-        isError={Boolean(service.$model.loadFirst.error)}
-        onRetry={() => void service.loadFirst()}
-        hasNextPage={service.hasMore}
-        isFetchingNextPage={service.$model.loadMore.loading}
-        fetchNextPage={() => void service.loadMore()}
-        entry={canCompose(chain) ? <ComposerEntry chainId={chain.id} /> : undefined}
-        empty={
-          service.filtered ? (
-            <EmptyState
-              variant="timeline"
-              scope="section"
-              title="没有符合条件的时刻"
-              description="换个标签或月份再看看。"
-              action={{ label: '清除筛选', emphasis: 'quiet', onPress: () => service.clearFilters() }}
-            />
-          ) : (
-            <EmptyState
-              variant="timeline"
-              scope="section"
-              title="还没有记下任何一刻"
-              description="这条链的第一刻，等你来写下。"
-              action={
-                canCompose(chain)
-                  ? { label: '记下此刻', emphasis: 'primary', onPress: () => composeSession.openCompose({ chainId: chain.id }) }
-                  : undefined
-              }
-            />
-          )
-        }
-      />
+      {service.activeView === 'timeline' ? (
+        <Timeline
+          moments={service.moments}
+          hideSignature={service.filter.order === 'created_at'}
+          isPending={service.$model.loadFirst.loading}
+          isError={Boolean(service.$model.loadFirst.error)}
+          onRetry={() => void service.loadFirst()}
+          hasNextPage={service.hasMore}
+          isFetchingNextPage={service.$model.loadMore.loading}
+          fetchNextPage={() => void service.loadMore()}
+          templateManifest={chain.templateManifest}
+          ageLabelOf={(m) => {
+            const birthdate = chain.payload?.birthdate;
+            return typeof birthdate === 'string' ? babyAgeLabel(birthdate, m.happenedAt, m.happenedTzOffset) : '';
+          }}
+          entry={canCompose(chain) ? <ComposerEntry chainId={chain.id} /> : undefined}
+          empty={
+            service.filtered ? (
+              <EmptyState
+                variant="timeline"
+                scope="section"
+                title="没有符合条件的时刻"
+                description="换个标签或月份再看看。"
+                action={{ label: '清除筛选', emphasis: 'quiet', onPress: () => service.clearFilters() }}
+              />
+            ) : (
+              <EmptyState
+                variant="timeline"
+                scope="section"
+                title="还没有记下任何一刻"
+                description="这条链的第一刻，等你来写下。"
+                action={
+                  canCompose(chain)
+                    ? { label: '记下此刻', emphasis: 'primary', onPress: () => composeSession.openCompose({ chainId: chain.id }) }
+                    : undefined
+                }
+              />
+            )
+          }
+        />
+      ) : (
+        <AggregateView
+          view={service.activeView}
+          aggregate={service.aggregate}
+          moments={service.moments}
+          chainPayload={chain.payload}
+          hasMore={service.hasMore}
+          isLoading={service.$model.loadAggregate.loading}
+          error={service.$model.loadAggregate.error ? humanError(service.$model.loadAggregate.error) : null}
+          onRetry={() => void service.loadAggregate().catch(() => undefined)}
+          map={(props) => <MapView {...props} />}
+        />
+      )}
     </div>
   );
 });

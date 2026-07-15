@@ -79,6 +79,8 @@ const CHAIN: ChainDto = {
   color: 'coral',
   icon: null,
   visibility: 'private',
+  template: 'daily',
+  payload: null,
   ownerId: 'user-1',
   myRole: 'owner',
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -255,6 +257,7 @@ describe('开一条新的链', () => {
     await waitFor(() =>
       expect(api.createChain).toHaveBeenCalledWith({
         name: '周末小家',
+        template: 'daily',
         visibility: 'private',
         description: undefined,
         color: 'coral',

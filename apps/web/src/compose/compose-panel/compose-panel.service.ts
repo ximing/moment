@@ -1,11 +1,12 @@
 import { Service } from '@rabjs/react';
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VIDEO_DURATION_SECONDS } from '@moment/dto';
-import type { MomentResponse, TagResponse } from '@moment/dto';
+import type { MomentResponse, TagResponse, TemplateManifest } from '@moment/dto';
 import { client } from '@/api/client';
 import { compressImage } from '@/lib/compress';
 import { humanError } from '@/lib/errors';
 import { formatBytes, nowLocalInput, probeVideo } from '@/lib/media';
 import { canCompose } from '@/lib/roles';
+import { summarizePayload } from '@/lib/template';
 import { currentTzOffset, toWallClockInput, wallClockToIso } from '@/lib/time';
 import { ChainListService } from '@/services/chain-list.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
@@ -41,6 +42,14 @@ export class ComposePanelService extends Service {
   progress: string | null = null;
   error: string | null = null; // 本地校验 + humanError(API) 都落这里（面板内，spec §8）
   tagList: TagResponse[] = [];
+  /** 当前链的模板 manifest（链详情内嵌，spec §3.2）；null = 未加载或无扩展 */
+  manifest: TemplateManifest | null = null;
+  /** 结构化类别（spec §1.1）；standard = 普通 moment。编辑模式锁定为原 kind（S4：不允许切 kind） */
+  kind = 'standard';
+  /** momentFields / kind payload 的草稿值；key 与 manifest 声明一致 */
+  payloadDraft: Record<string, unknown> = {};
+  geoBusy = false;
+  private manifestChainId = '';
 
   get chainList(): ChainListService {
     return this.resolve(ChainListService);
@@ -70,6 +79,11 @@ export class ComposePanelService extends Service {
       ? toWallClockInput(request.edit.happenedAt, request.edit.happenedTzOffset)
       : nowLocalInput();
     this.selectedTags = request.edit?.tags.map((t) => t.id) ?? [];
+    // 编辑模式：kind 锁定原值，payload 草稿从既有值水合（S4：提交时 kind+payload 始终显式携带）
+    this.kind = request.edit?.kind ?? 'standard';
+    this.payloadDraft = { ...(request.edit?.payload ?? {}) };
+    this.manifest = null;
+    this.manifestChainId = '';
   }
 
   async loadTagList(): Promise<void> {
@@ -78,6 +92,65 @@ export class ComposePanelService extends Service {
       return;
     }
     this.tagList = (await client.listTags(this.chainId)).tags;
+  }
+
+  /** 面板内切链（评审 H4）：重置结构化状态——旧链的 kind/payload 草稿对新链模板无意义；
+   *  manifest 置 null 使 TemplateFields 在新 manifest 到达前不渲染（await 期间无旧表单可提交）。 */
+  pickChain(chainId: string): void {
+    if (this.pickedChainId === chainId) return;
+    this.pickedChainId = chainId;
+    this.kind = 'standard';
+    this.payloadDraft = {};
+    this.manifest = null;
+    this.manifestChainId = '';
+  }
+
+  /** 链切换时拉模板 manifest（链详情内嵌；同链幂等）。失败静默：无扩展字段可填，主流程不阻塞。 */
+  async loadManifest(chainId: string): Promise<void> {
+    if (!chainId || this.manifestChainId === chainId) return;
+    this.manifestChainId = chainId;
+    const detail = await client.getChain(chainId);
+    // 异步返回时链已切换则丢弃（防串链）
+    if (this.chainId === chainId) this.manifest = detail.templateManifest;
+  }
+
+  /** 切 kind（仅新建；编辑模式 UI 不提供入口）。切走清空草稿，防旧值按新 kind 校验不过（S4 推论）。 */
+  setKind(kind: string): void {
+    this.kind = kind;
+    this.payloadDraft = {};
+  }
+
+  /** momentField / kind 字段值写入草稿；undefined 表示清除该 key */
+  setFieldValue(key: string, value: unknown): void {
+    const next = { ...this.payloadDraft };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    this.payloadDraft = next;
+  }
+
+  /** geo 字段：浏览器定位（Geolocation API）；失败写 error，草稿不留半成品 */
+  async pickGeo(fieldKey: string): Promise<void> {
+    if (!('geolocation' in navigator)) {
+      this.error = '这个浏览器不支持定位';
+      return;
+    }
+    this.geoBusy = true;
+    this.error = null;
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10_000 }),
+      );
+      const prev = this.payloadDraft[fieldKey] as { place_name?: string } | undefined;
+      this.setFieldValue(fieldKey, {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        ...(prev?.place_name ? { place_name: prev.place_name } : {}),
+      });
+    } catch {
+      this.error = '没拿到定位，检查一下浏览器权限';
+    } finally {
+      this.geoBusy = false;
+    }
   }
 
   async createTag(): Promise<void> {
@@ -204,7 +277,8 @@ export class ComposePanelService extends Service {
     }
     const hasImages = this.images.length > 0;
     const hasVideo = Boolean(this.video);
-    if (!hasImages && !hasVideo && this.content.trim().length === 0) {
+    const structuredOnly = this.kind !== 'standard';
+    if (!hasImages && !hasVideo && this.content.trim().length === 0 && !structuredOnly) {
       this.error = '先写一句此刻吧';
       return;
     }
@@ -228,6 +302,8 @@ export class ComposePanelService extends Service {
           ...(timeEdited ? { happenedAt: happenedIso, happenedTzOffset: edit.happenedTzOffset } : {}),
           isBackfill,
           tagIds: this.selectedTags,
+          kind: edit.kind,
+          payload: Object.keys(this.payloadDraft).length > 0 ? this.payloadDraft : null,
         });
         composeSession.emit('moment:changed', { momentId: edit.id, chainId: edit.chainId, op: 'update' }, 'global');
       } else {
@@ -261,14 +337,27 @@ export class ComposePanelService extends Service {
           mediaIds.push(res.mediaId);
         }
         this.progress = '记下…';
+        const hasPayload = Object.keys(this.payloadDraft).length > 0;
+        // kind moment 正文兜底（Global Constraints）：正文空时用结构摘要，满足 text 类型 content 必填。
+        // 兜底填入的摘要与 Task 5 卡片摘要行逐字相同——卡片侧按 content===summary 判重跳过（评审 H1），不重复显示
+        const summary = this.kind !== 'standard' ? summarizePayload(this.manifest ?? { version: 1 }, this.kind, this.payloadDraft) : '';
+        if (this.kind !== 'standard' && this.content.trim().length === 0 && !summary && !hasImages && !hasVideo) {
+          // 摘要也为空时不发空 content 给 server 被 400（CONTENT_REQUIRED），前置人话提示（评审 S8）
+          this.error = '选一项或写一句，再记下';
+          this.progress = null;
+          return;
+        }
+        const content = this.content.trim().length === 0 && this.kind !== 'standard' ? summary : this.content;
         const res = await client.createMoment(chainId, {
           type,
-          content: this.content,
+          content,
           happenedAt: new Date(happenedAtMs).toISOString(),
           happenedTzOffset: currentTzOffset(),
           isBackfill,
           mediaIds,
           tagIds: this.selectedTags,
+          kind: this.kind,
+          ...(hasPayload ? { payload: this.payloadDraft } : {}),
         });
         composeSession.markCreated(res.id); // 「从链节长出来」微动效（spec §1.6）
         composeSession.emit('moment:changed', { momentId: res.id, chainId, op: 'create' }, 'global');

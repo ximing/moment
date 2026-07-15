@@ -1,6 +1,9 @@
 import type {
   AcceptInviteResponse,
+  AggregateQuery,
+  AggregateResponse,
   AuthResponse,
+  ChainDetailDto,
   ChainDto,
   ChainMemberDto,
   ChangePasswordInput,
@@ -25,6 +28,8 @@ import type {
   PublicShareResponse,
   RegisterInput,
   RegisterPushTokenInput,
+  TemplateDto,
+  TemplateScope,
   UpdateMeInput,
   ShareLinkDto,
   ShareLinkListResponse,
@@ -63,7 +68,12 @@ export interface MomentClient {
   changePassword(input: ChangePasswordInput): Promise<void>;
 
   listChains(): Promise<ChainDto[]>;
-  getChain(chainId: string): Promise<ChainDto>;
+  /** P3 起链详情内嵌 templateManifest（ChainDetailDto ⊃ ChainDto，向后兼容） */
+  getChain(chainId: string): Promise<ChainDetailDto>;
+  /** 模板列表（scope=official 取官方三模板；不传 = official 全部 + 我的 user 模板） */
+  listTemplates(scope?: TemplateScope): Promise<TemplateDto[]>;
+  /** 聚合视图投影（spec §3.2）；timeline 不走端点（前端分章），请求会得 INVALID_AGGREGATE_VIEW */
+  getAggregate(chainId: string, query: AggregateQuery): Promise<AggregateResponse>;
   createChain(input: CreateChainInput): Promise<ChainDto>;
   updateChain(chainId: string, input: UpdateChainInput): Promise<ChainDto>;
   deleteChain(chainId: string): Promise<void>;
@@ -138,6 +148,11 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
 
     listChains: () => http.request('/api/chains'),
     getChain: (chainId) => http.request(`/api/chains/${chainId}`),
+    listTemplates: (scope) => http.request('/api/templates', { query: { scope } }),
+    getAggregate: (chainId, query) =>
+      http.request(`/api/chains/${chainId}/aggregate`, {
+        query: { view: query.view, kind: query.kind, field: query.field },
+      }),
     createChain: (input) => http.request('/api/chains', { method: 'POST', body: input }),
     updateChain: (chainId, input) => http.request(`/api/chains/${chainId}`, { method: 'PATCH', body: input }),
     deleteChain: (chainId) => http.request(`/api/chains/${chainId}`, { method: 'DELETE' }),

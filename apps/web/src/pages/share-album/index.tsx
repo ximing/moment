@@ -3,6 +3,8 @@ import { useParams } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { ApiError } from '@moment/api-client';
 import { Timeline } from '@/timeline/timeline';
+import { AggregateView } from '@/chain/aggregate-views';
+import { MapView } from '@/chain/map-view';
 import { EmptyState, TimelineSkeleton } from '@/ui/feedback/index';
 import { ShareAlbumService } from './share-album.service';
 
@@ -58,6 +60,32 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
         </div>
       </header>
       <main className="mx-auto max-w-content px-6 py-8">
+        {(() => {
+          const manifest = service.templateManifest;
+          if (!manifest || service.aggregates.length === 0) return null;
+          return (
+            <div className="mb-8 flex flex-col gap-6">
+              {service.aggregates.map((agg) => (
+                <section key={agg.view}>
+                  <h2 className="mb-2 text-body font-semibold text-ink">
+                    {(manifest.views ?? []).find((v) => v.type === agg.view)?.label ?? agg.view}
+                  </h2>
+                  <AggregateView
+                    view={agg.view}
+                    aggregate={agg}
+                    moments={service.moments}
+                    chainPayload={null}
+                    hasMore={false}
+                    isLoading={false}
+                    error={null}
+                    onRetry={() => void service.loadFirst()}
+                    map={(props) => <MapView {...props} />}
+                  />
+                </section>
+              ))}
+            </div>
+          );
+        })()}
         <Timeline
           moments={service.moments}
           shareToken={token}

@@ -9,6 +9,7 @@ import { Banner, InlineProgress } from '@/ui/feedback/index';
 import { DateTimeField, Input, TextareaField } from '@/ui/field/index';
 import { AlertDialog, Sheet } from '@/ui/modal/index';
 import { ComposePanelService } from './compose-panel.service';
+import { TemplateFields } from '@/compose/template-fields';
 
 // 发布面板 = Sheet（Modal 规范 §2：记下／编辑时刻）；内部表单复用 Field 家族
 // （TextareaField / DateTimeField / Input）与 Button。关闭语义（Modal 规范 §9）：
@@ -53,6 +54,10 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
   const writable = service.writableChains;
   const chainId = service.chainId;
 
+  useEffect(() => {
+    if (chainId) void service.loadManifest(chainId).catch(() => undefined); // 失败静默（service 注释）
+  }, [service, chainId]);
+
   const title = edit ? '改这条时刻' : '记下此刻';
 
   /** 相对 hydrate 基线的 dirty 判定：正文 / 媒体 / 发生时间 / 标签任一变化即 dirty。 */
@@ -63,7 +68,9 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
     if (service.images.length > 0 || service.video) return true;
     if (service.happenedAt !== base.happenedAt) return true;
     if (service.selectedTags.length !== base.tagIds.length) return true;
-    return service.selectedTags.some((id) => !base.tagIds.includes(id));
+    if (service.selectedTags.some((id) => !base.tagIds.includes(id))) return true;
+    // 结构化字段草稿相对水合基线（编辑模式的既有 payload）有变化也算 dirty
+    return JSON.stringify(service.payloadDraft) !== JSON.stringify(edit?.payload ?? {});
   };
 
   const requestClose = () => {
@@ -97,7 +104,7 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => (service.pickedChainId = c.id)}
+                  onClick={() => service.pickChain(c.id)}
                   className={`flex items-center gap-2 rounded-surface-md border px-3 py-2 text-left text-sm transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus ${
                     chainId === c.id
                       ? 'border-action bg-bg font-semibold text-ink'
@@ -194,6 +201,8 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
                 : undefined
             }
           />
+
+          <TemplateFields service={service} edit={Boolean(edit)} />
 
           {chainId && (
             <div className="flex flex-wrap items-center gap-2">

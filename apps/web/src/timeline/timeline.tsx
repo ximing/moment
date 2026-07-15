@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { observer, useService } from '@rabjs/react';
-import type { ChainColor, ChainIcon, MomentResponse } from '@moment/dto';
+import type { ChainColor, ChainIcon, MomentResponse, TemplateManifest } from '@moment/dto';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { dayHeading } from '@/lib/time';
 import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
@@ -31,6 +31,8 @@ export const Timeline = observer(function Timeline({
   empty,
   hideSignature,
   entry,
+  templateManifest,
+  ageLabelOf,
 }: {
   moments: MomentResponse[];
   chainLookById?: Map<string, { name: string; color: ChainColor | null; icon: ChainIcon | null }>;
@@ -45,6 +47,9 @@ export const Timeline = observer(function Timeline({
   empty: ReactNode;
   hideSignature?: boolean;
   entry?: ReactNode;
+  templateManifest?: TemplateManifest | null;
+  /** 年龄标注函数（chain-home 按链 payload.birthdate 提供；feed/分享页不传则不显示） */
+  ageLabelOf?: (m: MomentResponse) => string;
 }) {
   const sentinelRef = useLoadMoreSentinel(!isPending && !isError, hasNextPage, isFetchingNextPage, fetchNextPage);
   const composeSession = useService(ComposeSessionService);
@@ -58,6 +63,8 @@ export const Timeline = observer(function Timeline({
         chainIcon={chainLookById?.get(m.chainId)?.icon}
         shareToken={shareToken}
         readOnly={readOnly}
+        templateManifest={templateManifest}
+        ageLabel={ageLabelOf?.(m)}
       />
     </div>
   );

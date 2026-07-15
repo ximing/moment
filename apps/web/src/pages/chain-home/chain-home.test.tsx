@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { RSRoot, register, resolve } from '@rabjs/react';
-import type { ChainDto, MomentMedia, MomentResponse, UserProfile } from '@moment/dto';
+import type { ChainDetailDto, MomentMedia, MomentResponse, UserProfile } from '@moment/dto';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComposePanel } from '@/compose/compose-panel';
 import { AuthService } from '@/services/auth.service';
@@ -97,7 +97,7 @@ const USER: UserProfile = {
   createdAt: '2026-01-01T00:00:00.000Z',
 };
 
-const CHAIN: ChainDto = {
+const CHAIN: ChainDetailDto = {
   id: 'chain-1',
   name: '周末小家',
   description: '一起记录平凡日子',
@@ -105,6 +105,9 @@ const CHAIN: ChainDto = {
   color: 'coral',
   icon: null,
   visibility: 'private',
+  template: 'daily',
+  payload: null,
+  templateManifest: { version: 1 },
   ownerId: 'user-1',
   myRole: 'owner',
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -121,6 +124,8 @@ const TEXT_MOMENT: MomentResponse = {
   chainId: 'chain-1',
   author: { id: 'user-1', nickname: '林晓满', avatarUrl: null },
   type: 'text',
+  kind: 'standard',
+  payload: null,
   content: '回家的路上买了刚出炉的面包。',
   happenedAt: '2026-08-17T14:00:00.000Z',
   happenedTzOffset: -480,
@@ -141,6 +146,8 @@ const IMAGE_MOMENT: MomentResponse = {
   chainId: 'chain-1',
   author: { id: 'user-2', nickname: '乔乔', avatarUrl: null },
   type: 'media',
+  kind: 'standard',
+  payload: null,
   content: '周末去看了海',
   happenedAt: '2026-08-16T14:01:00.000Z',
   happenedTzOffset: -480,
