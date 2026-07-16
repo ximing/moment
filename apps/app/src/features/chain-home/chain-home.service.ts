@@ -1,17 +1,22 @@
 import { Service } from '@rabjs/react';
-import type { ChainDto, MomentResponse, TagResponse } from '@moment/dto';
+import type { AggregateResponse, ChainDetailDto, MomentResponse, TagResponse } from '@moment/dto';
 import { client } from '../../lib/api';
 import { ChainListService } from '../../services/chain-list.service';
 import type { ChainChangedPayload } from '../../lib/events';
 
-export type ChainSegment = 'timeline' | 'tags';
+/** 链首页段：'timeline' 主时间线 / 'tags' 标签 / 'trips' 行程分章 / 其余为 manifest.views 声明的视图 type */
+export type ChainSegment = string;
 
 /** 链首页（时间线 + 标签两段；成员/邀请/设置已挪进设置页 Task 9）。 */
 export class ChainHomeService extends Service {
   chainId = '';
-  chain: ChainDto | null = null;
+  chain: ChainDetailDto | null = null;
   moments: MomentResponse[] = [];
   tags: TagResponse[] = [];
+  /** 当前聚合视图的投影数据（timeline/tags/trips 不用端点，为 null） */
+  aggregate: AggregateResponse | null = null;
+  /** 组件段切换时同步写入（段 state 留在组件 useState，加载逻辑在 service） */
+  activeView = 'timeline';
   private nextCursor: string | null = null;
   private gen = 0;
   private loadingMore = false;
@@ -23,6 +28,9 @@ export class ChainHomeService extends Service {
       'moment:changed',
       () => {
         void this.loadFirst().catch(() => undefined);
+        if (this.activeView !== 'timeline' && this.activeView !== 'tags' && this.activeView !== 'trips') {
+          void this.loadAggregate().catch(() => undefined);
+        }
       },
       'global',
     );
@@ -56,6 +64,8 @@ export class ChainHomeService extends Service {
     this.chain = null;
     this.moments = [];
     this.tags = [];
+    this.aggregate = null;
+    this.activeView = 'timeline';
     this.sectionsLoaded = false;
     void this.loadChain().catch(() => undefined);
     void this.loadFirst().catch(() => undefined);
@@ -95,6 +105,11 @@ export class ChainHomeService extends Service {
     this.tags = (await client.listTags(this.chainId)).tags;
   }
 
+  /** 时间线是否还有未加载页（trips 视图统计范围提示用，P4 H2） */
+  get hasMore(): boolean {
+    return this.nextCursor !== null;
+  }
+
   async addTag(name: string): Promise<void> {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -105,5 +120,26 @@ export class ChainHomeService extends Service {
   async deleteTag(id: string): Promise<void> {
     await client.deleteTag(id);
     await this.loadTags();
+  }
+
+  /** 段切换（组件 SegmentBar onChange 时调用）：记录当前段；聚合段触发加载。 */
+  setActiveView(view: string): void {
+    this.activeView = view;
+    this.aggregate = null;
+    if (view !== 'timeline' && view !== 'tags' && view !== 'trips') {
+      void this.loadAggregate().catch(() => undefined);
+    }
+  }
+
+  async loadAggregate(): Promise<void> {
+    const manifest = this.chain?.templateManifest;
+    const viewDef = (manifest?.views ?? []).find((v) => v.type === this.activeView);
+    if (!this.chainId || !viewDef) return;
+    if (viewDef.type === 'timeline') return; // groupBy 分章走已加载 moments，不打端点
+    this.aggregate = await client.getAggregate(this.chainId, {
+      view: viewDef.type,
+      kind: viewDef.source?.kind,
+      field: viewDef.source?.field,
+    });
   }
 }

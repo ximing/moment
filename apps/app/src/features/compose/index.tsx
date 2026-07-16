@@ -14,6 +14,7 @@ import { Button } from '../../components/Button';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { ComposeService } from './compose.service';
+import { TemplateFields } from './template-fields';
 
 const ComposeContent = observer(function ComposeContent() {
   const params = useLocalSearchParams<{ chainId?: string; momentId?: string }>();
@@ -24,6 +25,13 @@ const ComposeContent = observer(function ComposeContent() {
   useEffect(() => {
     service.hydrate(params.chainId, params.momentId);
   }, [service, params.chainId, params.momentId]);
+
+  useEffect(() => {
+    // activeChainId 经 observer 订阅 ChainListService：链列表就绪 / 用户切链时本 effect 重触发；
+    // loadManifest 同链幂等（manifestChainId 占位），重复调用无副作用
+    const active = service.activeChainId;
+    if (active) void service.loadManifest(active).catch(() => undefined);
+  }, [service, service.activeChainId]);
 
   async function onPickImages(): Promise<void> {
     try {
@@ -153,6 +161,8 @@ const ComposeContent = observer(function ComposeContent() {
           }}
         />
       ) : null}
+
+      <TemplateFields service={service} edit={service.isEdit} />
 
       {service.tagNames.length > 0 ? (
         <View style={styles.chipRow}>

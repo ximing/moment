@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { humanError } from '../../lib/errors';
+import { babyAgeLabel } from '../../lib/template';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { SegmentBar } from '../../components/SegmentBar';
@@ -13,6 +14,8 @@ import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { showMomentActions } from '../compose/moment-actions';
+import { AggregateView } from './aggregate-views';
+import { FootprintMap } from './map-view';
 import { ChainHomeService, type ChainSegment } from './chain-home.service';
 
 const Content = observer(function Content() {
@@ -23,6 +26,15 @@ const Content = observer(function Content() {
   const [segment, setSegment] = useState<ChainSegment>('timeline');
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+
+  function onSegment(v: ChainSegment): void {
+    setSegment(v);
+    service.setActiveView(v);
+  }
+
+  const viewTabs = (service.chain?.templateManifest?.views ?? [])
+    .filter((v) => v.type !== 'timeline' || v.groupBy === 'trips')
+    .map((v) => ({ value: v.type === 'timeline' ? ('trips' as const) : v.type, label: v.label }));
 
   useEffect(() => {
     service.hydrate(chainId);
@@ -45,10 +57,11 @@ const Content = observer(function Content() {
       <SegmentBar<ChainSegment>
         options={[
           { value: 'timeline', label: '时间线' },
+          ...viewTabs,
           { value: 'tags', label: `标签 ${service.tags.length}` },
         ]}
         value={segment}
-        onChange={setSegment}
+        onChange={onSegment}
       />
 
       {segment === 'timeline' ? (
@@ -71,6 +84,11 @@ const Content = observer(function Content() {
                       )
                   : undefined
               }
+              templateManifest={service.chain?.templateManifest ?? null}
+              ageLabel={(() => {
+                const birthdate = service.chain?.payload?.birthdate;
+                return typeof birthdate === 'string' ? babyAgeLabel(birthdate, item.happenedAt, item.happenedTzOffset) : undefined;
+              })()}
             />
           )}
           ListEmptyComponent={<Text style={styles.empty}>还没有时刻</Text>}
@@ -78,6 +96,22 @@ const Content = observer(function Content() {
       ) : null}
 
       {segment === 'tags' ? <TagsSection service={service} /> : null}
+
+      {segment !== 'timeline' && segment !== 'tags' ? (
+        <ScrollView>
+          <AggregateView
+            view={segment}
+            aggregate={service.aggregate}
+            moments={service.moments}
+            chainPayload={service.chain?.payload ?? null}
+            hasMore={service.hasMore}
+            isLoading={service.$model.loadAggregate.loading}
+            error={service.$model.loadAggregate.error ? humanError(service.$model.loadAggregate.error) : null}
+            onRetry={() => void service.loadAggregate().catch(() => undefined)}
+            map={(props) => <FootprintMap {...props} />}
+          />
+        </ScrollView>
+      ) : null}
     </View>
   );
 });

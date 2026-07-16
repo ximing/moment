@@ -1,8 +1,10 @@
 import { Service } from '@rabjs/react';
-import { MAX_IMAGE_BYTES, type MediaCompleteResponse, type MomentResponse, type MomentType, type PatchMomentInput } from '@moment/dto';
+import { MAX_IMAGE_BYTES, type MediaCompleteResponse, type MomentResponse, type MomentType, type PatchMomentInput, type TemplateManifest } from '@moment/dto';
 import { ApiError } from '@moment/api-client';
+import * as Location from 'expo-location';
 import { client } from '../../lib/api';
 import { compressImage, pickImages, pickVideo, validateVideo, type PickedVideo, type ReadyImage } from '../../lib/media';
+import { summarizePayload } from '../../lib/template';
 import { ChainListService } from '../../services/chain-list.service';
 
 /** 总尝试次数 = 初始 1 次 + ≤2 次重试；网络类（status 0）/5xx 才重试。
@@ -40,6 +42,15 @@ export class ComposeService extends Service {
 
   tagNames: { id: string; name: string }[] = [];
 
+  /** 当前链的模板 manifest（链详情内嵌，spec §3.2）；null = 未加载或无扩展 */
+  manifest: TemplateManifest | null = null;
+  /** 结构化类别（spec §1.1）；standard = 普通 moment。编辑模式锁定为原 kind（S4：不允许切 kind） */
+  kind = 'standard';
+  /** momentFields / kind payload 的草稿值；key 与 manifest 声明一致 */
+  payloadDraft: Record<string, unknown> = {};
+  geoBusy = false;
+  private manifestChainId = '';
+
   /** 编辑态：被编辑的 moment（spec §2）。非 null 时类型/链/媒体锁定，提交走 PATCH。 */
   edit: MomentResponse | null = null;
   /** 记录时区墙钟毫秒 = Date.parse(edit.happenedAt) − happenedTzOffset·60_000。
@@ -60,6 +71,15 @@ export class ComposeService extends Service {
       return;
     }
     this.chainId = chainId;
+    this.kind = 'standard';
+    this.payloadDraft = {};
+    this.manifest = null;
+    this.manifestChainId = '';
+    // manifest 锚点用 activeChainId 而非原始路由参数（评审 B2）：含「回退第一条可编辑链」
+    // 后的值——feed 首页 /compose 无 chainId、单链用户（无链 chips 可点）也要触发加载。
+    // 此刻 ChainListService 可能未就绪（activeChainId undefined）→ 跳过，由组件 effect 重试（Step 3）
+    const active = this.activeChainId;
+    if (active) void this.loadManifest(active).catch(() => undefined);
     void this.loadTags().catch(() => undefined);
   }
 
@@ -73,6 +93,9 @@ export class ComposeService extends Service {
     this.content = m.content;
     this.tagIds = m.tags.map((t) => t.id);
     this.isBackfill = m.isBackfill;
+    // 编辑模式：kind 锁定原值，payload 草稿从既有值水合（S4：提交时 kind+payload 始终显式携带）
+    this.kind = m.kind;
+    this.payloadDraft = { ...(m.payload ?? {}) };
     // 时区换算（spec 公式，禁止走 Date 本地字段捷径）：
     // wallMs 是记录时区的墙钟毫秒；picker 按设备本地字段渲染 Date，
     // 所以显示值 = wallMs + deviceOffset，使该 Date 的设备本地字段恰好等于记录时区墙钟。
@@ -80,6 +103,7 @@ export class ComposeService extends Service {
     this.editWallMs = Date.parse(m.happenedAt) - m.happenedTzOffset * 60_000;
     this.happenedAt = new Date(this.editWallMs + this.editDeviceOffset * 60_000);
     await this.loadTags();
+    void this.loadManifest(m.chainId).catch(() => undefined);
   }
 
   /** 实时读全局链列表（与 FeedService.chainList 同款 getter），无一次性快照的过期窗口。 */
@@ -98,9 +122,15 @@ export class ComposeService extends Service {
   }
 
   setChain(id: string): void {
+    if (this.chainId === id) return;
     this.chainId = id;
     this.tagIds = [];
+    this.kind = 'standard';
+    this.payloadDraft = {};
+    this.manifest = null;
+    this.manifestChainId = '';
     void this.loadTags().catch(() => undefined);
+    void this.loadManifest(id).catch(() => undefined);
   }
 
   /** 只拉当前活跃链的标签（链集合本身由 ChainListService 实时持有）。 */
@@ -109,6 +139,60 @@ export class ComposeService extends Service {
     if (active) {
       const tags = await client.listTags(active);
       this.tagNames = tags.tags.map((t) => ({ id: t.id, name: t.name }));
+    }
+  }
+
+  /** 链切换时拉模板 manifest（链详情内嵌；同链幂等）。失败静默：无扩展字段可填，主流程不阻塞。 */
+  async loadManifest(chainId: string): Promise<void> {
+    if (!chainId || this.manifestChainId === chainId) return;
+    this.manifestChainId = chainId;
+    const detail = await client.getChain(chainId);
+    // 防串链守卫且可重试（评审 B2）：仅当链仍匹配时落 manifest；不匹配
+    // （含 ChainListService 未就绪、activeChainId 暂未命中该链）时清占位，
+    // 允许组件 effect 在链列表就绪后重试——不静默丢弃、不占位锁死
+    if (this.activeChainId === chainId) {
+      this.manifest = detail.templateManifest;
+    } else if (this.manifestChainId === chainId) {
+      this.manifestChainId = '';
+    }
+  }
+
+  /** 切 kind（仅新建；编辑模式 UI 不提供入口）。切走清空草稿，防旧值按新 kind 校验不过（S4 推论）。 */
+  setKind(kind: string): void {
+    this.kind = kind;
+    this.payloadDraft = {};
+  }
+
+  /** momentField / kind 字段值写入草稿；undefined 表示清除该 key */
+  setFieldValue(key: string, value: unknown): void {
+    const next = { ...this.payloadDraft };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    this.payloadDraft = next;
+  }
+
+  /** geo 字段：expo-location 前台定位；返回问题文案（null = 成功，草稿不留半成品）。
+   *  权限拒绝/超时/不可用的人话文案与 P4 web 同口径。 */
+  async pickGeo(fieldKey: string): Promise<string | null> {
+    this.geoBusy = true;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return '没拿到定位权限，去系统设置里开一下';
+      const pos = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10_000)),
+      ]);
+      const prev = this.payloadDraft[fieldKey] as { place_name?: string } | undefined;
+      this.setFieldValue(fieldKey, {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        ...(prev?.place_name ? { place_name: prev.place_name } : {}),
+      });
+      return null;
+    } catch {
+      return '没拿到定位，检查一下定位服务是不是开着';
+    } finally {
+      this.geoBusy = false;
     }
   }
 
@@ -178,7 +262,12 @@ export class ComposeService extends Service {
     if (!activeChainId) throw new Error('请选择要发布到的链（需要编辑权限）');
     // 角色前置校验：viewer 链（含深链/旧参数）挡在媒体上传之前，避免全量上传后才被服务端 403
     if (!this.editableChains.some((c) => c.id === activeChainId)) throw new Error('请选择要发布到的链（需要编辑权限）');
-    if (this.type === 'text' && this.content.trim().length === 0) throw new Error('文字类型需要内容');
+    // kind moment 允许无正文（结构化字段即内容，正文由摘要兜底）；standard 维持原校验
+    if (this.type === 'text' && this.content.trim().length === 0 && this.kind === 'standard') throw new Error('文字类型需要内容');
+    if (this.kind !== 'standard' && this.content.trim().length === 0 && this.type === 'text') {
+      const s = summarizePayload(this.manifest ?? { version: 1 }, this.kind, this.payloadDraft);
+      if (!s) throw new Error('选一项或写一句，再发布');
+    }
     if (this.content.length > 5000) throw new Error('正文最多 5000 字');
     if (this.type === 'media' && this.images.length === 0) throw new Error('图文类型至少选 1 张图（最多 9 张）');
     if (this.type === 'video' && !this.video) throw new Error('视频类型需要先选择视频');
@@ -213,13 +302,18 @@ export class ComposeService extends Service {
       this.progressLabel = '发布中…';
       const created = await client.createMoment(activeChainId, {
         type: this.type,
-        content: this.content,
+        content:
+          this.content.trim().length === 0 && this.kind !== 'standard'
+            ? summarizePayload(this.manifest ?? { version: 1 }, this.kind, this.payloadDraft)
+            : this.content,
         happenedAt: this.happenedAt.toISOString(),
         // 与 dto 契约同语义：原值（同 JS getTimezoneOffset，东八区 = -480），不取反
         happenedTzOffset: this.happenedAt.getTimezoneOffset(),
         isBackfill: this.isBackfill,
         mediaIds,
         tagIds: this.tagIds,
+        kind: this.kind,
+        ...(Object.keys(this.payloadDraft).length > 0 ? { payload: this.payloadDraft } : {}),
       });
       this.emit('moment:changed', { momentId: created.id, chainId: activeChainId, op: 'create' }, 'global');
     } finally {
@@ -232,10 +326,15 @@ export class ComposeService extends Service {
   private async submitEdit(): Promise<void> {
     const edit = this.edit;
     if (!edit) return;
-    if (edit.type === 'text' && this.content.trim().length === 0) throw new Error('文字类型需要内容');
+    if (edit.type === 'text' && this.content.trim().length === 0 && edit.kind === 'standard') throw new Error('文字类型需要内容');
     if (this.content.length > 5000) throw new Error('正文最多 5000 字');
 
-    const patch: PatchMomentInput = { content: this.content, tagIds: this.tagIds };
+    const patch: PatchMomentInput = {
+      content: this.content,
+      tagIds: this.tagIds,
+      kind: edit.kind,
+      payload: Object.keys(this.payloadDraft).length > 0 ? this.payloadDraft : null,
+    };
     if (this.timeEdited) {
       // 还原：newWallMs = picker − deviceOffset；iso = newWallMs + 记录时区偏移（spec 公式）
       const newWallMs = this.happenedAt.getTime() - this.editDeviceOffset * 60_000;

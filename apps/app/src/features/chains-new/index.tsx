@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Alert, StyleSheet, Text } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { createChainInputSchema } from '@moment/dto';
@@ -17,11 +17,16 @@ const Content = observer(function Content() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
 
+  useEffect(() => {
+    void service.loadTemplates().catch(() => undefined); // 失败静默：选择器不渲染，默认 daily
+  }, []);
+
   function onSubmit(): void {
     const parsed = createChainInputSchema.safeParse({
       name: service.name,
       description: service.description || null,
       visibility: 'private',
+      template: service.template,
     });
     if (!parsed.success) {
       Alert.alert('提示', parsed.error.issues[0]?.message ?? '名称需 1–100 字');
@@ -36,6 +41,26 @@ const Content = observer(function Content() {
   return (
     <Screen scroll>
       <Text style={styles.hint}>链是共享时间线，创建后可邀请家人朋友共同记录。</Text>
+      {service.templates.length > 0 ? (
+        <View style={styles.tplSection}>
+          <Text style={styles.tplLabel}>这条链记什么</Text>
+          <Text style={styles.tplHint}>模板选定后不可更改</Text>
+          {service.templates.map((tpl) => (
+            <Pressable
+              key={tpl.key}
+              accessibilityRole="button"
+              accessibilityState={{ selected: service.template === tpl.key }}
+              style={[styles.tplCard, service.template === tpl.key && styles.tplCardActive]}
+              onPress={() => (service.template = tpl.key)}
+            >
+              <Text style={styles.tplName}>
+                {tpl.icon} {tpl.name}
+              </Text>
+              {tpl.description ? <Text style={styles.tplDesc}>{tpl.description}</Text> : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       <Field label="名称（1–100 字）" value={service.name} onChangeText={(v) => (service.name = v)} />
       <Field label="描述（可选）" value={service.description} onChangeText={(v) => (service.description = v)} multiline />
       <Button fullWidth loading={service.$model.submit.loading} loadingText="创建中…" onPress={onSubmit}>
@@ -58,4 +83,11 @@ export function ChainsNewPage() {
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     hint: { color: t.muted, fontSize: t.fontSupport },
+    tplSection: { gap: t.space2, marginBottom: t.space3 },
+    tplLabel: { fontSize: t.fontLabel, color: t.ink, fontWeight: '600' },
+    tplHint: { fontSize: t.fontCaption, color: t.muted },
+    tplCard: { backgroundColor: t.surface, borderRadius: t.radiusMd, borderWidth: 2, borderColor: t.line, padding: t.space3, gap: t.space1, minHeight: t.touchMin },
+    tplCardActive: { borderColor: t.action },
+    tplName: { fontSize: t.fontBody, color: t.ink, fontWeight: '600' },
+    tplDesc: { fontSize: t.fontSupport, color: t.muted },
   });
