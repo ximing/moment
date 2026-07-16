@@ -1,7 +1,7 @@
 # 时刻 Moment — 链模板系统 Design
 
 > 日期：2026-08-20
-> 状态：待评审
+> 状态：已实现（P1–P6 合入，2026-08-21）
 > 范围：server + dto + api-client + web + app + 分享页；含用户自建模板的系统架构（编辑器 UI 后置）
 > 权威边界：数据模型、权限模型、媒体、分享语义以 `2026-08-15-moment-design.md` 为准；本文定义模板子系统。模板与 `wall_date`/那年今日（`2026-08-18-memories-today-design.md`）正交。
 
