@@ -49,15 +49,15 @@ T1 dto Recap 域 → T2 server LLM provider 抽象 → T3 server recaps 表+输�
 
 | Task | Plan 文件 | 状态 |
 |---|---|---|
-| T1 | `docs/superpowers/plans/2026-08-20-ai-recap-p1-dto.md` | ✅ 本轮已起草 |
-| T2 | `docs/superpowers/plans/2026-08-20-ai-recap-p2-server-llm.md` | ✅ 本轮已起草 |
-| T3 | `docs/superpowers/plans/2026-08-20-ai-recap-p3-server-pipeline.md` | 待后续 wave 起草 |
-| T4 | `docs/superpowers/plans/2026-08-20-ai-recap-p4-server-dispatch.md` | 待后续 wave 起草 |
-| T5 | `docs/superpowers/plans/2026-08-20-ai-recap-p5-web.md` | 待后续 wave 起草 |
-| T6 | `docs/superpowers/plans/2026-08-20-ai-recap-p6-app.md` | 待后续 wave 起草 |
-| T7 | `docs/superpowers/plans/2026-08-20-ai-recap-p7-e2e.md` | 待后续 wave 起草 |
+| T1 | `docs/superpowers/plans/2026-08-20-ai-recap-p1-dto.md` | ✅ 已起草并评审通过 |
+| T2 | `docs/superpowers/plans/2026-08-20-ai-recap-p2-server-llm.md` | ✅ 已起草并评审通过 |
+| T3 | `docs/superpowers/plans/2026-08-20-ai-recap-p3-server-pipeline.md` | ✅ 已起草并评审通过 |
+| T4 | `docs/superpowers/plans/2026-08-20-ai-recap-p4-server-dispatch.md` | ✅ 已起草并评审通过 |
+| T5 | `docs/superpowers/plans/2026-08-20-ai-recap-p5-web.md` | ✅ 已起草并评审通过 |
+| T6 | `docs/superpowers/plans/2026-08-20-ai-recap-p6-app.md` | ✅ 已起草并评审通过 |
+| T7 | `docs/superpowers/plans/2026-08-20-ai-recap-p7-e2e.md` | ✅ 已起草并评审通过 |
 
-> 注：本轮（2026-08-21）仅起草 T1+T2 的完整 plan 文件；T3–T7 仅在本编排写边界摘要。后续 wave 按 T3→T4→T5→T6→T7 顺序起草 plan 文件，每个 wave 起草后由编排者派发实现。
+> 注：T1–T7 的完整 plan 文件已全部起草并经独立复审 + fixer 修复（2026-08-21）。每个 Task 的实现内容以对应 plan 文件为唯一真相源；本编排的 T 节用于你（编排者）把握边界与验收。
 
 实现 SubAgent 的输入 = 对应 plan 文件（逐 Task 逐步执行，含完整代码）+ spec + CONVENTIONS.md；本编排的 T 节用于你（编排者）把握边界与验收。
 
