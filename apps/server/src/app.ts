@@ -22,6 +22,7 @@ import { NotificationsController } from './notifications/notifications.controlle
 import { DevicesController } from './devices/devices.controller.js';
 import { PublicShareController } from './share/public-share.controller.js';
 import { ShareLinkItemController, ShareLinksController } from './share/share-links.controller.js';
+import { RecapController } from './recaps/recap.controller.js';
 import { TemplatesController } from './templates/template.controller.js';
 import { AggregateController } from './templates/aggregate.controller.js';
 
@@ -49,7 +50,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,

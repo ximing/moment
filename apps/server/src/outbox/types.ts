@@ -3,9 +3,11 @@ export const OUTBOX_MOMENT_CREATED = 'moment.created';
 export const OUTBOX_MOMENT_DELETED = 'moment.deleted';
 export const OUTBOX_COMMENT_CREATED = 'comment.created';
 export const OUTBOX_REACTION_CREATED = 'reaction.created';
+export const OUTBOX_RECAP_GENERATE = 'recap.generate';
 
 export type OutboxType =
   | typeof OUTBOX_MOMENT_CREATED
   | typeof OUTBOX_MOMENT_DELETED
   | typeof OUTBOX_COMMENT_CREATED
-  | typeof OUTBOX_REACTION_CREATED;
+  | typeof OUTBOX_REACTION_CREATED
+  | typeof OUTBOX_RECAP_GENERATE;

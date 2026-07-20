@@ -85,6 +85,13 @@
       "when": 1787325844737,
       "tag": "0011_third_moira_mactaggert",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1787329351053,
+      "tag": "0012_fixed_prowler",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { char, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
+import { boolean, char, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
 import type { AnyMySqlColumn } from 'drizzle-orm/mysql-core';
 import { media } from './media.js';
 import { users } from './users.js';
@@ -19,6 +19,8 @@ export const chains = mysqlTable('chains', {
   template: varchar('template', { length: 64 }).notNull(),
   /** 链级模板数据（宝宝生日、行程列表等），按 manifest.chainPayloadSchema 校验 */
   payload: json('payload').$type<Record<string, unknown>>(),
+  /** 链级开关：分享只读页是否外发最近一期 ready/degraded 回顾（spec §2/§6）。默认开（长辈收到本月回顾是最强回访钩子） */
+  shareRecapsEnabled: boolean('share_recaps_enabled').notNull().default(true),
   ownerId: char('owner_id', { length: 36 })
     .notNull()
     .references(() => users.id),

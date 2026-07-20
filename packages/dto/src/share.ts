@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AggregateResponse, TemplateManifest } from './templates.js';
 import type { MomentResponse } from './moments.js';
+import type { RecapDto } from './recaps.js';
 
 /** owner 创建分享链接：expiresAt 缺省 = 永不过期（spec §1：可设过期） */
 export const createShareLinkInputSchema = z.object({
@@ -47,4 +48,6 @@ export interface PublicShareResponse {
   aggregates: AggregateResponse[];
   moments: MomentResponse[];
   nextCursor: string | null;
+  /** 最近一期 ready/degraded 回顾（share_recaps_enabled 开启时外发，generating/failed 不外发，spec §6） */
+  recap?: RecapDto;
 }

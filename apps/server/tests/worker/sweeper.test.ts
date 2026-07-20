@@ -163,6 +163,6 @@ describe('handleMomentDeleted（outbox moment.deleted → 标记 orphaned，幂�
 
   it('handlers 注册表含 moment.deleted', () => {
     expect(handlers['moment.deleted']).toBe(handleMomentDeleted);
-    expect(Object.keys(handlers)).toHaveLength(4);
+    expect(Object.keys(handlers)).toHaveLength(5);
   });
 });

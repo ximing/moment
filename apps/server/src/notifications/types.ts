@@ -2,8 +2,10 @@
 export const NOTIFICATION_MOMENT_CREATED = 'moment.created';
 export const NOTIFICATION_COMMENT_CREATED = 'comment.created';
 export const NOTIFICATION_REACTION_CREATED = 'reaction.created';
+export const NOTIFICATION_RECAP_READY = 'recap.ready';
 
 export type NotificationType =
   | typeof NOTIFICATION_MOMENT_CREATED
   | typeof NOTIFICATION_COMMENT_CREATED
-  | typeof NOTIFICATION_REACTION_CREATED;
+  | typeof NOTIFICATION_REACTION_CREATED
+  | typeof NOTIFICATION_RECAP_READY;

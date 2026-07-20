@@ -6,12 +6,12 @@ import type {
   ShareLinkDto,
   ShareLinkListResponse,
 } from '@moment/dto';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
-import { chains, shareLinks, type ShareLink } from '../db/schema.js';
+import { chains, recaps, shareLinks, type ShareLink } from '../db/schema.js';
 import { queryMomentPage } from '../feed/moment-query.js';
 import { serializeMoments } from '../moments/moment-serializer.js';
 import { AggregateService } from '../templates/aggregate.service.js';
@@ -92,7 +92,12 @@ export class ShareLinkService {
     if (!link) throw new NotFoundError('SHARE_NOT_FOUND');
 
     const [chain] = await db
-      .select({ name: chains.name, description: chains.description, template: chains.template })
+      .select({
+        name: chains.name,
+        description: chains.description,
+        template: chains.template,
+        shareRecapsEnabled: chains.shareRecapsEnabled,
+      })
       .from(chains)
       .where(eq(chains.id, link.chainId))
       .limit(1);
@@ -105,6 +110,24 @@ export class ShareLinkService {
       cursor: query.cursor,
     });
     const manifest = (await this.templates.getByKey(chain.template)).manifest;
+
+    // 附最近一期 ready/degraded recap（spec §6 + S2 注：含 degraded，T7 回写 spec §6）
+    let recap: typeof recaps.$inferSelect | undefined;
+    if (chain.shareRecapsEnabled) {
+      const [latest] = await db
+        .select()
+        .from(recaps)
+        .where(
+          and(
+            eq(recaps.chainId, link.chainId),
+            inArray(recaps.status, ['ready', 'degraded']),
+          ),
+        )
+        .orderBy(desc(recaps.period))
+        .limit(1);
+      recap = latest;
+    }
+
     return {
       chain: { name: chain.name, description: chain.description },
       template: chain.template,
@@ -112,6 +135,23 @@ export class ShareLinkService {
       aggregates: await this.aggregates.projectAll(link.chainId, manifest),
       moments: await serializeMoments(page.rows),
       nextCursor: page.nextCursor,
+      ...(recap ? {
+        recap: {
+          id: recap.id,
+          chainId: recap.chainId,
+          period: recap.period,
+          status: recap.status,
+          content: recap.content,
+          highlights: recap.highlights,
+          model: recap.model,
+          promptVersion: recap.promptVersion,
+          tokenUsage: recap.tokenUsage,
+          error: recap.error,
+          generatedAt: recap.generatedAt ? recap.generatedAt.toISOString() : null,
+          createdAt: recap.createdAt.toISOString(),
+          updatedAt: recap.updatedAt.toISOString(),
+        },
+      } : {}),
     };
   }
 }

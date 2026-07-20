@@ -1,0 +1,1 @@
+ALTER TABLE `chains` ADD `share_recaps_enabled` boolean DEFAULT true NOT NULL;
