@@ -12,6 +12,7 @@ import {
   outbox,
   pushTokens,
   reactions,
+  recaps,
   refreshTokens,
   shareLinks,
   tags,
@@ -33,6 +34,7 @@ export async function resetDb(): Promise<void> {
   await db.delete(chainInvites);
   await db.delete(chainMembers);
   await db.delete(shareLinks);
+  await db.delete(recaps);
   await db.delete(chains);
   await db.delete(templates).where(eq(templates.scope, 'user'));
   await db.delete(refreshTokens);

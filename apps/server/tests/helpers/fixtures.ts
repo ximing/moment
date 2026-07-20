@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
-import { chainMembers, chains, momentTags, moments } from '../../src/db/schema.js';
+import { chainMembers, chains, momentTags, moments, recaps } from '../../src/db/schema.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
 
 export const app = createApp();
@@ -76,4 +76,37 @@ export async function insertMoment(opts: {
 /** 直插 moment-tag 关联。 */
 export async function attachTag(momentId: string, tagId: string): Promise<void> {
   await db.insert(momentTags).values({ momentId, tagId });
+}
+
+/** 直插 recap 行（测试用，绕过 generate 管线）。默认 status=generating，可覆盖全字段。 */
+export async function insertRecap(opts: {
+  chainId: string;
+  period: string;
+  status?: 'generating' | 'ready' | 'failed' | 'degraded';
+  content?: string;
+  highlights?: string[];
+  model?: string | null;
+  promptVersion?: number;
+  tokenUsage?: { prompt: number; completion: number; total: number } | null;
+  error?: string | null;
+  generatedAt?: Date | null;
+}): Promise<string> {
+  const id = randomUUID();
+  const now = new Date();
+  await db.insert(recaps).values({
+    id,
+    chainId: opts.chainId,
+    period: opts.period,
+    status: opts.status ?? 'generating',
+    content: opts.content ?? '',
+    highlights: opts.highlights ?? [],
+    model: opts.model ?? null,
+    promptVersion: opts.promptVersion ?? 1,
+    tokenUsage: opts.tokenUsage ?? null,
+    error: opts.error ?? null,
+    generatedAt: opts.generatedAt ?? null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return id;
 }

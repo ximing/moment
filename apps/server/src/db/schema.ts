@@ -13,3 +13,4 @@ export * from './schema/notifications.js';
 export * from './schema/push-tokens.js';
 export * from './schema/share-links.js';
 export * from './schema/templates.js';
+export * from './schema/recaps.js';
