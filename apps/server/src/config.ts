@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 loadEnv({ path: [`.env.${process.env.NODE_ENV ?? 'development'}`, '.env'] });
 
-const envSchema = z.object({
+export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
   MYSQL_HOST: z.string(),
@@ -66,6 +66,20 @@ const envSchema = z.object({
     (v) => (v === '' ? undefined : v),
     z.string().min(8).max(72).optional(),
   ),
+  // ---------- AI 月度回顾 LLM（spec §3） ----------
+  // OpenAI 兼容端点（DeepSeek/通义/Moonshot 同一协议，环境变量切换）
+  LLM_BASE_URL: z.string().url().default('https://api.deepseek.com/v1'),
+  // 凭据；空串 = recap 管线整体停用（本地开发默认不配置，扫描照常但跳过派发，spec §3/§8）
+  LLM_API_KEY: z.string().default(''),
+  // 模型名
+  LLM_MODEL: z.string().default('deepseek-chat'),
+  // 全局月度 token 预算，默认 0 = 不限；超限走降级（spec §5）
+  LLM_MONTHLY_TOKEN_BUDGET: z.coerce.number().int().min(0).default(0),
+  // 生成调度时区，默认 Asia/Shanghai（spec §1）
+  LLM_RECAP_TZ: z.string().default('Asia/Shanghai'),
+  // 输入截断护栏（spec §4）
+  LLM_RECAP_MAX_MOMENTS: z.coerce.number().int().min(1).default(100),
+  LLM_RECAP_MAX_CHARS: z.coerce.number().int().min(1).default(8000),
 });
 
 export const config = envSchema.parse(process.env);
