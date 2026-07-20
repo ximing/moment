@@ -11,6 +11,7 @@ import { MePage } from '@/pages/me';
 import { MomentPage } from '@/pages/moment';
 import { NotFound } from '@/pages/not-found';
 import { NotificationsHome } from '@/pages/notifications';
+import { RecapPage } from '@/pages/recap';
 import { ShareAlbumPage } from '@/pages/share-album';
 import { Shell } from '@/shell/Shell';
 import { ToastProvider, ToastRegion } from '@/ui/feedback/index';
@@ -51,6 +52,7 @@ export function App() {
         >
           <Route path="/" element={<FeedHome />} />
           <Route path="/chains/:chainId" element={<ChainHome />} />
+          <Route path="/chains/:chainId/recaps/:period" element={<RecapPage />} />
           <Route path="/chains/:chainId/settings" element={<ChainSettingsPage />} />
           <Route path="/moments/:momentId" element={<MomentPage />} />
           <Route path="/notifications" element={<NotificationsHome />} />

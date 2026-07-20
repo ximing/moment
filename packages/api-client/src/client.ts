@@ -26,6 +26,8 @@ import type {
   NotificationListResponse,
   PatchMomentInput, // 等价映射（依赖契约段免责条款）：Phase 3 计划名 PatchMomentInput / Phase 4 计划名 UpdateMomentInput——若 dto 实际导出为 UpdateMomentInput，改为 `UpdateMomentInput as PatchMomentInput`，禁止反向改 dto
   PublicShareResponse,
+  RecapDto,
+  RecapListResponse,
   RegisterInput,
   RegisterPushTokenInput,
   TemplateDto,
@@ -114,6 +116,12 @@ export interface MomentClient {
   listShareLinks(chainId: string): Promise<ShareLinkListResponse>;
   revokeShareLink(shareLinkId: string): Promise<void>;
   getPublicShare(token: string, cursor?: string): Promise<PublicShareResponse>;
+
+  // recap
+  /** 该链回顾列表（period 倒序，spec §6） */
+  listRecaps(chainId: string): Promise<RecapListResponse>;
+  /** 单条回顾详情（spec §6） */
+  getRecap(chainId: string, period: string): Promise<RecapDto>;
 
   listComments(momentId: string, query?: { cursor?: string; limit?: number }): Promise<CommentListResponse>;
   createComment(momentId: string, content: string): Promise<CommentDto>;
@@ -247,5 +255,8 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
         query: { cursor },
         skipAuth: true, // 匿名可用；永不触发 refresh
       }),
+
+    listRecaps: (chainId) => http.request(`/api/chains/${chainId}/recaps`),
+    getRecap: (chainId, period) => http.request(`/api/chains/${chainId}/recaps/${period}`),
   };
 }

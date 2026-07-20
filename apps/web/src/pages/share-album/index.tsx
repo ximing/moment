@@ -5,6 +5,7 @@ import { ApiError } from '@moment/api-client';
 import { Timeline } from '@/timeline/timeline';
 import { AggregateView } from '@/chain/aggregate-views';
 import { MapView } from '@/chain/map-view';
+import { MarkdownText } from '@/pages/recap/markdown-text';
 import { EmptyState, TimelineSkeleton } from '@/ui/feedback/index';
 import { ShareAlbumService } from './share-album.service';
 
@@ -60,6 +61,15 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
         </div>
       </header>
       <main className="mx-auto max-w-content px-6 py-8">
+        {service.recap && (
+          <section className="mb-8">
+            <h2 className="mb-4 text-body font-semibold text-ink">
+              {Number(service.recap.period.slice(5))} 月回顾
+              {service.recap.status === 'degraded' && <span className="ml-2 text-meta font-normal text-muted">（简版）</span>}
+            </h2>
+            <MarkdownText content={service.recap.content} />
+          </section>
+        )}
         {(() => {
           const manifest = service.templateManifest;
           if (!manifest || service.aggregates.length === 0) return null;

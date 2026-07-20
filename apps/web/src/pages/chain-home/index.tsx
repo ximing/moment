@@ -6,6 +6,7 @@ import { ComposerEntry } from '@/compose/composer-entry';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { AggregateView } from '@/chain/aggregate-views';
 import { MapView } from '@/chain/map-view';
+import { RecapEntry } from '@/chain/recap-entry';
 import { babyAgeLabel } from '@/lib/template';
 import { canCompose } from '@/lib/roles';
 import { humanError } from '@/lib/errors';
@@ -74,6 +75,8 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
         </div>
         {chain.description && <p className="mt-1 text-meta text-muted">{chain.description}</p>}
       </header>
+
+      <RecapEntry chainId={chain.id} />
 
       {(() => {
         const views = chain.templateManifest.views ?? [];
