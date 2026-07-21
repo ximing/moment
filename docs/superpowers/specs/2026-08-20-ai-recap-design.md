@@ -1,7 +1,7 @@
 # 时刻 Moment — AI 月度回顾 Design
 
 > 日期：2026-08-20
-> 状态：待评审
+> 状态：已实现（P1–P7 合入，2026-08-21）
 > 范围：server（llm 模块 + recap 管线）+ dto + api-client + web + app + 分享页
 > 权威边界：数据模型与异步机制以 `2026-08-15-moment-design.md`（outbox/worker/通知扇出）为准；模板结构化素材（kind/payload）以 `2026-08-20-chain-templates-design.md` 为准。本 spec 不修改媒体与权限语义。
 
@@ -123,7 +123,7 @@ baby 模板额外注入：宝宝 `birthdate` 换算的月龄（「本期末 1 �
 - `GET /chains/:id/recaps` —— 该链回顾列表（period 倒序，成员可读，含 viewer）。
 - `GET /chains/:id/recaps/:period` —— 单条详情（`period` 格式 `YYYY-MM`，zod 校验，非法 → `INVALID_PERIOD`）。
 - `POST /chains/:id/recaps/:period/regenerate` —— editor+，仅允许已存在的 period（该月有记录），写 outbox 重生成；每日每链限 3 次 → `RECAP_REGENERATE_LIMIT`。
-- 分享页：`GET /public/share/:token` 响应附最近一期 `ready` 回顾（`share_recaps_enabled` 链级开关，**默认开**——长辈收到本月回顾是最强回访钩子；owner 可在链设置关闭）。`generating`/`failed` 不外发。
+- 分享页：`GET /public/share/:token` 响应附最近一期 `ready`/`degraded` 回顾（含 degraded，§5 降级回顾同样外发；`share_recaps_enabled` 链级开关，**默认开**——长辈收到本月回顾是最强回访钩子；owner 可在链设置关闭）。`generating`/`failed` 不外发。
 - 通知：`type=recap_ready`，payload 含链名与 period 快照（链改名后通知文案不回溯，与现有快照语义一致）；点击进链内 recap 页。链免打扰预留与主 spec 一致。
 
 ## 7. 各端 UX
