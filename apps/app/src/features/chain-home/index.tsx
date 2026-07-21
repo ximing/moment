@@ -14,6 +14,7 @@ import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { showMomentActions } from '../compose/moment-actions';
+import { RecapEntryBar } from '../recap/recap-entry';
 import { AggregateView } from './aggregate-views';
 import { FootprintMap } from './map-view';
 import { ChainHomeService, type ChainSegment } from './chain-home.service';
@@ -54,6 +55,7 @@ const Content = observer(function Content() {
           <Button variant="quiet" onPress={() => router.push(`/chains/${service.chainId}/settings`)}>⚙️ 设置</Button>
         </View>
       </View>
+      <RecapEntryBar chainId={service.chainId} />
       <SegmentBar<ChainSegment>
         options={[
           { value: 'timeline', label: '时间线' },
