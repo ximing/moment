@@ -1,8 +1,9 @@
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { closeDb, resetDb } from '../helpers/db.js';
+import { listenLocal } from '../helpers/http-server.js';
 
-const app = createApp();
+const app = listenLocal(createApp());
 
 const alice = { email: 'Alice@Example.com', password: 'secret123', nickname: 'Alice' };
 

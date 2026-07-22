@@ -3,8 +3,9 @@ import { createApp } from '../../src/app.js';
 import { auth, createUser, type TestUser } from '../helpers/auth.js';
 import { createChain } from '../helpers/chains.js';
 import { closeDb, resetDb } from '../helpers/db.js';
+import { listenLocal } from '../helpers/http-server.js';
 
-const app = createApp();
+const app = listenLocal(createApp());
 
 let alice: TestUser;
 let bob: TestUser;

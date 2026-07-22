@@ -7,9 +7,10 @@ import { createUser } from '../helpers/auth.js';
 import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage } from '../helpers/storage.js';
+import { listenLocal } from '../helpers/http-server.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
 
-const app = createApp();
+const app = listenLocal(createApp());
 
 let storage: Record<string, import('@jest/globals').jest.Mock>;
 let alice: { id: string; token: string };

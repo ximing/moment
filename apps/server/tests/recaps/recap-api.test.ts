@@ -4,8 +4,9 @@ import { auth, createUser, type TestUser } from '../helpers/auth.js';
 import { addMember } from '../helpers/chains.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { insertMoment, insertRecap } from '../helpers/fixtures.js';
+import { listenLocal } from '../helpers/http-server.js';
 
-const app = createApp();
+const app = listenLocal(createApp());
 
 let owner: TestUser;
 let viewer: TestUser;

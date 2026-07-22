@@ -7,8 +7,9 @@ import { insertMoment, insertRecap } from '../helpers/fixtures.js';
 import { db } from '../../src/db/index.js';
 import { chains } from '../../src/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { listenLocal } from '../helpers/http-server.js';
 
-const app = createApp();
+const app = listenLocal(createApp());
 
 let owner: TestUser;
 

@@ -4,8 +4,9 @@ import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
 import { chainMembers, chains, momentTags, moments, recaps } from '../../src/db/schema.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
+import { listenLocal } from './http-server.js';
 
-export const app = createApp();
+export const app = listenLocal(createApp());
 
 let seq = 0;
 

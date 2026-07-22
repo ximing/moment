@@ -9,8 +9,9 @@ import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
+import { listenLocal } from '../helpers/http-server.js';
 
-const app = createApp();
+const app = listenLocal(createApp());
 
 let storage: Record<string, import('@jest/globals').jest.Mock>;
 let alice: { id: string; token: string };

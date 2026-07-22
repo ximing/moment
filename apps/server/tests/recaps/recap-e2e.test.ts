@@ -14,8 +14,9 @@ import { addMember, createChain } from '../helpers/chains.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { insertMoment } from '../helpers/fixtures.js';
 import type { PushSendOutcome, PushService } from '../../src/push/push-service.js';
+import { listenLocal } from '../helpers/http-server.js';
 
-const app = createApp();
+const app = listenLocal(createApp());
 
 let owner: TestUser;
 let member: TestUser;

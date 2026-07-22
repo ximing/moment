@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Server } from 'node:http';
 import type { AuthResponse } from '@moment/dto';
 import type { Express } from 'express';
 import request from 'supertest';
@@ -16,7 +17,7 @@ export interface TestUser {
  * - createUser(app, 'owner@example.com') → email as given (Phase 2)
  * - createUser(app, 'alice') → generate email, nickname=alice (Phase 3)
  */
-export async function createUser(app: Express, emailOrName: string, nickname?: string): Promise<TestUser> {
+export async function createUser(app: Express | Server, emailOrName: string, nickname?: string): Promise<TestUser> {
   const looksLikeEmail = emailOrName.includes('@');
   const email = looksLikeEmail
     ? emailOrName

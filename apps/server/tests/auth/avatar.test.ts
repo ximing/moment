@@ -7,8 +7,9 @@ import { currentStorageMeta, setStorageAdapter } from '../../src/storage/factory
 import { auth, createUser } from '../helpers/auth.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage } from '../helpers/storage.js';
+import { listenLocal } from '../helpers/http-server.js';
 
-const app = createApp();
+const app = listenLocal(createApp());
 
 beforeEach(resetDb);
 afterEach(() => setStorageAdapter(null));
