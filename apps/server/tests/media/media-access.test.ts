@@ -6,14 +6,14 @@ import { media, moments } from '../../src/db/schema.js';
 import { createUser } from '../helpers/auth.js';
 import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
-import { installMockStorage } from '../helpers/storage.js';
+import { installMockStorage, type MockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
 import { listenLocal } from '../helpers/http-server.js';
 
 const app = listenLocal(createApp());
 
-let storage: Record<string, import('@jest/globals').jest.Mock>;
+let storage: MockStorage;
 let alice: { id: string; token: string };
 let bob: { id: string; token: string };
 let carol: { id: string; token: string };

@@ -5,10 +5,10 @@ import { db } from '../../src/db/index.js';
 import { media, shareLinks } from '../../src/db/schema.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { app, createChain, insertMoment, registerUser } from '../helpers/fixtures.js';
-import { installMockStorage } from '../helpers/storage.js';
+import { installMockStorage, type MockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
 
-let storage: Record<string, jest.Mock>;
+let storage: MockStorage;
 let owner: { id: string; token: string };
 let other: { id: string; token: string };
 let chainId: string;

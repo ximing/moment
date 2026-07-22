@@ -21,8 +21,10 @@ describe('GET /api/chains/:chainId/moments（共用 builder 重构后行为）',
     const collected: string[] = [];
     let cursor: string | null = null;
     for (let page = 0; page < 5; page++) {
-      const q = cursor ? `?limit=2&cursor=${encodeURIComponent(cursor)}` : '?limit=2';
-      const res = await request(app).get(`/api/chains/${chainId}/moments${q}`).set(auth(owner.token));
+      // 显式标注：循环里 cursor 由 res.body.nextCursor 赋值，res 初始化器又用到 cursor，
+      // 不标注会形成类型推断环（TS7022）
+      const q: string = cursor ? `?limit=2&cursor=${encodeURIComponent(cursor)}` : '?limit=2';
+      const res: request.Response = await request(app).get(`/api/chains/${chainId}/moments${q}`).set(auth(owner.token));
       expect(res.status).toBe(200);
       collected.push(...res.body.items.map((m: { id: string }) => m.id));
       cursor = res.body.nextCursor;

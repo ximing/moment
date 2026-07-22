@@ -7,14 +7,14 @@ import { chains, comments, media, momentTags, moments, outbox, reactions, tags }
 import { createUser } from '../helpers/auth.js';
 import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
-import { installMockStorage } from '../helpers/storage.js';
+import { installMockStorage, type MockStorage } from '../helpers/storage.js';
 import { listenLocal } from '../helpers/http-server.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
 
 const app = listenLocal(createApp());
 
-let storage: Record<string, import('@jest/globals').jest.Mock>;
+let storage: MockStorage;
 let alice: { id: string; token: string };
 let bob: { id: string; token: string };
 let carol: { id: string; token: string };
@@ -88,7 +88,9 @@ describe('GET /api/chains/:chainId/moments（复合游标分页）', () => {
     let cursor: string | null = null;
     let pages = 0;
     do {
-      const res = await (cursor
+      // 显式标注：cursor 由 res.body.nextCursor 赋值，res 初始化器又用到 cursor，
+      // 不标注会形成类型推断环（TS7022）
+      const res: request.Response = await (cursor
         ? authed(carol.token).query({ limit: 7, cursor })
         : authed(carol.token).query({ limit: 7 }));
       expect(res.status).toBe(200);

@@ -20,9 +20,9 @@ const okPush: PushService = new MockPushService();
 describe('runOutboxBatch', () => {
   it('成功处理：claim → handler 执行 → status=done + processed_at', async () => {
     await emitRow('ob-1');
-    const handler = jest.fn().mockResolvedValue(undefined);
+    const handler = jest.fn<OutboxHandler>().mockResolvedValue(undefined);
 
-    const result = await runOutboxBatch({ push: okPush, handlers: { 'comment.created': handler as unknown as OutboxHandler } });
+    const result = await runOutboxBatch({ push: okPush, handlers: { 'comment.created': handler } });
     expect(result).toEqual({ claimed: 1, done: 1, retried: 0, failed: 0 });
     expect(handler).toHaveBeenCalledTimes(1);
 
@@ -73,8 +73,8 @@ describe('runOutboxBatch', () => {
 
   it('未到期的行不 claim（租约生效）：claim 后立即再跑不重复处理', async () => {
     await emitRow('ob-4');
-    const handler = jest.fn().mockResolvedValue(undefined);
-    const deps = { push: okPush, handlers: { 'comment.created': handler as unknown as OutboxHandler } };
+    const handler = jest.fn<OutboxHandler>().mockResolvedValue(undefined);
+    const deps = { push: okPush, handlers: { 'comment.created': handler } };
 
     await runOutboxBatch(deps);
     const second = await runOutboxBatch(deps);
