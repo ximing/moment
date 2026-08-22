@@ -5,6 +5,7 @@ build/
 .env
 .env.*
 !.env.example
+!.env.external.example
 .DS_Store
 .expo/
 coverage/
