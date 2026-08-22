@@ -26,6 +26,8 @@ export interface MediaLike {
   height: number | null;
   duration: number | null;
   sortOrder: number;
+  /** 视频封面媒体行 id（db 行自带该列，类型对齐即可）；无封面为 null */
+  posterMediaId: string | null;
 }
 
 /** 互动计数（spec §5.1：批量 GROUP BY 产出，禁止 N+1） */
@@ -67,6 +69,8 @@ export function momentSerializer(m: MomentLike, extras: SerializerExtras): Momen
         height: x.height,
         duration: x.duration,
         sortOrder: x.sortOrder,
+        posterMediaId: x.posterMediaId,
+        posterUrl: x.posterMediaId ? `/api/media/${x.posterMediaId}` : null,
       })),
     tags: extras.tags ?? [],
     commentCount: extras.counts?.commentCount ?? 0,
@@ -118,9 +122,15 @@ export async function serializeMoments(
       : Promise.resolve([] as { momentId: string; emoji: string }[]),
   ]);
 
+  // poster 行绑了同一 momentId 会被查出，必须从内容媒体中排除——否则以第 2 条媒体泄漏，
+  // 破坏 type=video 恰 1 条视频媒体的契约。排除只存在于批量函数；单条出口消费组装结果。
+  const posterIds = new Set(
+    mediaRows.map((r) => r.posterMediaId).filter((id): id is string => id !== null)
+  );
   const mediaBy = new Map<string, MediaLike[]>();
   for (const m of mediaRows) {
     if (!m.momentId) continue;
+    if (posterIds.has(m.id)) continue;
     const list = mediaBy.get(m.momentId) ?? [];
     list.push(m);
     mediaBy.set(m.momentId, list);

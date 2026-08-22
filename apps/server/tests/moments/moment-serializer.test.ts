@@ -18,8 +18,8 @@ describe('momentSerializer（moment → API 响应唯一出口）', () => {
   it('media 按 sortOrder 升序，url 是稳定入口相对路径（不内嵌预签名）', () => {
     const res = momentSerializer(moment, {
       media: [
-        { id: 'md-2', mime: 'image/jpeg', width: 100, height: 200, duration: null, sortOrder: 1 },
-        { id: 'md-1', mime: 'image/png', width: 10, height: 20, duration: null, sortOrder: 0 },
+        { id: 'md-2', mime: 'image/jpeg', width: 100, height: 200, duration: null, sortOrder: 1, posterMediaId: null },
+        { id: 'md-1', mime: 'image/png', width: 10, height: 20, duration: null, sortOrder: 0, posterMediaId: null },
       ],
       author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
     });

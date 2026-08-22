@@ -21,7 +21,7 @@ export const media = mysqlTable(
     height: int('height'),
     /** 视频时长（秒），客户端元数据可后补，本阶段允许 null */
     duration: int('duration'),
-    /** 视频封面（预留，服务端抽帧二期），不做 FK 以避免自引用循环 */
+    /** 视频封面（客户端截帧，spec 2026-08-22-video-poster §1）：关联同 moment 的 poster 媒体行；不做 FK 以避免自引用循环 */
     posterMediaId: char('poster_media_id', { length: 36 }),
     sortOrder: int('sort_order').notNull().default(0),
     status: mysqlEnum('status', ['uploading', 'ready', 'orphaned']).notNull(),

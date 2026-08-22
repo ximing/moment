@@ -47,14 +47,22 @@ export class MomentService {
 
     const created = await db.transaction(async (tx) => {
       let mediaRows: Media[] = [];
-      if (input.mediaIds.length > 0) {
+      let posterRow: Media | null = null;
+      // poster 与媒体行走同一事务行锁（并发语义一致），但 poster 行单独持有——
+      // 数量校验 mediaRows.length === new Set(input.mediaIds).size 只对媒体集合做，不能被 poster 污染
+      const lockIds = input.posterMediaId
+        ? [...new Set([...input.mediaIds, input.posterMediaId])]
+        : input.mediaIds;
+      if (lockIds.length > 0) {
         // 行锁：并发两个 moment 引用同一 mediaId 时，读-改-写必须串行化——
         // 后到者在锁上排队，提交后重读到的行 moment_id 非空 → 400 MEDIA_INVALID，杜绝「双发布各 copy 一半」
-        mediaRows = await tx
+        const locked = await tx
           .select()
           .from(media)
-          .where(inArray(media.id, input.mediaIds))
+          .where(inArray(media.id, lockIds))
           .for('update');
+        posterRow = locked.find((r) => r.id === input.posterMediaId) ?? null;
+        mediaRows = locked.filter((r) => r.id !== input.posterMediaId);
         // 全部满足：数量一致（dto 已拒重复 id，此处防御）+ 属本人 + ready + 未绑定 + mime 类型匹配
         // （type=video → 恰好 1 条 video/*；type=media 宫格允许图/视频**混排**，spec §1「media（图/视频宫格+文）」，见 Global Constraints）
         const valid =
@@ -69,6 +77,17 @@ export class MomentService {
                 : r.mime.startsWith('image/') || r.mime.startsWith('video/'))
           );
         if (!valid) throw new HttpError(400, 'MEDIA_INVALID');
+        // poster 行校验（spec video-poster §2.1）：本人 + ready + 未绑定 + image/* + 不在 mediaIds 中
+        if (input.posterMediaId) {
+          const posterValid =
+            posterRow !== null &&
+            posterRow.uploaderId === userId &&
+            posterRow.status === 'ready' &&
+            posterRow.momentId === null &&
+            posterRow.mime.startsWith('image/') &&
+            !input.mediaIds.includes(input.posterMediaId);
+          if (!posterValid) throw new HttpError(400, 'MEDIA_INVALID');
+        }
       }
 
       await tx.insert(moments).values({
@@ -98,8 +117,25 @@ export class MomentService {
         const sortOrder = input.mediaIds.indexOf(mediaId);
         await tx
           .update(media)
-          .set({ s3Key: finalKey, momentId, sortOrder, storageMeta: row.storageMeta })
+          .set({
+            s3Key: finalKey,
+            momentId,
+            sortOrder,
+            storageMeta: row.storageMeta,
+            ...(input.posterMediaId ? { posterMediaId: input.posterMediaId } : {}),
+          })
           .where(eq(media.id, row.id));
+      }
+
+      // poster 绑定（copy 复用媒体循环的 copyObject 范式，update 分开——不写 sortOrder / storageMeta）：
+      // poster 行只绑 momentId + 新 s3Key；sortOrder 保持上传时的值（默认 0），不参与宫格排序。
+      // tmp 对象进 copiedTmp，与媒体行走同一 post-commit 清理。
+      if (posterRow) {
+        const ext = mime.extension(posterRow.mime) || 'bin';
+        const finalKey = `chains/${chainId}/${momentId}/${posterRow.id}.${ext}`;
+        await storage.copyObject(posterRow.s3Key, finalKey, posterRow.storageMeta);
+        copiedTmp.push({ key: posterRow.s3Key, metadata: posterRow.storageMeta });
+        await tx.update(media).set({ s3Key: finalKey, momentId }).where(eq(media.id, posterRow.id));
       }
 
       const [inserted] = await tx.select().from(moments).where(eq(moments.id, momentId)).limit(1);
