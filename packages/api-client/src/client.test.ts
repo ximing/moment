@@ -112,6 +112,7 @@ test('moments/feed/tags 路径与查询参数', async () => {
     happenedTzOffset: -480,
     isBackfill: false,
     mediaIds: [],
+    kind: 'standard',
   });
   assert.deepEqual(calls[7]!.body, { name: '周岁' });
 });
