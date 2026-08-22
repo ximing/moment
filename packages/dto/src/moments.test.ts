@@ -119,3 +119,41 @@ test('patchMomentInputSchema：kind/payload 可选，strict 仍拒未知键', ()
   assert.deepEqual(ok.payload, { mood: '😄' });
   assert.throws(() => patchMomentInputSchema.parse({ kind: 'milestone', hacker: 1 }));
 });
+
+test('createMomentInputSchema：type=video 带/不带 posterMediaId 均通过', () => {
+  const video = { ...base, type: 'video' as const, content: '', mediaIds: ['m-1'] };
+  assert.ok(createMomentInputSchema.safeParse(video).success);
+  assert.ok(
+    createMomentInputSchema.safeParse({ ...video, posterMediaId: 'poster-1' }).success
+  );
+});
+
+test('createMomentInputSchema：type=text / media 传 posterMediaId → MEDIA_NOT_ALLOWED', () => {
+  const text = createMomentInputSchema.safeParse({ ...base, posterMediaId: 'poster-1' });
+  assert.ok(!text.success);
+  assert.ok(
+    !createMomentInputSchema.safeParse({
+      ...base,
+      type: 'media' as const,
+      content: '',
+      mediaIds: ['m-1'],
+      posterMediaId: 'poster-1',
+    }).success
+  );
+});
+
+test('createMomentInputSchema：posterMediaId 空串拒绝（min(1)）', () => {
+  assert.ok(
+    !createMomentInputSchema.safeParse({
+      ...base,
+      type: 'video' as const,
+      content: '',
+      mediaIds: ['m-1'],
+      posterMediaId: '',
+    }).success
+  );
+});
+
+test('patchMomentInputSchema：.strict() 拒绝 posterMediaId（封面发布后不可改）', () => {
+  assert.ok(!patchMomentInputSchema.safeParse({ posterMediaId: 'poster-1' }).success);
+});

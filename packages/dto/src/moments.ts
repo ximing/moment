@@ -22,6 +22,8 @@ export const createMomentInputSchema = z
     happenedTzOffset: z.number().int().min(-840).max(840),
     isBackfill: z.boolean().default(false),
     mediaIds: z.array(z.string().min(1)).default([]),
+    /** 视频封面媒体 id（客户端截帧的普通 image 上传）；仅 type=video 可传，见 superRefine */
+    posterMediaId: z.string().min(1).optional(),
     tagIds: momentTagIdsSchema.optional(),
     /** 语义类别（spec §1.1）；standard = 普通 moment，其余由链模板 kinds 声明 */
     kind: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64).default('standard'),
@@ -46,6 +48,10 @@ export const createMomentInputSchema = z
     // 重复 id 会导致发布事务对同一 tmp 对象 copy 两次（第二次 NoSuchKey → 500），必须拒绝
     if (val.type !== 'text' && new Set(val.mediaIds).size !== val.mediaIds.length) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'MEDIA_COUNT_INVALID', path: ['mediaIds'] });
+    }
+    // 封面仅单视频支持（spec video-poster §1：宫格视频封面语义 YAGNI）
+    if (val.type !== 'video' && val.posterMediaId !== undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'MEDIA_NOT_ALLOWED', path: ['posterMediaId'] });
     }
   });
 export type CreateMomentInput = z.infer<typeof createMomentInputSchema>;
@@ -75,6 +81,10 @@ export interface MomentMedia {
   height: number | null;
   duration: number | null;
   sortOrder: number;
+  /** 视频封面媒体 id：登录态经 useMediaObjectUrl / useMediaUri(posterMediaId) 取 blob；仅视频行非空，无封面为 null */
+  posterMediaId: string | null;
+  /** 视频封面稳定入口相对路径 /api/media/:posterId（不内嵌预签名 URL，CONVENTIONS §3.4）；分享态拼 ?st= 用；仅视频行非空，无封面为 null */
+  posterUrl: string | null;
 }
 
 export interface AuthorSummary {
