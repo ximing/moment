@@ -1,9 +1,10 @@
-# 生产栈：web（nginx 同源反代 /api）+ server + worker + mysql + backup
+# 生产一体栈：web（nginx 同源反代 /api）+ server + worker + mysql + backup
 #
 #   cp deploy/.env.example .env    # 改真实凭据，勿提交
 #   docker compose -f docker-compose.prod.yml up -d --build
 #   docker compose -f docker-compose.prod.yml run --rm server node dist/db/migrate.js
 #
+# 外部 MySQL + 外部 nginx：docker-compose.prod.external.yml
 # 本地开发请用 docker-compose.yml（只起 mysql）。
 
 name: moment

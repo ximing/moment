@@ -113,6 +113,55 @@ moment.example.com {
 
 本地开发仍用根目录 `docker-compose.yml`：`docker compose up -d mysql`。
 
+### 外部 MySQL + 外部 nginx
+
+compose 只跑 `server` / `worker` / `backup`。API 默认绑 `127.0.0.1:3000`，静态页和 80/443 交给你现有的 nginx。
+
+```bash
+cp deploy/.env.external.example .env
+# 必改：MYSQL_HOST / MYSQL_PASSWORD / JWT_SECRET / ATTACHMENT_S3_* / BACKUP_S3_*
+# 同机 MySQL 用 MYSQL_HOST=host.docker.internal（不能只监听 127.0.0.1，账号授权 moment@'%'）
+# 远程库填内网地址
+
+docker compose -f docker-compose.prod.external.yml up -d --build
+docker compose -f docker-compose.prod.external.yml run --rm server node dist/db/migrate.js
+```
+
+静态产物放到 nginx 的 `root`（默认 `/var/www/moment`）：
+
+```bash
+# 本机有 pnpm
+pnpm install && pnpm --filter @moment/dto build \
+  && pnpm --filter @moment/api-client build && pnpm --filter @moment/web build
+sudo mkdir -p /var/www/moment && sudo rsync -a apps/web/dist/ /var/www/moment/
+
+# 或从镜像拷（机器上没有 Node 时）
+docker build -f apps/web/Dockerfile --target build -t moment-web-build .
+id=$(docker create moment-web-build)
+sudo mkdir -p /var/www/moment && docker cp "$id":/app/apps/web/dist/. /var/www/moment/
+docker rm "$id"
+```
+
+站点配置：
+
+```bash
+sudo cp deploy/nginx.external.conf /etc/nginx/sites-available/moment
+# 改 server_name
+sudo ln -sf /etc/nginx/sites-available/moment /etc/nginx/sites-enabled/moment
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+nginx 在另一台机器时，把 `.env` 的 `MOMENT_API_BIND=0.0.0.0`，并把 `nginx.external.conf` 里的 `proxy_pass` 改成 API 主机地址。
+
+同机 MySQL 最少授权：
+
+```sql
+CREATE DATABASE moment CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'moment'@'%' IDENTIFIED BY '...';
+GRANT ALL ON moment.* TO 'moment'@'%';
+FLUSH PRIVILEGES;
+```
+
 ### sweeper 上线
 
 `deploy/.env.example` 默认 `SWEEPER_DRY_RUN=true`。`docker compose -f docker-compose.prod.yml logs -f worker` 观察一轮（每 `SWEEPER_INTERVAL_MS`，默认 1h）确认 `would delete` 符合预期，再改 `.env` 为 `false` 后 `docker compose -f docker-compose.prod.yml up -d worker`。

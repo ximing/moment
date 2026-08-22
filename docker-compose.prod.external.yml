@@ -1,0 +1,62 @@
+# 外部 MySQL + 外部 nginx：本文件只跑 server / worker / backup
+#
+#   cp deploy/.env.external.example .env
+#   docker compose -f docker-compose.prod.external.yml up -d --build
+#   docker compose -f docker-compose.prod.external.yml run --rm server node dist/db/migrate.js
+#
+# 静态页交给宿主机 nginx，配置见 deploy/nginx.external.conf。
+# 一体栈（自带 mysql + nginx）用 docker-compose.prod.yml。
+
+name: moment-ext
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+# MYSQL_HOST 只从 .env 读，不要在这里写死成 mysql。
+# 本机 MySQL：MYSQL_HOST=host.docker.internal（须监听 docker 网桥，不能只绑 127.0.0.1）
+# 远程 RDS：MYSQL_HOST=实际地址
+x-app: &app
+  extra_hosts:
+    - 'host.docker.internal:host-gateway'
+  env_file: .env
+  environment:
+    NODE_ENV: production
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  server:
+    <<: *app
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    ports:
+      # 给同机 nginx 反代；远程 nginx 再把 MOMENT_API_BIND 改成 0.0.0.0
+      - '${MOMENT_API_BIND:-127.0.0.1}:${MOMENT_API_PORT:-3000}:3000'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://127.0.0.1:3000/api/health").then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  worker:
+    <<: *app
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    command: ['node', 'dist/worker/index.js']
+
+  backup:
+    <<: *app
+    build:
+      context: ./backup
