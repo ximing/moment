@@ -124,6 +124,16 @@ describe('Dialog', () => {
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
+  it('滚动区为 Field 状态环留出左右呼吸，避免 overflow-y-auto 裁切', async () => {
+    const user = userEvent.setup();
+    render(<DialogHarness />);
+    const { dialog } = await openDialog(user);
+    const body = dialog.querySelector('.overflow-y-auto');
+    expect(body).toBeTruthy();
+    expect(body?.className).toContain('px-2');
+    expect(body?.className).toContain('-mx-2');
+  });
+
   it('busy 抑制 Close / Escape / Outside 全部关闭请求并标记 aria-busy', async () => {
     const user = userEvent.setup();
     const onRequestClose = vi.fn();

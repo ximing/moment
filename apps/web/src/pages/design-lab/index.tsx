@@ -192,14 +192,22 @@ function ModalSection(): JSX.Element {
           <Button onClick={() => setDialogOpen(false)}>完成</Button>
         }
       >
-        <p className="text-sm text-muted">Dialog 内容区域。</p>
+        <TextareaField
+          label="这一刻"
+          name="lab-dialog-moment"
+          placeholder="这一刻..."
+        />
       </Dialog>
       <Sheet
         open={sheetOpen}
         title="示例 Sheet"
         onRequestClose={() => setSheetOpen(false)}
       >
-        <p className="text-sm text-muted">Sheet 内容区域。</p>
+        <TextareaField
+          label="这一刻"
+          name="lab-sheet-moment"
+          placeholder="这一刻..."
+        />
       </Sheet>
       <AlertDialog
         open={alertOpen}

@@ -225,7 +225,13 @@ function StructuredSurface({
           onClick={() => requestClose('close-button')}
         />
       </div>
-      <div className="mt-4 min-h-0 flex-1 overflow-y-auto">{children}</div>
+      {/* overflow-y-auto 会把 overflow-x 算成 auto，裁掉全宽控件高亮。
+          全局 :focus-visible 是 2px outline + 2px offset，Field 还有 2px
+          ring，合计约 4px。用 8px（4px 网格）做内边距并负边距拉回，标题/
+          页脚对齐不变。 */}
+      <div className="mt-4 min-h-0 flex-1 overflow-y-auto px-2 py-2 -mx-2">
+        {children}
+      </div>
       {footer ? (
         <div className="mt-6 flex shrink-0 justify-end gap-overlay-action">
           {footer}
