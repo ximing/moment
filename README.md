@@ -69,28 +69,53 @@ pnpm --filter @moment/web test
 
 ## 自托管
 
+一台机器跑完整栈：`web`（nginx，静态页 + `/api` 反代）· `server` · `worker` · `mysql` · `backup`。
+
+前置：
+
+- Docker Compose v2
+- 一块 **S3 兼容私有桶**（阿里云 OSS / AWS / R2）。预签名 URL 会发给浏览器，所以 `ATTACHMENT_S3_ENDPOINT` 必须是公网可访问地址。server 不配齐 `ATTACHMENT_S3_*` 会拒绝启动。
+- 可选：域名 + HTTPS（Caddy / Cloudflare / 反代到 `MOMENT_HTTP_PORT`）
+
 ### 启动栈
 
 ```bash
-# 1) 准备环境（真实凭据已 gitignore，严禁提交）
-cp apps/server/.env.example apps/server/.env   # 若不存在
-# 编辑 .env：MYSQL_*（生产库）、JWT_SECRET（≥32 随机）、
-# ATTACHMENT_S3_*（生产桶，PREFIX 如 prod/attachments）、BACKUP_S3_*
+# 1) 环境变量（真实凭据已 gitignore，严禁提交）
+cp deploy/.env.example .env
+# 必改：MYSQL_ROOT_PASSWORD / MYSQL_PASSWORD / JWT_SECRET（≥32）
+#       ATTACHMENT_S3_* 与 BACKUP_S3_*
+# JWT_SECRET=$(openssl rand -base64 48)
 
-# 2) 一次性配置 S3 bucket lifecycle（tmp/ 7 天过期 + 未完成 multipart 7 天中止）
+# 2) 一次性配置附件桶 lifecycle（tmp/ 7 天过期 + 未完成 multipart 7 天中止）
+#    需要本机 pnpm；只做一次
 pnpm install && pnpm --filter @moment/server setup:s3-lifecycle
 
-# 3) 构建并启动（server + worker + mysql + backup）
-docker compose build
-docker compose up -d
+# 3) 构建并启动（没有 compose 插件时把 docker compose 换成 docker-compose）
+docker compose -f docker-compose.prod.yml up -d --build
 
 # 4) 数据库迁移（首次与每次发版）
-docker compose run --rm server node dist/db/migrate.js
+docker compose -f docker-compose.prod.yml run --rm server node dist/db/migrate.js
 ```
+
+浏览器打开 `http://<主机>:${MOMENT_HTTP_PORT:-80}`。API 不要单独暴露 3000，一律走 nginx 同源 `/api`。
+
+发版：拉代码后重复步骤 3–4。
+
+Expo App 把 `EXPO_PUBLIC_API_URL` / `EXPO_PUBLIC_WEB_URL` 指到这个公网 origin（含协议，无尾斜杠）。
+
+HTTPS 示例（宿主机 Caddy 反代 compose 的 80 端口）：
+
+```
+moment.example.com {
+    reverse_proxy 127.0.0.1:80
+}
+```
+
+本地开发仍用根目录 `docker-compose.yml`：`docker compose up -d mysql`。
 
 ### sweeper 上线
 
-首次部署（或调整保留期）时，先在 `.env` 设 `SWEEPER_DRY_RUN=true`，`docker compose up -d worker` 后观察一轮日志（`docker compose logs -f worker`，每 `SWEEPER_INTERVAL_MS` 一轮，默认 1h）确认 `would delete` 的行符合预期，再改回 `false` 重启 worker。
+`deploy/.env.example` 默认 `SWEEPER_DRY_RUN=true`。`docker compose -f docker-compose.prod.yml logs -f worker` 观察一轮（每 `SWEEPER_INTERVAL_MS`，默认 1h）确认 `would delete` 符合预期，再改 `.env` 为 `false` 后 `docker compose -f docker-compose.prod.yml up -d worker`。
 
 ### 备份与恢复演练
 
@@ -101,24 +126,19 @@ backup sidecar 每 `BACKUP_INTERVAL_SECONDS`（默认 86400s）执行 `mysqldump
 aws s3 ls "s3://$BACKUP_S3_BUCKET/$BACKUP_S3_PREFIX/" ${BACKUP_S3_ENDPOINT:+--endpoint-url "$BACKUP_S3_ENDPOINT"} | tail -1
 
 # 2) 恢复到一次性验证库（严禁直接覆盖生产库）
-#    MYSQL_ROOT_PASSWORD 取部署时 compose 里为 mysql service 设定的值（本地 dev compose 默认为 moment_root_dev）。
-#    导入/校验必须用 root：moment 用户只有 moment_dev.* 库级授权，对 root 新建的演练库无权限。
-docker compose exec mysql mysql -uroot -p"<MYSQL_ROOT_PASSWORD>" -e "CREATE DATABASE moment_restore_drill"
+#    MYSQL_ROOT_PASSWORD 取 .env 里的值。导入必须用 root：moment 用户只有本库授权。
+docker compose -f docker-compose.prod.yml exec mysql mysql -uroot -p"<MYSQL_ROOT_PASSWORD>" -e "CREATE DATABASE moment_restore_drill"
 aws s3 cp "s3://$BACKUP_S3_BUCKET/$BACKUP_S3_PREFIX/<file>.sql.gz" - ${BACKUP_S3_ENDPOINT:+--endpoint-url "$BACKUP_S3_ENDPOINT"} \
   | gunzip \
-  | docker compose exec -T mysql mysql -uroot -p"<MYSQL_ROOT_PASSWORD>" moment_restore_drill
+  | docker compose -f docker-compose.prod.yml exec -T mysql mysql -uroot -p"<MYSQL_ROOT_PASSWORD>" moment_restore_drill
 
 # 3) 校验：表齐全 + 关键表行数与生产同量级
-docker compose exec mysql mysql -uroot -p"<MYSQL_ROOT_PASSWORD>" moment_restore_drill \
+docker compose -f docker-compose.prod.yml exec mysql mysql -uroot -p"<MYSQL_ROOT_PASSWORD>" moment_restore_drill \
   -e "SHOW TABLES; SELECT COUNT(*) FROM users; SELECT COUNT(*) FROM moments; SELECT COUNT(*) FROM share_links;"
 
 # 4) 销毁演练库
-docker compose exec mysql mysql -uroot -p"<MYSQL_ROOT_PASSWORD>" -e "DROP DATABASE moment_restore_drill"
+docker compose -f docker-compose.prod.yml exec mysql mysql -uroot -p"<MYSQL_ROOT_PASSWORD>" -e "DROP DATABASE moment_restore_drill"
 ```
-
-### Web 部署
-
-Web 为静态产物：`pnpm --filter @moment/web build` → `apps/web/dist/`，托管到任意静态服务 / nginx，与 API **同源**部署并反代 `/api` 到 server:3000（媒体 302 与分享页均依赖同源相对路径）。
 
 ## Spec
 
