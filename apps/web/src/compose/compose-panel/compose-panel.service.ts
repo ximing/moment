@@ -34,6 +34,9 @@ export class ComposePanelService extends Service {
   content = '';
   images: PickedImage[] = [];
   video: PickedVideo | null = null;
+  /** 封面草稿（spec video-poster §3：与视频选择同生同灭）；截帧失败保持 null = 无封面发布 */
+  posterBlob: Blob | null = null;
+  posterMediaId: string | null = null;
   replaceConfirm: 'image' | 'video' | null = null;
   pendingFiles: File[] = [];
   happenedAt = nowLocalInput();
@@ -190,6 +193,18 @@ export class ComposePanelService extends Service {
     this.images = next;
   }
 
+  /** 截帧组件回调；blob 为 null = 截帧失败降级（静默无封面） */
+  setPoster(blob: Blob | null): void {
+    this.posterBlob = blob;
+    this.posterMediaId = null; // 换帧后已上传的 id 作废（重传；旧行按 §2.4 ready-unbound gap 处理）
+  }
+
+  /** 视频重置路径统一调用：丢弃已截帧/已上传的封面草稿（位图与 posterMediaId 一并清空） */
+  private resetPoster(): void {
+    this.posterBlob = null;
+    this.posterMediaId = null;
+  }
+
   async addVideo(file: File): Promise<void> {
     this.error = null;
     if (file.size > MAX_VIDEO_BYTES) {
@@ -203,6 +218,7 @@ export class ComposePanelService extends Service {
         return;
       }
       if (this.video) URL.revokeObjectURL(this.video.previewUrl); // 显式 revoke（spec §5）
+      this.resetPoster();
       this.video = { file, durationSeconds: meta.durationSeconds, previewUrl: URL.createObjectURL(file) };
     } catch {
       this.error = '无法读取视频';
@@ -237,6 +253,7 @@ export class ComposePanelService extends Service {
     if (this.replaceConfirm === 'image') {
       if (this.video) URL.revokeObjectURL(this.video.previewUrl); // 显式 revoke
       this.video = null;
+      this.resetPoster();
       this.addImages(this.pendingFiles);
     }
     if (this.replaceConfirm === 'video' && this.pendingFiles[0]) {
@@ -257,6 +274,7 @@ export class ComposePanelService extends Service {
   resetAndClose(): void {
     this.images.forEach((i) => URL.revokeObjectURL(i.previewUrl));
     if (this.video) URL.revokeObjectURL(this.video.previewUrl);
+    this.resetPoster();
     this.resolve(ComposeSessionService).closeCompose();
   }
 
@@ -265,6 +283,7 @@ export class ComposePanelService extends Service {
     if (this.video) URL.revokeObjectURL(this.video.previewUrl);
     this.images = [];
     this.video = null;
+    this.resetPoster();
   }
 
   async submit(): Promise<void> {
@@ -336,6 +355,20 @@ export class ComposePanelService extends Service {
           });
           mediaIds.push(res.mediaId);
         }
+        if (this.video && this.posterBlob && !this.posterMediaId) {
+          try {
+            this.progress = '上传封面…';
+            const res = await client.uploadMedia({
+              file: this.posterBlob,
+              mime: 'image/jpeg',
+              size: this.posterBlob.size,
+              kind: 'image',
+            });
+            this.posterMediaId = res.mediaId;
+          } catch {
+            this.posterMediaId = null; // 封面上传失败降级为无封面发布（spec §3）
+          }
+        }
         this.progress = '记下…';
         const hasPayload = Object.keys(this.payloadDraft).length > 0;
         // kind moment 正文兜底（Global Constraints）：正文空时用结构摘要，满足 text 类型 content 必填。
@@ -358,6 +391,7 @@ export class ComposePanelService extends Service {
           tagIds: this.selectedTags,
           kind: this.kind,
           ...(hasPayload ? { payload: this.payloadDraft } : {}),
+          ...(this.posterMediaId ? { posterMediaId: this.posterMediaId } : {}),
         });
         composeSession.markCreated(res.id); // 「从链节长出来」微动效（spec §1.6）
         composeSession.emit('moment:changed', { momentId: res.id, chainId, op: 'create' }, 'global');

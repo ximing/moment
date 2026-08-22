@@ -23,11 +23,11 @@ vi.mock('./useMediaObjectUrl', () => ({
 const mockUseMediaObjectUrl = vi.mocked(useMediaObjectUrl);
 
 function image(id: string, width = 64, height = 48, sortOrder = 0): MomentMedia {
-  return { id, url: `/api/media/${id}`, mime: 'image/jpeg', width, height, duration: null, sortOrder };
+  return { id, url: `/api/media/${id}`, mime: 'image/jpeg', width, height, duration: null, sortOrder, posterMediaId: null, posterUrl: null };
 }
 
 function video(id: string): MomentMedia {
-  return { id, url: `/api/media/${id}`, mime: 'video/mp4', width: 1280, height: 720, duration: 12, sortOrder: 0 };
+  return { id, url: `/api/media/${id}`, mime: 'video/mp4', width: 1280, height: 720, duration: 12, sortOrder: 0, posterMediaId: null, posterUrl: null };
 }
 
 beforeEach(() => {

@@ -151,7 +151,7 @@ const TEXT_MOMENT: MomentResponse = {
 };
 
 function image(id: string, width = 64, height = 48, sortOrder = 0): MomentMedia {
-  return { id, url: `/api/media/${id}`, mime: 'image/jpeg', width, height, duration: null, sortOrder };
+  return { id, url: `/api/media/${id}`, mime: 'image/jpeg', width, height, duration: null, sortOrder, posterMediaId: null, posterUrl: null };
 }
 
 const TWO_IMAGE_MOMENT: MomentResponse = {

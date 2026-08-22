@@ -9,6 +9,7 @@ import { Banner, InlineProgress } from '@/ui/feedback/index';
 import { DateTimeField, Input, TextareaField } from '@/ui/field/index';
 import { AlertDialog, Sheet } from '@/ui/modal/index';
 import { ComposePanelService } from './compose-panel.service';
+import { VideoPosterPicker } from './video-poster';
 import { TemplateFields } from '@/compose/template-fields';
 
 // 发布面板 = Sheet（Modal 规范 §2：记下／编辑时刻）；内部表单复用 Field 家族
@@ -151,6 +152,16 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
               )}
               {service.video && (
                 <video src={service.video.previewUrl} className="max-h-40 w-full rounded-surface-md" controls />
+              )}
+              {service.video && (
+                // key 绑 previewUrl：换视频即整体重挂载，避免旧缩略图与滑杆位置残留
+                // （滑杆是 uncontrolled defaultValue={0}，不重挂载不会复位）
+                <VideoPosterPicker
+                  key={service.video.previewUrl}
+                  previewUrl={service.video.previewUrl}
+                  durationSeconds={service.video.durationSeconds}
+                  onChange={(blob) => service.setPoster(blob)}
+                />
               )}
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" leadingIcon={ImageIcon} onClick={() => imgRef.current?.click()}>

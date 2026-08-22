@@ -131,6 +131,7 @@ function ImageOne({
 function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
   const [on, setOn] = useState(Boolean(shareToken));
   const blobUrl = useMediaObjectUrl(!shareToken && on ? media.id : null);
+  const posterBlobUrl = useMediaObjectUrl(!shareToken && !on ? media.posterMediaId : null);
   const url = shareToken ? shareSrc(media, shareToken) : blobUrl;
   if (!on) {
     return (
@@ -140,6 +141,9 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
         onClick={() => setOn(true)}
         className="relative aspect-video w-full overflow-hidden rounded-surface-lg bg-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-offset-focus focus-visible:ring-offset-bg"
       >
+        {posterBlobUrl && (
+          <img src={posterBlobUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        )}
         <span className="absolute inset-0 grid place-items-center">
           <span className="grid h-12 w-12 place-items-center rounded-full bg-action text-action-fg">
             <Icon icon={Play} size={20} className="ml-0.5 fill-current" />
@@ -159,5 +163,16 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
       </>
     );
   }
-  return <video controls src={url} className="aspect-video w-full rounded-surface-lg bg-ink" />;
+  return (
+    <video
+      controls
+      src={url}
+      poster={
+        shareToken && media.posterUrl
+          ? `${media.posterUrl}?st=${encodeURIComponent(shareToken)}`
+          : undefined
+      }
+      className="aspect-video w-full rounded-surface-lg bg-ink"
+    />
+  );
 }
