@@ -69,13 +69,23 @@ pnpm --filter @moment/web test
 
 ## 自托管
 
-一台机器跑完整栈：`web`（nginx，静态页 + `/api` 反代）· `server` · `worker` · `mysql` · `backup`。
+一台机器跑完整栈：`web`（nginx，静态页 + `/api` 反代）· `server` · `worker` · `mysql` · `backup`。镜像从 GitHub Container Registry 拉 `stable`（`main` 每次推送由 CI 构建并打标），部署机不必编译。
 
 前置：
 
 - Docker Compose v2
 - 一块 **S3 兼容私有桶**（阿里云 OSS / AWS / R2）。预签名 URL 会发给浏览器，所以 `ATTACHMENT_S3_ENDPOINT` 必须是公网可访问地址。server 不配齐 `ATTACHMENT_S3_*` 会拒绝启动。
 - 可选：域名 + HTTPS（Caddy / Cloudflare / 反代到 `MOMENT_HTTP_PORT`）
+
+镜像：
+
+| 服务 | 镜像 |
+|------|------|
+| server / worker | `ghcr.io/ximing/moment-server:stable` |
+| web | `ghcr.io/ximing/moment-web:stable` |
+| backup | `ghcr.io/ximing/moment-backup:stable` |
+
+`.env` 里 `MOMENT_IMAGE_TAG` 可改成 commit sha 或 `v1.2.3` 钉版本。首次 CI 跑完后若 `docker pull` 报 401，到 GitHub Packages 把上述三个包的可见性改成 Public。
 
 ### 启动栈
 
@@ -90,8 +100,9 @@ cp deploy/.env.example .env
 #    需要本机 pnpm；只做一次
 pnpm install && pnpm --filter @moment/server setup:s3-lifecycle
 
-# 3) 构建并启动（没有 compose 插件时把 docker compose 换成 docker-compose）
-docker compose -f docker-compose.prod.yml up -d --build
+# 3) 拉 stable 并启动（没有 compose 插件时把 docker compose 换成 docker-compose）
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 
 # 4) 数据库迁移（首次与每次发版）
 docker compose -f docker-compose.prod.yml run --rm server node dist/db/migrate.js
@@ -99,7 +110,7 @@ docker compose -f docker-compose.prod.yml run --rm server node dist/db/migrate.j
 
 浏览器打开 `http://<主机>:${MOMENT_HTTP_PORT:-80}`。API 不要单独暴露 3000，一律走 nginx 同源 `/api`。
 
-发版：拉代码后重复步骤 3–4。
+发版：CI 把新镜像打成 `stable` 后，部署机 `pull` + `up -d`，必要时再跑迁移。
 
 Expo App 把 `EXPO_PUBLIC_API_URL` / `EXPO_PUBLIC_WEB_URL` 指到这个公网 origin（含协议，无尾斜杠）。
 
@@ -123,22 +134,18 @@ cp deploy/.env.external.example .env
 # 同机 MySQL 用 MYSQL_HOST=host.docker.internal（不能只监听 127.0.0.1，账号授权 moment@'%'）
 # 远程库填内网地址
 
-docker compose -f docker-compose.prod.external.yml up -d --build
+docker compose -f docker-compose.prod.external.yml pull
+docker compose -f docker-compose.prod.external.yml up -d
 docker compose -f docker-compose.prod.external.yml run --rm server node dist/db/migrate.js
 ```
 
-静态产物放到 nginx 的 `root`（默认 `/var/www/moment`）：
+静态产物从 `moment-web` 镜像拷到 nginx 的 `root`（默认 `/var/www/moment`）：
 
 ```bash
-# 本机有 pnpm
-pnpm install && pnpm --filter @moment/dto build \
-  && pnpm --filter @moment/api-client build && pnpm --filter @moment/web build
-sudo mkdir -p /var/www/moment && sudo rsync -a apps/web/dist/ /var/www/moment/
-
-# 或从镜像拷（机器上没有 Node 时）
-docker build -f apps/web/Dockerfile --target build -t moment-web-build .
-id=$(docker create moment-web-build)
-sudo mkdir -p /var/www/moment && docker cp "$id":/app/apps/web/dist/. /var/www/moment/
+docker pull ghcr.io/ximing/moment-web:stable
+id=$(docker create ghcr.io/ximing/moment-web:stable)
+sudo mkdir -p /var/www/moment
+docker cp "$id":/usr/share/nginx/html/. /var/www/moment/
 docker rm "$id"
 ```
 

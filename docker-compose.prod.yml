@@ -1,7 +1,8 @@
-# 生产一体栈：web（nginx 同源反代 /api）+ server + worker + mysql + backup
+# 生产一体栈：从 GHCR 拉 stable 镜像（server + worker + web + mysql + backup）
 #
-#   cp deploy/.env.example .env    # 改真实凭据，勿提交
-#   docker compose -f docker-compose.prod.yml up -d --build
+#   cp deploy/.env.example .env
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
 #   docker compose -f docker-compose.prod.yml run --rm server node dist/db/migrate.js
 #
 # 外部 MySQL + 外部 nginx：docker-compose.prod.external.yml
@@ -45,9 +46,8 @@ services:
     logging: *logging
 
   server:
-    build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+    image: ghcr.io/ximing/moment-server:${MOMENT_IMAGE_TAG:-stable}
+    pull_policy: always
     restart: unless-stopped
     env_file: .env
     environment:
@@ -70,9 +70,8 @@ services:
     logging: *logging
 
   worker:
-    build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+    image: ghcr.io/ximing/moment-server:${MOMENT_IMAGE_TAG:-stable}
+    pull_policy: always
     restart: unless-stopped
     command: ['node', 'dist/worker/index.js']
     env_file: .env
@@ -84,8 +83,8 @@ services:
     logging: *logging
 
   backup:
-    build:
-      context: ./backup
+    image: ghcr.io/ximing/moment-backup:${MOMENT_IMAGE_TAG:-stable}
+    pull_policy: always
     restart: unless-stopped
     env_file: .env
     environment:
@@ -97,9 +96,8 @@ services:
     logging: *logging
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+    image: ghcr.io/ximing/moment-web:${MOMENT_IMAGE_TAG:-stable}
+    pull_policy: always
     restart: unless-stopped
     ports:
       - '${MOMENT_HTTP_PORT:-80}:80'

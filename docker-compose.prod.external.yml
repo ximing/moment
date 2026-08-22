@@ -1,7 +1,8 @@
-# 外部 MySQL + 外部 nginx：本文件只跑 server / worker / backup
+# 外部 MySQL + 外部 nginx：从 GHCR 拉 stable，只跑 server / worker / backup
 #
 #   cp deploy/.env.external.example .env
-#   docker compose -f docker-compose.prod.external.yml up -d --build
+#   docker compose -f docker-compose.prod.external.yml pull
+#   docker compose -f docker-compose.prod.external.yml up -d
 #   docker compose -f docker-compose.prod.external.yml run --rm server node dist/db/migrate.js
 #
 # 静态页交给宿主机 nginx，配置见 deploy/nginx.external.conf。
@@ -26,13 +27,12 @@ x-app: &app
     NODE_ENV: production
   restart: unless-stopped
   logging: *logging
+  pull_policy: always
 
 services:
   server:
     <<: *app
-    build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+    image: ghcr.io/ximing/moment-server:${MOMENT_IMAGE_TAG:-stable}
     ports:
       # 给同机 nginx 反代；远程 nginx 再把 MOMENT_API_BIND 改成 0.0.0.0
       - '${MOMENT_API_BIND:-127.0.0.1}:${MOMENT_API_PORT:-3000}:3000'
@@ -51,12 +51,9 @@ services:
 
   worker:
     <<: *app
-    build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+    image: ghcr.io/ximing/moment-server:${MOMENT_IMAGE_TAG:-stable}
     command: ['node', 'dist/worker/index.js']
 
   backup:
     <<: *app
-    build:
-      context: ./backup
+    image: ghcr.io/ximing/moment-backup:${MOMENT_IMAGE_TAG:-stable}

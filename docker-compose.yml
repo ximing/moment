@@ -1,6 +1,6 @@
 # 本地开发库：docker compose up -d mysql
-# 生产一体栈：docker-compose.prod.yml
-# 外部 MySQL + 外部 nginx：docker-compose.prod.external.yml
+# 生产一体栈（拉 GHCR stable）：docker-compose.prod.yml
+# 外部 MySQL + 外部 nginx（拉 GHCR stable）：docker-compose.prod.external.yml
 services:
   mysql:
     image: mysql:8.4
