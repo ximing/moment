@@ -18,6 +18,19 @@ function MediaImage({ mediaId, cellStyle }: { mediaId: string; cellStyle: object
   return <Image source={{ uri }} style={cellStyle} resizeMode="cover" />;
 }
 
+function VideoCell({ m, cellStyle, styles }: { m: MomentMedia; cellStyle: object; styles: ReturnType<typeof createStyles> }) {
+  // useMediaUri 签名是 string | undefined（use-media-uri.ts:6）：posterMediaId 为 null 时归一为 undefined，不发请求
+  const uri = useMediaUri(m.posterMediaId ?? undefined);
+  return (
+    <View style={[cellStyle, styles.videoCell]}>
+      {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+      <Text style={styles.play}>▶</Text>
+      {m.duration != null && m.duration > 0 ? <Text style={styles.duration}>{formatDuration(m.duration)}</Text> : null}
+      <Text style={styles.videoHint}>视频 · 进详情播放</Text>
+    </View>
+  );
+}
+
 export function MediaGrid({ media }: { media: MomentMedia[] }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
@@ -26,11 +39,7 @@ export function MediaGrid({ media }: { media: MomentMedia[] }) {
     <View style={styles.grid}>
       {media.map((m) =>
         m.mime.startsWith('video/') ? (
-          <View key={m.id} style={[styles.cell, styles.videoCell]}>
-            <Text style={styles.play}>▶</Text>
-            {m.duration != null && m.duration > 0 ? <Text style={styles.duration}>{formatDuration(m.duration)}</Text> : null}
-            <Text style={styles.videoHint}>视频 · 进详情播放</Text>
-          </View>
+          <VideoCell key={m.id} m={m} cellStyle={styles.cell} styles={styles} />
         ) : (
           <MediaImage key={m.id} mediaId={m.id} cellStyle={styles.cell} />
         )
@@ -44,7 +53,7 @@ const createStyles = (t: Theme) =>
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space1, marginTop: t.space2 },
     cell: { width: '32%', aspectRatio: 1, borderRadius: 6, backgroundColor: t.feedbackSkeleton },
     // 视频占位走 ink 反色档，其上文字用 bg / muted（spec §4.1）
-    videoCell: { alignItems: 'center', justifyContent: 'center', backgroundColor: t.ink },
+    videoCell: { alignItems: 'center', justifyContent: 'center', backgroundColor: t.ink, overflow: 'hidden' },
     play: { color: t.bg, fontSize: 26 },
     duration: { color: t.bg, fontSize: t.fontCaption, marginTop: t.space1 },
     videoHint: { color: t.muted, fontSize: 10, marginTop: t.space1 },

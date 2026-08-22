@@ -93,7 +93,7 @@ const ComposeContent = observer(function ComposeContent() {
           onChange={(t) => {
             service.type = t as typeof service.type;
             service.images = [];
-            service.video = null;
+            service.clearVideo();
           }}
         />
       )}
@@ -135,7 +135,7 @@ const ComposeContent = observer(function ComposeContent() {
         <View style={styles.mediaBar}>
           <Button variant="secondary" onPress={() => void onPickVideo()}>{service.video ? '重选视频' : '选择视频'}</Button>
           {service.video ? (
-            <Button variant="quiet" onPress={() => (service.video = null)}>移除</Button>
+            <Button variant="quiet" onPress={() => service.clearVideo()}>移除</Button>
           ) : null}
         </View>
       ) : null}

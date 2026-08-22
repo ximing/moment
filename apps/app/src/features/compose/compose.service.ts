@@ -3,7 +3,8 @@ import { MAX_IMAGE_BYTES, type MediaCompleteResponse, type MomentResponse, type 
 import { ApiError } from '@moment/api-client';
 import * as Location from 'expo-location';
 import { client } from '../../lib/api';
-import { compressImage, pickImages, pickVideo, validateVideo, type PickedVideo, type ReadyImage } from '../../lib/media';
+import * as VideoThumbnails from 'expo-video-thumbnails';
+import { compressImage, pickImages, pickVideo, uriToBlob, validateVideo, type PickedVideo, type ReadyImage } from '../../lib/media';
 import { summarizePayload } from '../../lib/template';
 import { ChainListService } from '../../services/chain-list.service';
 
@@ -34,6 +35,9 @@ export class ComposeService extends Service {
   content = '';
   images: ReadyImage[] = [];
   video: PickedVideo | null = null;
+  /** 封面草稿（spec video-poster §4：v1 固定首帧，无选帧 UI；与视频选择同生同灭） */
+  poster: { uri: string } | null = null;
+  posterMediaId: string | null = null;
   happenedAt = new Date();
   isBackfill = false;
   tagIds: string[] = [];
@@ -222,14 +226,38 @@ export class ComposeService extends Service {
     return rejected;
   }
 
-  /** 选视频 + 校验；返回问题文案（null = 成功）。 */
+  /** 选视频 + 校验；返回问题文案（null = 成功）。覆盖选择即丢弃上一支视频的封面草稿并重新截帧。 */
   async chooseVideo(): Promise<string | null> {
     const picked = await pickVideo();
     if (!picked) return null;
     const problem = validateVideo(picked);
     if (problem) return problem;
     this.video = picked;
+    this.resetPoster();
+    void this.capturePoster(picked.uri);
     return null;
+  }
+
+  /** 首帧截帧；失败静默降级为无封面发布（spec §4：封面是增强不是门槛） */
+  private async capturePoster(videoUri: string): Promise<void> {
+    try {
+      const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 0 });
+      // 异步返回时视频已更换则丢弃（防串视频）
+      if (this.video?.uri === videoUri) this.poster = { uri };
+    } catch {
+      // 保持 poster = null → 无封面发布
+    }
+  }
+
+  /** 组件侧置空视频（类型切换 SegmentBar / 「移除」按钮）统一入口：同时丢弃封面草稿 */
+  clearVideo(): void {
+    this.video = null;
+    this.resetPoster();
+  }
+
+  private resetPoster(): void {
+    this.poster = null;
+    this.posterMediaId = null;
   }
 
   toggleTag(id: string): void {
@@ -299,6 +327,16 @@ export class ComposeService extends Service {
         doneBytes += f.size;
       }
 
+      if (this.type === 'video' && this.poster && !this.posterMediaId) {
+        try {
+          const blob = await uriToBlob(this.poster.uri);
+          const res = await uploadWithRetry({ file: blob, mime: 'image/jpeg', size: blob.size, kind: 'image' });
+          this.posterMediaId = res.mediaId;
+        } catch {
+          this.posterMediaId = null; // 封面上传失败降级为无封面发布
+        }
+      }
+
       this.progressLabel = '发布中…';
       const created = await client.createMoment(activeChainId, {
         type: this.type,
@@ -313,6 +351,7 @@ export class ComposeService extends Service {
         mediaIds,
         tagIds: this.tagIds,
         kind: this.kind,
+        ...(this.posterMediaId ? { posterMediaId: this.posterMediaId } : {}),
         ...(Object.keys(this.payloadDraft).length > 0 ? { payload: this.payloadDraft } : {}),
       });
       this.emit('moment:changed', { momentId: created.id, chainId: activeChainId, op: 'create' }, 'global');
