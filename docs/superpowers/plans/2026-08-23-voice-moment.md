@@ -600,7 +600,7 @@ describe('POST /api/media/presign（audio，spec voice-moment §3.1）', () => {
 - [ ] **Step 2: 运行确认失败**
 
 Run: `pnpm --filter @moment/server test -- tests/media/presign-audio.test.ts`
-Expected: FAIL——首条用例 400（dto kind 枚举已含 audio 但服务端走 multipart 分支，`method` 为 `multipart` 且 `initMultipart` 被调）；「超 25MB」用例无 413（audio 不进 size 校验，201 插行）。
+Expected: FAIL——首条用例挂在 `method` 断言（presign 返回 201 成功，但 dto 放行 `kind: 'audio'` 后服务端落入 multipart 分支：`method` 为 `multipart`、`uploadId` 非空且 `initMultipart` 被调，与期望的 `put` / `uploadId: null` 不符）；「超 25MB」用例无 413（audio 不进 size 校验，201 插行）。
 
 > 注：Task 1 已让 dto 放行 `kind: 'audio'`，故红灯落在 service 行为而非 400 VALIDATION_ERROR；「缺 durationSeconds」「webm」两条在 dto 层已红转绿（Task 1 实现），本文件作为端到端防回归保留。
 
@@ -1943,7 +1943,7 @@ Expected: FAIL——`sweepStaleVoiceTranscriptions` 未导出（模块编译错�
 - [ ] **Step 3: 实现 sweep 任务 + 接线**
 
 1. Modify `apps/server/src/worker/sweeper.ts`：
-   - drizzle-orm import 行加 `inArray`：`import { and, asc, eq, inArray, isNotNull, lt } from 'drizzle-orm';`
+   - drizzle-orm import 行加 `inArray` 与 `isNull`（现状已 import `isNotNull`，无 `isNull`）：`import { and, asc, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';`
    - 文件末尾追加：
 
 ```ts
@@ -1982,7 +1982,8 @@ export async function sweepStaleVoiceTranscriptions(
       and(
         eq(moments.type, 'voice'),
         eq(moments.transcriptionStatus, 'pending'),
-        lt(moments.createdAt, cutoff)
+        lt(moments.createdAt, cutoff),
+        isNull(moments.deletedAt) // 软删不扫置 failed：与 transcribe handler「软删不写状态」对称
       )
     )
     .orderBy(asc(moments.createdAt)) // FIFO：与现有 sweep 任务同一理由
@@ -2062,7 +2063,7 @@ Expected: FAIL——dto 重建后 `MomentResponse` 多出两个必填字段，�
 
 - [ ] **Step 2: 夹具同步**
 
-六个文件的 moment 构造点各补 `transcript: null, transcriptionStatus: null`（值恒 `null`，voice 场景在 Task 11 手测覆盖）。补全手段：grep `: MomentResponse` 外加以 `type: 'text'` / `type: 'media'` 搜索字面量构造点，**tsc 报错是最终判据**（新字段必填，漏补即编译失败）。
+六个文件的 moment 构造点各补 `transcript: null, transcriptionStatus: null`（值恒 `null`，voice 场景在 Task 11 手测覆盖）。补全手段：grep `: MomentResponse` 外加以 `type: 'text'` / `type: 'media'` 搜索字面量构造点，**tsc 报错是主要判据**（新字段必填，漏补即编译失败）——例外：`apps/web/src/lib/template.test.ts` L8 的 `momentAt` 工厂是 `as MomentResponse` 强转，新增必填字段不产生 tsc 错误，tsc 安全网对该文件失效，以本清单为准必须人工补。
 
 Run: `pnpm --filter @moment/web typecheck`
 Expected: exit 0。
@@ -2338,6 +2339,9 @@ Modify `apps/web/src/compose/compose-panel/compose-panel.service.ts`：
    - `const hasVideo = Boolean(this.video);` 行后加 `const hasVoice = Boolean(this.voice);`
    - 空内容守卫（`if (!hasImages && !hasVideo && ...)`)加 `&& !hasVoice`：
      `if (!hasImages && !hasVideo && !hasVoice && this.content.trim().length === 0 && !structuredOnly) {`
+   - kind 空摘要守卫（L377）同步加 `&& !hasVoice`：
+     `if (this.kind !== 'standard' && this.content.trim().length === 0 && !summary && !hasImages && !hasVideo && !hasVoice) {`
+     ——voice + 非 standard kind + 空 content + 空摘要时 voice 本身即有效载荷，不应被「选一项或写一句」误拦。
    - 类型推导（L329）改为：`const type = hasVoice ? 'voice' : hasVideo ? 'video' : hasImages ? 'media' : 'text';`
    - 图片上传循环**之前**插入语音上传（mediaIds[0] = audio）：
 
@@ -2695,7 +2699,7 @@ export function VoiceRecorder({
     try {
       await recorder.stop();
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      const uri = recorder.url;
+      const uri = recorder.uri; // AudioRecorder 实例属性是 uri: string | null（url 在 RecorderState 上，实例无此属性）
       if (!uri) {
         onChange(null);
         return;
@@ -2882,11 +2886,19 @@ Modify `apps/app/src/features/compose/index.tsx`：
           }}
 ```
 
-4. 图片选择区两处 `service.type === 'media'` 条件（mediaBar 约 L122 与 mediaHint 约 L130）改为 voice 也可用：
+4. 图片选择区两处 `service.type === 'media'` 条件（mediaBar 约 L122 与 mediaHint 约 L130）改为 voice 也可用；mediaBar 按钮文案（约 L124）随 cap 分档：
 
 ```tsx
       {!service.isEdit && (service.type === 'media' || service.type === 'voice') ? (
 ```
+
+```tsx
+          <Button variant="secondary" onPress={() => void onPickImages()}>
+            选图（{service.images.length}/{service.type === 'voice' ? 8 : 9}）
+          </Button>
+```
+
+   （现状硬编码 `/9`，voice 附图 cap 为 8（Step 3.4），不分档会在 voice 下误导。）
 
 5. 视频选择区（约 L134-141）之后追加语音区：
 
@@ -3191,4 +3203,4 @@ git commit -m "test: verify voice moment end to end"
 | `apps/web/src/memories/memories-entry.test.tsx` | L46 `moment` 工厂 | 同上 |
 | `apps/web/src/memories/memories.service.test.ts` | L19 `moment` 工厂 | 同上 |
 
-补全手段：grep `: MomentResponse` 外加搜索 `type: 'text'` / `type: 'media'` 字面量构造点，tsc 报错是最终判据（`MomentResponse` / `MomentLike` 新字段为必填，漏补即编译失败）。
+补全手段：grep `: MomentResponse` 外加搜索 `type: 'text'` / `type: 'media'` 字面量构造点，tsc 报错是主要判据（`MomentResponse` / `MomentLike` 新字段为必填，漏补即编译失败）——例外：`apps/web/src/lib/template.test.ts` 的 `momentAt` 工厂用 `as MomentResponse` 强转，tsc 安全网对该文件失效，以本表清单为准人工核对。
