@@ -10,3 +10,5 @@ dist-check/
 *.mobileprovision
 .env
 .env.*
+android/
+ios/
