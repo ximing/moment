@@ -8,7 +8,11 @@ const versionCode = Number(process.env.APP_VERSION_CODE ?? 1);
 /**
  * 向生成的 android/app/build.gradle 注入 release 签名配置。
  * 密钥只读 System.getenv，永不落盘、不进 git。
- * EAS 的 eas-build.gradle 在 tasks.whenTaskAdded 里检测到 storeFile 已设即跳过，互不冲突。
+ * Expo 模板默认用 signingConfigs.debug 签 release；Gradle 合并多个 android {} 块时对冲突的
+ * signingConfig 赋值后写覆盖前（last-write-wins），故本块的 signingConfigs.release 覆盖模板
+ * 默认，无 EAS 插件介入。signingConfigs.release 的字段仅在 RELEASE_STORE_FILE 环境变量存在
+ * 时（CI）才赋值；本地缺该变量时 signingConfig 为空，但本地走 debug 构建（expo start），
+ * release 签名仅在 CI 生效。
  */
 const SIGNING_BLOCK = `// --- begin moment env signing (injected by withEnvReleaseSigning) ---
 android {
