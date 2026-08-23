@@ -176,7 +176,7 @@ ASR_MODEL=FunAudioLLM/SenseVoiceSmall
 
 outbox 重试耗尽（5 次退避后标 failed）后 moment 会挂在 `pending`。sweeper 增加一路：voice moment `transcription_status = 'pending'` 且 `created_at` 超过 **6 小时** → 置 `failed`。与现有 sweep 任务同周期执行；这路 sweep 同时覆盖「outbox 行丢失/ worker 长期宕机」的极端场景。
 
-**cutoff 取值理由**：processor 退避档为 1min → 5min → 15min → 1h → 4h（`worker/processor.ts` `RETRY_DELAYS_MS`），第 5 次失败才标 failed，累计退避窗口约 5h21m。cutoff 必须**大于**最大累计退避，否则 sweeper 会在合法重试期间把 moment 抢置 `failed`，而后续重试成功又被 §4.3 步骤 1 的幂等守卫（`transcriptionStatus !== 'pending'` 直接返回）丢弃——语音永远拿不到转写。取 6h 留出约 40 分钟余量覆盖 worker 调度抖动。
+**cutoff 取值理由**：processor 退避档为 1min → 5min → 15min → 1h → 4h（`worker/processor.ts` `RETRY_DELAYS_MS`），5 档退避用尽后（第 6 次失败）标 failed，累计退避窗口约 5h21m。cutoff 必须**大于**最大累计退避，否则 sweeper 会在合法重试期间把 moment 抢置 `failed`，而后续重试成功又被 §4.3 步骤 1 的幂等守卫（`transcriptionStatus !== 'pending'` 直接返回）丢弃——语音永远拿不到转写。取 6h 留出约 40 分钟余量覆盖 worker 调度抖动。
 
 ## 5. web 端
 
@@ -238,6 +238,6 @@ server 发布事务：`voice` 的 media 构成非「1 audio + 其余全 image」
   - sweeper：pending 超 6h 置 failed；未超 6h（合法重试窗口内）不被扫置；
   - 软删带 audio 的 voice moment → audio 行随既有路径 orphaned。
 - **server 测试夹具同步**：`MomentResponse` 新增两个必填字段后，手工构造该类型字面量的测试工厂/夹具必须补 `transcript` / `transcriptionStatus`（voice 场景除外一律给 `null`）；`MediaLike` 不变，但 `MomentLike` 接口扩了 type 联合与两字段，手写的 MomentLike 夹具同样要补。web/app 侧同理（参照 video-poster §6 列出的夹具位置逐一排查，grep `: MomentResponse` 与手写 moment 字面量构造点）。
-- **api-client**：`upload.ts` 的 kind 联合与 size 上限三分支改动靠 tsc + dto 测试间接覆盖（audio >25MB 在 client 侧抛 `MEDIA_TOO_LARGE`）；无独立单测设施，不新增。
+- **api-client**：`upload.ts` 的 kind 联合改动靠 tsc + dto 测试间接覆盖，但 size 上限三分支不行——dto 测试不 import api-client，tsc 也管不到运行时三元，`upload.ts` 的 size 三分支漏扩 audio 不会有任何测试报警。`packages/api-client/src/upload.test.ts` 已有 node:test 单测设施（图片超 `MAX_IMAGE_BYTES` → 本地 413 `MEDIA_TOO_LARGE` 用例，约 L85），照它镜像一条：`kind: 'audio'` 且 size 超 `MAX_AUDIO_BYTES` → 本地抛 413 `MEDIA_TOO_LARGE`，不发起任何请求。
 - **web / app**：`pnpm lint` + tsc（重点覆盖 §5/§6 点名的 4 个消费侧组件的 audio 拆分）；手测录制/转码/上传/降级（模拟 ASR 失败）与三态卡片渲染；app 侧手测含 expo-audio 麦克风权限拒绝态。
 - **全量验证门槛**：`pnpm test` 通过。
