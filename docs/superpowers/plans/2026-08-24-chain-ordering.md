@@ -902,7 +902,7 @@ docker compose up -d mysql
 SKIP_GLOBAL_MIGRATE=1 RUN_MIGRATION_IT=1 pnpm --filter @moment/server test -- chain-members-sort-order-backfill
 ```
 
-统一带 `SKIP_GLOBAL_MIGRATE=1`（与首次执行同一命令形态）：复跑时远程已有 0014、守卫在功能上非必需（globalSetup 的 migrate 是 no-op），但统一守卫让「该迁移验证测试从不触发远程 migrate」成为无条件不变量，命令在任何时序下都安全，也避免两种命令形态并存记错。
+统一带 `SKIP_GLOBAL_MIGRATE=1`（与首次执行同一命令形态）：复跑时远程已有 0014、守卫在功能上非必需（globalSetup 的 migrate 是 no-op），但统一守卫让「首跑与复跑等**验证性执行**从不触发远程 migrate」成为不变量（Step 2 的门控确认不带守卫、触发一次 no-op migrate，属既有全量测试路径，不在此列），命令在任何时序下都安全，也避免两种命令形态并存记错。
 
 Expected: 两个用例全过。若本地 3306 已有其它 MySQL 占用，用 `MIGRATION_IT_PORT=<port>` 覆盖；严禁把 `MIGRATION_IT_HOST` 指向任何远程/生产库。
 
