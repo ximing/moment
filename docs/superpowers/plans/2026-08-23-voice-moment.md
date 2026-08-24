@@ -2687,7 +2687,7 @@ export function VoiceRecorder({ voice, onChange }: { voice: VoiceDraft | null; o
 - [ ] **Step 1: 安装依赖 + 权限声明**
 
 Run: `pnpm --filter @moment/app exec expo install expo-audio`
-Expected: `apps/app/package.json` dependencies 新增 `expo-audio`（版本由 expo install 按 SDK 54 的 bundledNativeModules 钉版，不要手钉）；`pnpm --filter @moment/app typecheck` exit 0。
+Expected: `apps/app/package.json` dependencies 新增 `expo-audio`（版本由 expo install 按 SDK 54 的 bundledNativeModules 钉版，不要手钉），并写入 `pnpm-lock.yaml`。由于本仓库使用动态 `app.config.ts`，CLI 可能在完成依赖/lock 写入后因无法自动写入 plugin 而 exit 1，并明确提示需手动添加 plugin；当且仅当同时满足这两个结果时，该特定 exit 1 视为预期可继续结果。随后必须按本步骤手动修改 `apps/app/app.config.ts` 加入 `expo-audio` plugin，再运行 `pnpm --filter @moment/app typecheck` 并要求 exit 0。任何其他 `expo install` 失败（未写入依赖/lock，或无动态 config plugin 提示）都必须停止。
 
 > **原生模块与开发构建（真机验收前置）**：`expo-audio` 是原生模块，`apps/app/eas.json` 的 development profile 是 `developmentClient: true`——装完依赖后**必须重新构建开发客户端**（`eas build --profile development` 或 `npx expo run:ios`），否则运行时 `useAudioRecorder` 抛 "Cannot find native module"（同 video-poster Task 4 的 expo-video-thumbnails 教训）。
 
