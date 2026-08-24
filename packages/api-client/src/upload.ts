@@ -1,4 +1,4 @@
-import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, VIDEO_PART_SIZE } from '@moment/dto';
+import { MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, VIDEO_PART_SIZE } from '@moment/dto';
 import type { MediaCompleteResponse, MediaPresignResponse } from '@moment/dto';
 import type { Http } from './http.js';
 import { ApiError, type FilePart, type MomentClientOptions, type PutFn } from './types.js';
@@ -11,7 +11,7 @@ export interface UploadMediaInput {
   fileUri?: string;
   mime: string;
   size: number;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'audio';
   /** 视频时长（秒，≤300），透传给 presign（Phase 3 契约） */
   durationSeconds?: number;
   sortOrder?: number;
@@ -30,7 +30,8 @@ export async function uploadMediaImpl(
   options: MomentClientOptions,
   input: UploadMediaInput
 ): Promise<MediaCompleteResponse> {
-  const limit = input.kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
+  const limit =
+    input.kind === 'image' ? MAX_IMAGE_BYTES : input.kind === 'video' ? MAX_VIDEO_BYTES : MAX_AUDIO_BYTES;
   if (input.size > limit) {
     throw new ApiError(
       `文件超过上限（${Math.floor(limit / 1024 / 1024)}MB）`,

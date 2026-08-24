@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MAX_IMAGE_BYTES, VIDEO_PART_SIZE } from '@moment/dto';
+import { MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, VIDEO_PART_SIZE } from '@moment/dto';
 import { ApiError, createMomentClient, type PutFn } from './index.js';
 
 interface Recorded {
@@ -204,4 +204,43 @@ test('视频：PUT 成功但响应无 ETag → ETAG_MISSING 立即失败，不�
   );
   assert.equal(putCalls, 1); // 不作为可重试失败
   assert.equal(calls.find((c) => c.url.endsWith('/complete')), undefined);
+});
+
+test('音频：presign(put) → 单次 PUT → complete(parts=[])；presign 携带 kind=audio 与 durationSeconds', async () => {
+  const { client, calls, putUrls } = makeClient({
+    presignBody: { mediaId: 'md1', method: 'put', url: 'https://s3/put', uploadId: null, partSize: null },
+  });
+  const blob = new Blob(['wav-bytes']);
+  await client.uploadMedia({
+    file: blob,
+    mime: 'audio/wav',
+    size: blob.size,
+    kind: 'audio',
+    durationSeconds: 12,
+  });
+  assert.deepEqual(putUrls, ['https://s3/put']);
+  assert.deepEqual(calls.map((c) => `${c.method} ${c.url}`), [
+    'POST /api/media/presign',
+    'POST /api/media/md1/complete',
+  ]);
+  assert.equal((calls[0]!.body as { kind?: string }).kind, 'audio');
+  assert.equal((calls[0]!.body as { durationSeconds?: number }).durationSeconds, 12);
+});
+
+test('音频超 MAX_AUDIO_BYTES → 本地直接 413 MEDIA_TOO_LARGE，不发起任何请求', async () => {
+  const { client, calls } = makeClient({
+    presignBody: { mediaId: 'md1', method: 'put', url: 'u', uploadId: null, partSize: null },
+  });
+  await assert.rejects(
+    () =>
+      client.uploadMedia({
+        file: new Blob(['x']),
+        mime: 'audio/wav',
+        size: MAX_AUDIO_BYTES + 1,
+        kind: 'audio',
+        durationSeconds: 12,
+      }),
+    (e: unknown) => e instanceof ApiError && e.code === 'MEDIA_TOO_LARGE' && e.status === 413
+  );
+  assert.equal(calls.length, 0);
 });
