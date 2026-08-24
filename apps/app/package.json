@@ -21,6 +21,7 @@
     "@react-native-community/datetimepicker": "8.4.4",
     "@shopify/flash-list": "2.0.2",
     "expo": "~54.0.0",
+    "expo-audio": "~1.1.1",
     "expo-constants": "~18.0.5",
     "expo-file-system": "~19.0.5",
     "expo-image-manipulator": "~14.0.5",
