@@ -10,6 +10,7 @@ import type { ChainColor, ChainIcon, TemplateManifest } from '@moment/dto';
 import { ChainMark } from '@/chain/ChainMark';
 import { formatHappenedClock } from '@/lib/time';
 import { resolveMilestoneLabel, summarizePayload } from '@/lib/template';
+import { AudioBar } from '@/media/AudioBar';
 import { MediaBlock } from '@/media/MediaBlock';
 import { Avatar } from '@/ui/Avatar';
 import { Icon } from '@/ui/Icon';
@@ -66,9 +67,13 @@ export const MomentSheetContent = observer(function MomentSheetContent({
 
   const moment = momentProp; // 卡片渲染永远用父层传入的最新数据（feed 重拉后 prop 已是新值）
   const mine = auth.user?.id === moment.author.id;
-  const images = moment.media.filter((m) => !m.mime.startsWith('video/'));
-  const lightboxItems: MomentMedia[] = images.length > 0 ? images : moment.media;
+  // 显式 image/* 过滤：voice 的 audio/* 行不能进附图宫格与 lightbox（mime 是 string，tsc 不报警）
+  const images = moment.media.filter((m) => m.mime.startsWith('image/'));
+  const lightboxItems: MomentMedia[] =
+    images.length > 0 ? images : moment.media.filter((m) => m.mime.startsWith('video/'));
   const hasMedia = moment.media.length > 0;
+  const isVoice = moment.type === 'voice';
+  const audioMedia = isVoice ? moment.media.find((m) => m.mime.startsWith('audio/')) : undefined;
 
   // Tag 是内容语义（spec §6.2）：正文前、同一文字流、同一字号；只靠 --tag 色与
   // # 前缀区分。只有媒体、正文为空时紧贴媒体之前渲染为一段文本（自然降级）。
@@ -87,6 +92,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
       {moment.content}
     </p>
   );
+  const voiceCopy = moment.content.length > 0 ? copy : null;
 
   const acts = (
     <>
@@ -159,7 +165,18 @@ export const MomentSheetContent = observer(function MomentSheetContent({
             </ResponsiveMenu>
           )}
         </header>
-        {hasMedia ? (
+        {isVoice ? (
+          <>
+            {audioMedia && <AudioBar media={audioMedia} shareToken={shareToken} />}
+            {moment.transcriptionStatus === 'pending' && (
+              <p className="mt-1 text-meta text-muted">转写中…</p>
+            )}
+            {voiceCopy && <div className="my-2">{voiceCopy}</div>}
+            {images.length > 0 && (
+              <MediaBlock media={images} shareToken={shareToken} onOpen={(i) => (service.lightboxIndex = i)} />
+            )}
+          </>
+        ) : hasMedia ? (
           <>
             {copy && <div className="mb-2">{copy}</div>}
             <MediaBlock media={moment.media} shareToken={shareToken} onOpen={(i) => (service.lightboxIndex = i)} />
