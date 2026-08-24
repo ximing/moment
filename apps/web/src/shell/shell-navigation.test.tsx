@@ -12,6 +12,7 @@ import { ChainListService } from '@/services/chain-list.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { NotificationService } from '@/services/notification.service';
 import { ThemeService } from '@/services/theme.service';
+import { ToastProvider } from '@/ui/feedback/index';
 import { Shell } from './Shell';
 import { UserMenu } from './user-menu';
 
@@ -122,16 +123,18 @@ function renderShell(initialPath: string) {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <RSRoot>
-        <Routes>
-          <Route path="/login" element={<Probe />} />
-          <Route element={<Shell />}>
-            <Route path="/" element={<Probe />} />
-            <Route path="/chains/:chainId" element={<Probe />} />
-            <Route path="/chains/:chainId/settings" element={<Probe />} />
-            <Route path="/me" element={<Probe />} />
-            <Route path="/notifications" element={<Probe />} />
-          </Route>
-        </Routes>
+        <ToastProvider>
+          <Routes>
+            <Route path="/login" element={<Probe />} />
+            <Route element={<Shell />}>
+              <Route path="/" element={<Probe />} />
+              <Route path="/chains/:chainId" element={<Probe />} />
+              <Route path="/chains/:chainId/settings" element={<Probe />} />
+              <Route path="/me" element={<Probe />} />
+              <Route path="/notifications" element={<Probe />} />
+            </Route>
+          </Routes>
+        </ToastProvider>
       </RSRoot>
     </MemoryRouter>,
   );

@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router';
 import { observer, useService } from '@rabjs/react';
-import type { ChainDto } from '@moment/dto';
 import { ComposeFab } from '@/compose/compose-fab';
 import { ComposePanel } from '@/compose/compose-panel';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { ChainListService } from '@/services/chain-list.service';
 import { NotificationService } from '@/services/notification.service';
 import { canCompose } from '@/lib/roles';
-import { ChainMark } from '@/chain/ChainMark';
-// 必须显式指向 barrel：src/ui/ 下遗留 Menu.tsx 会截获裸目录导入（见 ui/menu/index.ts）
-import { ContextMenu, MenuItem } from '@/ui/menu/index';
+import { ChainNavList } from './chain-nav-list';
 import { CreateChainDialog } from './create-chain-dialog';
 import { UserMenu } from './user-menu';
 
@@ -51,9 +48,7 @@ export const Shell = observer(function Shell() {
             <span className="inline-block h-4 w-4 shrink-0 rounded-full bg-[conic-gradient(var(--dot-pink),var(--dot-blue),var(--dot-mint),var(--dot-pink))]" />
             大家的日子
           </NavLink>
-          {(chains ?? []).map((c) => (
-            <ChainNav key={c.id} chain={c} className={sideLink} />
-          ))}
+          <ChainNavList chains={chains ?? []} axis="y" itemClassName={sideLink} />
           <button
             type="button"
             onClick={() => setCreating(true)}
@@ -76,9 +71,7 @@ export const Shell = observer(function Shell() {
               <span className="inline-block h-4 w-4 shrink-0 rounded-full bg-[conic-gradient(var(--dot-pink),var(--dot-blue),var(--dot-mint),var(--dot-pink))]" />
               大家的日子
             </NavLink>
-            {(chains ?? []).map((c) => (
-              <ChainNav key={c.id} chain={c} className={chipLink} />
-            ))}
+            <ChainNavList chains={chains ?? []} axis="x" itemClassName={chipLink} />
             <button
               type="button"
               aria-label="开一条新的链"
@@ -101,36 +94,6 @@ export const Shell = observer(function Shell() {
     </div>
   );
 });
-
-function ChainNav({
-  chain,
-  className,
-}: {
-  chain: ChainDto;
-  className: (args: { isActive: boolean }) => string;
-}) {
-  const navigate = useNavigate();
-  // 右键 / Shift+F10 快捷入口由 ContextMenu 统一承载（Menu 规范 §7.4），
-  // 命令与文案与链页可见入口一致（Menu 规范 §14/§16）
-  return (
-    <ContextMenu
-      aria-label={`${chain.name} 的链操作`}
-      onAction={(key) => {
-        if (key === 'settings') navigate(`/chains/${chain.id}/settings`);
-      }}
-      items={
-        <MenuItem id="settings" textValue="链设置">
-          链设置
-        </MenuItem>
-      }
-    >
-      <NavLink to={`/chains/${chain.id}`} className={className}>
-        <ChainMark chainId={chain.id} color={chain.color} icon={chain.icon} size={16} />
-        <span className="truncate">{chain.name}</span>
-      </NavLink>
-    </ContextMenu>
-  );
-}
 
 function Brand({ compact }: { compact?: boolean }) {
   return (
