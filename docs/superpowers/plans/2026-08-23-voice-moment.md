@@ -2602,6 +2602,7 @@ Modify `apps/web/src/timeline/moment-sheet.tsx`：
     images.length > 0 ? images : moment.media.filter((m) => m.mime.startsWith('video/'));
   const isVoice = moment.type === 'voice';
   const audioMedia = isVoice ? moment.media.find((m) => m.mime.startsWith('audio/')) : undefined;
+  const voiceCopy = moment.content.length > 0 ? copy : null;
 ```
 
 3. 主体渲染块（L162-172）改为 voice 前置三分支：
@@ -2613,7 +2614,7 @@ Modify `apps/web/src/timeline/moment-sheet.tsx`：
             {moment.transcriptionStatus === 'pending' && (
               <p className="mt-1 text-meta text-muted">转写中…</p>
             )}
-            {copy && <div className="my-2">{copy}</div>}
+            {voiceCopy && <div className="my-2">{voiceCopy}</div>}
             {images.length > 0 && (
               <MediaBlock media={images} shareToken={shareToken} onOpen={(i) => (service.lightboxIndex = i)} />
             )}
@@ -2631,7 +2632,7 @@ Modify `apps/web/src/timeline/moment-sheet.tsx`：
         )}
 ```
 
-   三态文案规则（spec §5）：`pending` → 「转写中…」；`done` → copy 显示 content（content 空则 copy 为空不渲染，空转写无文本区）；`failed` → 不显示任何转写相关 UI（语音可播即是完整内容，不渲染负面状态）。`copy` 既有的「content 非空才渲染」语义天然覆盖后两条。
+   三态文案规则（spec §5）：`pending` → 「转写中…」；`done` → 显示 content（仅当 `moment.content.length > 0` 才渲染包含文本的容器，避免 `inlineTags` 回退值在空 content 时误显示）；`failed` → 不显示任何转写相关 UI（语音可播即是完整内容，不渲染负面状态）。非 voice 分支继续使用既有的 `copy` 条件与语义。
 
 - [ ] **Step 3: 运行确认**
 
