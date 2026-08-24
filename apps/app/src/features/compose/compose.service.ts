@@ -28,6 +28,14 @@ async function uploadWithRetry(
   throw lastError;
 }
 
+/** 录音完成的语音草稿（fileUri 形态：uploadWithRetry 经 rn-put 按 FilePart 读盘，整文件不进内存） */
+export interface VoiceDraft {
+  uri: string;
+  mime: string;
+  size: number;
+  durationSeconds: number;
+}
+
 /** 发布页（spec §6）：草稿进 Service，提交是显式动作，无 effect 链式 setState。 */
 export class ComposeService extends Service {
   chainId: string | undefined = undefined;
@@ -38,6 +46,8 @@ export class ComposeService extends Service {
   /** 封面草稿（spec video-poster §4：v1 固定首帧，无选帧 UI；与视频选择同生同灭） */
   poster: { uri: string } | null = null;
   posterMediaId: string | null = null;
+  /** 语音草稿（spec voice-moment §6）：type=voice 时必有；与图片可共存（≤8 附图） */
+  voice: VoiceDraft | null = null;
   happenedAt = new Date();
   isBackfill = false;
   tagIds: string[] = [];
@@ -205,8 +215,9 @@ export class ComposeService extends Service {
   async pickMoreImages(): Promise<number> {
     const picked = await pickImages();
     if (picked.length === 0) return 0;
-    const remain = 9 - this.images.length;
-    if (remain <= 0) throw new Error('图片最多 9 张');
+    const cap = this.type === 'voice' ? 8 : 9; // voice 附图 ≤8（1 audio + ≤8 图 ≤ 9 mediaIds，spec §2.2）
+    const remain = cap - this.images.length;
+    if (remain <= 0) throw new Error(this.type === 'voice' ? '语音时刻最多 8 张附图' : '图片最多 9 张');
     let rejected = 0;
     const ready: ReadyImage[] = [];
     try {
@@ -222,7 +233,7 @@ export class ComposeService extends Service {
     } finally {
       this.progressLabel = null;
     }
-    this.images = [...this.images, ...ready].slice(0, 9);
+    this.images = [...this.images, ...ready].slice(0, cap);
     return rejected;
   }
 
@@ -258,6 +269,16 @@ export class ComposeService extends Service {
   private resetPoster(): void {
     this.poster = null;
     this.posterMediaId = null;
+  }
+
+  /** 录音组件回调；draft 为 null = 移除重录 */
+  setVoice(draft: VoiceDraft | null): void {
+    this.voice = draft;
+  }
+
+  /** 组件侧清空语音（类型切换 SegmentBar 统一入口，与 clearVideo 同范式） */
+  clearVoice(): void {
+    this.voice = null;
   }
 
   toggleTag(id: string): void {
@@ -299,18 +320,26 @@ export class ComposeService extends Service {
     if (this.content.length > 5000) throw new Error('正文最多 5000 字');
     if (this.type === 'media' && this.images.length === 0) throw new Error('图文类型至少选 1 张图（最多 9 张）');
     if (this.type === 'video' && !this.video) throw new Error('视频类型需要先选择视频');
+    if (this.type === 'voice' && !this.voice) throw new Error('语音类型需要先录音');
 
-    // 图片走 file: Blob（压缩后百 KB 级，已在内存）；视频走 fileUri 形态——rnPut 按 part
-    // 从文件 uri 读盘 PUT，500MB 视频整文件不进内存（见 src/lib/rn-put.ts）。
+    // 图片走 file: Blob（压缩后百 KB 级，已在内存）；视频/语音走 fileUri 形态——rnPut 按 part
+    // 从文件 uri 读盘 PUT，大文件整体不进内存（见 src/lib/rn-put.ts）。
     const mediaIds: string[] = [];
     type UploadFile =
       | { file: Blob; mime: string; size: number; kind: 'image'; sortOrder: number }
-      | { fileUri: string; mime: string; size: number; kind: 'video'; durationSeconds: number; sortOrder: number };
+      | { fileUri: string; mime: string; size: number; kind: 'video'; durationSeconds: number; sortOrder: number }
+      | { fileUri: string; mime: string; size: number; kind: 'audio'; durationSeconds: number; sortOrder: number };
     let files: UploadFile[] = [];
     if (this.type === 'media') {
       files = this.images.map((img, i) => ({ file: img.blob, mime: img.mime, size: img.size, kind: 'image' as const, sortOrder: i }));
     } else if (this.type === 'video' && this.video) {
       files = [{ fileUri: this.video.uri, mime: this.video.mime, size: this.video.size, kind: 'video' as const, durationSeconds: this.video.durationSeconds, sortOrder: 0 }];
+    } else if (this.type === 'voice' && this.voice) {
+      // 语音在前（mediaIds[0] = audio），附图随后；fileUri 形态按 FilePart 读盘，整文件不进内存
+      files = [
+        { fileUri: this.voice.uri, mime: this.voice.mime, size: this.voice.size, kind: 'audio' as const, durationSeconds: this.voice.durationSeconds, sortOrder: 0 },
+        ...this.images.map((img, i) => ({ file: img.blob, mime: img.mime, size: img.size, kind: 'image' as const, sortOrder: i + 1 })),
+      ];
     }
     const totalBytes = files.reduce((s, f) => s + f.size, 0);
     let doneBytes = 0;

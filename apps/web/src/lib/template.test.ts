@@ -5,7 +5,7 @@ import { babyAgeLabel, groupMomentsByTrips, resolveMilestoneLabel, summarizePayl
 const baby = OFFICIAL_TEMPLATES.find((t) => t.key === 'baby')!.manifest;
 
 function momentAt(id: string, iso: string, tz = -480): MomentResponse {
-  return { id, happenedAt: iso, happenedTzOffset: tz } as MomentResponse;
+  return { id, happenedAt: iso, happenedTzOffset: tz, transcript: null, transcriptionStatus: null } as MomentResponse;
 }
 
 describe('babyAgeLabel', () => {

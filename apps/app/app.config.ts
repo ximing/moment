@@ -62,6 +62,8 @@ const config: ExpoConfig = {
     'expo-secure-store',
     // 旅行模板「添加位置」的 iOS 权限用途文案（提交 App Store 必需；Android 由插件自动补权限声明）
     ['expo-location', { locationWhenInUseUsageDescription: '记录时刻时附上当前位置，生成旅行足迹地图' }],
+    // 语音时刻录音的麦克风权限用途文案（spec voice-moment §6；Android RECORD_AUDIO 由插件自动声明）
+    ['expo-audio', { microphonePermission: '录制语音时刻，记录宝宝的声音' }],
     // @expo/config-types 将 plugins 标为 (string | [] | [string] | [string, any])[]，未含函数插件；
     // 运行时接受 ConfigPlugin（见 expo config-plugins/mods 文档），此 cast 仅弥合静态类型缺口。
     withEnvReleaseSigning as any,

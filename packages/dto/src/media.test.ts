@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  AUDIO_MIME_TYPES,
+  MAX_AUDIO_BYTES,
+  MAX_AUDIO_DURATION_SECONDS,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
   mediaCompleteInputSchema,
@@ -54,4 +57,45 @@ test('mediaCompleteInputSchema：parts 缺省为空数组（图片 PUT 复用同
   assert.deepEqual(mediaCompleteInputSchema.parse({}), { parts: [] });
   const parsed = mediaCompleteInputSchema.parse({ parts: [{ partNumber: 1, etag: '"abc"' }] });
   assert.equal(parsed.parts[0]?.etag, '"abc"');
+});
+
+test('audio 常量：25MB / 300s / 白名单 6 项（spec voice-moment §2.1）', () => {
+  assert.equal(MAX_AUDIO_BYTES, 25 * 1024 * 1024);
+  assert.equal(MAX_AUDIO_DURATION_SECONDS, 300);
+  assert.deepEqual([...AUDIO_MIME_TYPES], [
+    'audio/mp4',
+    'audio/x-m4a',
+    'audio/aac',
+    'audio/mpeg',
+    'audio/wav',
+    'audio/x-wav',
+  ]);
+});
+
+test('mediaPresignInputSchema：kind=audio 白名单 mime + durationSeconds 必填 ≤300', () => {
+  assert.ok(
+    mediaPresignInputSchema.safeParse({ mime: 'audio/wav', size: 1000, kind: 'audio', durationSeconds: 60 }).success,
+  );
+  assert.ok(
+    mediaPresignInputSchema.safeParse({ mime: 'audio/mp4', size: 1000, kind: 'audio', durationSeconds: 300 }).success,
+  );
+  assert.ok(
+    !mediaPresignInputSchema.safeParse({ mime: 'audio/webm', size: 1000, kind: 'audio', durationSeconds: 60 }).success,
+  );
+  assert.ok(
+    !mediaPresignInputSchema.safeParse({ mime: 'audio/ogg', size: 1000, kind: 'audio', durationSeconds: 60 }).success,
+  );
+  assert.ok(!mediaPresignInputSchema.safeParse({ mime: 'audio/wav', size: 1000, kind: 'audio' }).success);
+  assert.ok(
+    !mediaPresignInputSchema.safeParse({ mime: 'audio/wav', size: 1000, kind: 'audio', durationSeconds: 301 }).success,
+  );
+  assert.ok(
+    !mediaPresignInputSchema.safeParse({ mime: 'image/jpeg', size: 1000, kind: 'audio', durationSeconds: 60 }).success,
+  );
+});
+
+test('mediaPresignInputSchema：image 分支既有校验不回归（禁传 durationSeconds）', () => {
+  assert.ok(
+    !mediaPresignInputSchema.safeParse({ mime: 'image/jpeg', size: 1000, kind: 'image', durationSeconds: 60 }).success,
+  );
 });

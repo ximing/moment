@@ -80,6 +80,13 @@ export const envSchema = z.object({
   // 输入截断护栏（spec §4）
   LLM_RECAP_MAX_MOMENTS: z.coerce.number().int().min(1).default(100),
   LLM_RECAP_MAX_CHARS: z.coerce.number().int().min(1).default(8000),
+  // ---------- 语音转写 ASR（spec voice-moment §4.2；与 LLM_* 完全独立，可单独停用） ----------
+  // 阿里云百炼 DashScope fun-asr 异步任务 API
+  ASR_BASE_URL: z.string().url().default('https://dashscope.aliyuncs.com/api/v1'),
+  // 凭据；空串 = 转写整体停用（语音录制/播放不受影响，停用期发布的 voice 由 handler 落 failed）
+  ASR_API_KEY: z.string().default(''),
+  // 模型名
+  ASR_MODEL: z.string().default('fun-asr'),
 });
 
 export const config = envSchema.parse(process.env);

@@ -7,6 +7,9 @@ export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
 export const VIDEO_PART_SIZE = 8 * 1024 * 1024;
 /** 视频时长上限（秒，spec §5.5「≤5 分钟」）。服务端只校验客户端上报的 durationSeconds。 */
 export const MAX_VIDEO_DURATION_SECONDS = 300;
+/** 语音 ≤25MB（对齐主流 ASR 文件上限）；≤5 分钟（与视频时长上限同值同语义，spec voice-moment §2.1）。 */
+export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+export const MAX_AUDIO_DURATION_SECONDS = 300;
 
 /**
  * mime 白名单（而非 `kind + '/*'` 前缀检查）：SVG 可内嵌 `<script>`，
@@ -22,18 +25,30 @@ export const IMAGE_MIME_TYPES = [
   'image/heif',
 ] as const;
 export const VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'] as const;
+/**
+ * 音频 mime 白名单（同 IMAGE/VIDEO 的安全理由：不放行任意 audio/*）。
+ * 不收 audio/webm / audio/ogg：百炼/硅基流动对 webm/opus 支持不稳定，web 端浏览器内转码 WAV 再上传（spec §5）。
+ */
+export const AUDIO_MIME_TYPES = [
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/mpeg',
+  'audio/wav',
+  'audio/x-wav',
+] as const;
 
 export const mediaPresignInputSchema = z
   .object({
     mime: z.string().min(3).max(100),
     size: z.number().int().positive(),
-    kind: z.enum(['image', 'video']),
+    kind: z.enum(['image', 'video', 'audio']),
     sortOrder: z.number().int().min(0).max(8).optional(),
     /** 客户端上报的视频时长（秒）；≤300。服务端不探测实际时长（偏离取舍见 Global Constraints）。 */
     durationSeconds: z.number().int().min(1).max(MAX_VIDEO_DURATION_SECONDS).optional(),
   })
   .superRefine((val, ctx) => {
-    const allowed = val.kind === 'image' ? IMAGE_MIME_TYPES : VIDEO_MIME_TYPES;
+    const allowed = val.kind === 'image' ? IMAGE_MIME_TYPES : val.kind === 'video' ? VIDEO_MIME_TYPES : AUDIO_MIME_TYPES;
     if (!(allowed as readonly string[]).includes(val.mime)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -42,6 +57,14 @@ export const mediaPresignInputSchema = z
       });
     }
     if (val.kind === 'image' && val.durationSeconds !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'MEDIA_INVALID',
+        path: ['durationSeconds'],
+      });
+    }
+    // audio 必填时长：voice 卡片的时长展示与 5 分钟上限强依赖它，服务端不探测实际时长（与视频同取舍，spec §2.1）
+    if (val.kind === 'audio' && val.durationSeconds === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'MEDIA_INVALID',

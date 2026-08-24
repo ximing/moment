@@ -40,9 +40,9 @@ export function MediaGrid({ media }: { media: MomentMedia[] }) {
       {media.map((m) =>
         m.mime.startsWith('video/') ? (
           <VideoCell key={m.id} m={m} cellStyle={styles.cell} styles={styles} />
-        ) : (
+        ) : m.mime.startsWith('image/') ? (
           <MediaImage key={m.id} mediaId={m.id} cellStyle={styles.cell} />
-        )
+        ) : null
       )}
     </View>
   );

@@ -6,8 +6,12 @@ import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage, type MockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
-import { handleMomentDeleted, handlers } from '../../src/worker/handlers.js';
-import { sweepSoftDeletedMomentMedia, sweepStaleUploadingMedia } from '../../src/worker/sweeper.js';
+import { handleMomentDeleted, handleMomentTranscribe, handlers } from '../../src/worker/handlers.js';
+import {
+  sweepSoftDeletedMomentMedia,
+  sweepStaleUploadingMedia,
+  sweepStaleVoiceTranscriptions,
+} from '../../src/worker/sweeper.js';
 
 let storage: MockStorage;
 
@@ -163,6 +167,81 @@ describe('handleMomentDeleted（outbox moment.deleted → 标记 orphaned，幂�
 
   it('handlers 注册表含 moment.deleted', () => {
     expect(handlers['moment.deleted']).toBe(handleMomentDeleted);
-    expect(Object.keys(handlers)).toHaveLength(5);
+    expect(handlers['moment.transcribe']).toBe(handleMomentTranscribe);
+    expect(Object.keys(handlers)).toHaveLength(6);
+  });
+});
+
+describe('sweepStaleVoiceTranscriptions（spec voice-moment §4.4：6h cutoff 兜底悬挂 pending）', () => {
+  /** 直插 moment（voice 默认带 transcriptionStatus；text 恒 null）。 */
+  async function insertMomentWithTranscription(opts: {
+    createdAt: Date;
+    deletedAt?: Date | null;
+    status?: 'pending' | 'done' | 'failed';
+    type?: 'voice' | 'text';
+  }): Promise<string> {
+    const userId = randomUUID();
+    await db.insert(users).values({ id: userId, email: `${userId}@test.com`, passwordHash: 'x', nickname: 'u' });
+    const chainId = randomUUID();
+    const { chains } = await import('../../src/db/schema.js');
+    await db
+      .insert(chains)
+      .values({ id: chainId, name: 'c', ownerId: userId, visibility: 'private', template: 'daily' });
+    const momentId = randomUUID();
+    const type = opts.type ?? 'voice';
+    await db.insert(moments).values({
+      id: momentId,
+      chainId,
+      authorId: userId,
+      type,
+      content: '',
+      happenedAt: opts.createdAt,
+      happenedTzOffset: 0,
+      wallDate: wallDateOf(opts.createdAt, 0),
+      createdAt: opts.createdAt,
+      deletedAt: opts.deletedAt ?? null,
+      transcriptionStatus: type === 'voice' ? (opts.status ?? 'pending') : null,
+    });
+    return momentId;
+  }
+
+  it('只将未软删、pending、严格超过 6h 的 voice moment 标为 failed', async () => {
+    const now = new Date('2026-08-23T12:00:00Z');
+    const stale = await insertMomentWithTranscription({ createdAt: new Date(now.getTime() - 7 * 3_600_000) });
+    const atCutoff = await insertMomentWithTranscription({ createdAt: new Date(now.getTime() - 6 * 3_600_000) });
+    const doneM = await insertMomentWithTranscription({
+      createdAt: new Date(now.getTime() - 7 * 3_600_000),
+      status: 'done',
+    });
+    const deleted = await insertMomentWithTranscription({
+      createdAt: new Date(now.getTime() - 7 * 3_600_000),
+      deletedAt: new Date(now.getTime() - 1 * 3_600_000),
+    });
+    const textM = await insertMomentWithTranscription({
+      createdAt: new Date(now.getTime() - 7 * 3_600_000),
+      type: 'text',
+    });
+
+    const result = await sweepStaleVoiceTranscriptions(now);
+
+    expect(result).toEqual({ scanned: 1, markedFailed: 1, dryRun: false });
+    const rows = await db.select().from(moments);
+    const by = (id: string) => rows.find((row) => row.id === id)!;
+    expect(by(stale).transcriptionStatus).toBe('failed');
+    expect(by(atCutoff).transcriptionStatus).toBe('pending');
+    expect(by(doneM).transcriptionStatus).toBe('done');
+    expect(by(deleted).transcriptionStatus).toBe('pending');
+    expect(by(textM).transcriptionStatus).toBeNull();
+  });
+
+  it('dry-run 只报告严格超过 cutoff 的候选项，不更新状态', async () => {
+    const now = new Date('2026-08-23T12:00:00Z');
+    const stale = await insertMomentWithTranscription({ createdAt: new Date(now.getTime() - 7 * 3_600_000) });
+
+    const result = await sweepStaleVoiceTranscriptions(now, { dryRun: true });
+
+    expect(result).toEqual({ scanned: 1, markedFailed: 0, dryRun: true });
+    const [row] = await db.select().from(moments).where(eq(moments.id, stale));
+    expect(row.transcriptionStatus).toBe('pending');
   });
 });

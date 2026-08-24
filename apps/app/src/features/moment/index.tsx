@@ -6,6 +6,7 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import { REACTION_EMOJIS, type MomentMedia } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { formatMomentTime, formatRelative } from '../../lib/format';
+import { AudioBar } from '../../components/AudioBar';
 import { Loading } from '../../components/Loading';
 import { Button } from '../../components/Button';
 import { useMediaUri } from '../../lib/use-media-uri';
@@ -67,6 +68,11 @@ const MomentContent = observer(function MomentContent() {
   const m = service.moment;
   const myEmoji = m.myReaction; // ReactionSummary = { emoji, count } 无 mine；我的表情在 myReaction
   const isAuthor = auth.user?.id === m.author.id; // spec §4.1：编辑/删除入口仅作者本人可见
+  const isVoice = m.type === 'voice';
+  const audioMedia = isVoice ? m.media.filter((media) => media.mime.startsWith('audio/')) : [];
+  const visualMedia = m.media.filter((media) =>
+    isVoice ? media.mime.startsWith('image/') : media.mime.startsWith('image/') || media.mime.startsWith('video/')
+  );
 
   function onEmoji(emoji: string): void {
     void service
@@ -110,14 +116,18 @@ const MomentContent = observer(function MomentContent() {
             </Pressable>
           </View>
         ) : null}
+        {isVoice && m.transcriptionStatus === 'pending' ? (
+          <Text style={styles.transcribing}>转写中…</Text>
+        ) : null}
         {m.content.length > 0 ? <Text style={styles.content}>{m.content}</Text> : null}
-        {m.media.map((media) =>
+        {visualMedia.map((media) =>
           media.mime.startsWith('video/') ? (
             <VideoBlock key={media.id} media={media} />
-          ) : (
+          ) : media.mime.startsWith('image/') ? (
             <MomentImage key={media.id} media={media} />
-          )
+          ) : null
         )}
+        {audioMedia.map((media) => <AudioBar key={media.id} media={media} />)}
         {m.tags.length > 0 ? (
           <View style={styles.tagRow}>
             {m.tags.map((t) => (
@@ -205,6 +215,7 @@ const createStyles = (t: Theme) =>
     actionRow: { flexDirection: 'row', gap: t.space4 },
     actionEdit: { color: t.action, fontSize: t.fontLabel },
     actionDelete: { color: t.danger, fontSize: t.fontLabel },
+    transcribing: { color: t.muted, fontSize: t.fontCaption, marginTop: t.space1 },
     content: { fontSize: t.fontInput, lineHeight: 24, color: t.ink },
     image: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8, backgroundColor: t.feedbackSkeleton },
     video: { width: '100%', aspectRatio: 16 / 9, borderRadius: 8, backgroundColor: t.ink },

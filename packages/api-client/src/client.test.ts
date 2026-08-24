@@ -48,7 +48,7 @@ test('chains/members/invites 路径与方法名对齐 Phase 2 路由', async () 
   const { client, calls } = harness();
   await client.listChains();
   await client.getChain('c1');
-  await client.createChain({ name: '链', visibility: 'private' });
+  await client.createChain({ name: '链', visibility: 'private', template: 'daily' });
   await client.updateChain('c1', { name: '新' });
   await client.deleteChain('c1');
   await client.listMembers('c1');

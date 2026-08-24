@@ -9,7 +9,7 @@ export interface MomentLike {
   id: string;
   chainId: string;
   authorId: string;
-  type: 'text' | 'media' | 'video';
+  type: 'text' | 'media' | 'video' | 'voice';
   kind: string;
   payload: Record<string, unknown> | null;
   content: string;
@@ -17,6 +17,10 @@ export interface MomentLike {
   happenedTzOffset: number;
   isBackfill: boolean;
   createdAt: Date;
+  /** ASR 原始转写（db 行自带）；仅 voice 可能非空 */
+  transcript: string | null;
+  /** 转写状态；仅 voice 可能非空 */
+  transcriptionStatus: 'pending' | 'done' | 'failed' | null;
 }
 
 export interface MediaLike {
@@ -55,6 +59,8 @@ export function momentSerializer(m: MomentLike, extras: SerializerExtras): Momen
     kind: m.kind,
     payload: m.payload,
     content: m.content,
+    transcript: m.transcript,
+    transcriptionStatus: m.transcriptionStatus,
     happenedAt: m.happenedAt.toISOString(),
     happenedTzOffset: m.happenedTzOffset,
     isBackfill: m.isBackfill,

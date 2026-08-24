@@ -139,6 +139,8 @@ const TEXT_MOMENT: MomentResponse = {
   kind: 'standard',
   payload: null,
   content: '回家的路上买了刚出炉的面包。',
+  transcript: null,
+  transcriptionStatus: null,
   happenedAt: '2026-08-17T14:00:00.000Z',
   happenedTzOffset: -480,
   isBackfill: false,

@@ -13,12 +13,17 @@ export const moments = mysqlTable(
     authorId: char('author_id', { length: 36 })
       .notNull()
       .references((): AnyMySqlColumn => users.id),
-    type: mysqlEnum('type', ['text', 'media', 'video']).notNull(),
+    type: mysqlEnum('type', ['text', 'media', 'video', 'voice']).notNull(),
     /** 语义类别（spec §1.1）：standard 或链模板 kinds 声明的 key；不进核心索引（spec §2.2） */
     kind: varchar('kind', { length: 64 }).notNull().default('standard'),
     /** 结构化数据（kind 的 payload 或 standard 的扩展字段 mood/geo 等） */
     payload: json('payload').$type<Record<string, unknown>>(),
     content: text('content').notNull(),
+    /** ASR 原始转写（spec voice-moment §1）；仅 voice 可能非空，用户不可改（PATCH .strict() 拒绝） */
+    transcript: text('transcript'),
+    /** 转写状态；仅 voice 非空：创建 pending → done/failed；非 voice 恒 NULL
+        （用可空而非 default，避免给 text/media/video 行赋予无意义的转写语义，spec §1） */
+    transcriptionStatus: mysqlEnum('transcription_status', ['pending', 'done', 'failed']),
     /** 事件发生时间（UTC 存储的时间点，spec §5.6）。fsp=3 保留毫秒：MySQL timestamp 默认 fsp=0 会截断毫秒，
         导致 create 响应（内存 Date 含 ms）与落库后读回不一致 */
     happenedAt: timestamp('happened_at', { mode: 'date', fsp: 3 }).notNull(),

@@ -15,6 +15,7 @@ import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { ComposeService } from './compose.service';
 import { TemplateFields } from './template-fields';
+import { VoiceRecorder } from './voice-recorder';
 
 const ComposeContent = observer(function ComposeContent() {
   const params = useLocalSearchParams<{ chainId?: string; momentId?: string }>();
@@ -88,12 +89,14 @@ const ComposeContent = observer(function ComposeContent() {
             { value: 'text', label: '文字' },
             { value: 'media', label: '图文' },
             { value: 'video', label: '视频' },
+            { value: 'voice', label: '语音' },
           ]}
           value={service.type}
           onChange={(t) => {
             service.type = t as typeof service.type;
             service.images = [];
             service.clearVideo();
+            service.clearVoice();
           }}
         />
       )}
@@ -119,15 +122,17 @@ const ComposeContent = observer(function ComposeContent() {
 
       {service.isEdit && service.edit && service.edit.media.length > 0 ? <MediaGrid media={service.edit.media} /> : null}
 
-      {!service.isEdit && service.type === 'media' ? (
+      {!service.isEdit && (service.type === 'media' || service.type === 'voice') ? (
         <View style={styles.mediaBar}>
-          <Button variant="secondary" onPress={() => void onPickImages()}>选图（{service.images.length}/9）</Button>
+          <Button variant="secondary" onPress={() => void onPickImages()}>
+            选图（{service.images.length}/{service.type === 'voice' ? 8 : 9}）
+          </Button>
           {service.images.length > 0 ? (
             <Button variant="quiet" onPress={() => (service.images = [])}>清空</Button>
           ) : null}
         </View>
       ) : null}
-      {!service.isEdit && service.type === 'media' && service.images.length > 0 ? (
+      {!service.isEdit && (service.type === 'media' || service.type === 'voice') && service.images.length > 0 ? (
         <Text style={styles.mediaHint}>已压缩 {service.images.length} 张（最长边 ≤2048px），共 {Math.round(service.images.reduce((s, i) => s + i.size, 0) / 1024)}KB</Text>
       ) : null}
 
@@ -143,6 +148,10 @@ const ComposeContent = observer(function ComposeContent() {
         <Text style={styles.mediaHint}>
           {Math.round(service.video.size / 1024 / 1024)}MB · {Math.floor(service.video.durationSeconds / 60)}分{service.video.durationSeconds % 60}秒 · 分片上传可断点重试
         </Text>
+      ) : null}
+
+      {!service.isEdit && service.type === 'voice' ? (
+        <VoiceRecorder voice={service.voice} onChange={(v) => service.setVoice(v)} />
       ) : null}
 
       <Pressable style={styles.dateBtn} onPress={() => (service.showPicker = true)}>
