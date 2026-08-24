@@ -112,18 +112,18 @@ Shell 两处链列表渲染（`apps/web/src/shell/Shell.tsx`：侧栏 `chains.ma
 **a) 压制锚元素原生拖拽**。`ChainNav` 内的 `NavLink` 渲染为 `<a href>`（Shell.tsx），锚元素默认可拖，越过浏览器自身阈值即触发原生 dragstart（URL 幽灵图），pointer 流随后收到 pointercancel，手势状态机会被半途杀死。必须给 NavLink 加 `draggable={false}`（或等价 dragstart preventDefault）。
 
 **b) 触屏与原生滚动同轴冲突**。主目标设备是家庭平板，而两处容器都是原生可滚动且滚动方向与拖拽同轴：侧栏 `nav overflow-y-auto`（纵向拖）、顶部 chips `div overflow-x-auto`（横向拖）。触屏 pointerdown 后一旦移动，浏览器接管滚动并派发 pointercancel，固定像素阈值手势会被掐死。按 `pointerType` 区分激活方式：
-   - `mouse` / `pen`：移动超过 ~6px 阈值激活拖拽；
-   - `touch`：**长按 ~350ms 进入 armed 态，armed 后手指移动才激活拖拽**（见 c 的菜单互斥）；armed 前手指移动即放弃手势让位滚动。
+   - `mouse`：移动超过 ~6px 阈值激活拖拽；
+   - `touch` / `pen`：**长按 ~350ms 进入 armed 态，armed 后移动才激活拖拽**（见 c 的菜单互斥）；armed 前移动即放弃手势让位滚动。（pen 并入此分支：iPad + Apple Pencil 与 touch 一样受 touch-action 约束、会触发滚动接管，6px 阈值会被 pointercancel 杀手势。）
    - 注意：`touch-action` 的许可值在 pointerdown 时刻由浏览器采样，**手势进行中修改 `touch-action` 对当前手势无效**。因此激活后阻止滚动接管的手段是：对当前手势挂**非 passive 的 `touchmove` 监听并 `preventDefault()`**（pointermove 的 preventDefault 不能阻止滚动接管，必须用 touch 事件层）。pointercancel 清理（见 d）保留为兜底。不在静态样式上给链项预设 `touch-action: none`（否则链多时列表在链项上无法滚动）。
 
-**c) 与 ContextMenu 的互斥（触屏长按入口不回归）**。`ContextMenu` 只挂 `onContextmenu`（Menu.tsx），而今天触屏上长按链项就会派发 contextmenu 弹「链设置」菜单——这是触屏上进链设置的唯一入口，不能被拖拽抢占。规则：
-   - **长按 + 移动** = 进入拖拽；
-   - **长按 + 原地松手** = 不进入拖拽，contextmenu 照常弹菜单（现状不回归）；
-   - 移动进入拖拽时，若 contextmenu 已触发/菜单已开，则关闭菜单并 suppress 本次后续；
-   - 菜单已打开时不启动拖拽手势。
+**c) 与 ContextMenu 的互斥（触屏长按入口不回归）**。`ContextMenu` 只挂 `onContextmenu`（Menu.tsx），而今天触屏上长按链项就会派发 contextmenu 弹「链设置」菜单——这是触屏上进链设置的唯一入口，不能被拖拽抢占。注意平台的 contextmenu 在长按计时到达（手指仍按住）时自动派发，并非松手触发。规则：
+   - **contextmenu 默认不拦截**（菜单照常弹，现状不回归）；**仅当拖拽已因移动而激活时**才 suppress 本次 contextmenu，且若菜单已开则先关闭再进入拖拽；
+   - 即：**长按 + 移动** = 进入拖拽（菜单被关闭/抑制）；**长按未移动** = 菜单正常弹出使用；
+   - 菜单已打开时不启动拖拽手势；
+   - 已知取舍：长按意图拖拽的用户会在 ~500ms 看到菜单闪开、移动瞬间关闭（flicker），功能正确，本迭代接受。
    实现钩子（plan 落实）：拖拽层在**捕获阶段**监听 contextmenu 做 stopPropagation/preventDefault，或给 ContextMenu 加受控开关——ContextMenu 的处理器会 preventDefault 并开菜单，不在捕获阶段拦截则 suppress 无法实现。
 
-**d) pointercancel 清理**。任何阶段收到 pointercancel（浏览器接管滚动、手势被系统打断等）都必须中止手势、清理临时态（指示线、位移、抑制标记），不产生 reorder 提交。
+**d) pointercancel 清理与多点触控**。任何阶段收到 pointercancel（浏览器接管滚动、手势被系统打断等）都必须中止手势、清理临时态（指示线、位移、抑制标记），不产生 reorder 提交。状态机只跟踪主指针（`e.isPrimary`），拖拽进行中落下的第二根手指等副指针一律忽略（平板场景儿童误触）。
 
 **e) 点击与导航不回归**。未激活拖拽的 pointerup = 普通点击，NavLink 导航不变；激活过拖拽的手势结束后抑制随后的 click（防松手触发导航）。
 
@@ -144,7 +144,7 @@ Shell 两处链列表渲染（`apps/web/src/shell/Shell.tsx`：侧栏 `chains.ma
 
 拖拽手势期间的临时顺序只在组件内，松手才调 `reorder`。
 
-**重入语义**：在途期间用户再次松手发起第二次 reorder 是允许的，不排队、不阻塞 UI；服务端按到达顺序 last-write-wins，客户端每次成功/失败都经统一 `load()` 收敛，最终呈现以最后一次 load 为准（短暂中间态可接受）。
+**重入语义**：在途期间用户再次松手发起第二次 reorder 是允许的，不排队、不阻塞 UI；服务端按到达顺序 last-write-wins，客户端每次成功/失败都经统一 `load()` 收敛，最终呈现以最后一次 load 为准（短暂中间态可接受）。因此「在途标志」**不能是布尔量**——必须是引用计数/请求代序号（计数归零才解除 load 抑制），否则第一次完成即解除抑制，并发 load 会覆盖第二次的乐观顺序造成闪回。
 
 ### 6.4 其它消费方与多设备语义
 
@@ -166,8 +166,8 @@ Shell 两处链列表渲染（`apps/web/src/shell/Shell.tsx`：侧栏 `chains.ma
   - 「并发入链不被改写」测试手段：`--runInBand` 下真实并发难以确定性复现，采用顺序模拟——在 reorder 事务的校验之后、提交之前注入一条新 membership 行，断言该行 sortOrder 不被重写（plan 落实具体注入方式，如 service 内可测试钩子或拆步调用）。
 - **web**（Vitest + jsdom）：
   - `ChainListService.reorder` 乐观更新、失败回滚 + toast；
-  - **reorder 在途 + 并发 load() 完成的竞态**：在途期间 load 结果被抑制，成功/失败后由统一 load 收敛（本设计最易出 bug 的点，必须有测试）；
-  - 拖拽手势的状态机逻辑抽到 `src/lib/`（如 `chain-reorder.ts`：给定 items + from/to 计算新顺序、pointerType 激活方式、阈值/长按判定、pointercancel 清理），单测覆盖；DOM 拖拽本身不做 jsdom 仿真。
+  - **reorder 在途 + 并发 load() 完成的竞态**：在途期间 load 结果被抑制，成功/失败后由统一 load 收敛（本设计最易出 bug 的点，必须有测试）；含**重入用例**（两次 reorder 并发，第一次先完成时第二次的乐观顺序不被 load 覆盖）；
+  - 拖拽手势的状态机逻辑抽到 `src/lib/`（如 `chain-reorder.ts`：给定 items + from/to 计算新顺序、pointerType 激活方式、阈值/长按判定、pointercancel 清理、仅跟踪 isPrimary 主指针），单测覆盖（含副指针忽略用例）；DOM 拖拽本身不做 jsdom 仿真。
 
 ## 8. 红线与约定
 
