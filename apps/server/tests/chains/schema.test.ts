@@ -28,6 +28,10 @@ describe('chains 域三表', () => {
     expect(invite.role).toBe('editor');
     expect(invite.acceptedAt).toBeNull();
 
+    // spec chain-ordering §2：sort_order 默认 0；回填（迁移 0014）/ 新链置顶（min-1）/ reorder 全量重写另行赋值
+    const [member] = await db.select().from(chainMembers);
+    expect(member.sortOrder).toBe(0);
+
     // 联合主键 (chain_id, user_id)：重复写入报错
     await expect(
       db.insert(chainMembers).values({ chainId: 'c1', userId: 'u1', role: 'viewer' })
