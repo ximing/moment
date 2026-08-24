@@ -13,6 +13,13 @@ export class ChainListService extends Service {
    * 并发 load 会覆盖第二次的乐观顺序造成闪回。
    */
   private reorderInFlight = 0;
+  /**
+   * load 代序号（spec §6.3 竞态防护的等价实现，review 修补）：
+   * 在途计数只抑制「reorder 期间完成」的 load；一个 reorder 之前发出的 load 若比收尾
+   * 收敛 load 更晚 resolve，计数已归零、陈旧数据会压过收敛结果且不再自愈。
+   * reorder 起始 ++loadEpoch，load 发起时捕获、写回前比对，不等即丢弃。
+   */
+  private loadEpoch = 0;
 
   constructor() {
     super();
@@ -31,7 +38,10 @@ export class ChainListService extends Service {
   }
 
   async load(): Promise<void> {
+    const epoch = this.loadEpoch;
     const chains = await client.listChains();
+    // 陈旧响应丢弃：发起后有过 reorder（epoch 已推进），本响应早于任何一次 reorder 的乐观/收敛状态
+    if (epoch !== this.loadEpoch) return;
     // reorder 在途期间的并发 load（chain:changed 等）写回抑制：丢弃，由 reorder 收尾的统一 load 收敛
     if (this.reorderInFlight > 0) return;
     this.chains = chains;
@@ -51,6 +61,8 @@ export class ChainListService extends Service {
     // 防御：orderedIds 与当前列表不一致（拖拽期间列表被 chain:changed 改动）时跳过乐观写，
     // 仍提交并由收尾 load 收敛到服务端结果
     if (optimistic.length === orderedIds.length) this.chains = optimistic;
+    // 推进代序号：reorder 之前发出的任何在途 load 的响应自此全部视为陈旧
+    this.loadEpoch++;
     this.reorderInFlight++;
     let failure: unknown = null;
     try {

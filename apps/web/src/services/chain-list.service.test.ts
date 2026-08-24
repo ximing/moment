@@ -139,6 +139,27 @@ describe('ChainListService.reorder', () => {
     expect(ids(service.chains)).toEqual(['c', 'a', 'b']);
   });
 
+  it('代际防护：reorder 之前发出的 load 晚于收尾 load 完成时，陈旧写回被丢弃', async () => {
+    const service = resolve(ChainListService);
+    const staleList = deferred<ChainDto[]>();
+    const finalList = deferred<ChainDto[]>();
+    api.listChains.mockReturnValueOnce(staleList.promise); // load A（reorder 之前由 chain:changed 触发）
+    api.listChains.mockReturnValueOnce(finalList.promise); // 收尾收敛 load B
+    api.reorderChains.mockResolvedValue(undefined);
+
+    const a = service.load(); // reorder 之前发出，捕获旧代序号
+    const p = service.reorder(['c', 'a', 'b']);
+    // 收尾 load B 先完成：收敛到服务端顺序
+    finalList.resolve([chain('c'), chain('a'), chain('b')]);
+    await p;
+    expect(ids(service.chains)).toEqual(['c', 'a', 'b']);
+
+    // 陈旧的 load A 更晚完成（此时在途计数已归零）：代序号不等，写回必须被丢弃，不得压过 B
+    staleList.resolve([chain('a'), chain('b'), chain('c')]);
+    await a;
+    expect(ids(service.chains)).toEqual(['c', 'a', 'b']);
+  });
+
   it('无 reorder 在途时 load 正常写回', async () => {
     const service = resolve(ChainListService);
     api.listChains.mockResolvedValue([chain('b')]);
