@@ -28,6 +28,21 @@ export function insertionIndex(pointer: number, midpoints: readonly number[], ex
   return count;
 }
 
+/**
+ * 拖拽松手计算提交顺序：按 dragId 在「当前」列表里重算 from——拖拽期间列表可能被
+ * chain:changed 重写（建链、设置保存等），按下时捕获的下标已与身份错位；
+ * dragId 不在当前列表（拖项被删）返回 null，调用方放弃本次提交（review 修补）。
+ */
+export function dropOrder(
+  ids: readonly string[],
+  dragId: string,
+  toIndex: number,
+): { orderedIds: string[]; from: number } | null {
+  const from = ids.indexOf(dragId);
+  if (from < 0) return null;
+  return { orderedIds: moveItem(ids, from, toIndex), from };
+}
+
 export type DragPhase = 'idle' | 'pending' | 'dragging';
 
 /** 最小指针事件结构：React PointerEvent 与本接口结构化兼容，组件层无需适配。 */

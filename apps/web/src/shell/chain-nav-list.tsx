@@ -6,8 +6,8 @@ import type { ChainDto } from '@moment/dto';
 import { ChainMark } from '@/chain/ChainMark';
 import {
   createDragGesture,
+  dropOrder,
   insertionIndex,
-  moveItem,
   type DragGesture,
 } from '@/lib/chain-reorder';
 import { ChainListService } from '@/services/chain-list.service';
@@ -102,12 +102,18 @@ export const ChainNavList = observer(function ChainNavList({
           const drag = dragRef.current;
           if (!drag) return;
           const { chains: items } = latestRef.current;
+          // 拖拽期间列表可能被 chain:changed 重写：排除下标按 id 重算，不用按下时捕获的旧下标
+          const from = items.findIndex((c) => c.id === drag.id);
+          if (from < 0) {
+            setIndicator(null); // 拖项已被删：不再更新指示线，松手时 onDrop 会放弃提交
+            return;
+          }
           const pointer = drag.startPointer + offset;
           const midpoints = items.map((c) => {
             const el = itemsRef.current.get(c.id);
             return el ? midpointOf(el, axis) : Number.POSITIVE_INFINITY;
           });
-          drag.index = insertionIndex(pointer, midpoints, drag.from);
+          drag.index = insertionIndex(pointer, midpoints, from);
           setIndicator({ id: drag.id, index: drag.index });
         },
         onDrop() {
@@ -116,15 +122,16 @@ export const ChainNavList = observer(function ChainNavList({
           removeTouchBlockRef.current = null;
           setIndicator(null);
           if (!drag) return;
-          if (drag.index === drag.from) return; // 原位松手：顺序未变，不提交
           const { chains: items, chainList: list, toast: t } = latestRef.current;
-          const orderedIds = moveItem(
+          // 按 id 在当前列表重算 from（拖拽期间列表被重写则旧下标已错位）；拖项被删 = null，放弃提交
+          const drop = dropOrder(
             items.map((c) => c.id),
-            drag.from,
+            drag.id,
             drag.index,
           );
+          if (!drop || drop.from === drag.index) return; // 拖项已删 / 原位松手：顺序未变，不提交
           // 乐观更新 / 失败回滚 + 收敛由 service 统一 load 完成（§6.3）；失败 toast 遵循 Feedback 规范
-          void list.reorder(orderedIds).catch(() =>
+          void list.reorder(drop.orderedIds).catch(() =>
             t.show({ key: 'chain-reorder-failed', message: '链顺序保存失败，已恢复原顺序' }),
           );
         },

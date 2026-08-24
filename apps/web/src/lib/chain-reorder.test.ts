@@ -3,6 +3,7 @@ import {
   DRAG_THRESHOLD_PX,
   LONG_PRESS_ARM_MS,
   createDragGesture,
+  dropOrder,
   insertionIndex,
   moveItem,
   type DragGestureHandlers,
@@ -58,6 +59,21 @@ describe('moveItem / insertionIndex', () => {
     expect(insertionIndex(20, midpoints, 1)).toBe(1); // 中点 10 在前
     expect(insertionIndex(40, midpoints, 1)).toBe(1); // 中点 50 仍在后
     expect(insertionIndex(60, midpoints, 1)).toBe(2); // 最后（排除项不计数）
+  });
+});
+
+describe('dropOrder（拖拽期间列表被重写的下标失效防护）', () => {
+  it('按 id 重算 from：拖拽期间 chain:changed 重排了列表，以当前位置为准', () => {
+    // 按下时 b 在 index 1；拖拽期间列表被改为 ['b','a','c']——若沿用旧下标 1 会把 'a' 当拖动项
+    expect(dropOrder(['b', 'a', 'c'], 'b', 2)).toEqual({ orderedIds: ['a', 'c', 'b'], from: 0 });
+  });
+
+  it('拖项已不在当前列表（拖拽期间被删）：返回 null，调用方放弃提交', () => {
+    expect(dropOrder(['a', 'c'], 'b', 1)).toBeNull();
+  });
+
+  it('原位松手：from === toIndex，顺序不变（调用方据此不提交）', () => {
+    expect(dropOrder(['a', 'b', 'c'], 'b', 1)).toEqual({ orderedIds: ['a', 'b', 'c'], from: 1 });
   });
 });
 
