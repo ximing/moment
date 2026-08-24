@@ -1502,6 +1502,7 @@ git commit -m "feat(server): add ASR provider with OpenAI-compatible transcripti
 - Modify: `apps/server/src/worker/handlers.ts`（新增 `handleMomentTranscribe` + 注册表）
 - Test: `apps/server/tests/worker/handle-moment-transcribe.test.ts`（新建，触库）
 - Modify: `apps/server/tests/worker/handlers.test.ts`（注册表断言 5 → 6）
+- Modify: `apps/server/tests/worker/sweeper.test.ts`（既有注册表断言同步 5 → 6，并包含 `moment.transcribe`）
 
 **Interfaces:**
 - Consumes: Task 5 的 `OUTBOX_MOMENT_TRANSCRIBE`；Task 7 的 `getASRProvider()` / `setASRProvider()` / `ASRProvider`；`RetryableLLMError` / `NonRetryableLLMError`；`getStorage().generateAccessUrl(key, metadata, expiresIn)`；Task 1 的 `MAX_AUDIO_BYTES`；`installMockStorage()`。
@@ -1732,6 +1733,12 @@ Modify `apps/server/tests/worker/handlers.test.ts` 注册表断言块（`describ
 
 import 区 `from '../../src/worker/handlers.js'` 解构加 `handleMomentTranscribe`。
 
+同步修改 `apps/server/tests/worker/sweeper.test.ts` 中既有注册表断言：从
+`expect(handlers['moment.deleted']).toBe(handleMomentDeleted);` 所在的测试块中，补充
+`expect(handlers['moment.transcribe']).toBe(handleMomentTranscribe);`，并将
+`expect(Object.keys(handlers)).toHaveLength(5);` 改为 `toHaveLength(6)`；同时在该文件
+`from '../../src/worker/handlers.js'` 的解构 import 中加入 `handleMomentTranscribe`。
+
 - [ ] **Step 2: 运行确认失败**
 
 Run: `pnpm --filter @moment/server test -- tests/worker/handle-moment-transcribe.test.ts`
@@ -1853,7 +1860,7 @@ Expected: 全过（注册表计数 6、recap/processor/sweeper 既有用例不�
 > 本步骤由编排主 Agent 在验收后执行；实现 SubAgent 跳过 commit，报告待提交文件清单。
 
 ```bash
-git add apps/server/src/worker/handlers.ts apps/server/tests/worker/handle-moment-transcribe.test.ts apps/server/tests/worker/handlers.test.ts
+git add apps/server/src/worker/handlers.ts apps/server/tests/worker/handle-moment-transcribe.test.ts apps/server/tests/worker/handlers.test.ts apps/server/tests/worker/sweeper.test.ts
 git commit -m "feat(server): transcribe voice moments in worker with retry classification"
 ```
 
