@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../../src/db/index.js';
-import { chainMembers, comments, notifications, pushTokens } from '../../src/db/schema.js';
+import { chainMembers, comments, moments, notifications, pushTokens } from '../../src/db/schema.js';
+import { wallDateOf } from '../../src/moments/wall-date.js';
 import { MockPushService } from '../../src/push/mock.js';
 import {
   handleCommentCreated,
@@ -37,6 +39,35 @@ async function setupChainMoment(extra: number, opts: { isBackfill?: boolean; del
 }
 
 describe('handleMomentCreated（链内新 moment，spec §5.4）', () => {
+  it('voice 空 content：summary 与 body 摘要用 [语音] 兜底（spec §3.4）', async () => {
+    const owner = await registerUser();
+    const member = await registerUser();
+    const chainId = await createChain(owner.id);
+    await db.insert(chainMembers).values({ chainId, userId: member.id, role: 'viewer', joinedAt: new Date() });
+    // insertMoment 夹具 type 恒 text，voice 直插（content 空 + transcriptionStatus pending）
+    const momentId = randomUUID();
+    const happenedAt = new Date('2026-08-23T02:00:00Z');
+    await db.insert(moments).values({
+      id: momentId,
+      chainId,
+      authorId: owner.id,
+      type: 'voice',
+      content: '',
+      happenedAt,
+      happenedTzOffset: 0,
+      wallDate: wallDateOf(happenedAt, 0),
+      transcriptionStatus: 'pending',
+    });
+    const push = new MockPushService();
+
+    await handleMomentCreated({ momentId, chainId, authorId: owner.id, isBackfill: false }, { push });
+
+    const rows = await db.select().from(notifications);
+    expect(rows).toHaveLength(1);
+    const payload = rows[0].payload as Record<string, unknown>;
+    expect(payload.summary).toBe('[语音]');
+  });
+
   it('扇出到链全体成员（除作者）：owner+2 成员 → 2 条通知 + push', async () => {
     const { owner, members, chainId, momentId } = await setupChainMoment(2);
     const push = new MockPushService();

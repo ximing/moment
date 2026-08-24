@@ -62,6 +62,10 @@ export const handleMomentCreated: OutboxHandler = async (payload, deps) => {
 
   const { chainName, nicknames } = await loadSnapshot(chainId, [authorId]);
   const actorNickname = nicknames.get(authorId) ?? '';
+  // voice 发布时 content 通常为空：推送摘要用固定文案兜底（spec §3.4）；转写完成后不二次通知（spec §0 搁置）
+  const emptyVoice = m.type === 'voice' && m.content.trim().length === 0;
+  const summary = emptyVoice ? '[语音]' : summarize(m.content);
+  const bodySummary = emptyVoice ? '[语音]' : summarize(m.content, 30);
   await notificationService().fanoutNotifications(deps, {
     userIds: targets,
     type: NOTIFICATION_MOMENT_CREATED,
@@ -70,10 +74,10 @@ export const handleMomentCreated: OutboxHandler = async (payload, deps) => {
       chainId,
       chainName,
       actorNickname,
-      summary: summarize(m.content),
+      summary,
       backfill: isBackfill,
       title: chainName || '时刻',
-      body: `${actorNickname} 发布了新动态：${summarize(m.content, 30)}`,
+      body: `${actorNickname} 发布了新动态：${bodySummary}`,
       data: { momentId, chainId },
     },
     push: !isBackfill,
