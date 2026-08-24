@@ -3575,9 +3575,9 @@ ASR_MODEL=fun-asr
 
 - [ ] **Step 4: 运行 provider 测试确认通过**
 
-Run: `pnpm --filter @moment/server test -- tests/llm/asr-provider.test.ts && pnpm --filter @moment/server typecheck`
+Run: `pnpm --filter @moment/server test -- tests/llm/asr-provider.test.ts`
 
-Expected: provider 测试全部 PASS；typecheck exit 0；fetch 调用中不再出现 `FormData`、Blob、`/audio/transcriptions`。
+Expected: provider 测试全部 PASS；fetch 调用中不再出现 `FormData`、Blob、`/audio/transcriptions`。此时 `ASRTranscribeRequest` 已切换为 `{ fileUrl }` 而 handler 仍在后续步骤迁移，若运行全 server typecheck 暴露 handler 的 `{ audio, mime }` 类型错误属于预期，不在本步骤执行或修复；全 server typecheck/lint 成功门禁统一留到 Step 8。
 
 - [ ] **Step 5: 写 handler 失败测试**
 
