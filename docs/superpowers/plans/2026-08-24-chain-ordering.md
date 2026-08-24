@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **迁移编辑时序硬约束（spec §2，最高优先级）**：`drizzle-kit generate` 产出 0014 后必须**立即**追加回填 SQL，且在任何环境（含远程共享测试库）首次执行该迁移**之前**完成——drizzle 迁移 hash 由运行时按文件内容计算，某个环境先跑了无回填版本会造成 hash 分叉。Task 3 中 generate → append 之间**禁止**运行任何会执行迁移的命令（`pnpm migrate` / `pnpm --filter @moment/server test`（jest globalSetup 自动 migrate）/ `pnpm dev` / 任何部署）；且远程共享测试库的首跑必须排在**本地 docker 回填验证通过之后**（spec §2「实现时先验证再跑迁移」）——顺序为 generate → append → docker 验证 → 远程首跑，若 docker 验证发现回填 SQL 有误，远程库尚未记录任何版本，改完重新验证即可，不会 hash 分叉。
+- **迁移编辑时序硬约束（spec §2，最高优先级）**：`drizzle-kit generate` 产出 0014 后必须**立即**追加回填 SQL，且在任何环境（含远程共享测试库）首次执行该迁移**之前**完成——drizzle 迁移 hash 由运行时按文件内容计算，某个环境先跑了无回填版本会造成 hash 分叉。Task 3 中 generate → append 之间**禁止**运行任何会执行迁移的命令（`pnpm migrate` / `pnpm --filter @moment/server test`（jest globalSetup 自动 migrate）/ `pnpm dev` / 任何部署）；且远程共享测试库的首跑必须排在**本地 docker 回填验证通过之后**（spec §2「实现时先验证再跑迁移」）——顺序为 generate → append → docker 验证 → 远程首跑，若 docker 验证发现回填 SQL 有误，远程库尚未记录任何版本，改完重新验证即可，不会 hash 分叉。docker 验证命令必须带 `SKIP_GLOBAL_MIGRATE=1`：jest globalSetup（`tests/global-setup.ts`）对每次 server jest 调用无条件先对远程库跑 migrate，Task 3 Step 6 给该文件加的环境守卫是闸门成立的机制前提。
 - **不新增表、不新增环境变量**：`config.ts` / `.env.example` 不动；`resetDb()` 无需扩展（`sort_order` 随 `chain_members` 行一起被既有 delete 清理，spec §8）。
 - **`ChainDto` 不暴露 `sortOrder`**：spec §5 未把它放进响应契约，顺序只能经列表顺序观察；server 测试直接查库断言列值。
 - **迁移回填验证（Task 5）是触库规则的唯一例外**：不 import `src/db`（其 pool 指向 `.env` 远程测试库）、不打远程共享库；`RUN_MIGRATION_IT=1` 门控（沿用 `tests/storage/s3-it.test.ts` 的 `RUN_S3_IT` 先例），本地 docker compose MySQL 8.4 起临时 schema，跑完 DROP。
@@ -212,6 +212,7 @@ git commit -m "feat(api-client): add reorderChains PUT /api/chains/order"
 - Create: `apps/server/drizzle/0014_<drizzle-kit 随机名>.sql`（generate 产出 + 手工追加回填 UPDATE）
 - Modify: `apps/server/drizzle/meta/_journal.json`（generate 产出 idx 14 条目）
 - Create: `apps/server/drizzle/meta/0014_snapshot.json`（generate 产出）
+- Modify: `apps/server/tests/global-setup.ts`（加 `SKIP_GLOBAL_MIGRATE` 环境守卫，docker 验证闸门的机制前提）
 - Test: `apps/server/tests/chains/schema.test.ts`（扩展既有文件，触库）
 
 **Interfaces:**
@@ -220,7 +221,9 @@ git commit -m "feat(api-client): add reorderChains PUT /api/chains/order"
   - `chainMembers.sortOrder`——drizzle 列 `int('sort_order').notNull().default(0)`，TS 类型 `number`（Task 4 消费）。
   - DB 迁移 0014：`ALTER TABLE chain_members ADD sort_order int NOT NULL DEFAULT 0` + 同事务文件内的回填 UPDATE（每个用户按 `created_at DESC, id ASC` 写 1..n，Task 5 验证）。
 
-**时序警告（实现者必读，spec §2 硬约束）：** Step 3（generate）与 Step 4（追加回填）之间禁止运行 `pnpm migrate`、`pnpm --filter @moment/server test`、`pnpm dev` 或任何部署——它们都会执行迁移。drizzle 迁移 hash 在运行时按文件内容计算，任何环境先执行了无回填版本的 0014 都会造成 hash 分叉。执行顺序固定为 **generate → append → docker 回填验证（Step 6）→ 远程首跑（Step 8）**：远程共享测试库的首跑必须排在 docker 验证通过之后（spec §2「先验证再跑迁移」），否则一旦回填 SQL 有误，远程库已记录错误版本的 hash，正中本计划设防的 hash 分叉。Step 2 的红灯测试运行发生在 generate **之前**，是安全的（彼时 0014 尚不存在，jest globalSetup 的 migrate 只跑到 0013）。
+**时序警告（实现者必读，spec §2 硬约束）：** Step 3（generate）与 Step 4（追加回填）之间禁止运行 `pnpm migrate`、`pnpm --filter @moment/server test`、`pnpm dev` 或任何部署——它们都会执行迁移。drizzle 迁移 hash 在运行时按文件内容计算，任何环境先执行了无回填版本的 0014 都会造成 hash 分叉。执行顺序固定为 **generate → append → globalSetup 守卫（Step 6）→ docker 回填验证（Step 7）→ 远程首跑（Step 9）**：远程共享测试库的首跑必须排在 docker 验证通过之后（spec §2「先验证再跑迁移」），否则一旦回填 SQL 有误，远程库已记录错误版本的 hash，正中本计划设防的 hash 分叉。Step 2 的红灯测试运行发生在 generate **之前**，是安全的（彼时 0014 尚不存在，jest globalSetup 的 migrate 只跑到 0013）。
+
+**机制前提（复审确认）：** `apps/server/jest.config.mjs` 配了 `globalSetup: '<rootDir>/tests/global-setup.ts'`，该文件对**每一次** server jest 调用无条件 `execFileSync('pnpm', ['migrate'])`，打的是 `.env` 指向的远程共享测试库。因此 docker 验证若直接以 jest 运行，globalSetup 会先把 0014 应用到远程库（hash 落库），闸门形同虚设——Step 6 的 `SKIP_GLOBAL_MIGRATE` 守卫是闸门成立的机制前提，不可跳过。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -274,37 +277,70 @@ SET cm.sort_order = ranked.rn;
 Run: `git diff --stat apps/server/drizzle/` 并 `cat apps/server/drizzle/0014_*.sql`
 Expected: 新文件恰好含 1 条 `ALTER TABLE ... ADD sort_order ... DEFAULT 0` 与 1 条 `UPDATE chain_members ... ROW_NUMBER() ...`；无其它语句。确认 `_journal.json` 新增条目 `idx: 14` 且 tag 与新文件名（去 `.sql`）一致。
 
-- [ ] **Step 6: 本地 docker 回填验证（远程首跑的前置闸门，spec §2「先验证再跑迁移」）**
+- [ ] **Step 6: `tests/global-setup.ts` 加 `SKIP_GLOBAL_MIGRATE` 环境守卫（闸门成立的机制前提）**
 
-按 Task 5 Step 1 的完整代码（权威版本，逐字）创建 `apps/server/tests/migrations/chain-members-sort-order-backfill.test.ts`，然后执行 Task 5 Step 3 的命令：
+Modify `apps/server/tests/global-setup.ts`——在 `execFileSync` 之前加守卫（完整替换文件内容）：
+
+```ts
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/** Jest globalSetup does not apply moduleNameMapper, so we cannot import `../src/db/index.js`. */
+export default function globalSetup(): void {
+  // SKIP_GLOBAL_MIGRATE=1：迁移验证测试（tests/migrations/，自带本地 docker 临时 schema）
+  // 必须先于任何远程 migrate 执行（spec chain-ordering §2「先验证再跑迁移」）——
+  // 不设守卫的话本 globalSetup 会先把被测迁移应用到远程共享测试库（hash 落库），验证闸门形同虚设。
+  if (process.env.SKIP_GLOBAL_MIGRATE === '1') return;
+  const serverRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  execFileSync('pnpm', ['migrate'], {
+    cwd: serverRoot,
+    stdio: 'inherit',
+    env: process.env,
+  });
+}
+```
+
+守卫影响自查（实现者逐项确认）：
+- 类型：`process.env` 读取在 node types 覆盖内，无类型变更；该文件由 jest 经 ts-jest 编译（`jest.config.mjs` 的 `globalSetup` + transform），改动是一行早退守卫，语法平凡；Step 10 的实跑即其编译验证。
+- **默认行为不变**：不设环境变量时照常 migrate——本步之后的 Step 10（不带守卫跑 schema.test）会实际观察 globalSetup 照常输出 `migrations applied`（no-op migrate），Task 4 的全量测试同理；既有触库测试零影响。
+- 此步只改文件、不运行任何 jest/migrate 命令（守卫未就位前运行 jest 会先把 0014 打到远程库）。
+
+- [ ] **Step 7: 本地 docker 回填验证（远程首跑的前置闸门，spec §2「先验证再跑迁移」）**
+
+按 Task 5 Step 1 的完整代码（权威版本，逐字）创建 `apps/server/tests/migrations/chain-members-sort-order-backfill.test.ts`，然后执行：
 
 ```bash
 docker compose up -d mysql
-RUN_MIGRATION_IT=1 pnpm --filter @moment/server test -- chain-members-sort-order-backfill
+SKIP_GLOBAL_MIGRATE=1 RUN_MIGRATION_IT=1 pnpm --filter @moment/server test -- chain-members-sort-order-backfill
 ```
 
-Expected: 两个用例全过——回填后每用户 `sort_order` 恰为 `created_at DESC, id ASC` 的 1..n。**不通过则回到 Step 4 修回填 SQL（此时远程库尚未执行 0014，改 SQL 无 hash 分叉风险），修好重新验证，全过才允许进 Step 8。**
+`SKIP_GLOBAL_MIGRATE=1` 必须带：否则 jest globalSetup 会先把 0014 应用到远程共享测试库（hash 落库），本闸门的「验证通过才首跑」时序被架空（Step 6 的守卫正是为此而加）。
+
+Expected:
+- 输出**不含** `migrations applied`（globalSetup 被守卫跳过——这是闸门机制成立的直接观察证据）；该测试不 import `src/db`，全程零接触远程库。
+- 两个用例全过——回填后每用户 `sort_order` 恰为 `created_at DESC, id ASC` 的 1..n。**不通过则回到 Step 4 修回填 SQL（此时远程库尚未执行 0014，改 SQL 无 hash 分叉风险），修好重新验证，全过才允许进 Step 9。**
 
 注意：本步创建的测试文件**不在本 Task 提交**——由 Task 5 提交，保持「feat(server)=迁移」与「test(server)=验证」两个 conventional commit 的语义分离；文件在工作区保持未提交状态进入后续 Task（有 `RUN_MIGRATION_IT` 门控，不影响 Task 4 的全量测试）。
 
-- [ ] **Step 7: 确认临时 schema 已清理**
+- [ ] **Step 8: 确认临时 schema 已清理**
 
 执行 Task 5 Step 4 的命令与检查（`SHOW DATABASES LIKE 'moment_migration_it_%'` 应为空）。
 
-- [ ] **Step 8: 对 `.env` 指向的测试库执行迁移（该迁移在远程环境的首次执行，且已通过 Step 6 验证）**
+- [ ] **Step 9: 对 `.env` 指向的测试库执行迁移（该迁移在远程环境的首次执行，且已通过 Step 7 验证）**
 
 Run: `pnpm --filter @moment/server migrate`
 Expected: 输出 `migrations applied`，无报错。这是 0014 在远程共享测试库的**首次**执行，执行的是已通过 docker 回填验证的版本。
 
-- [ ] **Step 9: 运行确认通过**
+- [ ] **Step 10: 运行确认通过（顺带验证守卫默认行为不变）**
 
 Run: `pnpm --filter @moment/server test -- tests/chains/schema.test.ts`
-Expected: PASS（列存在且默认 0）。
+Expected: PASS（列存在且默认 0）；输出开头可见 globalSetup 照常执行的 `migrations applied`（no-op migrate）——证明 `SKIP_GLOBAL_MIGRATE` 守卫不改变默认行为，既有触库测试的 globalSetup 路径零影响。
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add apps/server/src/db/schema/chain-members.ts apps/server/drizzle/ apps/server/tests/chains/schema.test.ts
+git add apps/server/src/db/schema/chain-members.ts apps/server/drizzle/ apps/server/tests/global-setup.ts apps/server/tests/chains/schema.test.ts
 git commit -m "feat(server): add chain_members.sort_order column with backfill migration"
 ```
 
@@ -712,9 +748,9 @@ git commit -m "feat(server): per-user chain ordering (sort list, top-insert, reo
 
 **为什么不用远程共享测试库（spec §7 原话落实）：** 远程共享测试库已应用全部既有迁移，直接跑 migrate 是 no-op，观察不到回填效果。本测试在本地 docker MySQL 起**临时 schema**：顺序执行 0000–0013（旧行为，`chain_members` 尚无 `sort_order` 列）→ 造多用户多链数据（含 `created_at` 同秒并列）→ 执行 0014 → 断言回填结果。**全程不碰远程共享库**：不 import `src/db` / `tests/helpers/db.ts`（避免创建指向远程的全局 pool），自带 mysql2 连接，收尾 `DROP DATABASE`。门控方式沿用 `tests/storage/s3-it.test.ts` 的 `RUN_S3_IT` 先例（`const d = ... ? describe : describe.skip`），默认跳过、按需运行。
 
-**执行时机（spec §2「先验证再跑迁移」）：** 本测试的**首次执行在 Task 3 Step 6**——generate → append → docker 验证 → 远程首跑，docker 验证是远程共享测试库首跑 0014 的前置闸门。本 Task 持有该测试文件的**权威代码**与门控设计，并负责提交；Step 3/4 是复跑与清理规程。
+**执行时机（spec §2「先验证再跑迁移」）：** 本测试的**首次执行在 Task 3 Step 7**——generate → append → globalSetup 守卫 → docker 验证 → 远程首跑，docker 验证是远程共享测试库首跑 0014 的前置闸门（首次执行必须带 `SKIP_GLOBAL_MIGRATE=1`，否则 jest globalSetup 会先把 0014 打到远程库）。本 Task 持有该测试文件的**权威代码**与门控设计，并负责提交；Step 3/4 是复跑与清理规程。
 
-- [ ] **Step 1: 写测试（权威代码；该文件已在 Task 3 Step 6 逐字创建并执行——若已创建，本步核对一致即可，无需重写）**
+- [ ] **Step 1: 写测试（权威代码；该文件已在 Task 3 Step 7 逐字创建并执行——若已创建，本步核对一致即可，无需重写）**
 
 Create `apps/server/tests/migrations/chain-members-sort-order-backfill.test.ts`（完整内容）：
 
@@ -731,9 +767,10 @@ Create `apps/server/tests/migrations/chain-members-sort-order-backfill.test.ts`�
  * 不 import src/db / tests/helpers/db.ts（其 pool 指向 .env 远程测试库）；自带连接，
  * 收尾 DROP 临时 schema，全程不碰远程共享库。jest --runInBand 串行，无并行冲突。
  *
- * 运行方式：
+ * 运行方式（SKIP_GLOBAL_MIGRATE=1 必须带：jest globalSetup 默认每次都对远程共享测试库跑
+ * migrate，本测试的语义是「先于任何远程 migrate 验证回填」，守卫保证闸门时序不被架空）：
  *   docker compose up -d mysql
- *   RUN_MIGRATION_IT=1 pnpm --filter @moment/server test -- chain-members-sort-order-backfill
+ *   SKIP_GLOBAL_MIGRATE=1 RUN_MIGRATION_IT=1 pnpm --filter @moment/server test -- chain-members-sort-order-backfill
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -855,18 +892,21 @@ d('迁移 0014 chain_members.sort_order 回填（RUN_MIGRATION_IT=1，本地 doc
 - [ ] **Step 2: 确认门控（默认跳过，不打本地 docker）**
 
 Run: `pnpm --filter @moment/server test -- chain-members-sort-order-backfill`
-Expected: 通过但显示 skipped（未设 `RUN_MIGRATION_IT=1` 时 `describe.skip` 生效）——默认的 server 全量测试不因本地 docker 未启动而失败。
+Expected: 通过但显示 skipped（未设 `RUN_MIGRATION_IT=1` 时 `describe.skip` 生效）——默认的 server 全量测试不因本地 docker 未启动而失败。注：本步不带 `SKIP_GLOBAL_MIGRATE=1`，jest globalSetup 会对远程库跑一次 no-op migrate（此时 0014 已经 Task 3 Step 9 应用）——行为与既有全量测试一致，无害。
 
-- [ ] **Step 3: 运行方式（复跑规程；首次执行已在 Task 3 Step 6 作为远程首跑前置闸门完成）**
+- [ ] **Step 3: 运行方式（复跑规程；首次执行已在 Task 3 Step 7 作为远程首跑前置闸门完成）**
 
 Run:
 ```bash
 docker compose up -d mysql
-RUN_MIGRATION_IT=1 pnpm --filter @moment/server test -- chain-members-sort-order-backfill
+SKIP_GLOBAL_MIGRATE=1 RUN_MIGRATION_IT=1 pnpm --filter @moment/server test -- chain-members-sort-order-backfill
 ```
+
+统一带 `SKIP_GLOBAL_MIGRATE=1`（与首次执行同一命令形态）：复跑时远程已有 0014、守卫在功能上非必需（globalSetup 的 migrate 是 no-op），但统一守卫让「该迁移验证测试从不触发远程 migrate」成为无条件不变量，命令在任何时序下都安全，也避免两种命令形态并存记错。
+
 Expected: 两个用例全过。若本地 3306 已有其它 MySQL 占用，用 `MIGRATION_IT_PORT=<port>` 覆盖；严禁把 `MIGRATION_IT_HOST` 指向任何远程/生产库。
 
-- [ ] **Step 4: 确认临时 schema 已清理（已在 Task 3 Step 7 执行过；此处为复跑后的清理规程）**
+- [ ] **Step 4: 确认临时 schema 已清理（已在 Task 3 Step 8 执行过；此处为复跑后的清理规程）**
 
 Run: `docker compose exec mysql mysql -uroot -pmoment_root_dev -e "SHOW DATABASES LIKE 'moment_migration_it_%';"`
 Expected: 空结果（afterAll 已 DROP；即使测试中途失败，`IF EXISTS` 的 DROP 也不影响下次运行——失败遗留时手动 `DROP DATABASE` 即可）。
@@ -1717,7 +1757,7 @@ git commit -m "feat(web): expose imperative close on ContextMenu"
 - Modify: `apps/web/src/shell/shell-navigation.test.tsx`（renderShell 包 `ToastProvider`）
 
 **Interfaces:**
-- Consumes: Task 6 的 `ChainListService.reorder`；Task 7 的 `createDragGesture` / `moveItem` / `insertionIndex` / `DragGesture`；Task 8 的 `ContextMenuHandle`；既有 `ContextMenu` / `MenuItem`（`@/ui/menu/index`）、`useToast`（`@/ui/feedback/index`）、`ChainMark`、`sideLink` / `chipLink` 类名函数（**Shell.tsx 保留**——「大家的日子」汇总入口与 Brand 仍在用——经 `itemClassName` prop 传入本组件，不移动）。
+- Consumes: Task 6 的 `ChainListService.reorder`；Task 7 的 `createDragGesture` / `moveItem` / `insertionIndex` / `DragGesture`；Task 8 的 `ContextMenuHandle`；既有 `ContextMenu` / `MenuItem`（`@/ui/menu/index`）、`useToast`（`@/ui/feedback/index`）、`ChainMark`、`sideLink` / `chipLink` 类名函数（**Shell.tsx 保留**——「大家的日子」两处 NavLink（Shell.tsx 行 50/75）仍在用——经 `itemClassName` prop 传入本组件，不移动）。
 - Produces: `ChainNavList`——`{ chains: ChainDto[]; axis: 'x' | 'y'; itemClassName: (args: { isActive: boolean }) => string }`，Shell 侧栏（`axis="y"`）与顶部 chips（`axis="x"`）共用（spec §6.1「不各写一份」）。
 
 **DOM 接线清单（spec §6.2 硬要求逐条落点，实现者逐条核对）：**
@@ -2029,7 +2069,7 @@ git commit -m "feat(web): drag-to-reorder chains in shell navigation"
 **1. Spec 覆盖（逐节核对）：**
 
 - §1 背景与目标 / 非目标：只做 per-user 排序 + web 拖拽；不做 owner 全局排序、置顶概念、lexorank；share 只读页 / compose 面板 / moment sheet 零改动（Global Constraints 注明 compose 自动生效）。✓
-- §2 数据模型：`sort_order int notNull default 0`、允许负数、无唯一约束 → Task 3 schema；`drizzle-kit generate` 不手写改表 SQL → Task 3 Step 3；同迁移文件内回填（ROW_NUMBER PARTITION BY user_id ORDER BY created_at DESC, id）→ Task 3 Step 4（SQL 逐字取自 spec）；MySQL 8.4 窗口函数 → Task 3 Step 6 / Task 5 实测；**迁移编辑时序硬约束** → Global Constraints 首条 + Task 3 时序警告 + Step 3–8 顺序（generate → 立即 append → diff 检查 → **docker 回填验证** → 远程首跑——「先验证再跑迁移」，docker 验证不过则远程库零记录、无 hash 分叉）。✓
+- §2 数据模型：`sort_order int notNull default 0`、允许负数、无唯一约束 → Task 3 schema；`drizzle-kit generate` 不手写改表 SQL → Task 3 Step 3；同迁移文件内回填（ROW_NUMBER PARTITION BY user_id ORDER BY created_at DESC, id）→ Task 3 Step 4（SQL 逐字取自 spec）；MySQL 8.4 窗口函数 → Task 3 Step 7 / Task 5 实测；**迁移编辑时序硬约束** → Global Constraints 首条 + Task 3 时序警告与机制前提 + Step 3–9 顺序（generate → 立即 append → diff 检查 → **globalSetup 加 `SKIP_GLOBAL_MIGRATE` 守卫** → **docker 回填验证（带守卫，输出不含 `migrations applied` 为机制证据）** → 远程首跑——「先验证再跑迁移」，docker 验证不过则远程库零记录、无 hash 分叉）。✓
 - §3 列表查询：`ORDER BY sort_order ASC, created_at DESC` → Task 4 Step 3.5，测试含并列兜底用例。✓
 - §4 新链置顶：create / acceptInvite min-1、首链 1、退出重进回顶部、并发重复 sortOrder 容忍（不设唯一约束）→ Task 4 Step 3.4/3.6/3.7 + 三个测试用例。✓
 - §5 API：`PUT /api/chains/order`、body `{chainIds}`、204（`@HttpCode(204)+@OnUndefined(204)`）、去重集合恰好等于全部链否则 `CHAIN_ORDER_MISMATCH`、校验与重写同事务、IN 限定、空数组合法、dto schema（min(1).max(36).max(200)）、api-client `reorderChains` → Task 1/2/4；错误结构统一 `{error:{code,...}}` UPPER_SNAKE（沿用 `BadRequestError` + 既有 error-handler）。✓
@@ -2038,7 +2078,7 @@ git commit -m "feat(web): drag-to-reorder chains in shell navigation"
 - §6.3 提交流程：乐观更新 / 在途标志 / 成功收敛 load / 失败 toast + 回滚 load / **竞态防护（在途抑制 load 写回）** / **重入语义（引用计数非布尔）** / 拖拽临时顺序只在组件内 → Task 6（service + 4 个竞态/重入用例）+ Task 9（onDrop 才调 reorder）。✓
 - §6.4 compose 同源消费无改动、多设备 last-write-wins 取舍 → Global Constraints + Task 9 验收清单第 7 条。✓
 - §7 测试清单逐条：dto 正常/边界（空数组、超长 id、超 200）→ Task 1 三个用例；api-client 路由对齐 → Task 2；server listMine 排序 / create·acceptInvite 置顶（min-1、首链 1）/ reorder 正常重写 / 漏 id·多 id·他人链 id → CHAIN_ORDER_MISMATCH / 幂等 / 同事务+IN 限定（hook 顺序模拟）/ 退出重进回顶部 / 迁移回填验证（本地 docker 临时 schema）→ Task 4 十个用例 + Task 5 两个用例；web reorder 乐观·失败回滚+toast / 在途+并发 load 竞态 / 重入 / 状态机单测（含副指针忽略）/ DOM 不仿真 → Task 6 五个用例 + Task 7 十四个用例 + Task 9 无组件测试。✓
-- §8 红线：不新增表、`resetDb()` 不动、迁移只打 `.env` 测试库（且首跑排在 docker 回填验证之后）、每 Task 一个 conventional commit、TDD 红灯先行 → 各 Task Steps。**TDD 豁免点名：Task 9（Shell 接线）无红灯步骤**——spec §7 明确「DOM 拖拽本身不做 jsdom 仿真」，其红灯由 Step 3 前「`./chain-nav-list` 模块不存在」的编译失败承担，行为正确性由 Task 6/7/8 的单测与既有 shell-navigation 套件共同守护；另 Task 5 是迁移验证测试，其「红灯」形态是 Task 3 时序内的基线守卫失败，已在 Task 3 Step 6 说明。✓
+- §8 红线：不新增表、`resetDb()` 不动、迁移只打 `.env` 测试库（且首跑排在 docker 回填验证之后）、每 Task 一个 conventional commit、TDD 红灯先行 → 各 Task Steps。**TDD 豁免点名：Task 9（Shell 接线）无红灯步骤**——spec §7 明确「DOM 拖拽本身不做 jsdom 仿真」，其红灯由 Step 3 前「`./chain-nav-list` 模块不存在」的编译失败承担，行为正确性由 Task 6/7/8 的单测与既有 shell-navigation 套件共同守护；另 Task 5 是迁移验证测试，其「红灯」形态是 Task 3 时序内的基线守卫失败，已在 Task 3 Step 7 说明。✓
 
 **2. 占位符扫描：** 无 TBD / TODO / 「适当处理」/「类似 Task N」。所有代码块完整（dto schema、client 方法、service 方法、controller 路由、两个新测试文件、lib 状态机、组件、ContextMenu diff）；唯一非逐字产物是 `0014_<random>.sql` 的文件名（drizzle-kit 随机后缀），其内容已逐字给出。
 
