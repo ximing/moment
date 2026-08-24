@@ -200,7 +200,7 @@ describe('PUT /api/chains/order（spec §5）', () => {
     expect(res.status).toBe(401);
   });
 
-  it('校验与重写同事务且限定 chain_id IN：校验后并发入链的置顶行不被改写（spec §5.2/§7 顺序模拟）', async () => {
+  it('重写限定 chain_id IN：校验后并发入链的置顶行不被改写（spec §5.2/§7 顺序模拟）', async () => {
     const c1 = await createChain(app, owner, '链1');
     const c2 = await createChain(app, owner, '链2');
     const late = { id: randomUUID() };
