@@ -262,6 +262,7 @@ git commit -m "feat(dto): add voice moment type and audio media contracts"
 **Files:**
 - Modify: `packages/api-client/src/upload.ts`
 - Test: `packages/api-client/src/upload.test.ts`（扩展，node:test 不触库）
+- Modify: `packages/api-client/src/client.test.ts`（修正既有 createChain 测试 fixture）
 
 **Interfaces:**
 - Consumes: Task 1 的 `MAX_AUDIO_BYTES`；既有 `uploadMediaImpl(http, options, input)` / `UploadMediaInput` / mock fetch 测试基建。
@@ -352,6 +353,8 @@ import { MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, VIDEO_PART_SIZE } fr
 
 - [ ] **Step 4: 运行确认通过**
 
+先在 `packages/api-client/src/client.test.ts` 的既有 `createChain` 测试请求中补上 DTO 要求的 `template` 字段（例如 `template: 'daily'`），保持该测试与现有契约一致；该 fixture 修正属于本 Task 的 typecheck 门禁范围，不改变 voice 上传语义。
+
 Run: `pnpm --filter @moment/api-client test && pnpm --filter @moment/api-client typecheck && pnpm --filter @moment/api-client build`
 Expected: 全过，typecheck/build exit 0。
 
@@ -360,7 +363,7 @@ Expected: 全过，typecheck/build exit 0。
 > 本步骤由编排主 Agent 在验收后执行；实现 SubAgent 跳过 commit，报告待提交文件清单。
 
 ```bash
-git add packages/api-client/src/upload.ts packages/api-client/src/upload.test.ts
+git add packages/api-client/src/upload.ts packages/api-client/src/upload.test.ts packages/api-client/src/client.test.ts
 git commit -m "feat(api-client): support audio upload kind with 25MB local limit"
 ```
 
