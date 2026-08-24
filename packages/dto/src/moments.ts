@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ReactionSummary } from './comments.js';
 import type { TagBrief } from './tags.js';
 
-export const momentTypeSchema = z.enum(['text', 'media', 'video']);
+export const momentTypeSchema = z.enum(['text', 'media', 'video', 'voice']);
 export type MomentType = z.infer<typeof momentTypeSchema>;
 
 const uuidSchema = z.string().uuid();
@@ -43,6 +43,11 @@ export const createMomentInputSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'MEDIA_COUNT_INVALID', path: ['mediaIds'] });
     }
     if (val.type === 'media' && (val.mediaIds.length < 1 || val.mediaIds.length > 9)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'MEDIA_COUNT_INVALID', path: ['mediaIds'] });
+    }
+    // voice = 1 语音 + 0~8 附图（dto 只验数量与去重；「恰好 1 条 audio/* 且其余全 image/*」
+    // 的 mime 构成校验在 server 发布事务内做，与 video/media 同分工，spec §2.2）
+    if (val.type === 'voice' && (val.mediaIds.length < 1 || val.mediaIds.length > 9)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'MEDIA_COUNT_INVALID', path: ['mediaIds'] });
     }
     // 重复 id 会导致发布事务对同一 tmp 对象 copy 两次（第二次 NoSuchKey → 500），必须拒绝
@@ -100,6 +105,10 @@ export interface MomentResponse {
   author: AuthorSummary;
   type: MomentType;
   content: string;
+  /** ASR 原始转写；仅 voice 可能非空，其余类型恒 null（用户不可改，PATCH .strict() 拒绝） */
+  transcript: string | null;
+  /** 转写状态；仅 voice 非空（pending/done/failed），其余类型恒 null */
+  transcriptionStatus: 'pending' | 'done' | 'failed' | null;
   /** 语义类别（默认 standard） */
   kind: string;
   /** 结构化数据（milestone/metric 的 payload，或 standard 的 mood/geo 等扩展字段）；无为 null */

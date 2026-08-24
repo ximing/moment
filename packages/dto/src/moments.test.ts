@@ -157,3 +157,45 @@ test('createMomentInputSchema：posterMediaId 空串拒绝（min(1)）', () => {
 test('patchMomentInputSchema：.strict() 拒绝 posterMediaId（封面发布后不可改）', () => {
   assert.ok(!patchMomentInputSchema.safeParse({ posterMediaId: 'poster-1' }).success);
 });
+
+test('createMomentInputSchema：type=voice mediaIds 1~9（0/10 拒绝，MEDIA_COUNT_INVALID）', () => {
+  const voice = { ...base, type: 'voice' as const, content: '' };
+  assert.ok(!createMomentInputSchema.safeParse({ ...voice, mediaIds: [] }).success);
+  assert.ok(
+    !createMomentInputSchema.safeParse({
+      ...voice,
+      mediaIds: Array.from({ length: 10 }, (_, i) => `m-${i}`),
+    }).success,
+  );
+  assert.ok(createMomentInputSchema.safeParse({ ...voice, mediaIds: ['a-1'] }).success);
+  assert.ok(
+    createMomentInputSchema.safeParse({ ...voice, mediaIds: Array.from({ length: 9 }, (_, i) => `m-${i}`) }).success,
+  );
+});
+
+test('createMomentInputSchema：type=voice 重复 mediaId 拒绝（MEDIA_COUNT_INVALID）', () => {
+  assert.ok(
+    !createMomentInputSchema.safeParse({ ...base, type: 'voice', content: '', mediaIds: ['m-1', 'm-1'] }).success,
+  );
+});
+
+test('createMomentInputSchema：type=voice 空 content 通过（转写回填前无文本，spec §2.2）', () => {
+  assert.ok(createMomentInputSchema.safeParse({ ...base, type: 'voice', content: '', mediaIds: ['a-1'] }).success);
+});
+
+test('createMomentInputSchema：type=voice 传 posterMediaId → MEDIA_NOT_ALLOWED（封面仅 video）', () => {
+  assert.ok(
+    !createMomentInputSchema.safeParse({
+      ...base,
+      type: 'voice',
+      content: '',
+      mediaIds: ['a-1'],
+      posterMediaId: 'p-1',
+    }).success,
+  );
+});
+
+test('patchMomentInputSchema：.strict() 拒绝 transcript / transcriptionStatus（转写不可经 API 改）', () => {
+  assert.ok(!patchMomentInputSchema.safeParse({ transcript: 'x' }).success);
+  assert.ok(!patchMomentInputSchema.safeParse({ transcriptionStatus: 'done' }).success);
+});
