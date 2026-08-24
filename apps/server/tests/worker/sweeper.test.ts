@@ -6,7 +6,7 @@ import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage, type MockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
-import { handleMomentDeleted, handlers } from '../../src/worker/handlers.js';
+import { handleMomentDeleted, handleMomentTranscribe, handlers } from '../../src/worker/handlers.js';
 import { sweepSoftDeletedMomentMedia, sweepStaleUploadingMedia } from '../../src/worker/sweeper.js';
 
 let storage: MockStorage;
@@ -163,6 +163,7 @@ describe('handleMomentDeleted（outbox moment.deleted → 标记 orphaned，幂�
 
   it('handlers 注册表含 moment.deleted', () => {
     expect(handlers['moment.deleted']).toBe(handleMomentDeleted);
-    expect(Object.keys(handlers)).toHaveLength(5);
+    expect(handlers['moment.transcribe']).toBe(handleMomentTranscribe);
+    expect(Object.keys(handlers)).toHaveLength(6);
   });
 });

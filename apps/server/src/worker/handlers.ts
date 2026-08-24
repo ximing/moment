@@ -1,7 +1,10 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { MAX_AUDIO_BYTES } from '@moment/dto';
+import { and, eq, inArray, isNull, like } from 'drizzle-orm';
 import { Container } from 'typedi';
 import { db } from '../db/index.js';
 import { chainMembers, chains, comments, media, moments, recaps, users } from '../db/schema.js';
+import { getASRProvider } from '../llm/asr/factory.js';
+import { NonRetryableLLMError } from '../llm/base.provider.js';
 import { getLLMProvider } from '../llm/factory.js';
 import { generateRecap } from '../llm/recap/generate.js';
 import { NotificationService } from '../notifications/notification.service.js';
@@ -12,6 +15,7 @@ import {
   NOTIFICATION_RECAP_READY,
 } from '../notifications/types.js';
 import type { PushService } from '../push/push-service.js';
+import { getStorage } from '../storage/factory.js';
 
 export type OutboxHandler = (payload: Record<string, unknown>, deps: { push: PushService }) => Promise<void>;
 
@@ -161,6 +165,131 @@ export const handleMomentDeleted: OutboxHandler = async (payload) => {
     .where(and(eq(media.momentId, momentId), eq(media.status, 'ready')));
 };
 
+/** 转写文本截断上限：对齐 dto content max(5000)——worker 回填绕过 API 校验，
+ *  不截断会落出 API 写不出的值，破坏契约对称（spec §4.3 步骤 5）。 */
+const TRANSCRIPT_MAX_CHARS = 5000;
+
+/**
+ * 有界读取下载响应：header 可提前拒绝，但不能只信 header；无/伪造长度时仍按流累计。
+ * 返回 null 表示对象超限。超限后立即 cancel，避免继续从远端拉取剩余字节。
+ */
+async function readAudioResponse(resp: Response): Promise<Buffer | null> {
+  const contentLength = resp.headers.get('content-length');
+  if (contentLength !== null) {
+    const declaredBytes = Number(contentLength);
+    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_AUDIO_BYTES) {
+      await resp.body?.cancel().catch(() => undefined);
+      return null;
+    }
+  }
+
+  if (!resp.body) return Buffer.alloc(0);
+  const reader = resp.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_AUDIO_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, bytes);
+}
+
+/** 落 failed 终态：仅当前仍 pending 才写（防与并发成功路径互相覆盖）。 */
+async function markTranscriptionFailed(momentId: string): Promise<void> {
+  await db
+    .update(moments)
+    .set({ transcriptionStatus: 'failed' })
+    .where(and(eq(moments.id, momentId), eq(moments.transcriptionStatus, 'pending')));
+}
+
+/**
+ * moment.transcribe（spec voice-moment §4.3）：voice moment 的 ASR 异步转写回填。
+ * 失败语义：RetryableLLMError 传播给 processor 退避；NonRetryableLLMError / 停用 / 异常态自落 failed；
+ * 悬挂 pending 由 sweeper 6h cutoff 兜底（§4.4）。任何失败都不影响 moment 存在与语音播放。
+ * 转写完成后不扇出通知（§0 搁置决策）。
+ */
+export const handleMomentTranscribe: OutboxHandler = async (payload) => {
+  const momentId = str(payload.momentId);
+  if (!momentId) return;
+
+  // 步骤 1：幂等 + 竞态防御——不存在 / 已软删 / 非 voice / 非 pending 直接返回
+  const [m] = await db.select().from(moments).where(eq(moments.id, momentId)).limit(1);
+  if (!m || m.deletedAt || m.type !== 'voice' || m.transcriptionStatus !== 'pending') return;
+
+  // 步骤 2：查该 moment 的 audio/* media 行；不存在（异常态）→ failed
+  const [audioRow] = await db
+    .select()
+    .from(media)
+    .where(and(eq(media.momentId, momentId), like(media.mime, 'audio/%')))
+    .limit(1);
+  if (!audioRow) {
+    await markTranscriptionFailed(momentId);
+    return;
+  }
+
+  // 步骤 3：部署方停用转写 → failed 正常返回（不占重试额度；create 恒 emit、handler 判 null 的取舍见 spec §0）
+  const provider = getASRProvider();
+  if (!provider) {
+    await markTranscriptionFailed(momentId);
+    return;
+  }
+
+  // 步骤 4：内部预签名 GET（短 TTL）→ 下载字节；网络/非 2xx 抛普通 Error（processor 对任何抛出都退避，
+  // S3 瞬时故障可重试）。响应字节超 MAX_AUDIO_BYTES → failed（防御行上 size 与对象不符）。
+  const url = await getStorage().generateAccessUrl(audioRow.s3Key, audioRow.storageMeta, 300);
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`audio download failed: ${resp.status}`);
+  const audio = await readAudioResponse(resp);
+  if (!audio) {
+    await markTranscriptionFailed(momentId);
+    return;
+  }
+
+  // 步骤 5：转写 + 落库
+  try {
+    const { text } = await provider.transcribe({ audio, mime: audioRow.mime });
+    const truncated = text.slice(0, TRANSCRIPT_MAX_CHARS);
+    // 成功（含空文本）→ done + transcript；content 条件回填：用户可能在转写完成前已手动编辑，
+    // 不覆盖用户输入（SET content WHERE content=''）。CAS 在 IO 后重新校验终态，避免迟到结果覆盖
+    // 并发 failed / 软删 / 已完成；只有抢占 pending 成功后才回填 content。
+    await db.transaction(async (tx) => {
+      const [result] = await tx
+        .update(moments)
+        .set({ transcript: truncated, transcriptionStatus: 'done' })
+        .where(
+          and(
+            eq(moments.id, momentId),
+            isNull(moments.deletedAt),
+            eq(moments.type, 'voice'),
+            eq(moments.transcriptionStatus, 'pending'),
+          ),
+        );
+      if (result.affectedRows === 0) return;
+      await tx
+        .update(moments)
+        .set({ content: truncated })
+        .where(and(eq(moments.id, momentId), eq(moments.content, '')));
+    });
+  } catch (err) {
+    // NonRetryable：自落终态、不占 processor 退避额度（对齐 recap 范式）；Retryable 及其他抛出 → 传播退避
+    if (err instanceof NonRetryableLLMError) {
+      await markTranscriptionFailed(momentId);
+      return;
+    }
+    throw err;
+  }
+};
+
 /**
  * recap.generate（spec §1）：调 generateRecap 生成回顾，成功后扇出 recap.ready 通知。
  *
@@ -230,4 +359,5 @@ export const handlers: Record<string, OutboxHandler> = {
   'reaction.created': handleReactionCreated,
   'moment.deleted': handleMomentDeleted,
   'recap.generate': handleRecapGenerate,
+  'moment.transcribe': handleMomentTranscribe,
 };
