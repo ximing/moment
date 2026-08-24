@@ -113,9 +113,15 @@ Shell 两处链列表渲染（`apps/web/src/shell/Shell.tsx`：侧栏 `chains.ma
 
 **b) 触屏与原生滚动同轴冲突**。主目标设备是家庭平板，而两处容器都是原生可滚动且滚动方向与拖拽同轴：侧栏 `nav overflow-y-auto`（纵向拖）、顶部 chips `div overflow-x-auto`（横向拖）。触屏 pointerdown 后一旦移动，浏览器接管滚动并派发 pointercancel，固定像素阈值手势会被掐死。按 `pointerType` 区分激活方式：
    - `mouse` / `pen`：移动超过 ~6px 阈值激活拖拽；
-   - `touch`：**长按 ~350ms 激活**（不用像素阈值），激活前手指移动即放弃手势让位滚动；激活后再给该项施加 `touch-action: none`（此时滚动已让位）。不在静态样式上给链项预设 `touch-action: none`（否则链多时列表在链项上无法滚动）。
+   - `touch`：**长按 ~350ms 进入 armed 态，armed 后手指移动才激活拖拽**（见 c 的菜单互斥）；armed 前手指移动即放弃手势让位滚动。
+   - 注意：`touch-action` 的许可值在 pointerdown 时刻由浏览器采样，**手势进行中修改 `touch-action` 对当前手势无效**。因此激活后阻止滚动接管的手段是：对当前手势挂**非 passive 的 `touchmove` 监听并 `preventDefault()`**（pointermove 的 preventDefault 不能阻止滚动接管，必须用 touch 事件层）。pointercancel 清理（见 d）保留为兜底。不在静态样式上给链项预设 `touch-action: none`（否则链多时列表在链项上无法滚动）。
 
-**c) 与 ContextMenu 的互斥**。`ContextMenu` 监听 `contextmenu` 事件（Menu.tsx），移动端长按恰会派发 contextmenu。规则：长按激活拖拽后，本次手势内的 `contextmenu` 被 suppress（preventDefault，不弹菜单）；菜单已打开时不启动拖拽手势。
+**c) 与 ContextMenu 的互斥（触屏长按入口不回归）**。`ContextMenu` 只挂 `onContextmenu`（Menu.tsx），而今天触屏上长按链项就会派发 contextmenu 弹「链设置」菜单——这是触屏上进链设置的唯一入口，不能被拖拽抢占。规则：
+   - **长按 + 移动** = 进入拖拽；
+   - **长按 + 原地松手** = 不进入拖拽，contextmenu 照常弹菜单（现状不回归）；
+   - 移动进入拖拽时，若 contextmenu 已触发/菜单已开，则关闭菜单并 suppress 本次后续；
+   - 菜单已打开时不启动拖拽手势。
+   实现钩子（plan 落实）：拖拽层在**捕获阶段**监听 contextmenu 做 stopPropagation/preventDefault，或给 ContextMenu 加受控开关——ContextMenu 的处理器会 preventDefault 并开菜单，不在捕获阶段拦截则 suppress 无法实现。
 
 **d) pointercancel 清理**。任何阶段收到 pointercancel（浏览器接管滚动、手势被系统打断等）都必须中止手势、清理临时态（指示线、位移、抑制标记），不产生 reorder 提交。
 
@@ -138,9 +144,11 @@ Shell 两处链列表渲染（`apps/web/src/shell/Shell.tsx`：侧栏 `chains.ma
 
 拖拽手势期间的临时顺序只在组件内，松手才调 `reorder`。
 
+**重入语义**：在途期间用户再次松手发起第二次 reorder 是允许的，不排队、不阻塞 UI；服务端按到达顺序 last-write-wins，客户端每次成功/失败都经统一 `load()` 收敛，最终呈现以最后一次 load 为准（短暂中间态可接受）。
+
 ### 6.4 其它消费方与多设备语义
 
-- compose 面板 / moment sheet 链选择器：只读 `chainList.chains`（已核实同源），顺序自动生效，无代码改动。
+- compose 面板链选择器：只读 `chainList.chains`（已核实同源，compose-panel.service resolve ChainListService），顺序自动生效，无代码改动。moment sheet 无链选择器（只有跳链链接），不涉及。
 - **多设备 / 多端语义（显式取舍）**：`chain:changed` 是进程内事件总线，不是跨设备同步机制。设备 A reorder 后，设备 B 与 RN app 只在下次各自拉取列表时才看到新顺序；同一用户两台设备同时 reorder 时**last-write-wins**，后写者覆盖先写者，先写方客户端维持本地顺序直到下次 load。本迭代不做跨设备实时同步。
 
 
@@ -154,7 +162,8 @@ Shell 两处链列表渲染（`apps/web/src/shell/Shell.tsx`：侧栏 `chains.ma
   - `create` / `acceptInvite` 新链置顶（sortOrder = min-1，首链 = 1）；
   - `reorder`：正常重写；漏 id / 多 id / 他人链 id → `CHAIN_ORDER_MISMATCH`；幂等（重复提交同序无副作用）；校验与重写同事务、`chain_id IN` 限定（reorder 后并发入链的置顶行不被改写）；
   - 退出重进 = 回顶部；
-  - **迁移回填验证**：在测试库上实跑一次迁移（不是 service 层模拟），断言回填后 `listMine` 顺序与迁移前 `created_at DESC` 顺序一致。
+  - **迁移回填验证**：远程共享测试库已应用全部既有迁移，直接跑 migrate 是 no-op，无法观察回填效果。验证规程（plan 落实细节）：用本地 docker compose 的 MySQL 8.4 起**临时 schema**（不碰远程共享库），migrate 到 0013 → 按旧行为造多用户多链数据 → 应用本迁移（0014）→ 断言 `listMine` 顺序与迁移前 `created_at DESC` 顺序一致；jest 内可通过指向临时 DATABASE_URL 的子进程跑 migrate 脚本或直接调 migrator；
+  - 「并发入链不被改写」测试手段：`--runInBand` 下真实并发难以确定性复现，采用顺序模拟——在 reorder 事务的校验之后、提交之前注入一条新 membership 行，断言该行 sortOrder 不被重写（plan 落实具体注入方式，如 service 内可测试钩子或拆步调用）。
 - **web**（Vitest + jsdom）：
   - `ChainListService.reorder` 乐观更新、失败回滚 + toast；
   - **reorder 在途 + 并发 load() 完成的竞态**：在途期间 load 结果被抑制，成功/失败后由统一 load 收敛（本设计最易出 bug 的点，必须有测试）；
