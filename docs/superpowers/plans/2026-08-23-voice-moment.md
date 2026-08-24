@@ -2177,38 +2177,66 @@ export function VoiceRecorder({ onChange }: { onChange: (draft: VoiceDraft | nul
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<number | null>(null);
+  // 每次 start 都分配递增 token。reset/卸载使旧 token 失效；任何 await 后都只能回写仍活跃的会话。
+  const mountedRef = useRef(true);
+  const sessionRef = useRef(0);
+  const recordingRef = useRef<{ recorder: MediaRecorder; stream: MediaStream; token: number } | null>(null);
+  const timerRef = useRef<{ id: number; token: number } | null>(null);
   const previewRef = useRef<string | null>(null);
 
-  const clearTimer = () => {
-    if (timerRef.current !== null) {
-      window.clearInterval(timerRef.current);
+  const isActive = (token: number) => mountedRef.current && sessionRef.current === token;
+
+  const clearTimer = (token?: number) => {
+    if (timerRef.current !== null && (token === undefined || timerRef.current.token === token)) {
+      window.clearInterval(timerRef.current.id);
       timerRef.current = null;
     }
   };
 
-  const stop = () => {
-    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+  // reset/卸载必须同时关闭 recorder 与麦克风 tracks；其异步 onstop 由旧 token 拦截。
+  const stopActiveCapture = () => {
+    const active = recordingRef.current;
+    recordingRef.current = null;
+    if (!active) return;
+    if (active.recorder.state === 'recording') active.recorder.stop();
+    active.stream.getTracks().forEach((track) => track.stop());
+  };
+
+  const stop = (token = sessionRef.current) => {
+    const active = recordingRef.current;
+    if (active?.token === token && active.recorder.state === 'recording') active.recorder.stop();
   };
 
   const start = async () => {
+    // 先失效旧会话，再请求权限；并发 start 的较早 getUserMedia resolve 也只能自行释放 tracks。
+    const token = sessionRef.current + 1;
+    let stream: MediaStream | null = null;
+    sessionRef.current = token;
+    stopActiveCapture();
+    clearTimer();
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!isActive(token)) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const recorder = new MediaRecorder(stream);
-      recorderRef.current = recorder;
-      chunksRef.current = [];
+      const chunks: Blob[] = [];
+      recordingRef.current = { recorder, stream, token };
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data.size > 0) chunks.push(e.data);
       };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
-        clearTimer();
-        const raw = new Blob(chunksRef.current, { type: recorder.mimeType });
+        if (recordingRef.current?.recorder === recorder) recordingRef.current = null;
+        clearTimer(token); // 不能让旧 onstop 清掉新会话的 timer
+        if (!isActive(token)) return;
+        const raw = new Blob(chunks, { type: recorder.mimeType });
         void recorderBlobToWav(raw)
           .then(({ blob, durationSeconds }) => {
+            // 转码期间 reset/卸载则既不建 object URL，也不触发 service 回写。
+            if (!isActive(token)) return;
             const url = URL.createObjectURL(blob);
             previewRef.current = url;
             setPreviewUrl(url);
@@ -2216,6 +2244,8 @@ export function VoiceRecorder({ onChange }: { onChange: (draft: VoiceDraft | nul
             onChange({ blob, durationSeconds, previewUrl: url });
           })
           .catch(() => {
+            // 失败也不能覆盖已经开始的新会话或已关闭的面板。
+            if (!isActive(token)) return;
             setError('无法处理录音，请重试');
             setPhase('idle');
             onChange(null);
@@ -2225,12 +2255,26 @@ export function VoiceRecorder({ onChange }: { onChange: (draft: VoiceDraft | nul
       setElapsed(0);
       setPhase('recording');
       const startedAt = Date.now();
-      timerRef.current = window.setInterval(() => {
+      timerRef.current = { id: window.setInterval(() => {
+        if (!isActive(token)) {
+          clearTimer(token);
+          return;
+        }
         const sec = Math.floor((Date.now() - startedAt) / 1000);
         setElapsed(sec);
-        if (sec >= MAX_AUDIO_DURATION_SECONDS) stop(); // 300s 自动停止（spec §5）
-      }, 250);
+        if (sec >= MAX_AUDIO_DURATION_SECONDS) stop(token); // 300s 自动停止（spec §5）
+      }, 250), token };
     } catch {
+      // getUserMedia 的拒绝/异常若属于失效会话，禁止对已关闭 service 回写。
+      if (!isActive(token)) return;
+      // MediaRecorder 构造/start 抛错时，也先使 token 失效，防止 stop() 随后触发的 onstop 转码回写。
+      sessionRef.current += 1;
+      clearTimer(token);
+      if (recordingRef.current?.token === token) {
+        stopActiveCapture();
+      } else {
+        stream?.getTracks().forEach((track) => track.stop());
+      }
       setError('麦克风不可用或权限被拒绝');
       onChange(null);
     }
@@ -2238,6 +2282,9 @@ export function VoiceRecorder({ onChange }: { onChange: (draft: VoiceDraft | nul
 
   const reset = () => {
     // 重录：丢弃未上传草稿；已上传未绑定的 audio 行按既有 ready-unbound gap 处理（spec §5，本期不新增清理）
+    sessionRef.current += 1; // 先取消 onstop / 转码 / getUserMedia 的全部后续回写
+    clearTimer();
+    stopActiveCapture();
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     previewRef.current = null;
     setPreviewUrl(null);
@@ -2246,11 +2293,17 @@ export function VoiceRecorder({ onChange }: { onChange: (draft: VoiceDraft | nul
     onChange(null);
   };
 
-  // 卸载清理：停录音、清计时器；previewUrl 已随 onChange 转移给 service，不在此 revoke
+  // 卸载清理：先取消会话，再停 recorder、麦克风 tracks 与 timer；已交给 service 的 previewUrl 不在此 revoke。
   useEffect(
-    () => () => {
-      clearTimer();
-      if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+    () => {
+      // React Strict Mode 的 effect 重放后恢复 mounted 标志。
+      mountedRef.current = true;
+      return () => {
+        mountedRef.current = false;
+        sessionRef.current += 1;
+        clearTimer();
+        stopActiveCapture();
+      };
     },
     []
   );
