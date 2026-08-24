@@ -4,15 +4,16 @@
 
 **Goal:** 新增第四种 moment 类型 `voice` = 1 段语音（必有）+ 0~8 附图（可选）+ ASR 异步转写回填：dto 加 audio 媒体契约与 voice moment 契约；server 扩 moments 表（type 枚举 + `transcript` / `transcription_status` 列）、presign audio 分支、发布事务 voice 校验与 `moment.transcribe` outbox、ASR provider + worker 转写 handler + 6h 悬挂 sweeper；web 端 MediaRecorder 录音 → 16kHz mono WAV 转码发布 + 播放条卡片；app 端 expo-audio 录音/播放 + 消费侧分支。「重新转写」入口、转写完成二次通知、波形图、media 宫格混排 audio 均不做（spec §0 搁置决策）。
 
-**Architecture:** 数据层与 media moment 同构（都靠 media 行绑定，恰好 1 个 `audio/*` + 0~8 个 `image/*`），media 表零改动（无 kind 列，`duration` 列复用为音频时长）。转写与原文分离：`content` 存展示文本（用户可编辑），`transcript` 存 ASR 原始转写（不可改）。发布即上时间线（`transcription_status='pending'`，语音立即可播），转写走 outbox + worker 回填（成功单事务落 `transcript` + `done` + `content` 条件回填 `WHERE content=''`）。失败语义：RetryableLLMError 传播走 processor 退避；NonRetryable / 停用 / 异常态 handler 自落 `failed`；sweeper 6h cutoff 兜底悬挂 pending。ASR provider 与 recap 的 `LLM_*` 完全独立（`ASR_*` 三个新环境变量，空 key = 停用转写）。
+**Architecture:** 数据层与 media moment 同构（都靠 media 行绑定，恰好 1 个 `audio/*` + 0~8 个 `image/*`），media 表零改动（无 kind 列，`duration` 列复用为音频时长）。转写与原文分离：`content` 存展示文本（用户可编辑），`transcript` 存 ASR 原始转写（不可改）。发布即上时间线（`transcription_status='pending'`，语音立即可播），转写走 outbox + worker 回填（成功单事务落 `transcript` + `done` + `content` 条件回填 `WHERE content=''`）。handler 先用 3600 秒预签名 GET 做 25MB 有界下载防御，再把同一 URL 交给 DashScope `fun-asr`；provider 提交异步任务、2 秒轮询、5 分钟超时并拉取结果 JSON。失败语义：RetryableLLMError 传播走 processor 退避；NonRetryable / 停用 / 异常态 handler 自落 `failed`；sweeper 6h cutoff 兜底悬挂 pending。ASR provider 与 recap 的 `LLM_*` 完全独立（`ASR_*` 三个环境变量，空 key = 停用转写）。
 
-**Tech Stack:** zod ^3（dto）/ routing-controllers + Drizzle + MySQL + Jest 触库测试（server）/ OpenAI 兼容 `/audio/transcriptions` multipart（ASR）/ React 19 + @rabjs/react + MediaRecorder + AudioContext/OfflineAudioContext（web，纯 Web API 无新依赖）/ Expo SDK 54 + expo-audio（app，新原生依赖）。
+**Tech Stack:** zod ^3（dto）/ routing-controllers + Drizzle + MySQL + Jest 触库测试（server）/ 阿里云 DashScope `fun-asr` submit + poll HTTP API（ASR，Node 20 原生 fetch，无新依赖）/ React 19 + @rabjs/react + MediaRecorder + AudioContext/OfflineAudioContext（web，纯 Web API 无新依赖）/ Expo SDK 54 + expo-audio（app，新原生依赖）。
 
 **Spec:** `docs/superpowers/specs/2026-08-23-voice-moment-design.md`（唯一真相源；本计划不超出其范围）
 
 ## Global Constraints
 
 - **新环境变量** `ASR_BASE_URL` / `ASR_API_KEY` / `ASR_MODEL`：必须同步 `apps/server/src/config.ts`（zod）与 `apps/server/.env.example`（根 CLAUDE.md 强约定）；`apps/server/.env` 严禁提交或覆盖。
+- **DashScope 固定默认值**：`ASR_BASE_URL=https://dashscope.aliyuncs.com/api/v1`、`ASR_MODEL=fun-asr`；真实 `ASR_API_KEY` 只放本地 ignored env 或部署 secret，`.env.example` 保持空值。轮询间隔 2000ms、整体超时 300000ms、source URL TTL 3600s 均为实现常量，不新增环境变量、依赖、表或迁移。
 - **无新表**：`apps/server/tests/helpers/db.ts` 的 `resetDb()` 无需扩展。moments 表迁移由 `drizzle-kit generate` 产出，不手写 SQL。
 - **spec 钉死决策不得推翻**：app 录音用 expo-audio（不装 expo-av）；web 浏览器内转码 16kHz mono WAV（白名单不收 `audio/webm` / `audio/ogg`）；sweeper cutoff 6h（必须大于 processor 最大累计退避 ≈5h21m，理由见 spec §4.4）；转写回填截断 5000 字符（对齐 dto `content` `max(5000)`）；`content` / `transcript` 分离；ASR 停用形态 = 「create 恒 emit `moment.transcribe` + handler 判 `getASRProvider() === null` 落 `failed`」（spec §0，不得改为条件 emit）。
 - server 触库测试遵守 `.claude/rules/testing.md`：`--runInBand`（已内置在 test 脚本）、`afterAll(closeDb)`、只打 `.env` 指向的测试库；**测试库是远程共享 MySQL，严禁同时跑两个 jest 会话**；S3 走 `installMockStorage()`。
@@ -27,7 +28,7 @@
 2. **web `MediaBlock.tsx` 零改动**：spec §5 点名 MediaBlock 为「必须修改点」，但具体要求原文是「voice 卡片不该走 MediaBlock 渲 audio 行，**调用方须先拆出 audio 行**」——修改落在调用方 `moment-sheet.tsx`（voice 分支只把 `image/*` 行交给 MediaBlock），MediaBlock 本身不需要改。app 侧 `MediaGrid.tsx` 按 spec 原文加 `image/*` 显式守卫（else 分支按图渲染会吞 `audio/*`）。
 3. **app 播放用 expo-audio `useAudioPlayer`**：spec §6 允许 expo-audio 与已装 expo-video 二选一；录制已引入 expo-audio，播放复用同库，不重复引依赖范式。
 4. **recap input 字段表述微调**：spec §0 写 recap input「只 select content/kind/payload」——实际 `loadMomentsInPeriod` select 7 个字段（id/authorId/content/happenedAt/happenedTzOffset/kind/payload，`apps/server/src/llm/recap/input.ts` L62-73），但进入摘要文本的只有 content/kind/payload；结论（voice 空 content 参与 recap 属可接受退化、不改代码）不变。
-5. **worker handler 下载音频用全局 `fetch`**：Node 20 全局 fetch 直取预签名 GET URL；测试 stub `globalThis.fetch`（与 `tests/llm/provider.test.ts` 同范式），`installMockStorage()` 的 `generateAccessUrl` 返回假 URL。
+5. **worker handler 防御下载与 DashScope 共用 URL**：Node 20 全局 fetch 先对 3600 秒预签名 GET URL 做 25MB 有界读取防御，Buffer 随即丢弃；provider 接收同一 `{ fileUrl }`，让 DashScope 自行拉取。测试继续以 `installMockStorage()` 返回假 URL，并分别 stub handler fetch 与 provider。
 6. **spec §5/§6 行号已核实**：`moment-sheet.tsx` L69 images filter、`MediaGrid.tsx` L41 video 三元、`features/moment/index.tsx` L115 video 三元均与实际代码逐字吻合。
 
 ---
@@ -1126,6 +1127,8 @@ git commit -m "feat(server): fallback push summary for empty-content voice momen
 
 ### Task 7: server — ASR provider 子模块 + ASR_* 配置
 
+> **已落地的迁移前基线**：本 Task 记录最初的 OpenAI-compatible multipart 实现；最终目标由 Task 15 替换为 DashScope `fun-asr`。执行当前计划时不得重新实现本 Task 的 `OpenAICompatASRProvider`。
+
 **Files:**
 - Create: `apps/server/src/llm/asr/base.provider.ts`
 - Create: `apps/server/src/llm/asr/openai-compat.provider.ts`
@@ -1497,6 +1500,8 @@ git commit -m "feat(server): add ASR provider with OpenAI-compatible transcripti
 ---
 
 ### Task 8: server — worker handleMomentTranscribe + 注册
+
+> **已落地的迁移前基线**：本 Task 的 25MB 有界下载、5000 截断、CAS 与无通知语义继续保留；`provider.transcribe({ audio, mime })` 和 300 秒 URL TTL 由 Task 15 精确替换。
 
 **Files:**
 - Modify: `apps/server/src/worker/handlers.ts`（新增 `handleMomentTranscribe` + 注册表）
@@ -3270,9 +3275,9 @@ pnpm build && pnpm test && pnpm lint
 
 Expected: 全部 exit 0。`pnpm test` 覆盖 dto（`tsx --test`）、api-client（`tsx --test`）、server（jest `--runInBand` 触库）、web（vitest）。
 
-- [ ] **Step 2: server + worker 手动验收**（`pnpm dev` 起 server + web，`.env` 配好 `ASR_API_KEY`）
+- [ ] **Step 2: server + worker 手动验收**（`pnpm dev` 起 server + web；ignored 的本地 `.env` 配 `ASR_BASE_URL=https://dashscope.aliyuncs.com/api/v1`、`ASR_MODEL=fun-asr` 与真实 `ASR_API_KEY`，key 不 stage）
 
-1. 发布 voice moment（web 录音）→ 时间线 pending 卡片可播 → worker 日志消费 `moment.transcribe` → 几秒后刷新：`transcriptionStatus=done`，卡片显示转写文本。
+1. 发布 voice moment（web 录音）→ 时间线 pending 卡片可播 → worker 日志消费 `moment.transcribe`、提交 DashScope task 并轮询 → 完成后刷新：`transcriptionStatus=done`，卡片显示转写文本。
 2. 停用形态：`.env` 删掉 `ASR_API_KEY` 重启 → 再发一条 voice → 约一个 outbox 轮询周期后 `transcription_status=failed`，卡片无任何转写 UI、语音可播。
 3. 转写完成前手动编辑 content（PATCH）→ 转写回填不覆盖编辑值，`transcript` 仍落 ASR 原文。
 
@@ -3306,13 +3311,407 @@ git commit -m "test: verify voice moment end to end"
 
 ---
 
+### Task 15: server — 将 multipart ASR 替换为 DashScope `fun-asr` 异步任务
+
+**Files:**
+- Modify: `apps/server/src/llm/asr/base.provider.ts`
+- Delete: `apps/server/src/llm/asr/openai-compat.provider.ts`
+- Create: `apps/server/src/llm/asr/dashscope.provider.ts`
+- Modify: `apps/server/src/llm/asr/factory.ts`
+- Modify: `apps/server/src/config.ts`
+- Modify: `apps/server/.env.example`
+- Modify: `apps/server/src/worker/handlers.ts`
+- Modify: `apps/server/tests/llm/asr-provider.test.ts`（不触库）
+- Modify: `apps/server/tests/worker/handle-moment-transcribe.test.ts`（触真实测试库）
+
+**Interfaces:**
+- Consumes: Task 8 已落地的 `readAudioResponse(response): Promise<Buffer | null>` 25MB 有界读取、`markTranscriptionFailed(momentId)`、5000 截断、终态 CAS 与无通知断言；`getStorage().generateAccessUrl(key, metadata, expiresIn)`；既有 `RetryableLLMError` / `NonRetryableLLMError` 与 outbox at-least-once 退避。
+- Produces（不得改名/改值）:
+
+```ts
+// src/llm/asr/base.provider.ts
+export interface ASRTranscribeRequest {
+  fileUrl: string;
+}
+export interface ASRProvider {
+  transcribe(req: ASRTranscribeRequest): Promise<{ text: string }>;
+}
+
+// src/llm/asr/dashscope.provider.ts
+export const DASHSCOPE_POLL_INTERVAL_MS = 2_000;
+export const DASHSCOPE_TRANSCRIBE_TIMEOUT_MS = 300_000;
+export class DashScopeASRProvider implements ASRProvider {
+  constructor(opts: {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    pollIntervalMs?: number;
+    timeoutMs?: number;
+  });
+  transcribe(req: { fileUrl: string }): Promise<{ text: string }>;
+}
+
+// src/worker/handlers.ts
+export const ASR_SOURCE_URL_TTL_SECONDS = 3_600;
+```
+
+- DashScope 协议：submit `POST {base}/services/audio/asr/transcription` + Bearer + JSON + `X-DashScope-Async: enable` + `{model,input:{file_urls:[fileUrl]},parameters:{}}`；poll `GET {base}/tasks/{encodeURIComponent(taskId)}`；唯一子任务成功后 GET `transcription_url`，返回 `transcripts[].text.join('\n')`。
+- 不新增环境变量、依赖、表或迁移。默认仅改现有三变量：`ASR_BASE_URL=https://dashscope.aliyuncs.com/api/v1`、`ASR_MODEL=fun-asr`、`ASR_API_KEY=`；真实 key 不入库。
+- 不持久化 DashScope task id。提交后 worker 崩溃、poll/result retryable 错误或 5 分钟超时均允许 outbox 重跑并重复提交；现有 CAS 保证首个成功结果胜出，后到结果不覆盖终态/软删/用户正文，也不发通知。
+
+- [ ] **Step 1: 改写 provider 失败测试**
+
+将 `apps/server/tests/llm/asr-provider.test.ts` 的 OpenAI multipart 用例替换为下列 DashScope 用例组；每个测试 `afterEach` 恢复 `globalThis.fetch`、`jest.useRealTimers()`、`setASRProvider(undefined)`：
+
+```ts
+const baseOpts = {
+  baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+  apiKey: 'sk-test',
+  model: 'fun-asr',
+  pollIntervalMs: 10,
+  timeoutMs: 1_000,
+};
+const request = { fileUrl: 'https://s3.example/audio.wav?signature=secret' };
+
+it('submit 使用 DashScope async JSON，poll 后下载结果并拼接 transcripts 文本', async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const responses = [
+    jsonResponse({ output: { task_id: 'task/1', task_status: 'PENDING' }, request_id: 'r1' }),
+    jsonResponse({ output: { task_id: 'task/1', task_status: 'PENDING' }, request_id: 'r2' }),
+    jsonResponse({ output: { task_id: 'task/1', task_status: 'RUNNING' }, request_id: 'r3' }),
+    jsonResponse({
+      output: {
+        task_id: 'task/1',
+        task_status: 'SUCCEEDED',
+        results: [{
+          file_url: request.fileUrl,
+          subtask_status: 'SUCCEEDED',
+          transcription_url: 'https://result.example/task-1.json',
+        }],
+      },
+      request_id: 'r4',
+    }),
+    jsonResponse({ transcripts: [{ text: '第一段' }, { text: '第二段' }] }),
+  ];
+  globalThis.fetch = jest.fn<typeof fetch>(async (input, init) => {
+    calls.push({ url: String(input), init });
+    return responses.shift()!;
+  });
+
+  await expect(new DashScopeASRProvider(baseOpts).transcribe(request)).resolves.toEqual({
+    text: '第一段\n第二段',
+  });
+  expect(calls[0]!.url).toBe(
+    'https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription',
+  );
+  expect(calls[0]!.init).toMatchObject({
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer sk-test',
+      'Content-Type': 'application/json',
+      'X-DashScope-Async': 'enable',
+    },
+  });
+  expect(JSON.parse(String(calls[0]!.init!.body))).toEqual({
+    model: 'fun-asr',
+    input: { file_urls: [request.fileUrl] },
+    parameters: {},
+  });
+  expect(calls.slice(1, 4).map((call) => [call.url, call.init?.method])).toEqual([
+    ['https://dashscope.aliyuncs.com/api/v1/tasks/task%2F1', 'GET'],
+    ['https://dashscope.aliyuncs.com/api/v1/tasks/task%2F1', 'GET'],
+    ['https://dashscope.aliyuncs.com/api/v1/tasks/task%2F1', 'GET'],
+  ]);
+  expect(calls[4]).toMatchObject({ url: 'https://result.example/task-1.json' });
+});
+
+it('整体 SUCCEEDED 但唯一子任务 FAILED 仍按 FILE_DOWNLOAD_FAILED 判 Retryable', async () => {
+  globalThis.fetch = fetchSequence(
+    jsonResponse({ output: { task_id: 't', task_status: 'PENDING' }, request_id: 'r1' }),
+    jsonResponse({
+      output: {
+        task_id: 't',
+        task_status: 'SUCCEEDED',
+        results: [{
+          file_url: request.fileUrl,
+          subtask_status: 'FAILED',
+          code: 'FILE_DOWNLOAD_FAILED',
+          message: 'source unavailable',
+        }],
+      },
+      request_id: 'r2',
+    }),
+  );
+  await expect(new DashScopeASRProvider(baseOpts).transcribe(request)).rejects.toBeInstanceOf(
+    RetryableLLMError,
+  );
+});
+
+it.each([
+  ['submit 429', fetchSequence(jsonResponse({}, 429))],
+  [
+    'poll 503',
+    fetchSequence(
+      jsonResponse({ output: { task_id: 't', task_status: 'PENDING' }, request_id: 'r' }),
+      jsonResponse({}, 503),
+    ),
+  ],
+  [
+    'result 500',
+    successfulTaskSequence(request.fileUrl, jsonResponse({}, 500)),
+  ],
+  ['network', jest.fn<typeof fetch>(async () => { throw new TypeError('ECONNRESET'); })],
+])('%s → RetryableLLMError', async (_name, mockFetch) => {
+  globalThis.fetch = mockFetch;
+  await expect(new DashScopeASRProvider(baseOpts).transcribe(request)).rejects.toBeInstanceOf(
+    RetryableLLMError,
+  );
+});
+
+it.each([
+  ['submit 400', fetchSequence(jsonResponse({}, 400))],
+  [
+    '未知 task_status',
+    fetchSequence(
+      jsonResponse({ output: { task_id: 't', task_status: 'PENDING' }, request_id: 'r' }),
+      jsonResponse({ output: { task_id: 't', task_status: 'MYSTERY' }, request_id: 'r' }),
+    ),
+  ],
+  [
+    'FAILED 非下载错误',
+    fetchSequence(
+      jsonResponse({ output: { task_id: 't', task_status: 'PENDING' }, request_id: 'r' }),
+      jsonResponse({
+        output: {
+          task_id: 't',
+          task_status: 'FAILED',
+          results: [{ subtask_status: 'FAILED', code: 'INVALID_FILE', message: 'bad audio' }],
+        },
+        request_id: 'r',
+      }),
+    ),
+  ],
+  ['结果缺 transcripts', successfulTaskSequence(request.fileUrl, jsonResponse({ nope: 1 }))],
+])('%s → NonRetryableLLMError', async (_name, mockFetch) => {
+  globalThis.fetch = mockFetch;
+  await expect(new DashScopeASRProvider(baseOpts).transcribe(request)).rejects.toBeInstanceOf(
+    NonRetryableLLMError,
+  );
+});
+
+it('5 分钟整体超时 → RetryableLLMError', async () => {
+  jest.useFakeTimers();
+  globalThis.fetch = fetchSequence(
+    jsonResponse({ output: { task_id: 't', task_status: 'PENDING' }, request_id: 'r' }),
+    ...Array.from({ length: 10 }, () =>
+      jsonResponse({ output: { task_id: 't', task_status: 'RUNNING' }, request_id: 'r' }),
+    ),
+  );
+  const promise = new DashScopeASRProvider({
+    ...baseOpts,
+    pollIntervalMs: 2_000,
+    timeoutMs: 5_000,
+  }).transcribe(request);
+  await jest.advanceTimersByTimeAsync(6_000);
+  await expect(promise).rejects.toBeInstanceOf(RetryableLLMError);
+});
+
+it('transcripts 空数组是合法空转写', async () => {
+  globalThis.fetch = successfulTaskSequence(request.fileUrl, jsonResponse({ transcripts: [] }));
+  await expect(new DashScopeASRProvider(baseOpts).transcribe(request)).resolves.toEqual({ text: '' });
+});
+```
+
+测试文件内实现以下确定性 helpers，禁止真实 sleep / 网络：`jsonResponse(body,status=200)` 返回 JSON `Response`；`fetchSequence(...responses)` 按序返回并在耗尽时抛错；`successfulTaskSequence(fileUrl,resultResponse)` 固定返回 submit PENDING、poll SUCCEEDED（唯一成功子任务 + `https://result.example/task.json`）、结果响应。另保留 factory 三态测试，并把默认类断言改为 `DashScopeASRProvider`。补充两个单测：`fileUrl` 为 `file:` 时 NonRetryable；submit 200 但缺 `output.task_id` 时 NonRetryable。
+
+- [ ] **Step 2: 运行 provider 测试确认失败**
+
+Run: `pnpm --filter @moment/server test -- tests/llm/asr-provider.test.ts`
+
+Expected: FAIL——`dashscope.provider.ts` 不存在，且现有 `ASRTranscribeRequest` 不接受 `fileUrl`。
+
+- [ ] **Step 3: 实现 DashScope provider 与 factory/config 切换**
+
+1. 将 `apps/server/src/llm/asr/base.provider.ts` 的 request 精确改为：
+
+```ts
+export interface ASRTranscribeRequest {
+  /** DashScope 可通过 HTTP/HTTPS 读取的音频预签名 GET URL。 */
+  fileUrl: string;
+}
+```
+
+2. 删除 `apps/server/src/llm/asr/openai-compat.provider.ts`，创建 `apps/server/src/llm/asr/dashscope.provider.ts`。实现必须满足：
+   - base URL 去尾 `/`；固定 submit/poll 路径；taskId 必须 `encodeURIComponent`；
+   - `DASHSCOPE_POLL_INTERVAL_MS=2_000`、`DASHSCOPE_TRANSCRIBE_TIMEOUT_MS=300_000` 导出；constructor 的可选覆盖只供单测；
+   - 用同一 deadline 包住 submit、所有 poll、poll sleep 与 result GET。每次 fetch 用 `AbortController` 和剩余 deadline；timeout/network 转 `RetryableLLMError`；timer 必须在 `finally` 清理；
+   - HTTP 429/5xx → Retryable，其他 4xx → NonRetryable；JSON parse/字段契约错误 → NonRetryable；
+   - `PENDING|RUNNING` 继续；`FAILED` 与 `SUCCEEDED` 子任务失败走统一 `throwTaskFailure(taskId, code, message)`：仅 `code === 'FILE_DOWNLOAD_FAILED'` Retryable，其余 NonRetryable；
+   - `SUCCEEDED` 必须恰有 1 个结果、该结果 `subtask_status==='SUCCEEDED'` 且 `transcription_url` 为 HTTP/HTTPS；结果 JSON 必须有 `transcripts` 数组且每项 `text` 为 string，按序 `join('\n')`。不得读取顶层 `text`，不得把任务查询响应误当最终文本。
+
+3. `apps/server/src/llm/asr/factory.ts` 删除 `OpenAICompatASRProvider` import，改为 `DashScopeASRProvider`；有 key 时构造：
+
+```ts
+singleton = config.ASR_API_KEY
+  ? new DashScopeASRProvider({
+      baseUrl: config.ASR_BASE_URL,
+      apiKey: config.ASR_API_KEY,
+      model: config.ASR_MODEL,
+    })
+  : null;
+```
+
+4. `apps/server/src/config.ts` 与 `apps/server/.env.example` 只修改默认值/注释：
+
+```env
+# 阿里云百炼 DashScope fun-asr 异步任务 API；与 LLM_* 独立
+ASR_BASE_URL=https://dashscope.aliyuncs.com/api/v1
+# 真实值仅放 ignored 的本地 env / 部署 secret；留空 = 停用转写
+ASR_API_KEY=
+ASR_MODEL=fun-asr
+```
+
+`apps/server/.env` 不读取、不修改、不 stage。没有新依赖与数据库迁移。
+
+- [ ] **Step 4: 运行 provider 测试确认通过**
+
+Run: `pnpm --filter @moment/server test -- tests/llm/asr-provider.test.ts && pnpm --filter @moment/server typecheck`
+
+Expected: provider 测试全部 PASS；typecheck exit 0；fetch 调用中不再出现 `FormData`、Blob、`/audio/transcriptions`。
+
+- [ ] **Step 5: 写 handler 失败测试**
+
+修改 `apps/server/tests/worker/handle-moment-transcribe.test.ts`：
+
+1. `asrReturning` 的 mock 改为接受 URL 并记录 request：
+
+```ts
+function asrReturning(text: string, seen?: ASRTranscribeRequest[]): ASRProvider {
+  return {
+    transcribe: async (request) => {
+      seen?.push(request);
+      return { text };
+    },
+  };
+}
+```
+
+2. 成功主用例精确断言 source URL TTL、同一 URL 传 provider，以及无通知：
+
+```ts
+const seen: ASRTranscribeRequest[] = [];
+const storage = installMockStorage();
+storage.generateAccessUrl.mockResolvedValue('https://s3.example/audio.wav?signature=test');
+setASRProvider(asrReturning('宝宝第一次叫奶奶', seen));
+
+await handleMomentTranscribe({ momentId }, { push: mockPush });
+
+expect(storage.generateAccessUrl).toHaveBeenCalledWith(
+  expect.stringContaining(audioId!),
+  {},
+  ASR_SOURCE_URL_TTL_SECONDS,
+);
+expect(ASR_SOURCE_URL_TTL_SECONDS).toBe(3_600);
+expect(seen).toEqual([{ fileUrl: 'https://s3.example/audio.wav?signature=test' }]);
+expect(await db.select().from(notifications)).toHaveLength(0);
+expect(mockSend).not.toHaveBeenCalled();
+```
+
+3. 保留并继续通过既有用例：`Content-Length >25MB` 不读 body、无长度分块累计超限立即 cancel、下载非 2xx传播且 pending、空文本 done、5000 截断、用户正文不覆盖、NonRetryable 自落 failed、Retryable 保持 pending 并传播、provider null、无 audio、幂等守卫、IO 期间并发 failed/软删、两个 handler 只允许首个结果通过 CAS。
+
+4. 为 `成功`、`NonRetryable`、`Retryable` 三条路径都显式断言 notifications 表长度为 0 且 `mockSend` 未调用，防止供应商切换误加“转写完成”通知。
+
+- [ ] **Step 6: 运行 handler 测试确认失败**
+
+Run（触真实测试库，单独串行；此时不得另起 Jest）: `pnpm --filter @moment/server test -- tests/worker/handle-moment-transcribe.test.ts`
+
+Expected: FAIL——现有 handler 用 TTL 300，且调用 provider 的参数仍是 `{ audio, mime }`。
+
+- [ ] **Step 7: 修改 handler，仅替换 provider 边界**
+
+在 `apps/server/src/worker/handlers.ts`：
+
+1. 与 `TRANSCRIPT_MAX_CHARS` 相邻导出：
+
+```ts
+/** DashScope 异步拉取源文件：覆盖 5 分钟 provider 等待并留 55 分钟排队/下载余量。 */
+export const ASR_SOURCE_URL_TTL_SECONDS = 3_600;
+```
+
+2. 生成 URL 和有界下载段改为：
+
+```ts
+const fileUrl = await getStorage().generateAccessUrl(
+  audioRow.s3Key,
+  audioRow.storageMeta,
+  ASR_SOURCE_URL_TTL_SECONDS,
+);
+const resp = await fetch(fileUrl);
+if (!resp.ok) throw new Error(`audio download failed: ${resp.status}`);
+const boundedAudio = await readAudioResponse(resp);
+if (!boundedAudio) {
+  await markTranscriptionFailed(momentId);
+  return;
+}
+// boundedAudio 仅用于 25MB 防御；DashScope 必须自行读取同一预签名 GET URL。
+```
+
+3. 成功调用只改一行，其余 5000 截断、事务、CAS、catch 与无通知逻辑逐字保留：
+
+```ts
+const { text } = await provider.transcribe({ fileUrl });
+```
+
+不得把 Buffer、mime 或 multipart 逻辑移动到 `DashScopeASRProvider`；不得删除 handler 的有界下载；不得把 source URL TTL 退回 300 秒。
+
+- [ ] **Step 8: 串行验证 ASR 单元/触库测试与 server 门禁**
+
+Run（严格按顺序，不并发 Jest）:
+
+```bash
+pnpm --filter @moment/server test -- tests/llm/asr-provider.test.ts
+pnpm --filter @moment/server test -- tests/worker/handle-moment-transcribe.test.ts
+pnpm --filter @moment/server test -- tests/worker/handlers.test.ts tests/worker/sweeper.test.ts
+pnpm --filter @moment/server typecheck
+pnpm --filter @moment/server lint
+```
+
+Expected: 全部 exit 0。额外执行：
+
+```bash
+rg -n "OpenAICompatASRProvider|audio/transcriptions|FormData|FunAudioLLM/SenseVoiceSmall|api\.siliconflow\.cn" \
+  apps/server/src/llm/asr apps/server/src/config.ts apps/server/.env.example \
+  apps/server/tests/llm/asr-provider.test.ts
+```
+
+Expected: 无输出；`git diff --name-only` 不包含 `apps/server/.env`、drizzle 文件、`package.json` 或 lockfile。
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add \
+  apps/server/src/llm/asr/base.provider.ts \
+  apps/server/src/llm/asr/dashscope.provider.ts \
+  apps/server/src/llm/asr/factory.ts \
+  apps/server/src/llm/asr/openai-compat.provider.ts \
+  apps/server/src/config.ts \
+  apps/server/.env.example \
+  apps/server/src/worker/handlers.ts \
+  apps/server/tests/llm/asr-provider.test.ts \
+  apps/server/tests/worker/handle-moment-transcribe.test.ts
+git commit -m "feat(server): switch voice ASR to DashScope fun-asr"
+```
+
+---
+
 ## DoD（计划级验收）
 
 - [ ] `pnpm build && pnpm test && pnpm lint` 全部 exit 0
 - [ ] dto：audio presign 白名单 / durationSeconds 必填 ≤300；voice create 数量边界（0/1/9/10）、重复 id、空 content 通过、`posterMediaId` 拒绝；PATCH `.strict()` 拒绝 `transcript` / `transcriptionStatus`；text/media/video 既有矩阵不回归
 - [ ] api-client：audio 单 PUT 直通 + presign 携带 durationSeconds；超 25MB 本地 413 不发请求
 - [ ] server：moments 表 voice 枚举 + 两列迁移（drizzle-kit generate 产出，SQL 人工核对）；presign audio 单 PUT + 413；create voice 成功（audio 绑定 + pending + 两行 outbox）与四个 MEDIA_INVALID 分支（2 audio / 纯图 / 夹 video / 宫格夹 audio）；序列化两字段（voice 非空、非 voice 恒 null、audio 行在 media 数组）；通知摘要 `[语音]`；软删 audio 行 orphaned
-- [ ] worker：转写成功回填（含「用户已编辑不覆盖」条件更新）、空文本 done、5000 截断、Retryable 传播、NonRetryable failed、provider null failed、无 audio 行 failed、超 25MB 下载 failed、幂等守卫；sweeper 6h cutoff（未超不动、done/非 voice 不动）
+- [ ] ASR provider：无 `/audio/transcriptions`/multipart 残留；DashScope submit 精确携带 Bearer/JSON/`X-DashScope-Async: enable`/`input.file_urls`；2s poll、5min timeout；任务 `SUCCEEDED` 后仍检查唯一子任务并下载 `transcription_url`，解析 `transcripts[].text`；submit/poll/result 的 429/5xx/network/timeout 与 `FILE_DOWNLOAD_FAILED` 为 Retryable，其他 4xx/畸形响应/其他 FAILED 为 NonRetryable；默认 config/.env.example 为 DashScope `fun-asr` 且 key 空。
+- [ ] worker：同一 3600s 预签名 GET URL 先做 25MB 有界下载防御再传 provider；转写成功回填（含「用户已编辑不覆盖」条件更新）、空文本 done、5000 截断、CAS 抵御并发 failed/软删/重复成功、Retryable 传播、NonRetryable failed、provider null failed、无 audio 行 failed、超 25MB 下载 failed、幂等守卫、全路径无二次通知；不持久化 task id，接受 at-least-once 重试重复提交；sweeper 6h cutoff（未超不动、done/非 voice 不动）。
 - [ ] web：录音 → WAV 转码 → 上传 → 发布（附图 ≤8、视频互斥）；卡片播放条 + 三态文案 + 附图宫格/lightbox 无 audio 破图；分享态 `?st=` 可播；6 个 `MomentResponse` 夹具同步
 - [ ] app：expo-audio 录音（权限拒绝态）→ 发布；SegmentBar「语音」；卡片/详情播放条 + 三态；MediaGrid `image/*` 守卫；lint:tokens 过
 - [ ] 零改动面确认：`apps/server/src/llm/recap/`、`apps/server/src/worker/processor.ts`、`resetDb()`、`apps/web/src/media/MediaBlock.tsx`、`packages/api-client/src/client.ts` 均未改（processor 对任何抛出退避的既有语义即所需，不加 ASR 特判）
