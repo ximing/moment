@@ -2461,6 +2461,8 @@ Modify `apps/web/src/compose/compose-panel/index.tsx`：
                 ))}
 ```
 
+5. 面板关闭确认的 `isDirty` 条件继续覆盖所有媒体草稿：在现有 `service.images.length > 0 || service.video` 表达式中精确加入 `|| service.voice`，确保纯语音草稿关闭时也弹出确认，不会直接丢失。
+
 - [ ] **Step 7: 运行确认**
 
 Run:
