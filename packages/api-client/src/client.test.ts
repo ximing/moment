@@ -59,6 +59,7 @@ test('chains/members/invites 路径与方法名对齐 Phase 2 路由', async () 
   await client.listInvites('c1');
   await client.revokeInvite('i1');
   await client.acceptInvite('tok');
+  await client.reorderChains({ chainIds: ['c2', 'c1'] });
   assert.deepEqual(calls.map((c) => `${c.method} ${c.url}`), [
     'GET http://x/api/chains',
     'GET http://x/api/chains/c1',
@@ -73,9 +74,11 @@ test('chains/members/invites 路径与方法名对齐 Phase 2 路由', async () 
     'GET http://x/api/chains/c1/invites',
     'DELETE http://x/api/invites/i1',
     'POST http://x/api/invites/tok/accept',
+    'PUT http://x/api/chains/order',
   ]);
   assert.deepEqual(calls[6]!.body, { role: 'viewer' });
   assert.deepEqual(calls[8]!.body, { userId: 'u2' });
+  assert.deepEqual(calls[13]!.body, { chainIds: ['c2', 'c1'] });
 });
 
 test('moments/feed/tags 路径与查询参数', async () => {

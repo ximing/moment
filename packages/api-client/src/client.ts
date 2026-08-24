@@ -29,6 +29,7 @@ import type {
   RecapDto,
   RecapListResponse,
   RegisterInput,
+  ReorderChainsInput,
   RegisterPushTokenInput,
   TemplateDto,
   TemplateScope,
@@ -83,6 +84,8 @@ export interface MomentClient {
   updateMemberRole(chainId: string, userId: string, role: InviteRole): Promise<ChainMemberDto>;
   removeMember(chainId: string, userId: string): Promise<void>;
   transferChain(chainId: string, userId: string): Promise<ChainDto>;
+  /** 全量提交「我 × 链」展示顺序（spec chain-ordering §5）：204 空 body；成功/失败都由调用方重新 listChains 收敛 */
+  reorderChains(input: ReorderChainsInput): Promise<void>;
   createInvite(chainId: string, input: CreateInviteInput): Promise<InviteDto>;
   listInvites(chainId: string): Promise<InviteDto[]>;
   revokeInvite(inviteId: string): Promise<void>;
@@ -171,6 +174,7 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
       http.request(`/api/chains/${chainId}/members/${userId}`, { method: 'DELETE' }),
     transferChain: (chainId, userId) =>
       http.request(`/api/chains/${chainId}/transfer`, { method: 'POST', body: { userId } }),
+    reorderChains: (input) => http.request('/api/chains/order', { method: 'PUT', body: input }),
     createInvite: (chainId, input) => http.request(`/api/chains/${chainId}/invites`, { method: 'POST', body: input }),
     listInvites: (chainId) => http.request(`/api/chains/${chainId}/invites`),
     revokeInvite: (inviteId) => http.request(`/api/invites/${inviteId}`, { method: 'DELETE' }),
