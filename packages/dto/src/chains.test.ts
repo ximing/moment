@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   createChainInputSchema,
   createInviteInputSchema,
+  reorderChainsInputSchema,
   transferChainInputSchema,
   updateChainInputSchema,
   updateMemberRoleInputSchema,
@@ -91,4 +92,26 @@ test('updateChainInputSchema：payload 可改、可显式置 null；schema 不�
   // 注意：updateChainInputSchema 带 .refine()，类型是 ZodEffects 没有 .shape——用 parse 行为断言（传入 template 被剥离）
   const stripped = updateChainInputSchema.parse({ name: '改名', template: 'baby' });
   assert.equal('template' in stripped, false);
+});
+
+test('reorderChainsInputSchema：正常与空数组（无链用户恒等提交）通过', () => {
+  assert.deepEqual(reorderChainsInputSchema.parse({ chainIds: ['a', 'b'] }), { chainIds: ['a', 'b'] });
+  assert.deepEqual(reorderChainsInputSchema.parse({ chainIds: [] }), { chainIds: [] });
+});
+
+test('reorderChainsInputSchema：200 条恰好通过；36 字符 id 恰好通过', () => {
+  assert.ok(
+    reorderChainsInputSchema.safeParse({ chainIds: Array.from({ length: 200 }, (_, i) => `c${i}`) }).success,
+  );
+  assert.ok(reorderChainsInputSchema.safeParse({ chainIds: ['x'.repeat(36)] }).success);
+});
+
+test('reorderChainsInputSchema：拒绝空 id、超 36 字符 id、超 200 长度、缺键/非数组', () => {
+  assert.throws(() => reorderChainsInputSchema.parse({ chainIds: [''] }));
+  assert.throws(() => reorderChainsInputSchema.parse({ chainIds: ['x'.repeat(37)] }));
+  assert.throws(() =>
+    reorderChainsInputSchema.parse({ chainIds: Array.from({ length: 201 }, (_, i) => `c${i}`) }),
+  );
+  assert.throws(() => reorderChainsInputSchema.parse({}));
+  assert.throws(() => reorderChainsInputSchema.parse({ chainIds: 'c1' }));
 });

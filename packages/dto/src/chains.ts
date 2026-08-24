@@ -60,6 +60,16 @@ export const transferChainInputSchema = z.object({
 });
 export type TransferChainInput = z.infer<typeof transferChainInputSchema>;
 
+/**
+ * 链排序提交（spec chain-ordering §5）：当前用户全部链 id 的新顺序。
+ * server 校验「去重后恰好等于我的参与集合」；数组允许为空（无链用户的恒等提交），
+ * 故不加 min(1)（加了反而对 0 条链的用户制造无谓 400）。
+ */
+export const reorderChainsInputSchema = z.object({
+  chainIds: z.array(z.string().min(1).max(36)).max(200),
+});
+export type ReorderChainsInput = z.infer<typeof reorderChainsInputSchema>;
+
 export const createInviteInputSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(255).nullish(),
   role: inviteRoleSchema.default('editor'),
