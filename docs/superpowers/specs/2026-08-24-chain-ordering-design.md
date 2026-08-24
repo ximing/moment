@@ -47,6 +47,8 @@ SET cm.sort_order = ranked.rn;
 
 MySQL 8.4（docker-compose 已确认）支持窗口函数。远程共享测试库同为 MySQL 8 系；实现时先验证再跑迁移。
 
+**迁移编辑时序硬约束**：drizzle 迁移的 hash 由 migrator 运行时按文件内容计算（journal 只记 idx/tag/when），所以「generate 后追加回填 SQL」必须在**任何环境（含远程共享测试库）首次执行该迁移之前**完成；计划与实现中要有「generate 后立即追加、首跑前 diff 检查」的显式步骤，防止某个环境先跑了无回填版本的迁移导致 hash 分叉。
+
 ## 3. 列表查询
 
 `ChainService.listMine` 排序改为：
@@ -64,6 +66,7 @@ ORDER BY chain_members.sort_order ASC, chains.created_at DESC
 - `ChainService.create`：插入 owner membership 时 `sortOrder = 当前用户所有 membership 的最小 sortOrder - 1`；用户首条链（无现存 membership）取 1。在创建事务内完成。
 - `ChainService.acceptInvite`：插入新 member 时同样取 `最小值 - 1`（已是成员的幂等分支不写）。
 - 退出/被移除后重新加入 = 新 membership，按新链处理（回顶部），不记忆历史位置。
+- 并发 create / acceptInvite 可能读出相同 min 而写入重复 sortOrder——预期内，不设唯一约束；展示由 §3 的 `created_at DESC` 兜底，下次 reorder 全量重写即收敛。
 
 ## 5. API
 
@@ -78,14 +81,14 @@ body: { chainIds: string[] }
 语义与校验（在 `ChainService.reorder(userId, chainIds)`，响应固定 204——客户端已持有完整顺序，不需要回读）：
 
 1. `chainIds` 去重后的集合必须**恰好等于**当前用户参与的全部链 id 集合（防漏、防越权、防半截状态）。不满足 → `HttpError(400, 'CHAIN_ORDER_MISMATCH')`。
-2. 校验通过后，单事务把该用户每行 membership 的 `sortOrder` 重写为数组下标 + 1。
-3. 响应返回 **204**。客户端已持有完整顺序（乐观更新），不需要回读；`chain:changed` 事件流不变。
+2. **集合校验与重写 UPDATE 在同一事务内**；重写限定 `WHERE user_id = ? AND chain_id IN (:chainIds)`，不用裸 `WHERE user_id = ?` 全量重写——校验后、提交前并发入链的置顶新行（min-1）不参与本次重写，容忍其与新顺序交错，下次 reorder 收敛。
+3. 响应返回 **204**（routing-controllers 惯例：`@HttpCode(204)` + `@OnUndefined(204)` 组合，参照 chains.controller 既有写法）。客户端已持有完整顺序（乐观更新），不需要回读；`chain:changed` 事件流不变。
 
 dto（`packages/dto/src/chains.ts`）：
 
 ```ts
 export const reorderChainsInputSchema = z.object({
-  chainIds: z.array(z.string().min(1).max(36)),
+  chainIds: z.array(z.string().min(1).max(36)).max(200),
 });
 export type ReorderChainsInput = z.infer<typeof reorderChainsInputSchema>;
 ```
@@ -104,40 +107,58 @@ Shell 两处链列表渲染（`apps/web/src/shell/Shell.tsx`：侧栏 `chains.ma
 
 ### 6.2 拖拽方式：pointer-based，整项拖拽
 
-- 用 pointer 事件（pointerdown → 移动超过阈值 ~6px 进入拖拽）而非 HTML5 DnD：链项是 `NavLink`（`<a>`，原生可拖链接）且被 `ContextMenu` 包裹，HTML5 DnD 会与链接拖拽/右键菜单打架；pointer 方案点击与拖拽天然不冲突。
-- 未超阈值的 pointerup = 普通点击，导航行为不变；进入拖拽后抑制随后的 click（防止松手触发导航）。
-- 侧栏为纵向拖动，顶部 chips 为横向拖动；插入位置用指示线/空隙表达。
-- 视觉只消费既有 tokens：拖动项半透明/位移，插入指示用 `--action` 或既有线色，hover/focus 态不变；不新增 token、不写一次性像素值（遵循 `.claude/rules/web-ui.md` 与各设计规范）。
-- 键盘可访问性：本迭代不为拖拽提供键盘替代（链少、有右键菜单可进设置）；如规范评审要求再补。记为已知取舍。
+用 pointer 事件手写手势，不用 HTML5 DnD API（链项被 `ContextMenu` 包裹，HTML5 DnD 会与其打架）。以下每条都是已核对代码后必须满足的硬要求：
 
-### 6.3 提交流程（乐观更新）
+**a) 压制锚元素原生拖拽**。`ChainNav` 内的 `NavLink` 渲染为 `<a href>`（Shell.tsx），锚元素默认可拖，越过浏览器自身阈值即触发原生 dragstart（URL 幽灵图），pointer 流随后收到 pointercancel，手势状态机会被半途杀死。必须给 NavLink 加 `draggable={false}`（或等价 dragstart preventDefault）。
+
+**b) 触屏与原生滚动同轴冲突**。主目标设备是家庭平板，而两处容器都是原生可滚动且滚动方向与拖拽同轴：侧栏 `nav overflow-y-auto`（纵向拖）、顶部 chips `div overflow-x-auto`（横向拖）。触屏 pointerdown 后一旦移动，浏览器接管滚动并派发 pointercancel，固定像素阈值手势会被掐死。按 `pointerType` 区分激活方式：
+   - `mouse` / `pen`：移动超过 ~6px 阈值激活拖拽；
+   - `touch`：**长按 ~350ms 激活**（不用像素阈值），激活前手指移动即放弃手势让位滚动；激活后再给该项施加 `touch-action: none`（此时滚动已让位）。不在静态样式上给链项预设 `touch-action: none`（否则链多时列表在链项上无法滚动）。
+
+**c) 与 ContextMenu 的互斥**。`ContextMenu` 监听 `contextmenu` 事件（Menu.tsx），移动端长按恰会派发 contextmenu。规则：长按激活拖拽后，本次手势内的 `contextmenu` 被 suppress（preventDefault，不弹菜单）；菜单已打开时不启动拖拽手势。
+
+**d) pointercancel 清理**。任何阶段收到 pointercancel（浏览器接管滚动、手势被系统打断等）都必须中止手势、清理临时态（指示线、位移、抑制标记），不产生 reorder 提交。
+
+**e) 点击与导航不回归**。未激活拖拽的 pointerup = 普通点击，NavLink 导航不变；激活过拖拽的手势结束后抑制随后的 click（防松手触发导航）。
+
+**f) 方向与视觉**。侧栏纵向、顶部 chips 横向；插入位置用指示线/空隙表达。视觉只消费既有 tokens：拖动项半透明/位移，插入指示用 `--action` 或既有线色，hover/focus 态不变；不新增 token、不写一次性像素值（遵循 `.claude/rules/web-ui.md` 与各设计规范）。
+
+**g) 键盘可访问性**。本迭代不为拖拽提供键盘替代（链少、右键菜单可进设置），记为已知取舍。
+
+### 6.3 提交流程（乐观更新 + 竞态防护）
 
 `ChainListService`（`apps/web/src/services/chain-list.service.ts`）增加 `reorder(orderedIds: string[])`：
 
-1. 立即按新顺序更新 `this.chains`（乐观）。
+1. 立即按新顺序更新 `this.chains`（乐观），并置「reorder 在途」标志。
 2. 调 `client.reorderChains({ chainIds: orderedIds })`。
-3. 失败：toast 错误（遵循 Feedback 规范）并 `await this.load()` 回滚到服务端顺序。
-4. 成功：不发额外事件——`chains` 在同一 Service 内，所有消费方（compose 面板、moment sheet、feed-home）自动一致。
+3. 成功（204）：清在途标志，然后 `await this.load()` 与服务端收敛（一次列表请求，消除任何在途期间的漂移）。
+4. 失败：清在途标志，toast 错误（遵循 Feedback 规范），并 `await this.load()` 回滚到服务端顺序。
+
+**与 `chain:changed → load()` 的竞态防护（必须实现）**：本仓多处会 emit `chain:changed`（建链、链设置、邀请等），`load()` 会整体覆盖 `this.chains`。reorder 在途期间若有并发 `load()` 完成，会用提交前的旧顺序覆盖乐观顺序且不再自愈。因此：reorder 在途标志置位期间，`load()` 的**写回被抑制**（请求可发，结果丢弃）；在途结束（成功/失败）后由上面的 `load()` 统一收敛。等价实现（如单调序号丢弃陈旧写回）可接受，但必须在测试里覆盖该竞态。
 
 拖拽手势期间的临时顺序只在组件内，松手才调 `reorder`。
 
-### 6.4 其它消费方
+### 6.4 其它消费方与多设备语义
 
-- compose 面板 / moment sheet 链选择器：只读 `chainList.chains`，顺序自动生效，无代码改动（实现时确认确实同源）。
-- `chain:changed` 事件触发的 `load()` 从服务端拿回新顺序，与乐观态一致，无闪烁。
+- compose 面板 / moment sheet 链选择器：只读 `chainList.chains`（已核实同源），顺序自动生效，无代码改动。
+- **多设备 / 多端语义（显式取舍）**：`chain:changed` 是进程内事件总线，不是跨设备同步机制。设备 A reorder 后，设备 B 与 RN app 只在下次各自拉取列表时才看到新顺序；同一用户两台设备同时 reorder 时**last-write-wins**，后写者覆盖先写者，先写方客户端维持本地顺序直到下次 load。本迭代不做跨设备实时同步。
+
+
 
 ## 7. 测试
 
-- **dto**：`reorderChainsInputSchema` 正常/边界用例（空数组、超长 id）。
+- **dto**：`reorderChainsInputSchema` 正常/边界用例（空数组、超长 id、超 200 长度）。
+- **api-client**：`reorderChains` 加入 `client.test.ts` 既有路由对齐测试（方法 + 路径断言，参照 listChains 既有用例）。
 - **server**（触真实测试库，`--runInBand`）：
   - `listMine` 按 sortOrder 排序；
-  - 迁移回填后老数据顺序 = 旧行为（可用 service 层模拟：手动构造乱序 sortOrder 验证查询）；
   - `create` / `acceptInvite` 新链置顶（sortOrder = min-1，首链 = 1）；
-  - `reorder`：正常重写；漏 id / 多 id / 他人链 id → `CHAIN_ORDER_MISMATCH`；幂等（重复提交同序无副作用）；
-  - 退出重进 = 回顶部。
+  - `reorder`：正常重写；漏 id / 多 id / 他人链 id → `CHAIN_ORDER_MISMATCH`；幂等（重复提交同序无副作用）；校验与重写同事务、`chain_id IN` 限定（reorder 后并发入链的置顶行不被改写）；
+  - 退出重进 = 回顶部；
+  - **迁移回填验证**：在测试库上实跑一次迁移（不是 service 层模拟），断言回填后 `listMine` 顺序与迁移前 `created_at DESC` 顺序一致。
 - **web**（Vitest + jsdom）：
   - `ChainListService.reorder` 乐观更新、失败回滚 + toast；
-  - 拖拽手势的状态机逻辑抽到 `src/lib/`（如 `chain-reorder.ts`：给定 items + from/to 计算新顺序、阈值判定），单测覆盖；DOM 拖拽本身不做 jsdom 仿真。
+  - **reorder 在途 + 并发 load() 完成的竞态**：在途期间 load 结果被抑制，成功/失败后由统一 load 收敛（本设计最易出 bug 的点，必须有测试）；
+  - 拖拽手势的状态机逻辑抽到 `src/lib/`（如 `chain-reorder.ts`：给定 items + from/to 计算新顺序、pointerType 激活方式、阈值/长按判定、pointercancel 清理），单测覆盖；DOM 拖拽本身不做 jsdom 仿真。
 
 ## 8. 红线与约定
 
