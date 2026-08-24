@@ -2320,7 +2320,7 @@ export function VoiceRecorder({ onChange }: { onChange: (draft: VoiceDraft | nul
       )}
       {phase === 'recording' && (
         <div className="flex items-center gap-2">
-          <Button variant="secondary" leadingIcon={Square} onClick={stop}>
+          <Button variant="secondary" leadingIcon={Square} onClick={() => stop()}>
             停止
           </Button>
           <span className="text-meta text-muted">
