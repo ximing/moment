@@ -386,6 +386,8 @@ export function ResponsiveMenu({
 export type ContextMenuHandle = {
   /** 程序化关闭（拖拽激活时先关已弹出的菜单，spec chain-ordering §6.2c） */
   close(): void;
+  /** 当前是否打开：菜单为当前语境时调用方可据此不启动拖拽（spec chain-ordering §6.2c） */
+  isOpen(): boolean;
 };
 
 export type ContextMenuProps = {
@@ -416,7 +418,10 @@ export function ContextMenu({
   // 右键没有可锚定的元素：在指针坐标放一枚零尺寸的虚拟锚点供 FloatingLayer 定位
   const anchorRef = useRef<HTMLSpanElement>(null);
 
-  useImperativeHandle(ref, () => ({ close: () => setOpen(false) }), [ref]);
+  // 句柄里的 isOpen 读镜像 ref：useImperativeHandle 只在 ref 变化时重建，不能直接闭包 open
+  const openRef = useRef(open);
+  openRef.current = open;
+  useImperativeHandle(ref, () => ({ close: () => setOpen(false), isOpen: () => openRef.current }), [ref]);
 
   const openAt = (x: number, y: number) => {
     setPoint({ x, y });

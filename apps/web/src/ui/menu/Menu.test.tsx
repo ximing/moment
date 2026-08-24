@@ -527,8 +527,10 @@ describe('ContextMenu', () => {
 
     fireEvent.contextMenu(screen.getByRole('button', { name: '链' }));
     expect(await screen.findByRole('menu')).toBeInTheDocument();
+    expect(ref.current?.isOpen()).toBe(true);
 
     act(() => ref.current?.close());
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(ref.current?.isOpen()).toBe(false);
   });
 });

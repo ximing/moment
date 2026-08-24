@@ -150,6 +150,7 @@ export const ChainNavList = observer(function ChainNavList({
     if (e.pointerType === 'mouse' && e.button !== 0) return; // 只认主键
     if (!e.isPrimary) return; // 副指针一律忽略（§6.2d）
     if (gesture.phase !== 'idle') return; // 单手势
+    if (menusRef.current.get(c.id)?.isOpen()) return; // 菜单已打开：本次按压属菜单语境，不启动拖拽（§6.2c）
     const el = e.currentTarget;
     if (e.pointerType === 'mouse') el.setPointerCapture?.(e.pointerId); // touch/pen 有隐式捕获；jsdom 无此方法，可选调用
     dragRef.current = { id: c.id, from: index, index, el, startPointer: axisCoord(e, axis) };
