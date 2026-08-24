@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { HttpError, NotFoundError, UnauthorizedError } from 'routing-controllers';
 import { Service } from 'typedi';
 import {
+  MAX_AUDIO_BYTES,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
   VIDEO_PART_SIZE,
@@ -50,6 +51,9 @@ export class MediaService {
     if (input.kind === 'video' && input.size > MAX_VIDEO_BYTES) {
       throw new HttpError(413, 'MEDIA_TOO_LARGE');
     }
+    if (input.kind === 'audio' && input.size > MAX_AUDIO_BYTES) {
+      throw new HttpError(413, 'MEDIA_TOO_LARGE');
+    }
 
     const mediaId = randomUUID();
     // mime-types 的 extension() 对未知 mime 返回 false（不只是 null），必须用 || 兜底
@@ -73,7 +77,8 @@ export class MediaService {
       uploadId: null,
     });
 
-    if (input.kind === 'image') {
+    // image 与 audio 同走单 PUT（audio ≤25MB，不启 multipart，避免无谓分片复杂度，spec voice-moment §3.1）
+    if (input.kind !== 'video') {
       const url = await getStorage().presignPut(
         tmpKey,
         { contentType: input.mime },
