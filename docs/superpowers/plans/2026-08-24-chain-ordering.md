@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **迁移编辑时序硬约束（spec §2，最高优先级）**：`drizzle-kit generate` 产出 0014 后必须**立即**追加回填 SQL，且在任何环境（含远程共享测试库）首次执行该迁移**之前**完成——drizzle 迁移 hash 由运行时按文件内容计算，某个环境先跑了无回填版本会造成 hash 分叉。Task 3 中 generate → append 之间**禁止**运行任何会执行迁移的命令（`pnpm migrate` / `pnpm --filter @moment/server test`（jest globalSetup 自动 migrate）/ `pnpm dev` / 任何部署）。
+- **迁移编辑时序硬约束（spec §2，最高优先级）**：`drizzle-kit generate` 产出 0014 后必须**立即**追加回填 SQL，且在任何环境（含远程共享测试库）首次执行该迁移**之前**完成——drizzle 迁移 hash 由运行时按文件内容计算，某个环境先跑了无回填版本会造成 hash 分叉。Task 3 中 generate → append 之间**禁止**运行任何会执行迁移的命令（`pnpm migrate` / `pnpm --filter @moment/server test`（jest globalSetup 自动 migrate）/ `pnpm dev` / 任何部署）；且远程共享测试库的首跑必须排在**本地 docker 回填验证通过之后**（spec §2「实现时先验证再跑迁移」）——顺序为 generate → append → docker 验证 → 远程首跑，若 docker 验证发现回填 SQL 有误，远程库尚未记录任何版本，改完重新验证即可，不会 hash 分叉。
 - **不新增表、不新增环境变量**：`config.ts` / `.env.example` 不动；`resetDb()` 无需扩展（`sort_order` 随 `chain_members` 行一起被既有 delete 清理，spec §8）。
 - **`ChainDto` 不暴露 `sortOrder`**：spec §5 未把它放进响应契约，顺序只能经列表顺序观察；server 测试直接查库断言列值。
 - **迁移回填验证（Task 5）是触库规则的唯一例外**：不 import `src/db`（其 pool 指向 `.env` 远程测试库）、不打远程共享库；`RUN_MIGRATION_IT=1` 门控（沿用 `tests/storage/s3-it.test.ts` 的 `RUN_S3_IT` 先例），本地 docker compose MySQL 8.4 起临时 schema，跑完 DROP。
@@ -27,6 +27,9 @@
 3. **reorder 重写用事务内逐行 UPDATE（≤200 行）而非单条 CASE WHEN**：spec §5.2 只约束 `WHERE user_id AND chain_id IN (:chainIds)` 的作用域，不约束 SQL 形态；逐行 UPDATE 空数组天然安全（CASE 空拼接是非法 SQL）、可读性/可测性优先。
 4. **ContextMenu 互斥选「受控开关」路线**（spec §6.2c 给出的两个实现钩子之一）：`ContextMenu` 增加可选 `ref` 句柄暴露 `close()`（React 19 ref-as-prop，与 `Menu.tsx` 内 Pressable 的 ref 透传一致）；捕获阶段 suppress 由拖拽接线层在 NavLink 上做。既有调用方零影响（ref 可选）。
 5. **touch/pen armed 后的激活同样过 6px 阈值**：spec §6.2b 只写「armed 后移动才激活」，未给数值；统一沿用 mouse 的 6px 阈值，避免手指微抖即激活导致长按菜单被误关。
+6. **Task 9 toast 调用行无自动化测试覆盖**（已记录，接受）：`chain-nav-list.tsx` 里 `list.reorder(...).catch(() => t.show({ key: 'chain-reorder-failed', message: '链顺序保存失败，已恢复原顺序' }))` 这一行按 spec §7「DOM 拖拽本身不做 jsdom 仿真」不进组件测试；已核实 `ToastInput` 形状为 `{ key, message, action? }`，用法与仓内既有调用（`pages/chain-settings/sections.tsx` 的 `toast.show({ key: 'settings-saved', message: ... })`）一致，service 侧的失败路径已由 Task 6 的「reject + 回滚」用例覆盖。
+7. **Task 6 收尾 load 失败时的 toast 文案在该场景误导但无害**（已记录，接受）：`reorder` 的收尾 `load()` 若失败（PUT 已成功、收敛请求网络故障），promise reject，调用方 toast「链顺序保存失败，已恢复原顺序」——实际 PUT 已成功且 `this.chains` 恰停在正确的乐观顺序，文案两旬皆不准；但状态正确、下一次 `chain:changed`/进站 load 自愈，不为此引入第三种结果态。
+8. **触屏 contextmenu 弹出瞬间平台可能补发 pointercancel 的继承风险**（已记录，接受）：长按计时到达、菜单弹出的瞬间，部分平台会对当前 pointer 流补发 pointercancel——按 Task 7 状态机此时手势在 pending（armed），pointercancel 走 `onAbort` 静默清理，语义正确（用户本就在用菜单）；真正的风险是「菜单弹出后用户继续移动想拖拽」的时序差异，无法单测仿真，故 Task 9 Step 6 手动验收第 3 条（真机触屏长按 → 移动进入拖拽）被要求**组件落地后第一时间验**（spec §6.2c 的 flicker 取舍同此）。
 
 ## 文件结构
 
@@ -217,7 +220,7 @@ git commit -m "feat(api-client): add reorderChains PUT /api/chains/order"
   - `chainMembers.sortOrder`——drizzle 列 `int('sort_order').notNull().default(0)`，TS 类型 `number`（Task 4 消费）。
   - DB 迁移 0014：`ALTER TABLE chain_members ADD sort_order int NOT NULL DEFAULT 0` + 同事务文件内的回填 UPDATE（每个用户按 `created_at DESC, id ASC` 写 1..n，Task 5 验证）。
 
-**时序警告（实现者必读，spec §2 硬约束）：** Step 3（generate）与 Step 4（追加回填）之间禁止运行 `pnpm migrate`、`pnpm --filter @moment/server test`、`pnpm dev` 或任何部署——它们都会执行迁移。drizzle 迁移 hash 在运行时按文件内容计算，任何环境先执行了无回填版本的 0014 都会造成 hash 分叉。Step 2 的红灯测试运行发生在 generate **之前**，是安全的（彼时 0014 尚不存在，jest globalSetup 的 migrate 只跑到 0013）。
+**时序警告（实现者必读，spec §2 硬约束）：** Step 3（generate）与 Step 4（追加回填）之间禁止运行 `pnpm migrate`、`pnpm --filter @moment/server test`、`pnpm dev` 或任何部署——它们都会执行迁移。drizzle 迁移 hash 在运行时按文件内容计算，任何环境先执行了无回填版本的 0014 都会造成 hash 分叉。执行顺序固定为 **generate → append → docker 回填验证（Step 6）→ 远程首跑（Step 8）**：远程共享测试库的首跑必须排在 docker 验证通过之后（spec §2「先验证再跑迁移」），否则一旦回填 SQL 有误，远程库已记录错误版本的 hash，正中本计划设防的 hash 分叉。Step 2 的红灯测试运行发生在 generate **之前**，是安全的（彼时 0014 尚不存在，jest globalSetup 的 migrate 只跑到 0013）。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -232,7 +235,7 @@ Modify `apps/server/tests/chains/schema.test.ts`：在 `const [invite] = await d
 - [ ] **Step 2: 运行确认失败**
 
 Run: `pnpm --filter @moment/server test -- tests/chains/schema.test.ts`
-Expected: FAIL——drizzle schema 尚无 `sortOrder` 键，`member.sortOrder` 为 `undefined`，`expect(undefined).toBe(0)` 失败。
+Expected: FAIL——drizzle schema 尚无 `sortOrder` 键，`member.sortOrder` 为 `undefined`，`expect(undefined).toBe(0)` 失败。注意 server jest 经 ts-jest 全量类型检查，该文件实际在**编译期**即报 TS2339（`Property 'sortOrder' does not exist on type 'ChainMember'`）——编译错误即红灯，属预期，不必走到运行期断言。
 
 - [ ] **Step 3: schema 加列 + generate**
 
@@ -271,17 +274,34 @@ SET cm.sort_order = ranked.rn;
 Run: `git diff --stat apps/server/drizzle/` 并 `cat apps/server/drizzle/0014_*.sql`
 Expected: 新文件恰好含 1 条 `ALTER TABLE ... ADD sort_order ... DEFAULT 0` 与 1 条 `UPDATE chain_members ... ROW_NUMBER() ...`；无其它语句。确认 `_journal.json` 新增条目 `idx: 14` 且 tag 与新文件名（去 `.sql`）一致。
 
-- [ ] **Step 6: 对 `.env` 指向的测试库执行迁移（该迁移在任何环境的首次执行）**
+- [ ] **Step 6: 本地 docker 回填验证（远程首跑的前置闸门，spec §2「先验证再跑迁移」）**
+
+按 Task 5 Step 1 的完整代码（权威版本，逐字）创建 `apps/server/tests/migrations/chain-members-sort-order-backfill.test.ts`，然后执行 Task 5 Step 3 的命令：
+
+```bash
+docker compose up -d mysql
+RUN_MIGRATION_IT=1 pnpm --filter @moment/server test -- chain-members-sort-order-backfill
+```
+
+Expected: 两个用例全过——回填后每用户 `sort_order` 恰为 `created_at DESC, id ASC` 的 1..n。**不通过则回到 Step 4 修回填 SQL（此时远程库尚未执行 0014，改 SQL 无 hash 分叉风险），修好重新验证，全过才允许进 Step 8。**
+
+注意：本步创建的测试文件**不在本 Task 提交**——由 Task 5 提交，保持「feat(server)=迁移」与「test(server)=验证」两个 conventional commit 的语义分离；文件在工作区保持未提交状态进入后续 Task（有 `RUN_MIGRATION_IT` 门控，不影响 Task 4 的全量测试）。
+
+- [ ] **Step 7: 确认临时 schema 已清理**
+
+执行 Task 5 Step 4 的命令与检查（`SHOW DATABASES LIKE 'moment_migration_it_%'` 应为空）。
+
+- [ ] **Step 8: 对 `.env` 指向的测试库执行迁移（该迁移在远程环境的首次执行，且已通过 Step 6 验证）**
 
 Run: `pnpm --filter @moment/server migrate`
-Expected: 输出 `migrations applied`，无报错。这是 0014 在全环境的**首次**执行，执行的已是含回填版本。
+Expected: 输出 `migrations applied`，无报错。这是 0014 在远程共享测试库的**首次**执行，执行的是已通过 docker 回填验证的版本。
 
-- [ ] **Step 7: 运行确认通过**
+- [ ] **Step 9: 运行确认通过**
 
 Run: `pnpm --filter @moment/server test -- tests/chains/schema.test.ts`
 Expected: PASS（列存在且默认 0）。
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add apps/server/src/db/schema/chain-members.ts apps/server/drizzle/ apps/server/tests/chains/schema.test.ts
@@ -546,7 +566,7 @@ describe('PUT /api/chains/order（spec §5）', () => {
 - [ ] **Step 2: 运行确认失败**
 
 Run: `pnpm --filter @moment/server test -- tests/chains/chains.ordering.test.ts`
-Expected: FAIL——`PUT /api/chains/order` 404（路由不存在）；`create` 首链 sortOrder 断言失败（insert 未写 sortOrder，默认 0 而非 1）；排序用例失败（listMine 仍按 createdAt DESC）。
+Expected: FAIL——`PUT /api/chains/order` 404（路由不存在）；`create` 首链 sortOrder 断言失败（insert 未写 sortOrder，默认 0 而非 1）；排序用例失败（listMine 仍按 createdAt DESC）。注意 server jest 经 ts-jest 全量类型检查，`Container.get(ChainService).reorderAfterValidateHook` 在实现前是 TS2339 编译错误——编译错误即红灯，属预期，不必走到运行期断言。
 
 - [ ] **Step 3: 实现 ChainService 改动**
 
@@ -665,7 +685,7 @@ Modify `apps/server/src/chains/chains.controller.ts`：
 - [ ] **Step 5: 运行确认通过**
 
 Run: `pnpm --filter @moment/server test -- tests/chains/`
-Expected: 全过（新文件 9 个用例 + 既有 chains 套件不回归）。
+Expected: 全过（新文件 10 个用例 + 既有 chains 套件不回归）。
 
 - [ ] **Step 6: 全量回归 + typecheck**
 
@@ -692,7 +712,9 @@ git commit -m "feat(server): per-user chain ordering (sort list, top-insert, reo
 
 **为什么不用远程共享测试库（spec §7 原话落实）：** 远程共享测试库已应用全部既有迁移，直接跑 migrate 是 no-op，观察不到回填效果。本测试在本地 docker MySQL 起**临时 schema**：顺序执行 0000–0013（旧行为，`chain_members` 尚无 `sort_order` 列）→ 造多用户多链数据（含 `created_at` 同秒并列）→ 执行 0014 → 断言回填结果。**全程不碰远程共享库**：不 import `src/db` / `tests/helpers/db.ts`（避免创建指向远程的全局 pool），自带 mysql2 连接，收尾 `DROP DATABASE`。门控方式沿用 `tests/storage/s3-it.test.ts` 的 `RUN_S3_IT` 先例（`const d = ... ? describe : describe.skip`），默认跳过、按需运行。
 
-- [ ] **Step 1: 写测试**
+**执行时机（spec §2「先验证再跑迁移」）：** 本测试的**首次执行在 Task 3 Step 6**——generate → append → docker 验证 → 远程首跑，docker 验证是远程共享测试库首跑 0014 的前置闸门。本 Task 持有该测试文件的**权威代码**与门控设计，并负责提交；Step 3/4 是复跑与清理规程。
+
+- [ ] **Step 1: 写测试（权威代码；该文件已在 Task 3 Step 6 逐字创建并执行——若已创建，本步核对一致即可，无需重写）**
 
 Create `apps/server/tests/migrations/chain-members-sort-order-backfill.test.ts`（完整内容）：
 
@@ -835,7 +857,7 @@ d('迁移 0014 chain_members.sort_order 回填（RUN_MIGRATION_IT=1，本地 doc
 Run: `pnpm --filter @moment/server test -- chain-members-sort-order-backfill`
 Expected: 通过但显示 skipped（未设 `RUN_MIGRATION_IT=1` 时 `describe.skip` 生效）——默认的 server 全量测试不因本地 docker 未启动而失败。
 
-- [ ] **Step 3: 起本地 MySQL 并运行验证**
+- [ ] **Step 3: 运行方式（复跑规程；首次执行已在 Task 3 Step 6 作为远程首跑前置闸门完成）**
 
 Run:
 ```bash
@@ -844,7 +866,7 @@ RUN_MIGRATION_IT=1 pnpm --filter @moment/server test -- chain-members-sort-order
 ```
 Expected: 两个用例全过。若本地 3306 已有其它 MySQL 占用，用 `MIGRATION_IT_PORT=<port>` 覆盖；严禁把 `MIGRATION_IT_HOST` 指向任何远程/生产库。
 
-- [ ] **Step 4: 确认临时 schema 已清理**
+- [ ] **Step 4: 确认临时 schema 已清理（已在 Task 3 Step 7 执行过；此处为复跑后的清理规程）**
 
 Run: `docker compose exec mysql mysql -uroot -pmoment_root_dev -e "SHOW DATABASES LIKE 'moment_migration_it_%';"`
 Expected: 空结果（afterAll 已 DROP；即使测试中途失败，`IF EXISTS` 的 DROP 也不影响下次运行——失败遗留时手动 `DROP DATABASE` 即可）。
@@ -1666,7 +1688,7 @@ export type ContextMenuProps = {
 3. `ContextMenu` 函数签名解构加入 `ref`，函数体内 `const handleAction = ...` 之前加入：
 
 ```ts
-  useImperativeHandle(ref, () => ({ close: () => setOpen(false) }), []);
+  useImperativeHandle(ref, () => ({ close: () => setOpen(false) }), [ref]);
 ```
 
 （`setOpen(false)` 即关闭：`point` 保留无碍——下次 `openAt` 总是先写新坐标再开。）
@@ -1695,7 +1717,7 @@ git commit -m "feat(web): expose imperative close on ContextMenu"
 - Modify: `apps/web/src/shell/shell-navigation.test.tsx`（renderShell 包 `ToastProvider`）
 
 **Interfaces:**
-- Consumes: Task 6 的 `ChainListService.reorder`；Task 7 的 `createDragGesture` / `moveItem` / `insertionIndex` / `DragGesture`；Task 8 的 `ContextMenuHandle`；既有 `ContextMenu` / `MenuItem`（`@/ui/menu/index`）、`useToast`（`@/ui/feedback/index`）、`ChainMark`、`sideLink` / `chipLink` 类名函数（Shell.tsx 内移入本组件文件）。
+- Consumes: Task 6 的 `ChainListService.reorder`；Task 7 的 `createDragGesture` / `moveItem` / `insertionIndex` / `DragGesture`；Task 8 的 `ContextMenuHandle`；既有 `ContextMenu` / `MenuItem`（`@/ui/menu/index`）、`useToast`（`@/ui/feedback/index`）、`ChainMark`、`sideLink` / `chipLink` 类名函数（**Shell.tsx 保留**——「大家的日子」汇总入口与 Brand 仍在用——经 `itemClassName` prop 传入本组件，不移动）。
 - Produces: `ChainNavList`——`{ chains: ChainDto[]; axis: 'x' | 'y'; itemClassName: (args: { isActive: boolean }) => string }`，Shell 侧栏（`axis="y"`）与顶部 chips（`axis="x"`）共用（spec §6.1「不各写一份」）。
 
 **DOM 接线清单（spec §6.2 硬要求逐条落点，实现者逐条核对）：**
@@ -1986,7 +2008,7 @@ Expected: 全部 exit 0。
 
 1. ≥1400px 侧栏：鼠标按下移动 6px 内不激活（无指示线），超过 6px 激活，拖动项半透明、指示线随动；松手后新顺序立即生效，刷新页面后保持（服务端已持久化）。
 2. <1400px 顶部 chips：横向拖拽同理；chips 容器横向滚动在**未长按直接划动**时正常（手势让位滚动）。
-3. 触屏（或仿真）：长按链项不动 → ~500ms 弹出「链设置」菜单（现状不回归）；长按后移动 → 菜单关闭（或未来得及弹出则被 suppress）进入拖拽；松手落点正确。
+3. **（组件落地后第一时间验，不要全套装完再验）** 触屏真机优先、仿真次之：长按链项不动 → ~500ms 弹出「链设置」菜单（现状不回归）；长按后移动 → 菜单关闭（或未来得及弹出则被 suppress）进入拖拽；松手落点正确。此条覆盖「平台在 contextmenu 弹出瞬间可能补发 pointercancel」的继承风险（取舍第 8 条），仿真环境不复现时以真机（家庭平板）为准。
 4. 触屏拖拽中列表不滚动（touchmove preventDefault 生效）；拖出列表区域松手 / 系统手势打断（pointercancel）→ 指示线消失、无提交。
 5. 拖拽中第二根手指落下/滑动 → 拖拽不受干扰。
 6. 拖拽松手后不触发导航（停留在当前页）；普通点击链项导航到 `/chains/:id` 不变。
@@ -2007,7 +2029,7 @@ git commit -m "feat(web): drag-to-reorder chains in shell navigation"
 **1. Spec 覆盖（逐节核对）：**
 
 - §1 背景与目标 / 非目标：只做 per-user 排序 + web 拖拽；不做 owner 全局排序、置顶概念、lexorank；share 只读页 / compose 面板 / moment sheet 零改动（Global Constraints 注明 compose 自动生效）。✓
-- §2 数据模型：`sort_order int notNull default 0`、允许负数、无唯一约束 → Task 3 schema；`drizzle-kit generate` 不手写改表 SQL → Task 3 Step 3；同迁移文件内回填（ROW_NUMBER PARTITION BY user_id ORDER BY created_at DESC, id）→ Task 3 Step 4（SQL 逐字取自 spec）；MySQL 8.4 窗口函数 → Task 5 实测；**迁移编辑时序硬约束** → Global Constraints 首条 + Task 3 时序警告 + Step 3–6 顺序（generate → 立即 append → diff 检查 → 首跑）。✓
+- §2 数据模型：`sort_order int notNull default 0`、允许负数、无唯一约束 → Task 3 schema；`drizzle-kit generate` 不手写改表 SQL → Task 3 Step 3；同迁移文件内回填（ROW_NUMBER PARTITION BY user_id ORDER BY created_at DESC, id）→ Task 3 Step 4（SQL 逐字取自 spec）；MySQL 8.4 窗口函数 → Task 3 Step 6 / Task 5 实测；**迁移编辑时序硬约束** → Global Constraints 首条 + Task 3 时序警告 + Step 3–8 顺序（generate → 立即 append → diff 检查 → **docker 回填验证** → 远程首跑——「先验证再跑迁移」，docker 验证不过则远程库零记录、无 hash 分叉）。✓
 - §3 列表查询：`ORDER BY sort_order ASC, created_at DESC` → Task 4 Step 3.5，测试含并列兜底用例。✓
 - §4 新链置顶：create / acceptInvite min-1、首链 1、退出重进回顶部、并发重复 sortOrder 容忍（不设唯一约束）→ Task 4 Step 3.4/3.6/3.7 + 三个测试用例。✓
 - §5 API：`PUT /api/chains/order`、body `{chainIds}`、204（`@HttpCode(204)+@OnUndefined(204)`）、去重集合恰好等于全部链否则 `CHAIN_ORDER_MISMATCH`、校验与重写同事务、IN 限定、空数组合法、dto schema（min(1).max(36).max(200)）、api-client `reorderChains` → Task 1/2/4；错误结构统一 `{error:{code,...}}` UPPER_SNAKE（沿用 `BadRequestError` + 既有 error-handler）。✓
@@ -2015,8 +2037,8 @@ git commit -m "feat(web): drag-to-reorder chains in shell navigation"
 - §6.2 a–g：a) `draggable={false}` → Task 9 组件；b) pointerType 激活 + 350ms armed + touchmove preventDefault（非 passive）+ 不预设 touch-action + pen 并 touch → Task 7 状态机 + Task 9 onActivate；c) contextmenu 互斥（捕获 suppress / 已开则 close / 未移动不干预 / flicker 取舍）→ Task 8 ref 句柄 + Task 9 onContextMenuCapture/onActivate；d) pointercancel 清理 + isPrimary 主指针 + 副指针忽略 → Task 7 + 单测；e) 点击不回归 + 松手 click 抑制 → Task 7 suppress 标记 + Task 9 onClickCapture；f) 视觉只消费既有 tokens（`bg-action`/`opacity-50`/刻度值）→ Task 9；g) 键盘本迭代不做 → Task 9 清单注明。✓
 - §6.3 提交流程：乐观更新 / 在途标志 / 成功收敛 load / 失败 toast + 回滚 load / **竞态防护（在途抑制 load 写回）** / **重入语义（引用计数非布尔）** / 拖拽临时顺序只在组件内 → Task 6（service + 4 个竞态/重入用例）+ Task 9（onDrop 才调 reorder）。✓
 - §6.4 compose 同源消费无改动、多设备 last-write-wins 取舍 → Global Constraints + Task 9 验收清单第 7 条。✓
-- §7 测试清单逐条：dto 正常/边界（空数组、超长 id、超 200）→ Task 1 三个用例；api-client 路由对齐 → Task 2；server listMine 排序 / create·acceptInvite 置顶（min-1、首链 1）/ reorder 正常重写 / 漏 id·多 id·他人链 id → CHAIN_ORDER_MISMATCH / 幂等 / 同事务+IN 限定（hook 顺序模拟）/ 退出重进回顶部 / 迁移回填验证（本地 docker 临时 schema）→ Task 4 九个用例 + Task 5 两个用例；web reorder 乐观·失败回滚+toast / 在途+并发 load 竞态 / 重入 / 状态机单测（含副指针忽略）/ DOM 不仿真 → Task 6 五个用例 + Task 7 十五个用例 + Task 9 无组件测试。✓
-- §8 红线：不新增表、`resetDb()` 不动、迁移只打 `.env` 测试库、每 Task 一个 conventional commit、TDD 红灯先行 → 各 Task Steps。✓
+- §7 测试清单逐条：dto 正常/边界（空数组、超长 id、超 200）→ Task 1 三个用例；api-client 路由对齐 → Task 2；server listMine 排序 / create·acceptInvite 置顶（min-1、首链 1）/ reorder 正常重写 / 漏 id·多 id·他人链 id → CHAIN_ORDER_MISMATCH / 幂等 / 同事务+IN 限定（hook 顺序模拟）/ 退出重进回顶部 / 迁移回填验证（本地 docker 临时 schema）→ Task 4 十个用例 + Task 5 两个用例；web reorder 乐观·失败回滚+toast / 在途+并发 load 竞态 / 重入 / 状态机单测（含副指针忽略）/ DOM 不仿真 → Task 6 五个用例 + Task 7 十四个用例 + Task 9 无组件测试。✓
+- §8 红线：不新增表、`resetDb()` 不动、迁移只打 `.env` 测试库（且首跑排在 docker 回填验证之后）、每 Task 一个 conventional commit、TDD 红灯先行 → 各 Task Steps。**TDD 豁免点名：Task 9（Shell 接线）无红灯步骤**——spec §7 明确「DOM 拖拽本身不做 jsdom 仿真」，其红灯由 Step 3 前「`./chain-nav-list` 模块不存在」的编译失败承担，行为正确性由 Task 6/7/8 的单测与既有 shell-navigation 套件共同守护；另 Task 5 是迁移验证测试，其「红灯」形态是 Task 3 时序内的基线守卫失败，已在 Task 3 Step 6 说明。✓
 
 **2. 占位符扫描：** 无 TBD / TODO / 「适当处理」/「类似 Task N」。所有代码块完整（dto schema、client 方法、service 方法、controller 路由、两个新测试文件、lib 状态机、组件、ContextMenu diff）；唯一非逐字产物是 `0014_<random>.sql` 的文件名（drizzle-kit 随机后缀），其内容已逐字给出。
 
