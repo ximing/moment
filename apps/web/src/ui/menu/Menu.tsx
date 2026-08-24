@@ -1,10 +1,11 @@
 import type { LucideIcon } from 'lucide-react';
-import type { ComponentProps, ReactElement, ReactNode } from 'react';
+import type { ComponentProps, ReactElement, ReactNode, Ref } from 'react';
 import {
   createContext,
   useContext,
   useEffect,
   useId,
+  useImperativeHandle,
   useRef,
   useState,
 } from 'react';
@@ -382,12 +383,19 @@ export function ResponsiveMenu({
   );
 }
 
+export type ContextMenuHandle = {
+  /** 程序化关闭（拖拽激活时先关已弹出的菜单，spec chain-ordering §6.2c） */
+  close(): void;
+};
+
 export type ContextMenuProps = {
   /** 命令集合的可访问名称 */
   'aria-label': string;
   onAction?(key: Key): void;
   /** 与 ResponsiveMenu 共享的同一批命令（MenuItem / MenuGroup） */
   items: ReactNode;
+  /** 可选 ref 句柄（React 19 ref-as-prop）：仅暴露 close()，菜单开关仍为内部状态 */
+  ref?: Ref<ContextMenuHandle>;
   children: ReactNode;
 };
 
@@ -400,12 +408,15 @@ export function ContextMenu({
   'aria-label': ariaLabel,
   onAction,
   items,
+  ref,
   children,
 }: ContextMenuProps) {
   const [open, setOpen] = useState(false);
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
   // 右键没有可锚定的元素：在指针坐标放一枚零尺寸的虚拟锚点供 FloatingLayer 定位
   const anchorRef = useRef<HTMLSpanElement>(null);
+
+  useImperativeHandle(ref, () => ({ close: () => setOpen(false) }), [ref]);
 
   const openAt = (x: number, y: number) => {
     setPoint({ x, y });

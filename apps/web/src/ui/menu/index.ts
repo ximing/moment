@@ -8,6 +8,7 @@ export {
   ResponsiveMenu,
 } from './Menu';
 export type {
+  ContextMenuHandle,
   ContextMenuProps,
   MenuGroupProps,
   MenuItemProps,

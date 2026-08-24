@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createRef } from 'react';
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IconButton } from '../button/index';
@@ -9,6 +10,7 @@ import {
   MenuItem,
   MenuLinkItem,
   ResponsiveMenu,
+  type ContextMenuHandle,
 } from './index';
 
 // Menu 行为契约（Menu/Popover/Tooltip 规范 §3 / §6 / §7）：
@@ -505,5 +507,28 @@ describe('ContextMenu', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
     );
     await waitFor(() => expect(area).toHaveFocus());
+  });
+
+  it('ref 句柄：程序化关闭已打开的菜单（拖拽激活先关菜单，spec chain-ordering §6.2c）', async () => {
+    const ref = createRef<ContextMenuHandle>();
+    render(
+      <ContextMenu
+        ref={ref}
+        aria-label="链操作"
+        items={
+          <MenuItem id="settings" textValue="链设置">
+            链设置
+          </MenuItem>
+        }
+      >
+        <button type="button">链</button>
+      </ContextMenu>,
+    );
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: '链' }));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+
+    act(() => ref.current?.close());
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   });
 });
