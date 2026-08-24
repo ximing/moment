@@ -2221,14 +2221,15 @@ export function VoiceRecorder({ onChange }: { onChange: (draft: VoiceDraft | nul
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      const recorder = new MediaRecorder(stream);
+      const activeStream = stream;
+      const recorder = new MediaRecorder(activeStream);
       const chunks: Blob[] = [];
-      recordingRef.current = { recorder, stream, token };
+      recordingRef.current = { recorder, stream: activeStream, token };
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
       };
       recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
+        activeStream.getTracks().forEach((t) => t.stop());
         if (recordingRef.current?.recorder === recorder) recordingRef.current = null;
         clearTimer(token); // 不能让旧 onstop 清掉新会话的 timer
         if (!isActive(token)) return;
