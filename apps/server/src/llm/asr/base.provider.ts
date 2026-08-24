@@ -5,10 +5,8 @@
  * 分类语义与 outbox 退避契约完全一致（429/5xx/网络/超时 vs 其他 4xx），类名里的 LLM 是历史命名。
  */
 export interface ASRTranscribeRequest {
-  /** 音频字节（worker 从 S3 下载）；≤25MB，内存可控 */
-  audio: Buffer;
-  /** 行上 mime（白名单内），provider 据此定 multipart filename 扩展名 */
-  mime: string;
+  /** DashScope 可通过 HTTP/HTTPS 读取的音频预签名 GET URL。 */
+  fileUrl: string;
 }
 
 export interface ASRProvider {

@@ -1,6 +1,6 @@
 import { config } from '../../config.js';
 import type { ASRProvider } from './base.provider.js';
-import { OpenAICompatASRProvider } from './openai-compat.provider.js';
+import { DashScopeASRProvider } from './dashscope.provider.js';
 
 // 三态语义（与 llm/factory.ts 逐字同范式）：
 //   singleton: undefined=未求值; null=已求值且空 key; provider=已求值且有 key
@@ -17,7 +17,11 @@ export function getASRProvider(): ASRProvider | null {
   if (override !== undefined) return override;
   if (singleton === undefined) {
     singleton = config.ASR_API_KEY
-      ? new OpenAICompatASRProvider({ baseUrl: config.ASR_BASE_URL, apiKey: config.ASR_API_KEY, model: config.ASR_MODEL })
+      ? new DashScopeASRProvider({
+          baseUrl: config.ASR_BASE_URL,
+          apiKey: config.ASR_API_KEY,
+          model: config.ASR_MODEL,
+        })
       : null;
   }
   return singleton;

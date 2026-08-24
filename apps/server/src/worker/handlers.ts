@@ -169,6 +169,9 @@ export const handleMomentDeleted: OutboxHandler = async (payload) => {
  *  不截断会落出 API 写不出的值，破坏契约对称（spec §4.3 步骤 5）。 */
 const TRANSCRIPT_MAX_CHARS = 5000;
 
+/** DashScope 异步拉取源文件：覆盖 5 分钟 provider 等待并留 55 分钟排队/下载余量。 */
+export const ASR_SOURCE_URL_TTL_SECONDS = 3_600;
+
 /**
  * 有界读取下载响应：header 可提前拒绝，但不能只信 header；无/伪造长度时仍按流累计。
  * 返回 null 表示对象超限。超限后立即 cancel，避免继续从远端拉取剩余字节。
@@ -244,20 +247,25 @@ export const handleMomentTranscribe: OutboxHandler = async (payload) => {
     return;
   }
 
-  // 步骤 4：内部预签名 GET（短 TTL）→ 下载字节；网络/非 2xx 抛普通 Error（processor 对任何抛出都退避，
-  // S3 瞬时故障可重试）。响应字节超 MAX_AUDIO_BYTES → failed（防御行上 size 与对象不符）。
-  const url = await getStorage().generateAccessUrl(audioRow.s3Key, audioRow.storageMeta, 300);
-  const resp = await fetch(url);
+  // 步骤 4：同一 3600 秒预签名 GET URL 先做 25MB 有界下载防御，再交给 DashScope 自行拉取。
+  // 网络/非 2xx 抛普通 Error（processor 对任何抛出都退避）；响应字节超限则落 failed。
+  const fileUrl = await getStorage().generateAccessUrl(
+    audioRow.s3Key,
+    audioRow.storageMeta,
+    ASR_SOURCE_URL_TTL_SECONDS,
+  );
+  const resp = await fetch(fileUrl);
   if (!resp.ok) throw new Error(`audio download failed: ${resp.status}`);
-  const audio = await readAudioResponse(resp);
-  if (!audio) {
+  const boundedAudio = await readAudioResponse(resp);
+  if (!boundedAudio) {
     await markTranscriptionFailed(momentId);
     return;
   }
+  // boundedAudio 仅用于 25MB 防御；DashScope 必须自行读取同一预签名 GET URL。
 
   // 步骤 5：转写 + 落库
   try {
-    const { text } = await provider.transcribe({ audio, mime: audioRow.mime });
+    const { text } = await provider.transcribe({ fileUrl });
     const truncated = text.slice(0, TRANSCRIPT_MAX_CHARS);
     // 成功（含空文本）→ done + transcript；content 条件回填：用户可能在转写完成前已手动编辑，
     // 不覆盖用户输入（SET content WHERE content=''）。CAS 在 IO 后重新校验终态，避免迟到结果覆盖

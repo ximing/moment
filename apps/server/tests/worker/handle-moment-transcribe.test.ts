@@ -5,10 +5,13 @@ import { MAX_AUDIO_BYTES } from '@moment/dto';
 import { db } from '../../src/db/index.js';
 import { chains, media, moments, notifications, users } from '../../src/db/schema.js';
 import { NonRetryableLLMError, RetryableLLMError } from '../../src/llm/base.provider.js';
-import type { ASRProvider } from '../../src/llm/asr/base.provider.js';
+import type { ASRProvider, ASRTranscribeRequest } from '../../src/llm/asr/base.provider.js';
 import { setASRProvider } from '../../src/llm/asr/factory.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
-import { handleMomentTranscribe } from '../../src/worker/handlers.js';
+import {
+  ASR_SOURCE_URL_TTL_SECONDS,
+  handleMomentTranscribe,
+} from '../../src/worker/handlers.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
@@ -36,8 +39,13 @@ function stubAudioDownload(bytes: number): void {
   globalThis.fetch = (async () => new Response(new Uint8Array(bytes))) as typeof fetch;
 }
 
-function asrReturning(text: string): ASRProvider {
-  return { transcribe: async () => ({ text }) };
+function asrReturning(text: string, seen?: ASRTranscribeRequest[]): ASRProvider {
+  return {
+    transcribe: async (request) => {
+      seen?.push(request);
+      return { text };
+    },
+  };
 }
 
 function deferred<T>(): {
@@ -99,10 +107,12 @@ async function insertVoice(opts?: {
 
 describe('handleMomentTranscribe（spec voice-moment §4.3）', () => {
   it('成功：单事务落 transcript + done，空 content 条件回填且不发通知', async () => {
+    const seen: ASRTranscribeRequest[] = [];
     const storage = installMockStorage();
+    storage.generateAccessUrl.mockResolvedValue('https://s3.example/audio.wav?signature=test');
     const { momentId, audioId } = await insertVoice();
     stubAudioDownload(100);
-    setASRProvider(asrReturning('宝宝第一次叫奶奶'));
+    setASRProvider(asrReturning('宝宝第一次叫奶奶', seen));
 
     await handleMomentTranscribe({ momentId }, { push: mockPush });
 
@@ -113,8 +123,10 @@ describe('handleMomentTranscribe（spec voice-moment §4.3）', () => {
     expect(storage.generateAccessUrl).toHaveBeenCalledWith(
       expect.stringContaining(audioId!),
       {},
-      300,
+      ASR_SOURCE_URL_TTL_SECONDS,
     );
+    expect(ASR_SOURCE_URL_TTL_SECONDS).toBe(3_600);
+    expect(seen).toEqual([{ fileUrl: 'https://s3.example/audio.wav?signature=test' }]);
     expect(await db.select().from(notifications)).toHaveLength(0);
     expect(mockSend).not.toHaveBeenCalled();
   });
@@ -248,6 +260,8 @@ describe('handleMomentTranscribe（spec voice-moment §4.3）', () => {
     );
     const [m] = await db.select().from(moments).where(eq(moments.id, momentId));
     expect(m.transcriptionStatus).toBe('pending');
+    expect(await db.select().from(notifications)).toHaveLength(0);
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('NonRetryableLLMError → 自落 failed 后正常返回（不占退避额度）', async () => {
@@ -261,6 +275,8 @@ describe('handleMomentTranscribe（spec voice-moment §4.3）', () => {
     await expect(handleMomentTranscribe({ momentId }, { push: mockPush })).resolves.toBeUndefined();
     const [m] = await db.select().from(moments).where(eq(moments.id, momentId));
     expect(m.transcriptionStatus).toBe('failed');
+    expect(await db.select().from(notifications)).toHaveLength(0);
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('其他异常 → 传播给 processor，状态保持 pending', async () => {
