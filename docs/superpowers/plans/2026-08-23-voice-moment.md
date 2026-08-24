@@ -2703,7 +2703,7 @@ Modify `apps/app/app.config.ts`：plugins 数组（expo-location 条目后）加
 Create `apps/app/src/features/compose/voice-recorder.tsx`：
 
 ```tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import {
   RecordingPresets,
@@ -2758,14 +2758,19 @@ export function VoiceRecorder({
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const state = useAudioRecorderState(recorder, 200);
   const [busy, setBusy] = useState(false);
+  // 成功 stop 后保持 true，直到下一次 start；避免 200ms state 轮询期间 effect 重复调用 recorder.stop()。
+  const isStoppingRef = useRef(false);
 
   const elapsedSeconds = Math.floor((state.durationMillis ?? 0) / 1000);
 
-  const stopRecording = async () => {
-    if (!state.isRecording) return;
+  const stopRecording = useCallback(async () => {
+    if (!state.isRecording || isStoppingRef.current) return;
+    isStoppingRef.current = true;
+    let stopped = false;
     setBusy(true);
     try {
       await recorder.stop();
+      stopped = true;
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       const uri = recorder.uri; // AudioRecorder 实例属性是 uri: string | null（url 在 RecorderState 上，实例无此属性）
       if (!uri) {
@@ -2780,17 +2785,18 @@ export function VoiceRecorder({
         durationSeconds: Math.max(1, Math.round((state.durationMillis ?? 0) / 1000)),
       });
     } finally {
+      // recorder.stop() 抛错时允许用户重试；成功后由下次 startRecording 解锁。
+      if (!stopped) isStoppingRef.current = false;
       setBusy(false);
     }
-  };
+  }, [onChange, recorder, state.durationMillis, state.isRecording]);
 
   // 300s 自动停止（spec §6，与 web 对齐）
   useEffect(() => {
     if (state.isRecording && (state.durationMillis ?? 0) >= MAX_AUDIO_DURATION_SECONDS * 1000) {
       void stopRecording();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.durationMillis, state.isRecording]);
+  }, [state.durationMillis, state.isRecording, stopRecording]);
 
   const startRecording = async () => {
     const perm = await requestRecordingPermissionsAsync();
@@ -2798,6 +2804,8 @@ export function VoiceRecorder({
       Alert.alert('无法录音', '麦克风权限被拒绝，请在系统设置中开启后再试');
       return;
     }
+    // 解锁成功停止后的下一段录音；正在停止时录音按钮不会显示。
+    isStoppingRef.current = false;
     setBusy(true);
     try {
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
