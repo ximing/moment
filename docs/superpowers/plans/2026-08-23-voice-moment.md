@@ -2006,12 +2006,13 @@ export async function sweepStaleVoiceTranscriptions(
     return result;
   }
   if (rows.length > 0) {
-    // 条件更新（仍 pending 才写）：不覆盖扫描后恰好完成的 done
-    await db
+    // 条件更新（仍 pending 才写）：不覆盖扫描后恰好完成的 done。drizzle mysql2 返回
+    // [ResultSetHeader]；以实际 affectedRows 计数，因此这类并发完成安全跳过且不计为 failed。
+    const [updateResult] = await db
       .update(moments)
       .set({ transcriptionStatus: 'failed' })
       .where(and(inArray(moments.id, rows.map((r) => r.id)), eq(moments.transcriptionStatus, 'pending')));
-    result.markedFailed = rows.length;
+    result.markedFailed = updateResult.affectedRows;
   }
   logger.info('sweeper stale voice transcriptions done', { ...result });
   return result;
