@@ -11,7 +11,7 @@ import { TemplateService } from '../templates/template.service.js';
 import { validateMomentPayload } from '../templates/payload-validator.js';
 import { queryMomentPage } from '../feed/moment-query.js';
 import { emitOutbox } from '../outbox/outbox.js';
-import { OUTBOX_MOMENT_CREATED, OUTBOX_MOMENT_DELETED } from '../outbox/types.js';
+import { OUTBOX_MOMENT_CREATED, OUTBOX_MOMENT_DELETED, OUTBOX_MOMENT_TRANSCRIBE } from '../outbox/types.js';
 import { getStorage } from '../storage/factory.js';
 import type { StorageMetadata } from '../storage/base.adapter.js';
 import { replaceMomentTags } from '../tags/replace-moment-tags.js';
@@ -63,19 +63,22 @@ export class MomentService {
           .for('update');
         posterRow = locked.find((r) => r.id === input.posterMediaId) ?? null;
         mediaRows = locked.filter((r) => r.id !== input.posterMediaId);
-        // 全部满足：数量一致（dto 已拒重复 id，此处防御）+ 属本人 + ready + 未绑定 + mime 类型匹配
-        // （type=video → 恰好 1 条 video/*；type=media 宫格允许图/视频**混排**，spec §1「media（图/视频宫格+文）」，见 Global Constraints）
+        // 全部满足：数量一致（dto 已拒重复 id，此处防御）+ 属本人 + ready + 未绑定 + mime 构成匹配。
+        // mime 构成三分支：voice 前置独立（恰好 1 条 audio/* 且其余全 image/*，显式拒绝 video/* 与多条 audio）；
+        // video → 全 video/*；media 宫格允许 image/* 与 video/* 混排（不放行 audio/*，天然拒绝夹带）。
+        const mimeOk =
+          input.type === 'voice'
+            ? mediaRows.filter((r) => r.mime.startsWith('audio/')).length === 1 &&
+              mediaRows.every((r) => r.mime.startsWith('audio/') || r.mime.startsWith('image/'))
+            : mediaRows.every((r) =>
+                input.type === 'video'
+                  ? r.mime.startsWith('video/')
+                  : r.mime.startsWith('image/') || r.mime.startsWith('video/')
+              );
         const valid =
           mediaRows.length === new Set(input.mediaIds).size &&
-          mediaRows.every(
-            (r) =>
-              r.uploaderId === userId &&
-              r.status === 'ready' &&
-              r.momentId === null &&
-              (input.type === 'video'
-                ? r.mime.startsWith('video/')
-                : r.mime.startsWith('image/') || r.mime.startsWith('video/'))
-          );
+          mediaRows.every((r) => r.uploaderId === userId && r.status === 'ready' && r.momentId === null) &&
+          mimeOk;
         if (!valid) throw new HttpError(400, 'MEDIA_INVALID');
         // poster 行校验（spec video-poster §2.1）：本人 + ready + 未绑定 + image/* + 不在 mediaIds 中
         if (input.posterMediaId) {
@@ -103,6 +106,8 @@ export class MomentService {
         // wall_date 冗余投影随 happenedAt/happenedTzOffset 一并写入（spec memories-today §1）
         wallDate: wallDateOf(happenedAt, input.happenedTzOffset),
         isBackfill: input.isBackfill,
+        // voice 创建即进入转写管线（spec §1：仅 voice 非空，其余类型恒 NULL；transcript 留 NULL）
+        ...(input.type === 'voice' ? { transcriptionStatus: 'pending' as const } : {}),
       });
 
       for (const mediaId of input.mediaIds) {
@@ -148,6 +153,11 @@ export class MomentService {
         OUTBOX_MOMENT_CREATED,
         { momentId, chainId, authorId: userId, isBackfill: input.isBackfill }
       );
+      // ASR 异步转写（spec §4.3）：create 恒 emit moment.transcribe；
+      // 停用部署由 handler 判 getASRProvider()===null 落 failed，create 路径不读 ASR config（spec §0）
+      if (input.type === 'voice') {
+        await emitOutbox(tx, OUTBOX_MOMENT_TRANSCRIBE, { momentId });
+      }
 
       return inserted;
     });

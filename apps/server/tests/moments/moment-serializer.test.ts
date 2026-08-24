@@ -8,6 +8,8 @@ const moment = {
   kind: 'standard',
   payload: null,
   content: '九张图',
+  transcript: null,
+  transcriptionStatus: null,
   happenedAt: new Date('2026-08-15T02:00:00Z'),
   happenedTzOffset: -480,
   isBackfill: false,
@@ -53,5 +55,17 @@ describe('momentSerializer（moment → API 响应唯一出口）', () => {
     expect(res.tags).toEqual([{ id: 't-1', name: '周岁' }]);
     expect(res.author).toEqual({ id: 'u-1', nickname: 'Alice', avatarUrl: null });
     expect(res.media).toEqual([]);
+  });
+
+  it('voice：transcript / transcriptionStatus 透传出口；非 voice 恒 null（spec §3.3）', () => {
+    const res = momentSerializer(
+      { ...moment, type: 'voice', content: '', transcript: 'ASR 原文', transcriptionStatus: 'done' },
+      { media: [], author: { id: 'u-1', nickname: 'Alice', avatarUrl: null } }
+    );
+    expect(res.transcript).toBe('ASR 原文');
+    expect(res.transcriptionStatus).toBe('done');
+    const plain = momentSerializer(moment, { media: [], author: { id: 'u-1', nickname: 'A', avatarUrl: null } });
+    expect(plain.transcript).toBeNull();
+    expect(plain.transcriptionStatus).toBeNull();
   });
 });
