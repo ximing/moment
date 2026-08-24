@@ -5,6 +5,7 @@ import { formatMomentTime } from '../lib/format';
 import { resolveMilestoneLabel, summarizePayload } from '../lib/template';
 import type { Theme } from '../theme/theme';
 import { useTheme } from '../theme/use-theme';
+import { AudioBar } from './AudioBar';
 import { MediaGrid } from './MediaGrid';
 
 /** spec §4.2：onLongPress 可选（Pressable 原生支持）；权限判断在列表侧，组件不含。 */
@@ -25,6 +26,10 @@ export function MomentCard({
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const isVoice = moment.type === 'voice';
+  const audioMedia = isVoice ? moment.media.find((m) => m.mime.startsWith('audio/')) : undefined;
+  // voice 附图只传 image/* 行：audio/* 是内容本体进播放条，不能进宫格（spec §6）
+  const gridMedia = isVoice ? moment.media.filter((m) => m.mime.startsWith('image/')) : moment.media;
   return (
     <Pressable style={styles.card} onPress={onPress} onLongPress={onLongPress}>
       <View style={styles.head}>
@@ -35,8 +40,12 @@ export function MomentCard({
           {ageLabel ? ` · ${ageLabel}` : ''}
         </Text>
       </View>
+      {audioMedia ? <AudioBar media={audioMedia} /> : null}
+      {isVoice && moment.transcriptionStatus === 'pending' ? (
+        <Text style={styles.transcribing}>转写中…</Text>
+      ) : null}
       {moment.content.length > 0 ? <Text style={styles.content}>{moment.content}</Text> : null}
-      <MediaGrid media={moment.media} />
+      <MediaGrid media={gridMedia} />
       {moment.kind !== 'standard' && templateManifest
         ? (() => {
             const p = moment.payload ?? {};
@@ -74,6 +83,7 @@ const createStyles = (t: Theme) =>
     head: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
     author: { fontWeight: '600', fontSize: t.fontBody, color: t.ink },
     time: { color: t.muted, fontSize: t.fontCaption },
+    transcribing: { color: t.muted, fontSize: t.fontCaption, marginTop: t.space1 },
     content: { fontSize: t.fontBody, lineHeight: 22, color: t.ink },
     footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.space2, marginTop: t.space2 },
     tplLine: { color: t.muted, fontSize: t.fontSupport, marginTop: t.space1 },

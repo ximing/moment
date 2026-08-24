@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
+import { setAudioModeAsync } from 'expo-audio';
 import { StatusBar } from 'expo-status-bar';
 import { RSRoot } from '@rabjs/react';
 import { registerGlobals } from '../src/services/register';
@@ -9,6 +11,11 @@ registerGlobals();
 
 export default function RootLayout() {
   const t = useTheme();
+
+  useEffect(() => {
+    void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
+  }, []);
+
   return (
     <RSRoot>
       <StatusBar style={t.scheme === 'dark' ? 'light' : 'dark'} />
