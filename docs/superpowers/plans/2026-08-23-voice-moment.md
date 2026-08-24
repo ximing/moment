@@ -3009,14 +3009,16 @@ git commit -m "feat(app): record and publish voice moments with expo-audio"
 
 **Files:**
 - Create: `apps/app/src/components/AudioBar.tsx`（expo-audio 播放条）
+- Modify: `apps/app/app/_layout.tsx`（根客户端生命周期配置非录音音频模式，保证未进入录音流程时静音模式仍可播放）
 - Modify: `apps/app/src/components/MomentCard.tsx`（voice 分支）
 - Modify: `apps/app/src/components/MediaGrid.tsx`（L41 else 分支加 `image/*` 显式守卫）
 - Modify: `apps/app/src/features/moment/index.tsx`（详情页 voice 分支，L115 三元前拆出 audio 行）
 
 **Interfaces:**
-- Consumes: Task 1 的 `MomentResponse.transcriptionStatus`；既有 `useMediaUri(mediaId: string | undefined)`（`apps/app/src/lib/use-media-uri.ts`）；`expo-audio` 的 `useAudioPlayer` / `useAudioPlayerStatus`；`useTheme()` token。
+- Consumes: Task 1 的 `MomentResponse.transcriptionStatus`；既有 `useMediaUri(mediaId: string | undefined)`（`apps/app/src/lib/use-media-uri.ts`）；`expo-audio` 的 `setAudioModeAsync` / `useAudioPlayer` / `useAudioPlayerStatus`；`useTheme()` token。
 - Produces:
-  - `<AudioBar media: MomentMedia />`：经 `useMediaUri` 拿本地缓存 uri 播放（**不用裸 url 直渲**——原生播放器不带鉴权头，与 video-poster §4 同约束）；v1 无波形。
+  - `<AudioBar media: MomentMedia />`：经 `useMediaUri` 拿本地缓存 uri 播放（**不用裸 url 直渲**——原生播放器不带鉴权头，与 video-poster §4 同约束）；播放/暂停、可见进度轨道及点击 seek，播完重播先 `await seekTo(0)` 再 `play()`；v1 无波形。
+  - 根布局在安全的客户端生命周期 best-effort 设为 `{ allowsRecording: false, playsInSilentMode: true }`，使没有打开录音入口的用户也能播放；Task 12 的录音前后显式模式切换仍是录音生命周期的唯一所有者。
   - MomentCard / 详情页 voice 分支：播放条 + `pending` → 「转写中…」+ 文本区 + 附图（只 `image/*` 行进宫格）。
 
 - [ ] **Step 1: AudioBar 组件**
@@ -3024,8 +3026,8 @@ git commit -m "feat(app): record and publish voice moments with expo-audio"
 Create `apps/app/src/components/AudioBar.tsx`：
 
 ```tsx
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import type { MomentMedia } from '@moment/dto';
 import { useMediaUri } from '../lib/use-media-uri';
@@ -3049,28 +3051,57 @@ function Player({ media, uri }: { media: MomentMedia; uri: string }) {
   const styles = useMemo(() => createStyles(t), [t]);
   const player = useAudioPlayer(uri);
   const status = useAudioPlayerStatus(player);
+  const [trackWidth, setTrackWidth] = useState(0);
   // 行上 duration（presign 上报值）兜底：播放器元数据未就绪时进度分母不为 0
   const duration = status.duration > 0 ? status.duration : (media.duration ?? 0);
+  const currentTime = Math.min(status.currentTime, duration);
+  const progress = duration > 0 ? currentTime / duration : 0;
+
+  const seek = async (locationX: number) => {
+    if (duration <= 0 || trackWidth <= 0) return;
+    const next = Math.max(0, Math.min(duration, (locationX / trackWidth) * duration));
+    await player.seekTo(next);
+  };
+
+  const onTrackLayout = (event: LayoutChangeEvent) => {
+    setTrackWidth(event.nativeEvent.layout.width);
+  };
+
+  const togglePlayback = async () => {
+    if (status.playing) {
+      player.pause();
+      return;
+    }
+    if (status.didJustFinish) await player.seekTo(0);
+    player.play();
+  };
+
   return (
     <View style={styles.bar}>
       <Pressable
         accessibilityLabel={status.playing ? '暂停语音' : '播放语音'}
-        hitSlop={8}
-        onPress={() => {
-          if (status.playing) {
-            player.pause();
-          } else {
-            if (status.didJustFinish) void player.seekTo(0);
-            player.play();
-          }
-        }}
+        hitSlop={t.space2}
+        onPress={() => void togglePlayback()}
         style={styles.playBtn}
       >
         <Text style={styles.playIcon}>{status.playing ? '⏸' : '▶'}</Text>
       </Pressable>
       <Text style={styles.time}>
-        {formatDuration(status.currentTime)} / {formatDuration(duration)}
+        {formatDuration(currentTime)} / {formatDuration(duration)}
       </Text>
+      <Pressable
+        accessibilityLabel="语音播放进度"
+        accessibilityRole="adjustable"
+        accessibilityValue={{ min: 0, max: duration, now: currentTime }}
+        hitSlop={t.space2}
+        onLayout={onTrackLayout}
+        onPress={(event) => void seek(event.nativeEvent.locationX)}
+        style={styles.trackHitbox}
+      >
+        <View style={styles.trackRail}>
+          <View style={[styles.trackFill, { width: `${progress * 100}%` }]} />
+        </View>
+      </Pressable>
     </View>
   );
 }
@@ -3089,17 +3120,37 @@ const createStyles = (t: Theme) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: t.space2,
-      borderRadius: 8,
+      borderRadius: t.radiusMd,
       padding: t.space2,
       marginTop: t.space2,
     },
     playBtn: { minWidth: t.touchMin, minHeight: t.touchMin, alignItems: 'center', justifyContent: 'center' },
     playIcon: { color: t.ink, fontSize: t.fontBody },
     time: { color: t.muted, fontSize: t.fontCaption },
+    trackHitbox: { flex: 1, minHeight: t.touchMin, justifyContent: 'center' },
+    trackRail: { height: t.space1, borderRadius: t.radiusMd, overflow: 'hidden', backgroundColor: t.line },
+    trackFill: { height: '100%', backgroundColor: t.action },
   });
 ```
 
-- [ ] **Step 2: MomentCard voice 分支**
+所有新增颜色、间距、圆角、字号、命中区域与轨道厚度必须消费现有 `Theme` token；进度填充的百分比宽度是运行时播放状态，不是新增视觉尺寸 token。不得为播放条新增一次性常量。
+
+- [ ] **Step 2: 根布局的静音播放模式**
+
+Modify `apps/app/app/_layout.tsx`（当前 Expo Router 根布局；不是 tabs 子布局）：
+
+1. import 区加：`import { useEffect } from 'react';` 与 `import { setAudioModeAsync } from 'expo-audio';`。
+2. `RootLayout` 内、`useTheme()` 后添加一次仅客户端挂载时执行的 best-effort effect：
+
+```tsx
+  useEffect(() => {
+    void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
+  }, []);
+```
+
+不要在这里恢复默认模式或监听录音状态：Task 12 的 `VoiceRecorder` 仍会在开始录音前设 `allowsRecording: true`，并在停止/失败/卸载时恢复 `allowsRecording: false`（同时保持 `playsInSilentMode: true`）。根 effect 只补足从未进入录音流程的播放用户，失败不可阻断应用渲染。
+
+- [ ] **Step 3: MomentCard voice 分支**
 
 Modify `apps/app/src/components/MomentCard.tsx`：
 
@@ -3133,7 +3184,7 @@ Modify `apps/app/src/components/MomentCard.tsx`：
 
    三态规则同 web：`done` → content 行（空 content 不渲染）；`failed` → 不显示任何转写相关 UI。
 
-- [ ] **Step 3: MediaGrid 显式 image 守卫**
+- [ ] **Step 4: MediaGrid 显式 image 守卫**
 
 Modify `apps/app/src/components/MediaGrid.tsx`：媒体 map（L40-46）改为：
 
@@ -3147,7 +3198,7 @@ Modify `apps/app/src/components/MediaGrid.tsx`：媒体 map（L40-46）改为：
       )}
 ```
 
-- [ ] **Step 4: 详情页 voice 分支**
+- [ ] **Step 5: 详情页 voice 分支**
 
 Modify `apps/app/src/features/moment/index.tsx`：
 
@@ -3184,7 +3235,7 @@ Modify `apps/app/src/features/moment/index.tsx`：
     transcribing: { color: t.muted, fontSize: t.fontCaption, marginTop: t.space1 },
 ```
 
-- [ ] **Step 5: 运行确认**
+- [ ] **Step 6: 运行确认**
 
 Run:
 
@@ -3192,14 +3243,14 @@ Run:
 pnpm --filter @moment/app typecheck && pnpm --filter @moment/app lint
 ```
 
-Expected: 均 exit 0。
+Expected: 均 exit 0。手动验收：设备处于静音模式且从未打开录音入口时，打开含 audio 的 voice moment 可播放；播放/暂停可切换，进度轨道随播放推进，点击轨道会 seek；播放结束后点播放会先归零再重新播放；开始、停止和取消录音仍保持 Task 12 的音频模式切换行为。
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 > 本步骤由编排主 Agent 在验收后执行；实现 SubAgent 跳过 commit，报告待提交文件清单。
 
 ```bash
-git add apps/app/src/components/AudioBar.tsx apps/app/src/components/MomentCard.tsx apps/app/src/components/MediaGrid.tsx apps/app/src/features/moment/index.tsx
+git add apps/app/app/_layout.tsx apps/app/src/components/AudioBar.tsx apps/app/src/components/MomentCard.tsx apps/app/src/components/MediaGrid.tsx apps/app/src/features/moment/index.tsx
 git commit -m "feat(app): render voice moment playback on card and detail"
 ```
 
