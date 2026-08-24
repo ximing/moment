@@ -11,6 +11,7 @@ import { currentTzOffset, toWallClockInput, wallClockToIso } from '@/lib/time';
 import { ChainListService } from '@/services/chain-list.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import type { ComposeRequest } from '@/services/compose-session.service';
+import type { VoiceDraft } from './voice-recorder';
 
 export interface PickedImage {
   file: File;
@@ -37,6 +38,8 @@ export class ComposePanelService extends Service {
   /** 封面草稿（spec video-poster §3：与视频选择同生同灭）；截帧失败保持 null = 无封面发布 */
   posterBlob: Blob | null = null;
   posterMediaId: string | null = null;
+  /** 语音草稿（spec voice-moment §5）：与视频互斥；与图片可共存（voice = 1 语音 + ≤8 附图） */
+  voice: VoiceDraft | null = null;
   replaceConfirm: 'image' | 'video' | null = null;
   pendingFiles: File[] = [];
   happenedAt = nowLocalInput();
@@ -184,8 +187,9 @@ export class ComposePanelService extends Service {
         this.error = `「${file.name}」超过图片上限（${formatBytes(MAX_IMAGE_BYTES)}）`;
         continue;
       }
-      if (next.length >= 9) {
-        this.error = '最多 9 张图片';
+      const cap = this.voice ? 8 : 9; // voice 附图 ≤8（1 audio + ≤8 图 ≤ 9 mediaIds，spec §2.2）
+      if (next.length >= cap) {
+        this.error = this.voice ? '语音时刻最多 8 张附图' : '最多 9 张图片';
         break;
       }
       next.push({ file, previewUrl: URL.createObjectURL(file) });
@@ -205,6 +209,31 @@ export class ComposePanelService extends Service {
     this.posterMediaId = null;
   }
 
+  /** 录音组件回调；draft 为 null = 重录/清空。语音与视频互斥；已有图片截断到 8 张（voice 附图上限） */
+  setVoice(draft: VoiceDraft | null): void {
+    if (this.voice && this.voice.previewUrl !== draft?.previewUrl) {
+      URL.revokeObjectURL(this.voice.previewUrl);
+    }
+    this.voice = draft;
+    if (draft) {
+      if (this.video) {
+        URL.revokeObjectURL(this.video.previewUrl);
+        this.video = null;
+        this.resetPoster();
+      }
+      if (this.images.length > 8) {
+        const dropped = this.images.splice(8);
+        dropped.forEach((i) => URL.revokeObjectURL(i.previewUrl));
+      }
+    }
+  }
+
+  /** 语音重置统一入口：revoke previewUrl 并清空草稿 */
+  private resetVoice(): void {
+    if (this.voice) URL.revokeObjectURL(this.voice.previewUrl);
+    this.voice = null;
+  }
+
   async addVideo(file: File): Promise<void> {
     this.error = null;
     if (file.size > MAX_VIDEO_BYTES) {
@@ -219,6 +248,7 @@ export class ComposePanelService extends Service {
       }
       if (this.video) URL.revokeObjectURL(this.video.previewUrl); // 显式 revoke（spec §5）
       this.resetPoster();
+      this.resetVoice();
       this.video = { file, durationSeconds: meta.durationSeconds, previewUrl: URL.createObjectURL(file) };
     } catch {
       this.error = '无法读取视频';
@@ -275,6 +305,7 @@ export class ComposePanelService extends Service {
     this.images.forEach((i) => URL.revokeObjectURL(i.previewUrl));
     if (this.video) URL.revokeObjectURL(this.video.previewUrl);
     this.resetPoster();
+    this.resetVoice();
     this.resolve(ComposeSessionService).closeCompose();
   }
 
@@ -284,6 +315,7 @@ export class ComposePanelService extends Service {
     this.images = [];
     this.video = null;
     this.resetPoster();
+    this.resetVoice();
   }
 
   async submit(): Promise<void> {
@@ -296,8 +328,9 @@ export class ComposePanelService extends Service {
     }
     const hasImages = this.images.length > 0;
     const hasVideo = Boolean(this.video);
+    const hasVoice = Boolean(this.voice);
     const structuredOnly = this.kind !== 'standard';
-    if (!hasImages && !hasVideo && this.content.trim().length === 0 && !structuredOnly) {
+    if (!hasImages && !hasVideo && !hasVoice && this.content.trim().length === 0 && !structuredOnly) {
       this.error = '先写一句此刻吧';
       return;
     }
@@ -326,8 +359,20 @@ export class ComposePanelService extends Service {
         });
         composeSession.emit('moment:changed', { momentId: edit.id, chainId: edit.chainId, op: 'update' }, 'global');
       } else {
-        const type = hasVideo ? 'video' : hasImages ? 'media' : 'text';
+        const type = hasVoice ? 'voice' : hasVideo ? 'video' : hasImages ? 'media' : 'text';
         const mediaIds: string[] = [];
+        if (this.voice) {
+          this.progress = '上传语音…';
+          const res = await client.uploadMedia({
+            file: this.voice.blob,
+            mime: 'audio/wav',
+            size: this.voice.blob.size,
+            kind: 'audio',
+            durationSeconds: this.voice.durationSeconds,
+            onProgress: (l, t) => (this.progress = `上传语音 ${Math.round((l / t) * 100)}%`),
+          });
+          mediaIds.push(res.mediaId);
+        }
         if (hasImages) {
           for (let i = 0; i < this.images.length; i++) {
             this.progress = `上传图片 ${i + 1}/${this.images.length}`;
@@ -374,7 +419,7 @@ export class ComposePanelService extends Service {
         // kind moment 正文兜底（Global Constraints）：正文空时用结构摘要，满足 text 类型 content 必填。
         // 兜底填入的摘要与 Task 5 卡片摘要行逐字相同——卡片侧按 content===summary 判重跳过（评审 H1），不重复显示
         const summary = this.kind !== 'standard' ? summarizePayload(this.manifest ?? { version: 1 }, this.kind, this.payloadDraft) : '';
-        if (this.kind !== 'standard' && this.content.trim().length === 0 && !summary && !hasImages && !hasVideo) {
+        if (this.kind !== 'standard' && this.content.trim().length === 0 && !summary && !hasImages && !hasVideo && !hasVoice) {
           // 摘要也为空时不发空 content 给 server 被 400（CONTENT_REQUIRED），前置人话提示（评审 S8）
           this.error = '选一项或写一句，再记下';
           this.progress = null;

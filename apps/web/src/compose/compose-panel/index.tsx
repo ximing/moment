@@ -9,6 +9,7 @@ import { Banner, InlineProgress } from '@/ui/feedback/index';
 import { DateTimeField, Input, TextareaField } from '@/ui/field/index';
 import { AlertDialog, Sheet } from '@/ui/modal/index';
 import { ComposePanelService } from './compose-panel.service';
+import { VoiceRecorder } from './voice-recorder';
 import { VideoPosterPicker } from './video-poster';
 import { TemplateFields } from '@/compose/template-fields';
 
@@ -54,6 +55,8 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
   const edit = service.edit;
   const writable = service.writableChains;
   const chainId = service.chainId;
+  // 老 Safari 无 MediaRecorder → 录音入口不渲染并提示（spec §5：置灰提示，不影响其他类型）
+  const voiceSupported = typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
 
   useEffect(() => {
     if (chainId) void service.loadManifest(chainId).catch(() => undefined); // 失败静默（service 注释）
@@ -66,7 +69,7 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
     const base = baselineRef.current;
     if (!base) return false;
     if (service.content !== base.content) return true;
-    if (service.images.length > 0 || service.video) return true;
+    if (service.images.length > 0 || service.video || service.voice) return true;
     if (service.happenedAt !== base.happenedAt) return true;
     if (service.selectedTags.length !== base.tagIds.length) return true;
     if (service.selectedTags.some((id) => !base.tagIds.includes(id))) return true;
@@ -167,9 +170,11 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
                 <Button variant="secondary" leadingIcon={ImageIcon} onClick={() => imgRef.current?.click()}>
                   加图片
                 </Button>
-                <Button variant="secondary" leadingIcon={VideoIcon} onClick={() => vidRef.current?.click()}>
-                  加视频
-                </Button>
+                {!service.voice && (
+                  <Button variant="secondary" leadingIcon={VideoIcon} onClick={() => vidRef.current?.click()}>
+                    加视频
+                  </Button>
+                )}
                 <input
                   ref={imgRef}
                   type="file"
@@ -194,6 +199,12 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
                   }}
                 />
               </div>
+              {!service.video &&
+                (voiceSupported ? (
+                  <VoiceRecorder onChange={(draft) => service.setVoice(draft)} />
+                ) : (
+                  <p className="text-meta text-muted">当前浏览器不支持录音，可继续发文字、图片或视频。</p>
+                ))}
             </div>
           )}
 

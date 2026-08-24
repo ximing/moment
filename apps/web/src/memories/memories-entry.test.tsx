@@ -52,6 +52,8 @@ function moment(id: string, content: string): MomentResponse {
     kind: 'standard',
     payload: null,
     content,
+    transcript: null,
+    transcriptionStatus: null,
     happenedAt: '2025-08-19T02:00:00.000Z',
     happenedTzOffset: -480,
     isBackfill: false,
