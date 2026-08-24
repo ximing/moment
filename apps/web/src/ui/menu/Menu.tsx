@@ -419,8 +419,11 @@ export function ContextMenu({
   const anchorRef = useRef<HTMLSpanElement>(null);
 
   // 句柄里的 isOpen 读镜像 ref：useImperativeHandle 只在 ref 变化时重建，不能直接闭包 open
+  // （镜像在 effect 里写，与 ResponsiveMenu 的 openRef 同一手法——render 期写 ref 过不了 react-hooks/refs）
   const openRef = useRef(open);
-  openRef.current = open;
+  useEffect(() => {
+    openRef.current = open;
+  });
   useImperativeHandle(ref, () => ({ close: () => setOpen(false), isOpen: () => openRef.current }), [ref]);
 
   const openAt = (x: number, y: number) => {

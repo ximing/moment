@@ -2054,6 +2054,7 @@ Expected: 全部 exit 0。
 6. 拖拽松手后不触发导航（停留在当前页）；普通点击链项导航到 `/chains/:id` 不变。
 7. DevTools 离线（或停 server）后拖拽提交 → toast「链顺序保存失败，已恢复原顺序」，列表回滚到服务端顺序；恢复网络后列表与另一台设备/浏览器在下一次拉取时收敛（多设备 last-write-wins，spec §6.4 取舍）。
 8. 右键（桌面）/ Shift+F10 链设置菜单不回归。
+9. 「链设置」菜单已打开时按压同一链项拖动：不启动拖拽（无指示线、无半透明——菜单为当前语境，`onItemPointerDown` 经 `ContextMenuHandle.isOpen()` 直接 bail）；外点关闭菜单后拖拽恢复正常。
 
 - [ ] **Step 7: Commit**
 
