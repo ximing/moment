@@ -1,6 +1,7 @@
 import {
   createChainInputSchema,
   createInviteInputSchema,
+  reorderChainsInputSchema,
   transferChainInputSchema,
   updateChainInputSchema,
   updateMemberRoleInputSchema,
@@ -21,6 +22,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UseBefore,
   BadRequestError,
 } from 'routing-controllers';
@@ -43,6 +45,14 @@ export class ChainsController {
   @Get('/')
   list(@CurrentUser() user: UserProfile): Promise<ChainDto[]> {
     return this.chainService.listMine(user.id);
+  }
+
+  // spec chain-ordering §5：全量重写我的链顺序，固定 204——客户端已持有完整顺序（乐观更新），不需要回读
+  @Put('/order')
+  @HttpCode(204)
+  @OnUndefined(204)
+  reorder(@CurrentUser() user: UserProfile, @Body() body: unknown): Promise<void> {
+    return this.chainService.reorder(user.id, reorderChainsInputSchema.parse(body));
   }
 
   @Get('/:chainId')

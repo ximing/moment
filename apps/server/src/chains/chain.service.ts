@@ -12,11 +12,12 @@ import {
   type CreateInviteInput,
   type InviteDto,
   type InviteRole,
+  type ReorderChainsInput,
   type UpdateChainInput,
   type UserProfile,
 } from '@moment/dto';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, min } from 'drizzle-orm';
 import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
 import { avatarUrlsByUserIds } from '../auth/avatar.js';
@@ -24,6 +25,7 @@ import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { chainInvites, chainMembers, chains, comments, media, momentTags, moments, reactions, shareLinks, tags, users, type Chain, type ChainInvite } from '../db/schema.js';
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
+import type { DbTx } from '../outbox/outbox.js';
 import { TemplateService } from '../templates/template.service.js';
 import { validateChainPayload } from '../templates/payload-validator.js';
 
@@ -57,19 +59,21 @@ export class ChainService {
         template: input.template,
         payload,
       });
-      await tx.insert(chainMembers).values({ chainId: id, userId, role: 'owner' });
+      // 新链置顶（spec §4）：min-1；首条链（无现存 membership）取 1
+      const sortOrder = await this.nextTopSortOrder(tx, userId);
+      await tx.insert(chainMembers).values({ chainId: id, userId, role: 'owner', sortOrder });
     });
     return this.getById(userId, id);
   }
 
-  /** 我参与的链（含我的角色），createdAt 倒序。 */
+  /** 我参与的链（含我的角色）：sortOrder 升序，createdAt 倒序兜底（spec chain-ordering §3）。 */
   async listMine(userId: string): Promise<ChainDto[]> {
     const rows = await db
       .select({ chain: chains, role: chainMembers.role })
       .from(chainMembers)
       .innerJoin(chains, eq(chainMembers.chainId, chains.id))
       .where(eq(chainMembers.userId, userId))
-      .orderBy(desc(chains.createdAt));
+      .orderBy(asc(chainMembers.sortOrder), desc(chains.createdAt));
     return this.attachPreviews(rows.map((r) => ({ chain: r.chain, role: r.role })));
   }
 
@@ -287,11 +291,55 @@ export class ChainService {
     if (invite.expiresAt.getTime() < Date.now()) throw new HttpError(410, 'INVITE_EXPIRED');
 
     await db.transaction(async (tx) => {
-      await tx.insert(chainMembers).values({ chainId: invite.chainId, userId: user.id, role: invite.role });
+      // 新加入的链同样置顶（spec §4）；幂等分支已在上方提前返回，不写库
+      const sortOrder = await this.nextTopSortOrder(tx, user.id);
+      await tx.insert(chainMembers).values({ chainId: invite.chainId, userId: user.id, role: invite.role, sortOrder });
       await tx.update(chainInvites).set({ acceptedAt: new Date() }).where(eq(chainInvites.id, invite.id));
       // outbox 锚点：「被邀请入链」通知扇出属 Phase 5（outbox 表 Phase 3 才建立），此处不写。
     });
     return { chainId: invite.chainId, role: invite.role, alreadyMember: false };
+  }
+
+  /**
+   * 测试专用钩子（spec §7「并发入链不被改写」的顺序模拟）：
+   * 非空时在 reorder 事务校验通过后、重写执行前 await。生产代码不得赋值。
+   */
+  reorderAfterValidateHook: ((userId: string) => Promise<void>) | null = null;
+
+  /**
+   * 全量重写「我 × 链」展示顺序（spec §5）：
+   * 去重后的集合必须恰好等于我的全部链 id（防漏/防越权/防半截）；校验与重写同事务；
+   * 重写按 chain_id 逐行 UPDATE（天然限定在提交集合内）——校验后并发入链的置顶新行
+   * 不参与本次重写，容忍交错，下次 reorder 收敛。响应固定 204（controller 声明）。
+   */
+  async reorder(userId: string, input: ReorderChainsInput): Promise<void> {
+    const ordered = [...new Set(input.chainIds)];
+    await db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ chainId: chainMembers.chainId })
+        .from(chainMembers)
+        .where(eq(chainMembers.userId, userId));
+      const mine = new Set(rows.map((r) => r.chainId));
+      if (ordered.length !== mine.size || ordered.some((id) => !mine.has(id))) {
+        throw new BadRequestError('CHAIN_ORDER_MISMATCH');
+      }
+      if (this.reorderAfterValidateHook) await this.reorderAfterValidateHook(userId);
+      for (let i = 0; i < ordered.length; i++) {
+        await tx
+          .update(chainMembers)
+          .set({ sortOrder: i + 1 })
+          .where(and(eq(chainMembers.userId, userId), eq(chainMembers.chainId, ordered[i] as string)));
+      }
+    });
+  }
+
+  /** 新 membership 置顶（spec §4）：当前用户最小 sortOrder - 1；无现存 membership（首条链）取 1。 */
+  private async nextTopSortOrder(tx: DbTx, userId: string): Promise<number> {
+    const [row] = await tx
+      .select({ value: min(chainMembers.sortOrder) })
+      .from(chainMembers)
+      .where(eq(chainMembers.userId, userId));
+    return row?.value == null ? 1 : Number(row.value) - 1;
   }
 
   private toChainDto(
