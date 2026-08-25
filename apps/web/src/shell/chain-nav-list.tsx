@@ -199,6 +199,15 @@ export const ChainNavList = observer(function ChainNavList({
   }
   const gesture = gestureRef.current;
 
+  // 卸载清理在途 FLIP 的清理定时器：元素随组件卸载，定时器不再有必要（也避免命中已卸载节点）
+  useEffect(() => {
+    const timers = flipTimersRef.current;
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      timers.clear();
+    };
+  }, []);
+
   // 松手提交后保留视觉顺序直到真实列表更新（reorder 乐观写同步发生，提交时序见 §6.3），
   // 避免先闪回旧序再跳新序；乐观写被跳过 / 失败回滚时，收尾 load 的 chains 变更同样经这里
   // 收敛（FLIP 归位）。拖拽进行中（phase === 'dragging'）的 chain:changed 不会误清覆盖。
@@ -224,6 +233,9 @@ export const ChainNavList = observer(function ChainNavList({
         el.style.transition = 'none';
         el.style.transform = '';
         layout = el.getBoundingClientRect();
+        // 量完即还原：后续提前 return（洞静默换槽 / 位移为零）不会把内联 'none' 留在元素上
+        // 压制样式表过渡（hover/focus transition-colors）；再走 FLIP 的分支会重新设置
+        el.style.transition = '';
       }
       next.set(id, layout);
       if (id === dragVisual?.id) return; // 占位「洞」静默换槽
