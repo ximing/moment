@@ -58,8 +58,25 @@ export function createApp(): express.Express {
   });
 
   // 统一 404（useExpressServer 之后注册，兜底未匹配路由）
-  app.use('/api', (_req, res) => {
-    res.status(404).json({ error: { code: 'NOT_FOUND', message: '资源不存在' } });
-  });
+  app.use('/api', notFoundFallback);
   return app;
+}
+
+/**
+ * /api 404 兜底中间件。
+ *
+ * routing-controllers 的 handleSuccess 在成功发送响应（res.json/redirect）后会调 next()，
+ * 请求会落进此兜底；此时 res 已发送，再次 res.status().json() 会抛 ERR_HTTP_HEADERS_SENT
+ * 噪音（被健康检查等高频端点放大）。已发送响应的请求直接放行（next），不重复发送。
+ */
+export function notFoundFallback(
+  _req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): void {
+  if (res.headersSent) {
+    next();
+    return;
+  }
+  res.status(404).json({ error: { code: 'NOT_FOUND', message: '资源不存在' } });
 }
