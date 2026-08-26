@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { RSRoot, register, resolve } from '@rabjs/react';
@@ -38,6 +38,17 @@ import { ChainHomeService } from './chain-home.service';
 
 const api = vi.hoisted(() => ({
   listTags: vi.fn(),
+  uploadMedia: vi.fn(),
+  createMoment: vi.fn(),
+}));
+
+const mediaLib = vi.hoisted(() => ({
+  probeVideo: vi.fn(),
+}));
+
+vi.mock('@/lib/media', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/media')>()),
+  probeVideo: mediaLib.probeVideo,
 }));
 
 vi.mock('@/api/client', () => ({
@@ -205,6 +216,14 @@ function renderChainHome() {
 }
 
 beforeAll(() => {
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: vi.fn((file: File) => `blob:${file.name}`),
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    configurable: true,
+    value: vi.fn(),
+  });
   // matchMedia 钉死桌面（≥768px）：ResponsiveMenu 走锚定 Menu 分支，其余查询一律 false
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: query === '(min-width: 768px)',
@@ -227,6 +246,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mediaBlockCalls.list.length = 0;
   api.listTags.mockResolvedValue({ tags: [] });
+  api.uploadMedia.mockResolvedValue({ mediaId: 'media-new', status: 'ready', mime: 'video/mp4', size: 5 });
+  api.createMoment.mockResolvedValue({ ...TEXT_MOMENT, id: 'moment-new', type: 'video' });
+  mediaLib.probeVideo.mockResolvedValue({ size: 5, durationSeconds: 12 });
   resolve(AuthService).user = USER;
   resolve(ChainListService).chains = [CHAIN];
   resolve(ComposeSessionService).request = null;
@@ -390,5 +412,138 @@ describe('发布面板草稿保护', () => {
     await user.click(screen.getByRole('button', { name: '取消' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(resolve(ComposeSessionService).request).toBeNull();
+  });
+
+  it('从媒体区域粘贴图片时由面板接收，并阻止浏览器重复处理文件', () => {
+    renderCompose();
+    const image = new File(['photo'], 'family.jpg', { type: 'image/jpeg' });
+    const dropzone = screen.getByRole('region', { name: '添加图片或视频' });
+
+    const allowed = fireEvent.paste(dropzone, {
+      clipboardData: { files: [image] },
+    });
+    // RAB observable 在 jsdom 中不主动刷新 observer；拖入态的 React state 变化促使组件读取最新图片草稿。
+    fireEvent.dragEnter(dropzone);
+
+    expect(allowed).toBe(false);
+    expect(screen.getByRole('button', { name: '移除这张图片' })).toBeInTheDocument();
+  });
+
+  it('拖入图片后直接加入图片草稿', () => {
+    renderCompose();
+    const image = new File(['photo'], 'family.jpg', { type: 'image/jpeg' });
+    const dropzone = screen.getByRole('region', { name: '添加图片或视频' });
+
+    fireEvent.dragEnter(dropzone);
+    fireEvent.drop(dropzone, { dataTransfer: { files: [image] } });
+
+    expect(screen.getByRole('button', { name: '移除这张图片' })).toBeInTheDocument();
+  });
+
+  it('拖入单个视频后保留原文件，并从现有上传客户端提交', async () => {
+    const user = userEvent.setup();
+    renderCompose();
+    const video = new File(['video'], 'family.mp4', { type: 'video/mp4' });
+    const dropzone = screen.getByRole('region', { name: '添加图片或视频' });
+
+    fireEvent.dragEnter(dropzone);
+    fireEvent.drop(dropzone, { dataTransfer: { files: [video] } });
+    await waitFor(() => expect(mediaLib.probeVideo).toHaveBeenCalledWith(video));
+    // probeVideo 异步写入 RAB service 后，以 React 拖入态刷新测试 DOM。
+    fireEvent.dragEnter(dropzone);
+
+    expect(document.querySelector('video[src="blob:family.mp4"]')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '记下' }));
+
+    await waitFor(() =>
+      expect(api.uploadMedia).toHaveBeenCalledWith(
+        expect.objectContaining({
+          file: video,
+          mime: 'video/mp4',
+          size: video.size,
+          kind: 'video',
+          durationSeconds: 12,
+        }),
+      ),
+    );
+    expect(api.createMoment).toHaveBeenCalledWith(
+      'chain-1',
+      expect.objectContaining({ type: 'video', mediaIds: ['media-new'] }),
+    );
+  });
+
+  it('拖拽经过区域内子元素时保持高亮，真正离开后才恢复', () => {
+    renderCompose();
+    const dropzone = screen.getByRole('region', { name: '添加图片或视频' });
+    const imageButton = within(dropzone).getByRole('button', { name: '加图片' });
+
+    fireEvent.dragEnter(dropzone);
+    fireEvent.dragEnter(imageButton);
+    fireEvent.dragLeave(imageButton, { relatedTarget: null });
+    expect(dropzone).toHaveClass('border-action');
+
+    fireEvent.dragLeave(dropzone, { relatedTarget: null });
+    expect(dropzone).toHaveClass('border-line');
+  });
+
+  it('拖入视频时复用现有的图片/视频互斥确认', () => {
+    renderCompose();
+    const image = new File(['photo'], 'family.jpg', { type: 'image/jpeg' });
+    const video = new File(['video'], 'family.mp4', { type: 'video/mp4' });
+    const dropzone = screen.getByRole('region', { name: '添加图片或视频' });
+
+    fireEvent.paste(screen.getByRole('textbox', { name: '这一刻' }), {
+      clipboardData: { files: [image] },
+    });
+    fireEvent.dragEnter(dropzone);
+    fireEvent.drop(dropzone, { dataTransfer: { files: [video] } });
+
+    expect(screen.getByRole('alertdialog', { name: '换成视频？' })).toBeInTheDocument();
+  });
+
+  it('普通文字粘贴不被媒体处理器阻止', () => {
+    renderCompose();
+
+    const allowed = fireEvent.paste(screen.getByRole('textbox', { name: '这一刻' }), {
+      clipboardData: { files: [] },
+    });
+
+    expect(allowed).toBe(true);
+  });
+
+  it('一次拖入图片和视频时明确拒绝，不静默丢掉视频', () => {
+    renderCompose();
+    const image = new File(['photo'], 'family.jpg', { type: 'image/jpeg' });
+    const video = new File(['video'], 'family.mp4', { type: 'video/mp4' });
+    const dropzone = screen.getByRole('region', { name: '添加图片或视频' });
+
+    fireEvent.dragEnter(dropzone);
+    fireEvent.drop(dropzone, { dataTransfer: { files: [image, video] } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('图片和视频不能一起添加');
+    expect(screen.queryByRole('button', { name: '移除这张图片' })).toBeNull();
+  });
+
+  it('一次拖入多个视频时明确说明只能添加一个', () => {
+    renderCompose();
+    const first = new File(['video-1'], 'first.mp4', { type: 'video/mp4' });
+    const second = new File(['video-2'], 'second.mp4', { type: 'video/mp4' });
+    const dropzone = screen.getByRole('region', { name: '添加图片或视频' });
+
+    fireEvent.dragEnter(dropzone);
+    fireEvent.drop(dropzone, { dataTransfer: { files: [first, second] } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('一次只能添加一个视频');
+  });
+
+  it('拖入非媒体文件时给出明确提示', () => {
+    renderCompose();
+    const document = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+    const dropzone = screen.getByRole('region', { name: '添加图片或视频' });
+
+    fireEvent.dragEnter(dropzone);
+    fireEvent.drop(dropzone, { dataTransfer: { files: [document] } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('这里只能添加图片或视频');
   });
 });

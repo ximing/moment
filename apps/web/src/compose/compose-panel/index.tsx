@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { Image as ImageIcon, Video as VideoIcon, X } from 'lucide-react';
+import { Image as ImageIcon, Upload, Video as VideoIcon, X } from 'lucide-react';
 import { ChainMark } from '@/chain/ChainMark';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { toWallClockInput, wallClockToIso } from '@/lib/time';
@@ -37,6 +37,8 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
   // 草稿确认是面板本地呈现状态（React state）：jsdom 下 RAB 属性变更不重渲，
   // 且它不是业务状态，不进 Service
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const dragDepthRef = useRef(0);
   const baselineRef = useRef<DraftBaseline | null>(null);
 
   useEffect(() => {
@@ -63,6 +65,43 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
   }, [service, chainId]);
 
   const title = edit ? '改这条时刻' : '记下此刻';
+
+  const addMediaFiles = (files: File[]): boolean => {
+    if (files.length === 0) return false;
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    const videos = files.filter((file) => file.type.startsWith('video/'));
+    if (images.length + videos.length !== files.length) {
+      service.error = '这里只能添加图片或视频';
+      return true;
+    }
+    if (images.length > 0 && videos.length > 0) {
+      service.error = '图片和视频不能一起添加';
+      return true;
+    }
+    if (videos.length > 1) {
+      service.error = '一次只能添加一个视频';
+      return true;
+    }
+    if (images.length > 0) service.onPickImages(images);
+    else if (videos[0]) service.onPickVideo(videos[0]);
+    return true;
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    if (edit || busy) return;
+    const files = Array.from(event.clipboardData.files);
+    if (files.length === 0) return; // 普通文字粘贴保持浏览器原行为
+    event.preventDefault();
+    addMediaFiles(files);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragActive(false);
+    if (busy) return;
+    addMediaFiles(Array.from(event.dataTransfer.files));
+  };
 
   /** 相对 hydrate 基线的 dirty 判定：正文 / 媒体 / 发生时间 / 标签任一变化即 dirty。 */
   const isDirty = (): boolean => {
@@ -101,7 +140,7 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
           </>
         }
       >
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4" onPaste={handlePaste}>
           {!edit && writable.length > 1 && (
             <div className="grid grid-cols-2 gap-2">
               {writable.map((c) => (
@@ -132,7 +171,25 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
           />
 
           {!edit && (
-            <div className="flex flex-col gap-3">
+            <div
+              role="region"
+              aria-label="添加图片或视频"
+              className={`flex flex-col gap-3 rounded-surface-md border border-dashed px-3 py-3 transition-colors duration-[var(--ease)] ${
+                dragActive ? 'border-action bg-floating-hover' : 'border-line'
+              }`}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                if (busy) return;
+                dragDepthRef.current += 1;
+                setDragActive(true);
+              }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={() => {
+                dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+                if (dragDepthRef.current === 0) setDragActive(false);
+              }}
+              onDrop={handleDrop}
+            >
               {service.images.length > 0 && (
                 <div className="grid grid-cols-4 gap-2">
                   {service.images.map((img, i) => (
@@ -199,6 +256,10 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
                   }}
                 />
               </div>
+              <p className="flex items-center gap-2 text-caption text-muted">
+                <Upload aria-hidden="true" size={16} />
+                粘贴图片，或把图片／视频拖到这里
+              </p>
               {!service.video &&
                 (voiceSupported ? (
                   <VoiceRecorder onChange={(draft) => service.setVoice(draft)} />
