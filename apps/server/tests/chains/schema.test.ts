@@ -1,5 +1,5 @@
 import { db } from '../../src/db/index.js';
-import { chainInvites, chainMembers, chains, users } from '../../src/db/schema.js';
+import { chainInvites, chainMembers, chains, media, users } from '../../src/db/schema.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 
 beforeEach(resetDb);
@@ -9,6 +9,22 @@ describe('chains 域三表', () => {
   it('可写入并读回；默认值/枚举/联合主键生效', async () => {
     await db.insert(users).values({ id: 'u1', email: 'u1@t.com', passwordHash: 'x', nickname: 'u1' });
     await db.insert(chains).values({ id: 'c1', name: '链', ownerId: 'u1', template: 'daily' });
+    const orphanedAt = new Date('2026-08-27T00:00:00Z');
+    await db.insert(media).values({
+      id: 'm1',
+      uploaderId: 'u1',
+      s3Key: 'tmp/m1.jpg',
+      mime: 'image/jpeg',
+      size: 1,
+      status: 'orphaned',
+      storageMeta: {
+        bucket: 'moment-test-placeholder',
+        prefix: 'test/attachments',
+        region: 'us-east-1',
+        isPublicBucket: 'false',
+      },
+      orphanedAt,
+    });
     await db.insert(chainMembers).values({ chainId: 'c1', userId: 'u1', role: 'owner' });
     await db.insert(chainInvites).values({
       id: 'i1',
@@ -23,6 +39,14 @@ describe('chains 域三表', () => {
     expect(chain.visibility).toBe('private'); // 默认值
     expect(chain.description).toBeNull();
     expect(chain.coverMediaId).toBeNull();
+    expect(chain.avatarMediaId).toBeNull();
+    expect(chain.avatarFocusX).toBe(5000);
+    expect(chain.avatarFocusY).toBe(5000);
+    expect(chain.coverFocusX).toBe(5000);
+    expect(chain.coverFocusY).toBe(5000);
+
+    const [orphan] = await db.select().from(media);
+    expect(orphan.orphanedAt?.toISOString()).toBe(orphanedAt.toISOString());
 
     const [invite] = await db.select().from(chainInvites);
     expect(invite.role).toBe('editor');

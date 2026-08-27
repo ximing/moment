@@ -29,6 +29,7 @@ export const media = mysqlTable(
     storageMeta: json('storage_meta').$type<StorageMetadata>().notNull(),
     /** S3 multipart uploadId；图片单 PUT 为 null */
     uploadId: varchar('upload_id', { length: 128 }),
+    orphanedAt: timestamp('orphaned_at', { mode: 'date' }),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (t) => [
