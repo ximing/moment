@@ -59,9 +59,8 @@ export const createChainInputSchema = z
     payload: z.record(z.unknown()).nullish(),
   })
   .superRefine((value, ctx) => {
-    const hasImage = value.avatarMediaId != null || value.coverMediaId != null;
     const hasColorOrIcon = value.color != null || value.icon != null;
-    if (hasImage && hasColorOrIcon) {
+    if (value.avatarMediaId != null && hasColorOrIcon) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'image appearance cannot be combined with color or icon' });
     }
     if (value.avatarFocus != null && value.avatarMediaId == null) {
@@ -88,6 +87,10 @@ export const updateChainInputSchema = z
     payload: z.record(z.unknown()).nullable().optional(),
   })
   .superRefine((value, ctx) => {
+    const hasColorOrIcon = value.color != null || value.icon != null;
+    if (value.avatarMediaId != null && hasColorOrIcon) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'image appearance cannot be combined with color or icon' });
+    }
     if (value.avatarMediaId === null && value.avatarFocus != null) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['avatarFocus'], message: 'avatarFocus cannot accompany null avatarMediaId' });
     }

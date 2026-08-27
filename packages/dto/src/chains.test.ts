@@ -64,6 +64,25 @@ test('图片模式拒绝与 color/icon 混传；旧 color+icon 仍可解析', ()
   }));
 });
 
+test('封面独立于头像外观模式，允许与 color/icon 一起创建', () => {
+  const chain = createChainInputSchema.parse({
+    name: '有封面',
+    template: 'daily',
+    color: 'mint',
+    icon: '👶🏽',
+    coverMediaId: '00000000-0000-4000-8000-000000000002',
+    coverFocus: { x: 0.5, y: 0.5 },
+  });
+  assert.equal(chain.coverMediaId, '00000000-0000-4000-8000-000000000002');
+  assert.equal(chain.color, 'mint');
+});
+
+test('update 拒绝头像图片与 color 或 icon 的歧义 patch', () => {
+  const avatarMediaId = '00000000-0000-4000-8000-000000000001';
+  assert.throws(() => updateChainInputSchema.parse({ avatarMediaId, color: 'mint' }));
+  assert.throws(() => updateChainInputSchema.parse({ avatarMediaId, icon: '👶🏽' }));
+});
+
 test('focus 边界与删除封面组合', () => {
   assert.deepEqual(chainImageFocusSchema.parse({ x: 0, y: 1 }), { x: 0, y: 1 });
   assert.throws(() => chainImageFocusSchema.parse({ x: -0.01, y: 0.5 }));
