@@ -13,12 +13,12 @@ import {
   type UpdateMeInput,
   type UserProfile,
 } from '@moment/dto';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { BadRequestError, HttpError, NotFoundError, UnauthorizedError } from 'routing-controllers';
 import { Service } from 'typedi';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
-import { media, users, type User } from '../db/schema.js';
+import { chains, media, users, type User } from '../db/schema.js';
 import { getStorage } from '../storage/factory.js';
 import { logger } from '../utils/logger.js';
 import { avatarExpiresAt, signAvatarGetUrl } from './avatar.js';
@@ -148,37 +148,51 @@ export class AuthService {
     return { ...base, avatarUrl: url, avatarExpiresAt: avatarExpiresAt().toISOString() };
   }
 
+  /**
+   * 绑定用户头像：事务内 FOR UPDATE 锁 media 行（与绑定/discard 路径串行）：
+   * - 不存在/非本人/非 ready → 404（不泄露存在性）；非图片 → 400 MEDIA_INVALID；
+   * - momentId 非空或被任一链 avatar/cover 活引用 → 400 MEDIA_ALREADY_BOUND
+   *   （链头像被重绑成用户头像会搬走并删除链的活对象，且越权可读性见 spec §4.4）。
+   */
   private async bindAvatar(user: User, avatarMediaId: string | null): Promise<void> {
     if (avatarMediaId === null) {
       await db.update(users).set({ avatarMediaId: null }).where(eq(users.id, user.id));
       return;
     }
-    const [row] = await db.select().from(media).where(eq(media.id, avatarMediaId)).limit(1);
-    if (!row || row.uploaderId !== user.id || row.status !== 'ready') {
-      throw new NotFoundError('MEDIA_NOT_FOUND');
-    }
-    if (!(IMAGE_MIME_TYPES as readonly string[]).includes(row.mime)) {
-      throw new BadRequestError('MEDIA_INVALID');
-    }
-    if (row.momentId) throw new BadRequestError('MEDIA_ALREADY_BOUND');
+    await db.transaction(async (tx) => {
+      const [row] = await tx.select().from(media).where(eq(media.id, avatarMediaId)).limit(1).for('update');
+      if (!row || row.uploaderId !== user.id || row.status !== 'ready') {
+        throw new NotFoundError('MEDIA_NOT_FOUND');
+      }
+      if (!(IMAGE_MIME_TYPES as readonly string[]).includes(row.mime)) {
+        throw new BadRequestError('MEDIA_INVALID');
+      }
+      if (row.momentId) throw new BadRequestError('MEDIA_ALREADY_BOUND');
+      const [boundChain] = await tx
+        .select({ id: chains.id })
+        .from(chains)
+        .where(or(eq(chains.avatarMediaId, row.id), eq(chains.coverMediaId, row.id)))
+        .limit(1);
+      if (boundChain) throw new BadRequestError('MEDIA_ALREADY_BOUND');
 
-    const ext = mime.extension(row.mime) || 'bin';
-    const finalKey = `users/${user.id}/avatar/${row.id}.${ext}`;
-    if (row.s3Key !== finalKey) {
-      await getStorage().copyObject(row.s3Key, finalKey, row.storageMeta);
-      await db.update(media).set({ s3Key: finalKey }).where(eq(media.id, row.id));
-      await getStorage()
-        .deleteFile(row.s3Key, row.storageMeta)
-        .catch((err: unknown) => {
-          logger.warn(`avatar tmp cleanup failed: ${row.s3Key}`, err);
-        });
-    }
+      const ext = mime.extension(row.mime) || 'bin';
+      const finalKey = `users/${user.id}/avatar/${row.id}.${ext}`;
+      if (row.s3Key !== finalKey) {
+        await getStorage().copyObject(row.s3Key, finalKey, row.storageMeta);
+        await tx.update(media).set({ s3Key: finalKey }).where(eq(media.id, row.id));
+        await getStorage()
+          .deleteFile(row.s3Key, row.storageMeta)
+          .catch((err: unknown) => {
+            logger.warn(`avatar tmp cleanup failed: ${row.s3Key}`, err);
+          });
+      }
 
-    const prev = user.avatarMediaId;
-    await db.update(users).set({ avatarMediaId: row.id }).where(eq(users.id, user.id));
-    if (prev && prev !== row.id) {
-      await db.update(media).set({ status: 'orphaned', orphanedAt: new Date() }).where(eq(media.id, prev));
-    }
+      const prev = user.avatarMediaId;
+      await tx.update(users).set({ avatarMediaId: row.id }).where(eq(users.id, user.id));
+      if (prev && prev !== row.id) {
+        await tx.update(media).set({ status: 'orphaned', orphanedAt: new Date() }).where(eq(media.id, prev));
+      }
+    });
   }
 
   private async buildAuthResponse(user: User): Promise<AuthResponse> {

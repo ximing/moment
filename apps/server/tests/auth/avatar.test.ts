@@ -3,9 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
-import { media } from '../../src/db/schema.js';
+import { chains, media, users } from '../../src/db/schema.js';
 import { currentStorageMeta, setStorageAdapter } from '../../src/storage/factory.js';
 import { auth, createUser } from '../helpers/auth.js';
+import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage } from '../helpers/storage.js';
 import { listenLocal } from '../helpers/http-server.js';
@@ -128,5 +129,41 @@ describe('PATCH /api/auth/me 头像', () => {
     const bound = await request(app).delete(`/api/media/${second}`).set('Authorization', auth(user));
     expect(bound.status).toBe(400);
     expect(bound.body.error.code).toBe('MEDIA_ALREADY_BOUND');
+  });
+
+  it('链头像/封面引用的 media 不能再绑为用户头像：400 MEDIA_ALREADY_BOUND，链引用与对象原样保留', async () => {
+    const storage = installMockStorage();
+    const user = await createUser(app, 'ava4@example.com', 'Ava');
+    const avatarMediaId = await insertReadyImage(user.id);
+    const coverMediaId = await insertReadyImage(user.id);
+    const chainId = await createChainWithMembers(user.id);
+    await db.update(chains).set({ avatarMediaId, coverMediaId }).where(eq(chains.id, chainId));
+
+    for (const mediaId of [avatarMediaId, coverMediaId]) {
+      const res = await request(app)
+        .patch('/api/auth/me')
+        .set('Authorization', auth(user))
+        .send({ avatarMediaId: mediaId });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('MEDIA_ALREADY_BOUND');
+    }
+
+    // 不发生任何 copy：链的活对象不被搬到 users/ 前缀
+    expect(storage.copyObject).not.toHaveBeenCalled();
+
+    // 链引用与 media 行原样保留
+    const [chain] = await db.select().from(chains).where(eq(chains.id, chainId));
+    expect(chain.avatarMediaId).toBe(avatarMediaId);
+    expect(chain.coverMediaId).toBe(coverMediaId);
+    for (const mediaId of [avatarMediaId, coverMediaId]) {
+      const [row] = await db.select().from(media).where(eq(media.id, mediaId));
+      expect(row.s3Key).toBe(`tmp/${mediaId}.jpeg`);
+      expect(row.status).toBe('ready');
+      expect(row.orphanedAt).toBeNull();
+    }
+
+    // 用户头像未被绑定
+    const [me] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(me.avatarMediaId).toBeNull();
   });
 });
