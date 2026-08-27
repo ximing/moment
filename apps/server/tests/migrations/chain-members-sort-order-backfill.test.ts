@@ -52,11 +52,11 @@ d('迁移 0014 chain_members.sort_order 回填（RUN_MIGRATION_IT=1，本地 doc
     const journal = JSON.parse(await readFile(path.join(MIGRATIONS_DIR, 'meta/_journal.json'), 'utf8')) as {
       entries: { idx: number; tag: string }[];
     };
-    const tags = [...journal.entries].sort((a, b) => a.idx - b.idx).map((e) => e.tag);
-    // 基线守卫：本测试按「0000–0013 旧行为 + 0014 回填」编写；未来新迁移落地后必须重定基线
-    if (tags.length !== 15 || !tags[14]!.startsWith('0014_')) {
+    const entries = [...journal.entries].sort((a, b) => a.idx - b.idx);
+    const target = entries.find((entry) => entry.idx === 14);
+    if (!target?.tag.startsWith('0014_')) {
       throw new Error(
-        `chain-ordering 回填验证基线失效：期望 journal 恰好 15 条且末条为 0014_*，实际 ${tags.length} 条末条 ${tags[tags.length - 1]}。请按新基线调整本测试。`,
+        `chain-ordering 回填验证基线失效：期望 journal idx=14 为 0014_*，实际 ${JSON.stringify(target)}。`,
       );
     }
 
@@ -65,7 +65,9 @@ d('迁移 0014 chain_members.sort_order 回填（RUN_MIGRATION_IT=1，本地 doc
     await conn.query(`USE \`${schema}\``);
 
     // 旧行为：迁移到 0013（此时 chain_members 还没有 sort_order 列，INSERT 不带它）
-    for (const tag of tags.slice(0, 14)) await applyMigration(conn, tag);
+    for (const { tag } of entries.filter((entry) => entry.idx < target.idx)) {
+      await applyMigration(conn, tag);
+    }
 
     // 多用户多链：chain-2 与 chain-3 同一秒 created_at（回填的并列按 id 稳定，spec §2 回填 SQL）
     await conn.query(
@@ -89,7 +91,7 @@ d('迁移 0014 chain_members.sort_order 回填（RUN_MIGRATION_IT=1，本地 doc
     );
 
     // 应用被测迁移（ALTER ADD sort_order DEFAULT 0 + 回填 UPDATE 在同一文件）
-    await applyMigration(conn, tags[14]!);
+    await applyMigration(conn, target.tag);
   }, 120_000);
 
   afterAll(async () => {

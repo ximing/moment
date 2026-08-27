@@ -46,9 +46,10 @@ d('迁移 0015 chain appearance 回填（RUN_MIGRATION_IT=1，本地 docker MySQ
       entries: { idx: number; tag: string }[];
     };
     const entries = [...journal.entries].sort((a, b) => a.idx - b.idx);
-    if (entries.length !== 16 || entries[15]?.idx !== 15 || !entries[15].tag.startsWith('0015_')) {
+    const target = entries.find((entry) => entry.idx === 15);
+    if (!target?.tag.startsWith('0015_')) {
       throw new Error(
-        `chain appearance 回填验证基线失效：期望 journal 恰好 16 条且末条为 idx=15/0015_*，实际 ${entries.length} 条末条 ${JSON.stringify(entries.at(-1))}。`,
+        `chain appearance 回填验证基线失效：期望 journal idx=15 为 0015_*，实际 ${JSON.stringify(target)}。`,
       );
     }
 
@@ -56,7 +57,9 @@ d('迁移 0015 chain appearance 回填（RUN_MIGRATION_IT=1，本地 docker MySQ
     await conn.query(`CREATE DATABASE \`${schema}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`);
     await conn.query(`USE \`${schema}\``);
 
-    for (const { tag } of entries.slice(0, 15)) await applyMigration(conn, tag);
+    for (const { tag } of entries.filter((entry) => entry.idx < target.idx)) {
+      await applyMigration(conn, tag);
+    }
 
     await conn.query(
       `INSERT INTO users (id, email, password_hash, nickname)
@@ -80,7 +83,7 @@ d('迁移 0015 chain appearance 回填（RUN_MIGRATION_IT=1，本地 docker MySQ
        )`,
     );
 
-    await applyMigration(conn, entries[15].tag);
+    await applyMigration(conn, target.tag);
   }, 120_000);
 
   afterAll(async () => {
