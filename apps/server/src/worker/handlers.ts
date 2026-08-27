@@ -161,7 +161,7 @@ export const handleMomentDeleted: OutboxHandler = async (payload) => {
   if (!momentId) return;
   await db
     .update(media)
-    .set({ status: 'orphaned' })
+    .set({ status: 'orphaned', orphanedAt: new Date() })
     .where(and(eq(media.momentId, momentId), eq(media.status, 'ready')));
 };
 

@@ -177,7 +177,7 @@ export class AuthService {
     const prev = user.avatarMediaId;
     await db.update(users).set({ avatarMediaId: row.id }).where(eq(users.id, user.id));
     if (prev && prev !== row.id) {
-      await db.update(media).set({ status: 'orphaned' }).where(eq(media.id, prev));
+      await db.update(media).set({ status: 'orphaned', orphanedAt: new Date() }).where(eq(media.id, prev));
     }
   }
 

@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
 import { media } from '../../src/db/schema.js';
@@ -99,5 +100,33 @@ describe('PATCH /api/auth/me 头像', () => {
       .send({ avatarMediaId: null });
     expect(cleared.status).toBe(200);
     expect(cleared.body.avatarUrl).toBeNull();
+  });
+
+  it('替换头像：旧 media 标 orphaned 并写 orphanedAt；新头像被活引用 DELETE 拒绝', async () => {
+    installMockStorage();
+    const user = await createUser(app, 'ava3@example.com', 'Ava');
+    const first = await insertReadyImage(user.id);
+    const second = await insertReadyImage(user.id);
+
+    await request(app).patch('/api/auth/me').set('Authorization', auth(user)).send({ avatarMediaId: first });
+    const res = await request(app)
+      .patch('/api/auth/me')
+      .set('Authorization', auth(user))
+      .send({ avatarMediaId: second });
+    expect(res.status).toBe(200);
+
+    const [prev] = await db.select().from(media).where(eq(media.id, first));
+    expect(prev.status).toBe('orphaned');
+    expect(prev.orphanedAt).not.toBeNull();
+
+    const [cur] = await db.select().from(media).where(eq(media.id, second));
+    expect(cur.status).toBe('ready');
+    expect(cur.orphanedAt).toBeNull();
+
+    // 旧头像已 orphaned：DELETE 幂等 204；新头像是 users.avatar_media_id 活引用：400
+    expect((await request(app).delete(`/api/media/${first}`).set('Authorization', auth(user))).status).toBe(204);
+    const bound = await request(app).delete(`/api/media/${second}`).set('Authorization', auth(user));
+    expect(bound.status).toBe(400);
+    expect(bound.body.error.code).toBe('MEDIA_ALREADY_BOUND');
   });
 });

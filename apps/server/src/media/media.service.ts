@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import mime from 'mime-types';
-import { and, eq } from 'drizzle-orm';
-import { HttpError, NotFoundError, UnauthorizedError } from 'routing-controllers';
+import { and, eq, or } from 'drizzle-orm';
+import { BadRequestError, HttpError, NotFoundError, UnauthorizedError } from 'routing-controllers';
 import { Service } from 'typedi';
 import {
   MAX_AUDIO_BYTES,
@@ -19,9 +19,10 @@ import {
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
-import { media, moments, type Media } from '../db/schema.js';
+import { chains, media, moments, users, type Media } from '../db/schema.js';
 import { ShareLinkService } from '../share/share-link.service.js';
 import { currentStorageMeta, getStorage } from '../storage/factory.js';
+import { logger } from '../utils/logger.js';
 import { alignedGetPresign } from './presign-ttl.js';
 
 /** 读取「存在且属于该用户」的 media；不区分不存在与非本人，避免 mediaId 探测。 */
@@ -195,11 +196,65 @@ export class MediaService {
     if (row.status !== 'uploading') throw new HttpError(409, 'MEDIA_INVALID_STATE');
     const [result] = await db
       .update(media)
-      .set({ status: 'orphaned' })
+      .set({ status: 'orphaned', orphanedAt: new Date() })
       .where(and(eq(media.id, mediaId), eq(media.status, 'uploading')));
     if (result.affectedRows === 0) return;
     if (row.uploadId) {
       await getStorage().abortMultipart(row.s3Key, row.uploadId);
+    }
+  }
+
+  /**
+   * discard：主动丢弃未绑定媒体（design chain-appearance §4.5），DELETE /api/media/:id → 204。
+   * 事务内 FOR UPDATE 锁行（与绑定路径的行锁串行，防「绑定中又被丢弃」的并发窗口）：
+   * - 不存在/非 uploader → 404（不泄露存在性）；orphaned → 幂等返回；
+   * - momentId 非空、或被 users.avatar_media_id / chains.avatar_media_id / chains.cover_media_id
+   *   活引用 → 400 MEDIA_ALREADY_BOUND（不因 uploader 身份允许破坏活引用）；
+   * - ready → 转 orphaned 并写 orphanedAt；
+   * - uploading → 条件更新抢占（镜像 abort 语义，抢不到说明他方已推进，幂等返回），
+   *   事务后 best-effort abortMultipart：失败由 bucket AbortIncompleteMultipartUpload lifecycle 兜底。
+   */
+  async discard(userId: string, mediaId: string): Promise<void> {
+    let abortTarget: { s3Key: string; uploadId: string } | null = null;
+    await db.transaction(async (tx) => {
+      const [row] = await tx.select().from(media).where(eq(media.id, mediaId)).limit(1).for('update');
+      if (!row || row.uploaderId !== userId) throw new NotFoundError('MEDIA_NOT_FOUND');
+      if (row.status === 'orphaned') return;
+      if (row.momentId) throw new BadRequestError('MEDIA_ALREADY_BOUND');
+      const [boundUser] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.avatarMediaId, row.id))
+        .limit(1);
+      if (boundUser) throw new BadRequestError('MEDIA_ALREADY_BOUND');
+      const [boundChain] = await tx
+        .select({ id: chains.id })
+        .from(chains)
+        .where(or(eq(chains.avatarMediaId, row.id), eq(chains.coverMediaId, row.id)))
+        .limit(1);
+      if (boundChain) throw new BadRequestError('MEDIA_ALREADY_BOUND');
+
+      if (row.status === 'ready') {
+        await tx.update(media).set({ status: 'orphaned', orphanedAt: new Date() }).where(eq(media.id, row.id));
+        return;
+      }
+      const [result] = await tx
+        .update(media)
+        .set({ status: 'orphaned', orphanedAt: new Date() })
+        .where(and(eq(media.id, row.id), eq(media.status, 'uploading')));
+      if (result.affectedRows === 0) return;
+      if (row.uploadId) abortTarget = { s3Key: row.s3Key, uploadId: row.uploadId };
+    });
+    if (abortTarget) {
+      const target: { s3Key: string; uploadId: string } = abortTarget;
+      await getStorage()
+        .abortMultipart(target.s3Key, target.uploadId)
+        .catch((err: unknown) => {
+          logger.warn('discard abort multipart failed（AbortIncompleteMultipartUpload lifecycle 兜底）', {
+            mediaId,
+            err: String(err),
+          });
+        });
     }
   }
 

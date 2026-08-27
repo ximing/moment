@@ -13,6 +13,7 @@ import {
   Authorized,
   Body,
   CurrentUser,
+  Delete,
   Get,
   HttpCode,
   JsonController,
@@ -64,6 +65,14 @@ export class MediaController {
   @OnUndefined(204)
   abort(@Param('id') id: string, @CurrentUser() user: UserProfile): Promise<void> {
     return this.mediaService.abort(user.id, id);
+  }
+
+  @Delete('/:id')
+  @Authorized()
+  @HttpCode(204)
+  @OnUndefined(204)
+  discard(@Param('id') id: string, @CurrentUser() user: UserProfile): Promise<void> {
+    return this.mediaService.discard(user.id, id);
   }
 
   @Get('/:id')

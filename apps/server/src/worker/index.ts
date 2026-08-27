@@ -5,7 +5,13 @@ import { getPushService } from '../push/factory.js';
 import { logger } from '../utils/logger.js';
 import { runOutboxBatch } from './processor.js';
 import { runRecapSweep } from './recap-scheduler.js';
-import { sweepSoftDeletedMomentMedia, sweepStaleUploadingMedia, sweepStaleVoiceTranscriptions } from './sweeper.js';
+import {
+  sweepOrphanedMedia,
+  sweepSoftDeletedMomentMedia,
+  sweepStaleUnboundReadyMedia,
+  sweepStaleUploadingMedia,
+  sweepStaleVoiceTranscriptions,
+} from './sweeper.js';
 
 /** 独立 worker 进程（spec §5.4）：与 API 同 codebase、不同进程；docker-compose service 属 Phase 8。 */
 
@@ -39,6 +45,8 @@ async function main(): Promise<void> {
       lastSweep = Date.now();
       try {
         await sweepStaleUploadingMedia();
+        await sweepStaleUnboundReadyMedia();
+        await sweepOrphanedMedia();
         await sweepSoftDeletedMomentMedia();
         await sweepStaleVoiceTranscriptions();
       } catch (err) {

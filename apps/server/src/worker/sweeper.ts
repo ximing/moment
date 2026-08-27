@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
-import { media, moments, type Media } from '../db/schema.js';
+import { chains, media, moments, users, type Media } from '../db/schema.js';
 import { getStorage } from '../storage/factory.js';
 import { logger } from '../utils/logger.js';
 
@@ -81,6 +81,102 @@ export async function sweepStaleUploadingMedia(
     result.deletedRows += 1;
   }
   logger.info('sweeper stale uploading media done', { ...result });
+  return result;
+}
+
+export interface MarkOrphanedSweepResult {
+  scanned: number;
+  markedOrphaned: number;
+  dryRun: boolean;
+}
+
+/**
+ * 过期未绑定 ready 上传 → orphaned（design chain-appearance §6）：
+ * ready + momentId IS NULL + createdAt 超 MEDIA_UPLOADING_TTL_HOURS，且未被
+ * users.avatar_media_id / chains.avatar_media_id / chains.cover_media_id 引用。
+ * 覆盖「上传完成后直接关页/断网」留下的未绑定 ready；只标状态不触达存储对象，
+ * 物理清理由 sweepOrphanedMedia 按 30 天保留期执行。逐行条件更新防与并发绑定的丢失更新。
+ */
+export async function sweepStaleUnboundReadyMedia(
+  now = new Date(),
+  opts?: { dryRun?: boolean }
+): Promise<MarkOrphanedSweepResult> {
+  const result: MarkOrphanedSweepResult = {
+    scanned: 0,
+    markedOrphaned: 0,
+    dryRun: opts?.dryRun ?? config.SWEEPER_DRY_RUN,
+  };
+  const cutoff = new Date(now.getTime() - config.MEDIA_UPLOADING_TTL_HOURS * 3_600_000);
+  const rows = await db
+    .select()
+    .from(media)
+    .leftJoin(users, eq(users.avatarMediaId, media.id))
+    .leftJoin(chains, or(eq(chains.avatarMediaId, media.id), eq(chains.coverMediaId, media.id)))
+    .where(
+      and(
+        eq(media.status, 'ready'),
+        isNull(media.momentId),
+        lt(media.createdAt, cutoff),
+        isNull(users.id),
+        isNull(chains.id)
+      )
+    )
+    .orderBy(asc(media.createdAt)) // FIFO：同 sweepStaleUploadingMedia，老行优先
+    .limit(BATCH_LIMIT);
+  result.scanned = rows.length;
+  for (const { media: row } of rows) {
+    if (result.dryRun) {
+      logger.info('sweeper dry-run: would orphan stale unbound ready media', {
+        mediaId: row.id,
+        key: row.s3Key,
+        createdAt: row.createdAt,
+      });
+      continue;
+    }
+    // 条件更新：扫描后若已被绑定（momentId 写入）或状态被推进则安全跳过，不计入标记数。
+    const [updateResult] = await db
+      .update(media)
+      .set({ status: 'orphaned', orphanedAt: now })
+      .where(and(eq(media.id, row.id), eq(media.status, 'ready'), isNull(media.momentId)));
+    result.markedOrphaned += Number(updateResult.affectedRows);
+  }
+  logger.info('sweeper stale unbound ready media done', { ...result });
+  return result;
+}
+
+/**
+ * 过期 orphaned 对象物理清理（design chain-appearance §6）：orphanedAt 超统一保留期
+ * （沿用 MOMENT_SOFT_DELETE_RETENTION_DAYS 30 天语义）后删 S3 对象，成功才删 media 行。
+ * orphanedAt 为 null 的历史行不动（迁移已回填 createdAt；null 只在迁移前窗口出现，等下轮）。
+ * 与 sweepSoftDeletedMomentMedia 共用 destroyMediaObject 的「对象删除成功才删行」规则，并发命中幂等。
+ */
+export async function sweepOrphanedMedia(
+  now = new Date(),
+  opts?: { dryRun?: boolean }
+): Promise<SweepResult> {
+  const result = newResult(opts?.dryRun ?? config.SWEEPER_DRY_RUN);
+  const cutoff = new Date(now.getTime() - config.MOMENT_SOFT_DELETE_RETENTION_DAYS * 86_400_000);
+  const rows = await db
+    .select()
+    .from(media)
+    .where(and(eq(media.status, 'orphaned'), isNotNull(media.orphanedAt), lt(media.orphanedAt, cutoff)))
+    .orderBy(asc(media.orphanedAt)) // FIFO：同上，老行优先
+    .limit(BATCH_LIMIT);
+  result.scanned = rows.length;
+  for (const row of rows) {
+    if (result.dryRun) {
+      logger.info('sweeper dry-run: would delete expired orphaned media', {
+        mediaId: row.id,
+        key: row.s3Key,
+        orphanedAt: row.orphanedAt,
+      });
+      continue;
+    }
+    if (!(await destroyMediaObject(row, result))) continue; // 对象删除失败：行留下轮重试
+    await db.delete(media).where(eq(media.id, row.id));
+    result.deletedRows += 1;
+  }
+  logger.info('sweeper orphaned media done', { ...result });
   return result;
 }
 
