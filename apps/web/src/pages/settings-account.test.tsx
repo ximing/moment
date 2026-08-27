@@ -281,6 +281,21 @@ describe('资料保存反馈', () => {
   });
 });
 
+describe('外观草稿生命周期', () => {
+  it('离开设置页（unmount）调用 disposeAppearanceDraft 回收未保存 temp', () => {
+    resolve(AuthService).user = VIEWER_USER;
+    seedChainSettings(CHAIN_VIEWER);
+    const service = resolve(ChainSettingsService);
+    const spy = vi.spyOn(service, 'disposeAppearanceDraft');
+    const { unmount } = renderChainSettings();
+
+    unmount();
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+});
+
 describe('「我」页主题三态', () => {
   it('主题暴露跟随系统 / 浅 / 深三个既有选项', () => {
     resolve(AuthService).user = USER;

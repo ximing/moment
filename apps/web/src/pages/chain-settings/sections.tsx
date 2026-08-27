@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { observer, useService } from '@rabjs/react';
 import { MoreHorizontal, X } from 'lucide-react';
@@ -29,6 +29,9 @@ export const ChainSettingsSections = observer(function ChainSettingsSections() {
   const owner = chain ? isOwner(chain) : false;
   // 壳已保证链存在（index.tsx 三态判定后才渲染分区）；hook 需先于守卫调用
   const [section, setSection] = useState<Section>(owner ? 'share' : 'members');
+  // 离开设置页（unmount）：回收未持久化的 temp 上传（abort 在途 + best-effort DELETE）；
+  // 已保存/已绑定资源为 persisted，dispose 不会误删（spec §7.1，同创建链弹窗）
+  useEffect(() => () => service.disposeAppearanceDraft(), [service]);
   if (!chain) return null;
   const items: { key: Section; label: string; show: boolean }[] = [
     { key: 'share', label: '分享', show: owner },
