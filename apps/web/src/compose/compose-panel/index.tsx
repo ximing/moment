@@ -154,7 +154,14 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
                       : 'border-transparent bg-bg text-muted hover:text-ink'
                   }`}
                 >
-                  <ChainMark chainId={c.id} color={c.color} icon={c.icon} size={16} />
+                  <ChainMark
+                    chainId={c.id}
+                    color={c.color}
+                    icon={c.icon}
+                    avatarMediaId={c.avatarMediaId}
+                    avatarFocus={c.avatarFocus}
+                    size={16}
+                  />
                   {c.name}
                 </button>
               ))}

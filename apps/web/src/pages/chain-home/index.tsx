@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { ArrowLeft, MoreHorizontal } from 'lucide-react';
 import { ComposerEntry } from '@/compose/composer-entry';
+import { ChainCover } from '@/chain/ChainCover';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { AggregateView } from '@/chain/aggregate-views';
 import { MapView } from '@/chain/map-view';
@@ -30,6 +31,8 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
   const navigate = useNavigate();
   const service = useService(ChainHomeService);
   const composeSession = useService(ComposeSessionService);
+  // 封面加载失败当次隐藏（按 coverMediaId 记忆，换链/换封面自然重置），不无限重试
+  const [failedCoverId, setFailedCoverId] = useState<string | null>(null);
 
   useEffect(() => {
     service.hydrate(chainId);
@@ -51,9 +54,19 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
     );
   }
   const chain = service.chain;
+  // 大封面只属于链首页与公开分享页（spec §7.5）；服务端 ready 门闸保证 mediaId/URL/focus 三元组同非空
+  const showCover = chain.coverMediaId !== null && chain.coverUrl !== null && failedCoverId !== chain.coverMediaId;
 
   return (
     <div>
+      {showCover && (
+        <ChainCover
+          mediaId={chain.coverMediaId!}
+          focus={chain.coverFocus}
+          onError={() => setFailedCoverId(chain.coverMediaId)}
+          className="mb-4"
+        />
+      )}
       <header className="mb-6">
         <div className="flex items-center gap-3">
           <h1 className="min-w-0 truncate text-page-title font-semibold text-ink">{chain.name}</h1>

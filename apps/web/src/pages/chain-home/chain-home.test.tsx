@@ -69,6 +69,11 @@ vi.mock('@/api/client', () => ({
   cacheUser: () => undefined,
 }));
 
+// 链头像/封面的认证 blob 通道：同步回 blob:mock-<id>（与 timeline-variants.test.tsx 同一约定）。
+vi.mock('@/media/useMediaObjectUrl', () => ({
+  useMediaObjectUrl: vi.fn((mediaId: string | null) => (mediaId ? `blob:mock-${mediaId}` : null)),
+}));
+
 // MediaBlock 桩：记录每次交接的 props，并把每个媒体渲染成可点击的探针。
 const mediaBlockCalls = vi.hoisted(() => ({
   list: [] as { media: MomentMedia[]; onOpen?: (index: number) => void }[],
@@ -112,7 +117,12 @@ const CHAIN: ChainDetailDto = {
   id: 'chain-1',
   name: '周末小家',
   description: '一起记录平凡日子',
+  avatarMediaId: null,
+  avatarUrl: null,
+  avatarFocus: null,
   coverMediaId: null,
+  coverUrl: null,
+  coverFocus: null,
   color: 'coral',
   icon: null,
   visibility: 'private',
@@ -128,6 +138,14 @@ const CHAIN: ChainDetailDto = {
     { userId: 'user-2', nickname: '乔乔', avatarUrl: null, role: 'editor' },
   ],
   memberCount: 2,
+};
+
+/** 带封面的链：服务端 ready 门闸保证 mediaId/URL/focus 三元组同非空。 */
+const COVERED_CHAIN: ChainDetailDto = {
+  ...CHAIN,
+  coverMediaId: 'cover-1',
+  coverUrl: '/api/media/cover-1',
+  coverFocus: { x: 0.25, y: 0.75 },
 };
 
 const TEXT_MOMENT: MomentResponse = {
@@ -187,10 +205,10 @@ const MONTH_INDEX = [
 ];
 
 /** 渲染前播种 ChainHomeService：chainId 与路由一致时 hydrate 幂等返回，不发请求。 */
-function seedChainHome(moments: MomentResponse[]) {
+function seedChainHome(moments: MomentResponse[], chain: ChainDetailDto = CHAIN) {
   const service = resolve(ChainHomeService);
   service.chainId = 'chain-1';
-  service.chain = CHAIN;
+  service.chain = chain;
   service.moments = moments;
   service.nextCursor = null;
   service.monthIndex = MONTH_INDEX;
@@ -335,6 +353,37 @@ describe('链主页时间线', () => {
     expect(within(rail).getByText('12月')).toBeInTheDocument();
     // 一次只展开一个历史年份
     expect(within(rail).queryByText('5月')).toBeNull();
+  });
+});
+
+describe('链首页封面', () => {
+  it('链有封面时标题上方渲染宽幅封面：blob 通道 + 焦点 object-position', () => {
+    seedChainHome([TEXT_MOMENT], COVERED_CHAIN);
+    const { container } = renderChainHome();
+
+    const img = container.querySelector('img');
+    expect(img).not.toBeNull();
+    expect(img).toHaveAttribute('src', 'blob:mock-cover-1');
+    expect(img).toHaveStyle({ objectPosition: '25% 75%' });
+    // 普通页眉仍在（封面上方/前方附加，不替换既有结构）
+    expect(screen.getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
+  });
+
+  it('封面加载失败当次隐藏，页面回普通页眉', () => {
+    seedChainHome([TEXT_MOMENT], COVERED_CHAIN);
+    const { container } = renderChainHome();
+
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
+  });
+
+  it('无封面的链不渲染封面容器之外的任何页眉图片', () => {
+    seedChainHome([TEXT_MOMENT]);
+    const { container } = renderChainHome();
+
+    // 页面上没有任何 <img>（成员头像簇为字母占位、时刻无媒体）
+    expect(container.querySelector('img')).toBeNull();
   });
 });
 

@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { ApiError } from '@moment/api-client';
 import { Timeline } from '@/timeline/timeline';
+import { ChainMark } from '@/chain/ChainMark';
+import { PublicChainCover } from '@/chain/ChainCover';
 import { AggregateView } from '@/chain/aggregate-views';
 import { MapView } from '@/chain/map-view';
 import { MarkdownText } from '@/pages/recap/markdown-text';
@@ -18,6 +20,8 @@ import { ShareAlbumService } from './share-album.service';
 export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
   const { token = '' } = useParams();
   const service = useService(ShareAlbumService);
+  // 封面加载失败当次隐藏（不无限重试），页头回普通布局
+  const [coverFailed, setCoverFailed] = useState(false);
 
   useEffect(() => {
     if (token) service.hydrate(token);
@@ -55,7 +59,31 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
     <div className="min-h-screen bg-bg">
       <header className="border-b border-line">
         <div className="mx-auto max-w-content px-6 py-8">
-          <h1 className="text-page-title font-semibold text-ink">{chain?.name}</h1>
+          {chain?.coverMediaId && chain.coverUrl && !coverFailed && (
+            <PublicChainCover
+              src={chain.coverUrl}
+              shareToken={token}
+              focus={chain.coverFocus}
+              onError={() => setCoverFailed(true)}
+              className="mb-6"
+            />
+          )}
+          <div className="flex min-w-0 items-center gap-3">
+            {chain && (
+              <ChainMark
+                // PublicShareChainInfo 不带链 id：哈希色回退用 share token 作稳定种子（仅三模式全空时才用到）
+                chainId={token}
+                color={chain.color}
+                icon={chain.icon}
+                avatarSrc={
+                  chain.avatarUrl ? `${chain.avatarUrl}?st=${encodeURIComponent(token)}` : null
+                }
+                avatarFocus={chain.avatarFocus}
+                size={24}
+              />
+            )}
+            <h1 className="min-w-0 truncate text-page-title font-semibold text-ink">{chain?.name}</h1>
+          </div>
           {chain?.description && <p className="mt-2 text-meta text-muted">{chain.description}</p>}
           <p className="mt-2 text-caption text-muted">只读分享 · 时刻</p>
         </div>

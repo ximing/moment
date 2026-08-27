@@ -41,6 +41,11 @@ vi.mock('@/api/client', () => ({
   cacheUser: () => undefined,
 }));
 
+// 链头像的认证 blob 通道：同步回 blob:mock-<id>（与 timeline-variants.test.tsx 同一约定）。
+vi.mock('@/media/useMediaObjectUrl', () => ({
+  useMediaObjectUrl: vi.fn((mediaId: string | null) => (mediaId ? `blob:mock-${mediaId}` : null)),
+}));
+
 register(AuthService);
 register(ChainListService);
 
@@ -49,7 +54,12 @@ function makeChain(id: string, name: string): ChainDto {
     id,
     name,
     description: null,
+    avatarMediaId: null,
+    avatarUrl: null,
+    avatarFocus: null,
     coverMediaId: null,
+    coverUrl: null,
+    coverFocus: null,
     color: 'coral',
     icon: null,
     visibility: 'private',
@@ -152,5 +162,34 @@ describe('ChainNavList 拖拽 ghost 与提交', () => {
 
     expect(document.body.querySelector(GHOST_SELECTOR)).toBeNull();
     expect(api.reorderChains).not.toHaveBeenCalled();
+  });
+
+  it('导航项只渲染链头像（blob 通道 + 焦点），不渲染封面', () => {
+    const withAvatar: ChainDto = {
+      ...makeChain('c1', '链一'),
+      avatarMediaId: 'm-avatar-1',
+      avatarUrl: '/api/media/m-avatar-1',
+      avatarFocus: { x: 0.25, y: 0.75 },
+      coverMediaId: 'm-cover-1',
+      coverUrl: '/api/media/m-cover-1',
+      coverFocus: { x: 0.5, y: 0.5 },
+    };
+    const { container } = render(
+      <MemoryRouter>
+        <RSRoot>
+          <ToastProvider>
+            <ChainNavList chains={[withAvatar]} axis="y" itemClassName={() => 'item'} />
+          </ToastProvider>
+        </RSRoot>
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole('link', { name: /链一/ });
+    const img = link.querySelector('img');
+    expect(img).not.toBeNull();
+    expect(img).toHaveAttribute('src', 'blob:mock-m-avatar-1');
+    expect(img).toHaveStyle({ objectPosition: '25% 75%' });
+    // 封面不进导航：整个导航只有头像这一张图
+    expect(container.querySelectorAll('img')).toHaveLength(1);
   });
 });

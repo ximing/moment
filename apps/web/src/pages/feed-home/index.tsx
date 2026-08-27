@@ -23,7 +23,18 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
   const chainList = useService(ChainListService);
   const composeSession = useService(ComposeSessionService);
   const chains = chainList.chains;
-  const looks = new Map(chains.map((c) => [c.id, { name: c.name, color: c.color, icon: c.icon }]));
+  const looks = new Map(
+    chains.map((c) => [
+      c.id,
+      {
+        name: c.name,
+        color: c.color,
+        icon: c.icon,
+        avatarMediaId: c.avatarMediaId,
+        avatarFocus: c.avatarFocus,
+      },
+    ]),
+  );
   // viewer（任何链都不可写）全程不见发布入口（spec §5）
   const writable = chains.some(canCompose);
   const entry = writable ? <ComposerEntry /> : undefined;

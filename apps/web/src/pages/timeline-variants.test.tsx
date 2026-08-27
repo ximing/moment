@@ -115,7 +115,12 @@ const CHAIN: ChainDto = {
   id: 'chain-1',
   name: '周末小家',
   description: '一起记录平凡日子',
+  avatarMediaId: 'm-avatar-1',
+  avatarUrl: '/api/media/m-avatar-1',
+  avatarFocus: { x: 0.25, y: 0.75 },
   coverMediaId: null,
+  coverUrl: null,
+  coverFocus: null,
   color: 'coral',
   icon: null,
   visibility: 'private',
@@ -129,7 +134,15 @@ const CHAIN: ChainDto = {
   memberCount: 1,
 };
 
-const CHAIN_B: ChainDto = { ...CHAIN, id: 'chain-2', name: '厨房实验', color: 'mint' };
+const CHAIN_B: ChainDto = {
+  ...CHAIN,
+  id: 'chain-2',
+  name: '厨房实验',
+  color: 'mint',
+  avatarMediaId: null,
+  avatarUrl: null,
+  avatarFocus: null,
+};
 
 const TEXT_MOMENT: MomentResponse = {
   id: 'moment-text',
@@ -208,7 +221,18 @@ function seedMomentDetail(comments: CommentDto[]) {
 function seedShare(moments: MomentResponse[]) {
   const service = resolve(ShareAlbumService);
   service.token = 'tok en';
-  service.chain = { name: '周末小家', description: '一起记录平凡日子' };
+  service.chain = {
+    name: '周末小家',
+    description: '一起记录平凡日子',
+    avatarMediaId: 'm-avatar',
+    avatarUrl: '/api/media/m-avatar',
+    avatarFocus: { x: 0.5, y: 0.5 },
+    coverMediaId: 'm-cover',
+    coverUrl: '/api/media/m-cover',
+    coverFocus: { x: 0.25, y: 0.75 },
+    color: null,
+    icon: null,
+  };
   service.moments = moments;
   service.nextCursor = null;
 }
@@ -287,6 +311,17 @@ describe('大家的日子 feed', () => {
     expect(source.textContent).toContain('周末小家');
   });
 
+  it('feed 项链标识渲染链头像：认证 blob 通道 + 焦点 object-position', async () => {
+    await seedFeed([TEXT_MOMENT]);
+    renderFeed();
+
+    const source = within(screen.getByRole('article')).getByRole('link', { name: /周末小家/ });
+    const mark = source.querySelector('img');
+    expect(mark).not.toBeNull();
+    expect(mark).toHaveAttribute('src', 'blob:mock-m-avatar-1');
+    expect(mark).toHaveStyle({ objectPosition: '25% 75%' });
+  });
+
   it('同一 MomentSheet 不给 chainLookById 时没有来源链接', () => {
     render(
       <MemoryRouter>
@@ -354,6 +389,33 @@ describe('公开分享相册', () => {
       </MemoryRouter>,
     );
   }
+
+  it('页头渲染公开链头像与封面：稳定 URL + ?st=encodeURIComponent(token)，不走 blob 通道', () => {
+    seedShare([TWO_IMAGE_MOMENT]);
+    const { container } = renderShare();
+
+    const imgs = [...container.querySelectorAll('img')].map((el) => el.getAttribute('src'));
+    // 头像与封面都走 ?st= 通道（token 带空格，必须 encode）
+    expect(imgs).toContain('/api/media/m-avatar?st=tok%20en');
+    expect(imgs).toContain('/api/media/m-cover?st=tok%20en');
+    // 封面只出现在页头：时刻媒体经 MediaBlock 桩渲染按钮，不产生额外 <img>
+    expect(imgs).toHaveLength(2);
+
+    const cover = container.querySelector('img[src="/api/media/m-cover?st=tok%20en"]');
+    expect(cover).toHaveStyle({ objectPosition: '25% 75%' });
+  });
+
+  it('封面加载失败当次隐藏，页头回普通布局', () => {
+    seedShare([TWO_IMAGE_MOMENT]);
+    const { container } = renderShare();
+
+    const cover = container.querySelector('img[src="/api/media/m-cover?st=tok%20en"]')!;
+    fireEvent.error(cover);
+    expect(container.querySelector('img[src^="/api/media/m-cover"]')).toBeNull();
+    // 公开头像不受影响
+    expect(container.querySelector('img[src^="/api/media/m-avatar"]')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
+  });
 
   it('只读无 Shell：无 composer、无表情入口、无 kebab，媒体经 ?st= 通道交接', () => {
     seedShare([TWO_IMAGE_MOMENT]);

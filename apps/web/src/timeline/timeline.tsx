@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { observer, useService } from '@rabjs/react';
-import type { ChainColor, ChainIcon, MomentResponse, TemplateManifest } from '@moment/dto';
+import type { MomentResponse, TemplateManifest } from '@moment/dto';
+import type { ChainLook } from '@/chain/ChainMark';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { dayHeading } from '@/lib/time';
 import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
@@ -35,7 +36,7 @@ export const Timeline = observer(function Timeline({
   ageLabelOf,
 }: {
   moments: MomentResponse[];
-  chainLookById?: Map<string, { name: string; color: ChainColor | null; icon: ChainIcon | null }>;
+  chainLookById?: Map<string, ChainLook>;
   shareToken?: string;
   readOnly?: boolean;
   isPending: boolean;
@@ -61,6 +62,8 @@ export const Timeline = observer(function Timeline({
         chainName={chainLookById?.get(m.chainId)?.name}
         chainColor={chainLookById?.get(m.chainId)?.color}
         chainIcon={chainLookById?.get(m.chainId)?.icon}
+        chainAvatarMediaId={chainLookById?.get(m.chainId)?.avatarMediaId}
+        chainAvatarFocus={chainLookById?.get(m.chainId)?.avatarFocus}
         shareToken={shareToken}
         readOnly={readOnly}
         templateManifest={templateManifest}

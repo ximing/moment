@@ -21,7 +21,8 @@ import { UserMenu } from './user-menu';
 // - 头像菜单动作：「我的资料」→ /me（主题三态入口所在页，C 端总规范 §10.2）、
 //   「通知」→ /notifications 并携带未读计数、「退出登录」走 AuthService.logout
 //   既有 service 路径（tokenStore.clear → moment:auth-cleared）后跳 /login；
-// - create-chain：空名字本地校验报错、不调用 service；合法提交走既有
+// - create-chain：canSubmit 保存闸（chain-appearance §7.1）——名字为空或外观未就绪
+//   时「创建」禁用、不调用 service；合法提交走既有
 //   CreateChainDialogService.submit → client.createChain 并跳转新链；
 // - composer entry / FAB 把 chainId 经 openCompose 交接给 ComposeSessionService。
 //
@@ -76,7 +77,12 @@ const CHAIN: ChainDto = {
   id: 'chain-1',
   name: '宝宝成长',
   description: null,
+  avatarMediaId: null,
+  avatarUrl: null,
+  avatarFocus: null,
   coverMediaId: null,
+  coverUrl: null,
+  coverFocus: null,
   color: 'coral',
   icon: null,
   visibility: 'private',
@@ -119,8 +125,8 @@ function Probe(): ReactElement {
   return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
 }
 
-function renderShell(initialPath: string) {
-  return render(
+function shellTree(initialPath: string): ReactElement {
+  return (
     <MemoryRouter initialEntries={[initialPath]}>
       <RSRoot>
         <ToastProvider>
@@ -136,8 +142,12 @@ function renderShell(initialPath: string) {
           </Routes>
         </ToastProvider>
       </RSRoot>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderShell(initialPath: string) {
+  return render(shellTree(initialPath));
 }
 
 /** 独立渲染 Shell 子组件（头像菜单 / composer 入口），同时挂地址探针。 */
@@ -228,24 +238,23 @@ describe('头像菜单动作（退出 / 主题入口）', () => {
 });
 
 describe('开一条新的链', () => {
-  it('空名字本地校验报错，不调用 createChain', async () => {
+  it('空名字时「创建」被 canSubmit 门闸禁用，不调用 createChain', async () => {
     const user = userEvent.setup();
     renderShell('/');
 
     await user.click(screen.getAllByRole('button', { name: '开一条新的链' })[0]);
     const dialog = await screen.findByRole('dialog', { name: '开一条新的链' });
-    await user.click(within(dialog).getByRole('button', { name: '创建' }));
 
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      '给这条链起个名字',
-    );
+    // 门闸语义（chain-appearance §7.1）：名字为空不可提交，点击路径被按钮禁用直接封死
+    expect(within(dialog).getByRole('button', { name: '创建' })).toBeDisabled();
+    expect(within(dialog).queryByRole('alert')).toBeNull();
     expect(api.createChain).not.toHaveBeenCalled();
   });
 
-  it('合法提交走既有 service 调用并跳转到新链', async () => {
+  it('合法提交解除门闸，走既有 service 调用并跳转到新链', async () => {
     const user = userEvent.setup();
     api.createChain.mockResolvedValue({ id: 'chain-new' });
-    renderShell('/');
+    const view = renderShell('/');
 
     await user.click(screen.getAllByRole('button', { name: '开一条新的链' })[0]);
     const dialog = await screen.findByRole('dialog', { name: '开一条新的链' });
@@ -255,7 +264,12 @@ describe('开一条新的链', () => {
     fireEvent.change(within(dialog).getByRole('textbox', { name: /名字/ }), {
       target: { value: '周末小家' },
     });
-    await user.click(within(dialog).getByRole('button', { name: '创建' }));
+    // jsdom 下 observer 不重渲：手动 rerender 让渲染时读取的 canSubmit 门闸看到新名字
+    // （真实浏览器里 observer 会随 service.name 写入自动重渲，无需这一手）
+    view.rerender(shellTree('/'));
+    const submit = within(screen.getByRole('dialog', { name: '开一条新的链' })).getByRole('button', { name: '创建' });
+    expect(submit).toBeEnabled();
+    await user.click(submit);
 
     await waitFor(() =>
       expect(api.createChain).toHaveBeenCalledWith({

@@ -39,6 +39,11 @@ vi.mock('@/api/client', () => ({
   cacheUser: () => undefined,
 }));
 
+// 链头像的认证 blob 通道：同步回 blob:mock-<id>（与 timeline-variants.test.tsx 同一约定）。
+vi.mock('@/media/useMediaObjectUrl', () => ({
+  useMediaObjectUrl: vi.fn((mediaId: string | null) => (mediaId ? `blob:mock-${mediaId}` : null)),
+}));
+
 register(AuthService);
 register(ComposeSessionService);
 register(MemoriesService);
@@ -169,5 +174,29 @@ describe('那年今日入口条', () => {
     const service = resolve(MemoriesService);
     expect(service.open).toBe(true);
     expect(api.getMemoriesToday).toHaveBeenCalledTimes(1); // 打开即重拉
+  });
+
+  it('链标识只渲染头像（blob 通道），不渲染封面（大封面只属于链首页与公开分享页）', async () => {
+    const look = {
+      name: '周末小家',
+      color: 'coral' as const,
+      icon: null,
+      avatarMediaId: 'm-avatar-1',
+      avatarFocus: { x: 0.5, y: 0.5 },
+    };
+    await seedMemories({ open: true, years: [{ year: 2025, moments: [moment('a', '面包')] }] });
+    const { container } = render(
+      <MemoryRouter>
+        <RSRoot>
+          <MemoriesEntryContent chainLookById={new Map([['chain-1', look]])} />
+        </RSRoot>
+      </MemoryRouter>,
+    );
+
+    const imgs = [...container.querySelectorAll('img')].map((el) => el.getAttribute('src'));
+    expect(imgs).toEqual(['blob:mock-m-avatar-1']);
+    // 头像在「链名」来源链接里，与链名同表达身份
+    const source = screen.getByRole('link', { name: /周末小家/ });
+    expect(source.querySelector('img')).not.toBeNull();
   });
 });

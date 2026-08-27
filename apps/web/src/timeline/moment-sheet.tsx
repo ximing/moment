@@ -6,7 +6,7 @@ import { MoreHorizontal } from 'lucide-react';
 import { AuthService } from '@/services/auth.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { humanError } from '@/lib/errors';
-import type { ChainColor, ChainIcon, TemplateManifest } from '@moment/dto';
+import type { ChainAppearanceColor, ChainIcon, ChainImageFocus, TemplateManifest } from '@moment/dto';
 import { ChainMark } from '@/chain/ChainMark';
 import { formatHappenedClock } from '@/lib/time';
 import { resolveMilestoneLabel, summarizePayload } from '@/lib/template';
@@ -37,6 +37,8 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   chainName,
   chainColor,
   chainIcon,
+  chainAvatarMediaId,
+  chainAvatarFocus,
   shareToken,
   readOnly,
   templateManifest,
@@ -44,8 +46,10 @@ export const MomentSheetContent = observer(function MomentSheetContent({
 }: {
   moment: MomentResponse;
   chainName?: string;
-  chainColor?: ChainColor | null;
+  chainColor?: ChainAppearanceColor | null;
   chainIcon?: ChainIcon | null;
+  chainAvatarMediaId?: string | null;
+  chainAvatarFocus?: ChainImageFocus | null;
   shareToken?: string;
   readOnly?: boolean;
   templateManifest?: TemplateManifest | null;
@@ -141,7 +145,14 @@ export const MomentSheetContent = observer(function MomentSheetContent({
             {ageLabel && <span className="text-muted">{ageLabel}</span>}
             {chainName && !shareToken && (
               <Link to={`/chains/${moment.chainId}`} className="inline-flex items-center gap-1 text-muted hover:text-ink">
-                <ChainMark chainId={moment.chainId} color={chainColor} icon={chainIcon} size={14} />
+                <ChainMark
+                  chainId={moment.chainId}
+                  color={chainColor}
+                  icon={chainIcon}
+                  avatarMediaId={chainAvatarMediaId}
+                  avatarFocus={chainAvatarFocus}
+                  size={14}
+                />
                 {chainName}
               </Link>
             )}

@@ -44,6 +44,8 @@ type GhostState = {
   name: string;
   color: ChainDto['color'];
   icon: ChainDto['icon'];
+  avatarMediaId: ChainDto['avatarMediaId'];
+  avatarFocus: ChainDto['avatarFocus'];
   width: number;
   height: number;
   x: number;
@@ -128,6 +130,8 @@ export const ChainNavList = observer(function ChainNavList({
             name: item.name,
             color: item.color,
             icon: item.icon,
+            avatarMediaId: item.avatarMediaId,
+            avatarFocus: item.avatarFocus,
             width: drag.width,
             height: drag.height,
             x: drag.pointerX - drag.grabOffsetX,
@@ -358,7 +362,14 @@ export const ChainNavList = observer(function ChainNavList({
               }
             }}
           >
-            <ChainMark chainId={c.id} color={c.color} icon={c.icon} size={16} />
+            <ChainMark
+              chainId={c.id}
+              color={c.color}
+              icon={c.icon}
+              avatarMediaId={c.avatarMediaId}
+              avatarFocus={c.avatarFocus}
+              size={16}
+            />
             <span className="truncate">{c.name}</span>
           </NavLink>
         </ContextMenu>
@@ -377,7 +388,14 @@ export const ChainNavList = observer(function ChainNavList({
               transform: `translate(${ghost.x}px, ${ghost.y}px)`,
             }}
           >
-            <ChainMark chainId={ghost.id} color={ghost.color} icon={ghost.icon} size={16} />
+            <ChainMark
+              chainId={ghost.id}
+              color={ghost.color}
+              icon={ghost.icon}
+              avatarMediaId={ghost.avatarMediaId}
+              avatarFocus={ghost.avatarFocus}
+              size={16}
+            />
             <span className="truncate">{ghost.name}</span>
           </div>,
           document.body,

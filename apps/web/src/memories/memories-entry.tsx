@@ -1,6 +1,6 @@
 import { bindServices, observer, useService } from '@rabjs/react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import type { ChainColor, ChainIcon } from '@moment/dto';
+import type { ChainLook } from '@/chain/ChainMark';
 import { memoriesBarText } from '@/lib/memories';
 import { MomentSheet } from '@/timeline/moment-sheet';
 import { Icon } from '@/ui/Icon';
@@ -16,7 +16,7 @@ import { MemoriesService } from './memories.service';
 export const MemoriesEntryContent = observer(function MemoriesEntryContent({
   chainLookById,
 }: {
-  chainLookById?: Map<string, { name: string; color: ChainColor | null; icon: ChainIcon | null }>;
+  chainLookById?: Map<string, ChainLook>;
 }) {
   const service = useService(MemoriesService);
   const summary = service.summary;
@@ -53,6 +53,8 @@ export const MemoriesEntryContent = observer(function MemoriesEntryContent({
                     chainName={chainLookById?.get(m.chainId)?.name}
                     chainColor={chainLookById?.get(m.chainId)?.color}
                     chainIcon={chainLookById?.get(m.chainId)?.icon}
+                    chainAvatarMediaId={chainLookById?.get(m.chainId)?.avatarMediaId}
+                    chainAvatarFocus={chainLookById?.get(m.chainId)?.avatarFocus}
                   />
                 ))}
               </div>
