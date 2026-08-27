@@ -2,7 +2,7 @@ import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../../src/db/index.js';
-import { media, shareLinks } from '../../src/db/schema.js';
+import { chains, media, shareLinks } from '../../src/db/schema.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { app, createChain, insertMoment, registerUser } from '../helpers/fixtures.js';
 import { installMockStorage, type MockStorage } from '../helpers/storage.js';
@@ -142,5 +142,57 @@ describe('GET /api/media/:id?st=（share token 透传，spec §5.3）', () => {
       .get(`/api/media/${mediaId}?st=${shareToken}`)
       .set('Authorization', `Bearer ${other.token}`);
     expect(loggedInOutsider.status).toBe(302);
+  });
+
+  it('有效 st + 本链 avatar/cover（未绑定 moment）→ 302', async () => {
+    const avatarId = await insertReadyMedia(owner.id, null);
+    const coverId = await insertReadyMedia(owner.id, null);
+    await db
+      .update(chains)
+      .set({ avatarMediaId: avatarId, coverMediaId: coverId })
+      .where(eq(chains.id, chainId));
+
+    const avatarRes = await request(app).get(`/api/media/${avatarId}?st=${shareToken}`);
+    expect(avatarRes.status).toBe(302);
+    expect(avatarRes.headers.location).toBe('https://fake.local/presigned-get');
+
+    const coverRes = await request(app).get(`/api/media/${coverId}?st=${shareToken}`);
+    expect(coverRes.status).toBe(302);
+    expect(coverRes.headers.location).toBe('https://fake.local/presigned-get');
+    expect(storage.generateAccessUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it('有效 st + 跨链 avatar/cover → 404 MEDIA_NOT_FOUND（不允许借 token 探测他链资源）', async () => {
+    const foreignAvatar = await insertReadyMedia(other.id, null);
+    const foreignCover = await insertReadyMedia(other.id, null);
+    await db
+      .update(chains)
+      .set({ avatarMediaId: foreignAvatar, coverMediaId: foreignCover })
+      .where(eq(chains.id, otherChainId));
+
+    const r1 = await request(app).get(`/api/media/${foreignAvatar}?st=${shareToken}`);
+    expect(r1.status).toBe(404);
+    expect(r1.body.error.code).toBe('MEDIA_NOT_FOUND');
+
+    const r2 = await request(app).get(`/api/media/${foreignCover}?st=${shareToken}`);
+    expect(r2.status).toBe(404);
+    expect(r2.body.error.code).toBe('MEDIA_NOT_FOUND');
+  });
+
+  it('吊销 token + 本链 avatar → 404 SHARE_NOT_FOUND（不泄露存在性）', async () => {
+    const avatarId = await insertReadyMedia(owner.id, null);
+    await db.update(chains).set({ avatarMediaId: avatarId }).where(eq(chains.id, chainId));
+
+    const link = await request(app)
+      .post(`/api/chains/${chainId}/share-links`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({});
+    await request(app)
+      .delete(`/api/share-links/${link.body.id}`)
+      .set('Authorization', `Bearer ${owner.token}`);
+
+    const res = await request(app).get(`/api/media/${avatarId}?st=${link.body.token}`);
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('SHARE_NOT_FOUND');
   });
 });

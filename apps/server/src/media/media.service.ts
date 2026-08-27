@@ -300,18 +300,35 @@ export class MediaService {
     return getStorage().generateAccessUrl(row.s3Key, row.storageMeta, expiresIn, signingDate);
   }
 
-  /** share token 透传：token 有效 + media 绑定该链未软删 moment → 放行；其余一律 404，不泄露存在性。 */
+  /**
+   * share token 透传：token 有效 + media 属该链（未软删 moment 媒体，或链 avatar/cover
+   * 引用，chain-appearance 设计 §4.4）→ 放行；跨链/未绑定临时媒体一律 404，不泄露存在性。
+   */
   private async assertShareAccess(token: string, row: Media): Promise<void> {
     const link = await this.shareLinks.findValidByToken(token);
     if (!link) throw new NotFoundError('SHARE_NOT_FOUND');
-    if (!row.momentId) throw new NotFoundError('MEDIA_NOT_FOUND');
-    const [m] = await db
-      .select({ chainId: moments.chainId, deletedAt: moments.deletedAt })
-      .from(moments)
-      .where(eq(moments.id, row.momentId))
-      .limit(1);
-    if (!m || m.deletedAt || m.chainId !== link.chainId) {
-      throw new NotFoundError('MEDIA_NOT_FOUND'); // 跨链媒体拒绝
+    if (row.momentId) {
+      const [m] = await db
+        .select({ chainId: moments.chainId, deletedAt: moments.deletedAt })
+        .from(moments)
+        .where(eq(moments.id, row.momentId))
+        .limit(1);
+      if (!m || m.deletedAt || m.chainId !== link.chainId) {
+        throw new NotFoundError('MEDIA_NOT_FOUND'); // 跨链媒体拒绝
+      }
+      return;
     }
+    // 未绑定 moment：仅放行本链 avatar/cover 引用
+    const [boundChain] = await db
+      .select({ id: chains.id })
+      .from(chains)
+      .where(
+        and(
+          eq(chains.id, link.chainId),
+          or(eq(chains.avatarMediaId, row.id), eq(chains.coverMediaId, row.id)),
+        ),
+      )
+      .limit(1);
+    if (!boundChain) throw new NotFoundError('MEDIA_NOT_FOUND');
   }
 }

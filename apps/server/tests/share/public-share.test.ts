@@ -1,9 +1,31 @@
 import request from 'supertest';
+import { randomUUID } from 'node:crypto';
 import { db } from '../../src/db/index.js';
-import { shareLinks } from '../../src/db/schema.js';
+import { chains, media, shareLinks } from '../../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { app, createChain, insertMoment, registerUser } from '../helpers/fixtures.js';
+
+/** 直插未绑定 moment 的 media（链头像/封面场景；稳定 URL 不含预签名，无需 mock storage）。 */
+async function insertChainMedia(uploaderId: string, status: 'ready' | 'uploading'): Promise<string> {
+  const id = randomUUID();
+  await db.insert(media).values({
+    id,
+    momentId: null,
+    uploaderId,
+    s3Key: `chains/x/y/${id}.jpeg`,
+    mime: 'image/jpeg',
+    size: 1024,
+    status,
+    storageMeta: {
+      bucket: 'moment-test-placeholder',
+      prefix: 'test/attachments',
+      region: 'us-east-1',
+      isPublicBucket: 'false' as const,
+    },
+  });
+  return id;
+}
 
 let owner: { id: string; token: string };
 let chainId: string;
@@ -26,7 +48,18 @@ describe('GET /api/public/share/:token（匿名）', () => {
     await insertMoment({ chainId, authorId: owner.id, happenedAt: new Date('2026-08-01T00:00:00Z'), content: '第一次翻身' });
     const res = await request(app).get(`/api/public/share/${shareToken}`);
     expect(res.status).toBe(200);
-    expect(res.body.chain).toEqual({ name: '宝宝成长', description: null });
+    expect(res.body.chain).toEqual({
+      name: '宝宝成长',
+      description: null,
+      avatarMediaId: null,
+      avatarUrl: null,
+      avatarFocus: null,
+      coverMediaId: null,
+      coverUrl: null,
+      coverFocus: null,
+      color: null,
+      icon: null,
+    });
     expect(res.body.moments).toHaveLength(1);
     expect(res.body.moments[0].content).toBe('第一次翻身');
     // 只读计数存在，匿名视角 myReaction 恒 null（Global Constraints 决策）
@@ -113,5 +146,67 @@ describe('GET /api/public/share/:token（匿名）', () => {
     const badCursor = await request(app).get(`/api/public/share/${shareToken}?cursor=!!!junk`);
     expect(badCursor.status).toBe(400);
     expect(badCursor.body.error.code).toBe('INVALID_CURSOR');
+  });
+
+  it('链视觉：ready avatar/cover → 稳定 URL + mediaId + focus；icon/color 按图片优先置空', async () => {
+    const avatarId = await insertChainMedia(owner.id, 'ready');
+    const coverId = await insertChainMedia(owner.id, 'ready');
+    // 故意同时存入 icon/color（历史异常数据），验证读取防御性优先级 avatarMediaId > icon > color
+    await db
+      .update(chains)
+      .set({
+        avatarMediaId: avatarId,
+        avatarFocusX: 2500,
+        avatarFocusY: 7500,
+        coverMediaId: coverId,
+        coverFocusX: 10000,
+        coverFocusY: 0,
+        icon: '🌱',
+        color: '#A1B2C3',
+      })
+      .where(eq(chains.id, chainId));
+
+    const res = await request(app).get(`/api/public/share/${shareToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.chain).toEqual({
+      name: '宝宝成长',
+      description: null,
+      avatarMediaId: avatarId,
+      avatarUrl: `/api/media/${avatarId}`,
+      avatarFocus: { x: 0.25, y: 0.75 },
+      coverMediaId: coverId,
+      coverUrl: `/api/media/${coverId}`,
+      coverFocus: { x: 1, y: 0 },
+      color: null,
+      icon: null,
+    });
+    // DTO 不内嵌预签名参数（稳定相对入口，鉴权由 ?st= 完成）
+    expect(res.body.chain.avatarUrl).not.toContain('?');
+  });
+
+  it('链视觉：avatar 非 ready → mediaId/URL/focus 三者全 null，回退已存 color', async () => {
+    const uploadingId = await insertChainMedia(owner.id, 'uploading');
+    await db
+      .update(chains)
+      .set({ avatarMediaId: uploadingId, color: '#A1B2C3' })
+      .where(eq(chains.id, chainId));
+
+    const res = await request(app).get(`/api/public/share/${shareToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.chain.avatarMediaId).toBeNull();
+    expect(res.body.chain.avatarUrl).toBeNull();
+    expect(res.body.chain.avatarFocus).toBeNull();
+    expect(res.body.chain.color).toBe('#A1B2C3');
+    expect(res.body.chain.icon).toBeNull();
+  });
+
+  it('链视觉：无 avatar 时 icon 原样外发', async () => {
+    await db.update(chains).set({ icon: '👶🏽' }).where(eq(chains.id, chainId));
+
+    const res = await request(app).get(`/api/public/share/${shareToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.chain.icon).toBe('👶🏽');
+    expect(res.body.chain.color).toBeNull();
+    expect(res.body.chain.avatarUrl).toBeNull();
   });
 });
