@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  chainAppearanceColorSchema,
+  chainColorSchema,
+  chainIconSchema,
+  chainImageFocusSchema,
   createChainInputSchema,
   createInviteInputSchema,
   reorderChainsInputSchema,
@@ -29,15 +33,44 @@ test('updateChainInputSchema：拒绝空 patch；description 可显式置 null',
   assert.equal(ok.description, null);
 });
 
-test('create/update 接受预设色与图标，拒绝非法值', () => {
+test('create/update 接受预设色与图标，拒绝非法色与非 Emoji 图标', () => {
   const created = createChainInputSchema.parse({ name: '宝宝', template: 'daily', color: 'mint', icon: '👶' });
   assert.equal(created.color, 'mint');
   assert.equal(created.icon, '👶');
   assert.throws(() => createChainInputSchema.parse({ name: 'x', template: 'daily', color: 'neon' }));
-  assert.throws(() => createChainInputSchema.parse({ name: 'x', template: 'daily', icon: '💩' }));
+  assert.throws(() => createChainInputSchema.parse({ name: 'x', template: 'daily', icon: 'not-an-emoji' }));
   const cleared = updateChainInputSchema.parse({ icon: null, color: 'gold' });
   assert.equal(cleared.icon, null);
   assert.equal(cleared.color, 'gold');
+});
+
+test('链自定义色规范化；既有 ChainColor 仍只接受预设', () => {
+  assert.equal(chainAppearanceColorSchema.parse('#a1b2c3'), '#A1B2C3');
+  assert.equal(chainAppearanceColorSchema.parse('mint'), 'mint');
+  assert.throws(() => chainAppearanceColorSchema.parse('#abc'));
+  assert.throws(() => chainColorSchema.parse('#A1B2C3'));
+});
+
+test('链 Emoji 接受单个组合序列并拒绝文本或多个 Emoji', () => {
+  for (const icon of ['👶🏽', '🏳️‍🌈', '👨‍👩‍👧‍👦']) assert.equal(chainIconSchema.parse(icon), icon);
+  for (const icon of ['', 'family', '😀😃']) assert.throws(() => chainIconSchema.parse(icon));
+});
+
+test('图片模式拒绝与 color/icon 混传；旧 color+icon 仍可解析', () => {
+  const legacy = createChainInputSchema.parse({ name: '旧端', template: 'daily', color: 'mint', icon: '👶' });
+  assert.equal(legacy.icon, '👶');
+  assert.throws(() => createChainInputSchema.parse({
+    name: '冲突', template: 'daily', color: 'mint', avatarMediaId: '00000000-0000-4000-8000-000000000001',
+  }));
+});
+
+test('focus 边界与删除封面组合', () => {
+  assert.deepEqual(chainImageFocusSchema.parse({ x: 0, y: 1 }), { x: 0, y: 1 });
+  assert.throws(() => chainImageFocusSchema.parse({ x: -0.01, y: 0.5 }));
+  assert.throws(() => createChainInputSchema.parse({
+    name: '无图焦点', template: 'daily', coverFocus: { x: 0.5, y: 0.5 },
+  }));
+  assert.throws(() => updateChainInputSchema.parse({ coverMediaId: null, coverFocus: { x: 0.5, y: 0.5 } }));
 });
 
 test('updateMemberRoleInputSchema：不允许 owner（转让走专门端点）', () => {

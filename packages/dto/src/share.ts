@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ChainAppearanceColor, ChainIcon, ChainImageFocus } from './chains.js';
 import type { AggregateResponse, TemplateManifest } from './templates.js';
 import type { MomentResponse } from './moments.js';
 import type { RecapDto } from './recaps.js';
@@ -36,6 +37,14 @@ export interface ShareLinkListResponse {
 export interface PublicShareChainInfo {
   name: string;
   description: string | null;
+  avatarMediaId: string | null;
+  avatarUrl: string | null;
+  avatarFocus: ChainImageFocus | null;
+  coverMediaId: string | null;
+  coverUrl: string | null;
+  coverFocus: ChainImageFocus | null;
+  color: ChainAppearanceColor | null;
+  icon: ChainIcon | null;
 }
 
 /** 匿名只读视图：计数只读展示（commentCount/reactions），myReaction 恒 null */

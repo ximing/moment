@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import emojiRegex from 'emoji-regex';
 import type { TemplateManifest } from './templates.js';
 
 export const chainVisibilitySchema = z.enum(['private', 'link', 'public']);
@@ -16,22 +17,60 @@ export const CHAIN_COLORS = ['coral', 'orange', 'pink', 'mint', 'sky', 'purple',
 export const chainColorSchema = z.enum(CHAIN_COLORS);
 export type ChainColor = z.infer<typeof chainColorSchema>;
 
-/** 链标记预设图标；null = 只用色点。 */
+/** 链标记预设图标（仅供客户端候选项展示）；null = 只用色点。 */
 export const CHAIN_ICONS = ['🌱', '👶', '✈️', '🏠', '💛', '📷', '🐾', '🎓', '🎵', '⭐'] as const;
-export const chainIconSchema = z.enum(CHAIN_ICONS);
+
+/** 链外观色：预设色或 #RRGGBB（统一为大写）。 */
+export const chainAppearanceColorSchema = z.union([
+  chainColorSchema,
+  z.string().regex(/^#[0-9A-Fa-f]{6}$/).transform((value) => value.toUpperCase() as `#${string}`),
+]);
+export type ChainAppearanceColor = z.infer<typeof chainAppearanceColorSchema>;
+
+/** 单个完整 Unicode Emoji 序列，最多 64 个 UTF-16 code units。 */
+export const chainIconSchema = z.string().min(1).max(64).refine((value) => {
+  const matches = [...value.matchAll(emojiRegex())];
+  return matches.length === 1 && matches[0]![0] === value;
+}, 'exactly one emoji required');
 export type ChainIcon = z.infer<typeof chainIconSchema>;
 
-export const createChainInputSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  description: z.string().trim().max(2000).nullish(),
-  visibility: chainVisibilitySchema.default('private'),
-  color: chainColorSchema.optional(),
-  icon: chainIconSchema.nullish(),
-  /** 链模板 key（spec §3.2：创建必传、不可改）；official 为 baby/travel/daily，user 模板为 u_<21位> */
-  template: z.string().min(1).max(64),
-  /** 链级模板数据（宝宝生日、行程列表等），按模板 manifest 的 chainPayloadSchema 在 server 校验 */
-  payload: z.record(z.unknown()).nullish(),
+export const chainImageFocusSchema = z.object({
+  x: z.number().finite().min(0).max(1),
+  y: z.number().finite().min(0).max(1),
 });
+export type ChainImageFocus = z.infer<typeof chainImageFocusSchema>;
+
+const chainMediaIdSchema = z.string().uuid();
+
+export const createChainInputSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(2000).nullish(),
+    visibility: chainVisibilitySchema.default('private'),
+    color: chainAppearanceColorSchema.optional(),
+    icon: chainIconSchema.nullish(),
+    avatarMediaId: chainMediaIdSchema.nullish(),
+    avatarFocus: chainImageFocusSchema.nullish(),
+    coverMediaId: chainMediaIdSchema.nullish(),
+    coverFocus: chainImageFocusSchema.nullish(),
+    /** 链模板 key（spec §3.2：创建必传、不可改）；official 为 baby/travel/daily，user 模板为 u_<21位> */
+    template: z.string().min(1).max(64),
+    /** 链级模板数据（宝宝生日、行程列表等），按模板 manifest 的 chainPayloadSchema 在 server 校验 */
+    payload: z.record(z.unknown()).nullish(),
+  })
+  .superRefine((value, ctx) => {
+    const hasImage = value.avatarMediaId != null || value.coverMediaId != null;
+    const hasColorOrIcon = value.color != null || value.icon != null;
+    if (hasImage && hasColorOrIcon) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'image appearance cannot be combined with color or icon' });
+    }
+    if (value.avatarFocus != null && value.avatarMediaId == null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['avatarFocus'], message: 'avatarFocus requires avatarMediaId' });
+    }
+    if (value.coverFocus != null && value.coverMediaId == null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['coverFocus'], message: 'coverFocus requires coverMediaId' });
+    }
+  });
 export type CreateChainInput = z.infer<typeof createChainInputSchema>;
 
 export const updateChainInputSchema = z
@@ -39,11 +78,22 @@ export const updateChainInputSchema = z
     name: z.string().trim().min(1).max(100).optional(),
     description: z.string().trim().max(2000).nullable().optional(),
     visibility: chainVisibilitySchema.optional(),
-    color: chainColorSchema.optional(),
+    color: chainAppearanceColorSchema.optional(),
     icon: chainIconSchema.nullable().optional(),
+    avatarMediaId: chainMediaIdSchema.nullable().optional(),
+    avatarFocus: chainImageFocusSchema.nullable().optional(),
+    coverMediaId: chainMediaIdSchema.nullable().optional(),
+    coverFocus: chainImageFocusSchema.nullable().optional(),
     // template 刻意不在此 schema：改 template 由 server controller 检测原始 body 抛 TEMPLATE_IMMUTABLE（spec §3.2）
     payload: z.record(z.unknown()).nullable().optional(),
-    // coverMediaId 的校验依赖 media 归属判断，属 Phase 3，本阶段不支持改封面。
+  })
+  .superRefine((value, ctx) => {
+    if (value.avatarMediaId === null && value.avatarFocus != null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['avatarFocus'], message: 'avatarFocus cannot accompany null avatarMediaId' });
+    }
+    if (value.coverMediaId === null && value.coverFocus != null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['coverFocus'], message: 'coverFocus cannot accompany null coverMediaId' });
+    }
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: 'at least one field required',
@@ -80,9 +130,14 @@ export interface ChainDto {
   id: string;
   name: string;
   description: string | null;
+  avatarMediaId: string | null;
+  avatarUrl: string | null;
+  avatarFocus: ChainImageFocus | null;
   coverMediaId: string | null;
+  coverUrl: string | null;
+  coverFocus: ChainImageFocus | null;
   /** 未选色时为 null，客户端按 id 哈希回退 */
-  color: ChainColor | null;
+  color: ChainAppearanceColor | null;
   /** 未选图标时为 null，只画色点 */
   icon: ChainIcon | null;
   visibility: ChainVisibility;

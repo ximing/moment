@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createShareLinkInputSchema, publicShareQuerySchema } from './share.js';
+import { createShareLinkInputSchema, publicShareQuerySchema, type PublicShareChainInfo } from './share.js';
+
+test('PublicShareChainInfo 包含只读视觉字段，并使用稳定相对媒体 URL', () => {
+  const chain: PublicShareChainInfo = {
+    name: '宝宝成长',
+    description: '第一年',
+    avatarMediaId: 'm1',
+    avatarUrl: '/api/media/m1',
+    avatarFocus: { x: 0.5, y: 0.5 },
+    coverMediaId: null,
+    coverUrl: null,
+    coverFocus: null,
+    color: '#A1B2C3',
+    icon: '👶🏽',
+  };
+  assert.equal(chain.avatarUrl, '/api/media/m1');
+  assert.equal('expires' in chain, false);
+});
 
 test('createShareLinkInputSchema：空对象合法（永不过期）', () => {
   assert.deepEqual(createShareLinkInputSchema.parse({}), {});
