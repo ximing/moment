@@ -75,6 +75,7 @@ export async function resetFixture(): Promise<{ ok: true }> {
   }
   // 外键逆序：pushTokens, notifications, reactions, comments, momentTags, tags,
   // outbox, media, moments, chainInvites, chainMembers, shareLinks, chains, refreshTokens, users
+  // chains→media 与 media→moments→chains 构成引用环：delete(media) 前先显式断开链的图片引用
   await db.delete(pushTokens);
   await db.delete(notifications);
   await db.delete(reactions);
@@ -82,6 +83,7 @@ export async function resetFixture(): Promise<{ ok: true }> {
   await db.delete(momentTags);
   await db.delete(tags);
   await db.delete(outbox);
+  await db.update(chains).set({ avatarMediaId: null, coverMediaId: null });
   await db.delete(media);
   await db.delete(moments);
   await db.delete(chainInvites);

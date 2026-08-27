@@ -1,11 +1,9 @@
 import {
-  CHAIN_COLORS,
-  CHAIN_ICONS,
+  chainAppearanceColorSchema,
   type AcceptInviteResponse,
-  type ChainColor,
+  type ChainAppearanceColor,
   type ChainDto,
   type ChainDetailDto,
-  type ChainIcon,
   type ChainMemberDto,
   type ChainMemberPreview,
   type CreateChainInput,
@@ -28,41 +26,62 @@ import { ChainPolicy, type ChainRole } from './chain-policy.js';
 import type { DbTx } from '../outbox/outbox.js';
 import { TemplateService } from '../templates/template.service.js';
 import { validateChainPayload } from '../templates/payload-validator.js';
+import {
+  focusFromDb,
+  normalizeCreateAppearance,
+  normalizeUpdateAppearance,
+} from './chain-appearance.js';
+import {
+  bindChainMedia,
+  cleanupBoundMedia,
+  rollbackBoundMedia,
+  type ChainMediaBinding,
+} from './chain-media.js';
 
-function isChainColor(v: string | null): v is ChainColor {
-  return v !== null && (CHAIN_COLORS as readonly string[]).includes(v);
-}
-
-function isChainIcon(v: string | null): v is ChainIcon {
-  return v !== null && (CHAIN_ICONS as readonly string[]).includes(v);
+/** 读取防御：color 列只接受预设色或 #RRGGBB（历史异常值 → null，由客户端哈希回退）。 */
+function asAppearanceColor(v: string | null): ChainAppearanceColor | null {
+  if (v === null) return null;
+  const parsed = chainAppearanceColorSchema.safeParse(v);
+  return parsed.success ? parsed.data : null;
 }
 
 @Service()
 export class ChainService {
   constructor(private policy: ChainPolicy, private templates: TemplateService) {}
 
-  /** 创建链：同事务把创建者写为 owner 成员（spec §3 事务边界）。 */
+  /** 创建链：同事务完成媒体绑定（锁/copy）+ 插链 + 把创建者写为 owner 成员（spec §3 事务边界）。 */
   async create(userId: string, input: CreateChainInput): Promise<ChainDto> {
     // 模板必须存在且 active（archived 阻止新建链选用，spec §3.4）；payload 按 chainPayloadSchema 校验
     const template = await this.templates.getActiveByKey(input.template);
     const payload = validateChainPayload(template.manifest, input.payload ?? null);
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.insert(chains).values({
-        id,
-        name: input.name,
-        description: input.description ?? null,
-        visibility: input.visibility,
-        color: input.color ?? null,
-        icon: input.icon ?? null,
-        ownerId: userId,
-        template: input.template,
-        payload,
+    const appearance = normalizeCreateAppearance(id, input);
+    // binding 由调用方持有、bindChainMedia 逐步累积：中途失败也能补偿已 copy 的 final
+    const binding: ChainMediaBinding = { copies: [], replacedIds: [] };
+    try {
+      await db.transaction(async (tx) => {
+        await bindChainMedia(tx, { chainId: id, userId, current: null, patch: appearance, binding });
+        await tx.insert(chains).values({
+          id,
+          name: input.name,
+          description: input.description ?? null,
+          visibility: input.visibility,
+          ...appearance,
+          ownerId: userId,
+          template: input.template,
+          payload,
+        });
+        // 新链置顶（spec §4）：min-1；首条链（无现存 membership）取 1
+        const sortOrder = await this.nextTopSortOrder(tx, userId);
+        await tx.insert(chainMembers).values({ chainId: id, userId, role: 'owner', sortOrder });
       });
-      // 新链置顶（spec §4）：min-1；首条链（无现存 membership）取 1
-      const sortOrder = await this.nextTopSortOrder(tx, userId);
-      await tx.insert(chainMembers).values({ chainId: id, userId, role: 'owner', sortOrder });
-    });
+    } catch (err) {
+      // 事务回滚：删除本次 copy 出的 final 对象（原 media 行仍指向 tmp，可重试）
+      await rollbackBoundMedia(binding);
+      throw err;
+    }
+    // 提交成功后才删 tmp：事务内先删再回滚会让 ready 媒体永久丢失
+    await cleanupBoundMedia(binding);
     return this.getById(userId, id);
   }
 
@@ -88,39 +107,71 @@ export class ChainService {
     return { ...dto, templateManifest: template.manifest };
   }
 
-  /** owner 改链设置（coverMediaId 属 Phase 3，本阶段不可改）。 */
+  /** owner 改链设置：事务内锁 chain 行与待绑定 media，归一化外观 patch 后一次性写入。 */
   async update(userId: string, chainId: string, input: UpdateChainInput): Promise<ChainDto> {
     await this.policy.require(userId, chainId, 'owner');
-    const [current] = await db.select().from(chains).where(eq(chains.id, chainId)).limit(1);
-    if (!current) throw new NotFoundError('CHAIN_NOT_FOUND'); // policy 已保证存在，防御性兜底
-    // payload 显式出现在输入里才校验/写入（undefined = 不动；null = 清空，validateChainPayload 放行 null）
-    let payloadSet: { payload?: Record<string, unknown> | null } = {};
-    if (input.payload !== undefined) {
-      const template = await this.templates.getByKey(current.template);
-      payloadSet = { payload: validateChainPayload(template.manifest, input.payload) };
+    const binding: ChainMediaBinding = { copies: [], replacedIds: [] };
+    try {
+      await db.transaction(async (tx) => {
+        const [current] = await tx
+          .select()
+          .from(chains)
+          .where(eq(chains.id, chainId))
+          .limit(1)
+          .for('update');
+        if (!current) throw new NotFoundError('CHAIN_NOT_FOUND'); // policy 已保证存在，防御性兜底
+        // payload 显式出现在输入里才校验/写入（undefined = 不动；null = 清空，validateChainPayload 放行 null）
+        let payloadSet: { payload?: Record<string, unknown> | null } = {};
+        if (input.payload !== undefined) {
+          const template = await this.templates.getByKey(current.template);
+          payloadSet = { payload: validateChainPayload(template.manifest, input.payload) };
+        }
+        const appearance = normalizeUpdateAppearance(chainId, current, input);
+        if (Object.keys(appearance).length > 0) {
+          // 锁/copy 媒体、写外观 patch、旧媒体标 orphaned（顺序见 chain-media.ts）
+          await bindChainMedia(tx, { chainId, userId, current, patch: appearance, binding });
+        }
+        const rest = {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
+          ...payloadSet,
+        };
+        await tx
+          .update(chains)
+          .set({ ...rest, updatedAt: new Date() })
+          .where(eq(chains.id, chainId));
+      });
+    } catch (err) {
+      await rollbackBoundMedia(binding);
+      throw err;
     }
-    await db
-      .update(chains)
-      .set({
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.description !== undefined ? { description: input.description } : {}),
-        ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
-        ...(input.color !== undefined ? { color: input.color } : {}),
-        ...(input.icon !== undefined ? { icon: input.icon } : {}),
-        ...payloadSet,
-        updatedAt: new Date(),
-      })
-      .where(eq(chains.id, chainId));
+    await cleanupBoundMedia(binding);
     return this.getById(userId, chainId);
   }
 
   /**
    * owner 删链：同事务硬删 reactions → comments → moment_tags → tags → media → moments → invites → members → chain。
    * comments/reactions 对 moments 为 ON DELETE no action，必须先于 moments 硬删，否则 MySQL 1451。
+   * 删 chain 前把 avatar/cover media 标 orphaned（写 orphanedAt，交 generic orphan sweeper 按保留期物理清理）。
    */
   async remove(userId: string, chainId: string): Promise<void> {
     await this.policy.require(userId, chainId, 'owner');
     await db.transaction(async (tx) => {
+      const [chain] = await tx
+        .select({ avatarMediaId: chains.avatarMediaId, coverMediaId: chains.coverMediaId })
+        .from(chains)
+        .where(eq(chains.id, chainId))
+        .limit(1);
+      const appearanceMediaIds = [chain?.avatarMediaId, chain?.coverMediaId].filter(
+        (id): id is string => typeof id === 'string',
+      );
+      if (appearanceMediaIds.length > 0) {
+        await tx
+          .update(media)
+          .set({ status: 'orphaned', orphanedAt: new Date() })
+          .where(inArray(media.id, appearanceMediaIds));
+      }
       const chainMomentIds = tx
         .select({ id: moments.id })
         .from(moments)
@@ -346,14 +397,27 @@ export class ChainService {
     chain: Chain,
     myRole: ChainRole | undefined,
     extras: { membersPreview: ChainMemberPreview[]; memberCount: number },
+    readyMedia: ReadonlySet<string>,
   ): ChainDto {
+    // 每个图片 placement 只在关联 media 存在且 ready 时返回成组的 mediaId/稳定 URL/focus；
+    // 关联缺失或非 ready 时三者全部 null（设计 §4.3），客户端按防御性优先级回退。
+    const avatarReady = chain.avatarMediaId !== null && readyMedia.has(chain.avatarMediaId);
+    const coverReady = chain.coverMediaId !== null && readyMedia.has(chain.coverMediaId);
+    // 读取防御性优先级 avatarMediaId > icon > color（设计 §3.1 历史异常数据）
+    const icon = avatarReady ? null : chain.icon;
+    const color = avatarReady || icon !== null ? null : asAppearanceColor(chain.color);
     return {
       id: chain.id,
       name: chain.name,
       description: chain.description,
-      coverMediaId: chain.coverMediaId,
-      color: isChainColor(chain.color) ? chain.color : null,
-      icon: isChainIcon(chain.icon) ? chain.icon : null,
+      avatarMediaId: avatarReady ? chain.avatarMediaId : null,
+      avatarUrl: avatarReady ? `/api/media/${chain.avatarMediaId}` : null,
+      avatarFocus: avatarReady ? focusFromDb(chain.avatarFocusX, chain.avatarFocusY) : null,
+      coverMediaId: coverReady ? chain.coverMediaId : null,
+      coverUrl: coverReady ? `/api/media/${chain.coverMediaId}` : null,
+      coverFocus: coverReady ? focusFromDb(chain.coverFocusX, chain.coverFocusY) : null,
+      color,
+      icon,
       visibility: chain.visibility,
       template: chain.template,
       payload: chain.payload,
@@ -369,6 +433,22 @@ export class ChainService {
   private async attachPreviews(items: { chain: Chain; role?: ChainRole }[]): Promise<ChainDto[]> {
     if (items.length === 0) return [];
     const chainIds = items.map((i) => i.chain.id);
+    // 批量收集全部 avatar/cover id，一次查询 ready media 集合（不逐链查 media）
+    const appearanceMediaIds = [
+      ...new Set(
+        items.flatMap((i) =>
+          [i.chain.avatarMediaId, i.chain.coverMediaId].filter((id): id is string => typeof id === 'string'),
+        ),
+      ),
+    ];
+    const readyMedia = new Set<string>();
+    if (appearanceMediaIds.length > 0) {
+      const readyRows = await db
+        .select({ id: media.id })
+        .from(media)
+        .where(and(inArray(media.id, appearanceMediaIds), eq(media.status, 'ready')));
+      for (const r of readyRows) readyMedia.add(r.id);
+    }
     const rows = await db
       .select({
         chainId: chainMembers.chainId,
@@ -414,7 +494,7 @@ export class ChainService {
           avatarUrl: avatarBy.get(p.userId) ?? null,
           role: p.role,
         })),
-      });
+      }, readyMedia);
     });
   }
 

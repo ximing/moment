@@ -55,6 +55,9 @@ export async function resetDb(): Promise<void> {
     await db.delete(momentTags);
     await db.delete(tags);
     await db.delete(outbox);
+    // chains→media 与 media→moments→chains 构成引用环：先显式断链再 delete(media)
+    // （不能只靠调整 delete 顺序；ON DELETE SET NULL 虽能兜底，显式断开才不受 FK 行为约束）
+    await db.update(chains).set({ avatarMediaId: null, coverMediaId: null });
     await db.delete(media);
     await db.delete(moments);
     await db.delete(chainInvites);

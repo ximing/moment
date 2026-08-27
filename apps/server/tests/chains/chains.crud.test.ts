@@ -2,6 +2,7 @@ import type { ChainDto } from '@moment/dto';
 import { and, eq } from 'drizzle-orm';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
+import { defaultChainColor } from '../../src/chains/chain-appearance.js';
 import { db } from '../../src/db/index.js';
 import { chainInvites, chainMembers } from '../../src/db/schema.js';
 import { auth, createUser, type TestUser } from '../helpers/auth.js';
@@ -35,7 +36,11 @@ describe('POST /api/chains', () => {
     expect(chain.ownerId).toBe(owner.id);
     expect(chain.myRole).toBe('owner');
     expect(chain.coverMediaId).toBeNull();
-    expect(chain.color).toBeNull();
+    expect(chain.avatarMediaId).toBeNull();
+    expect(chain.avatarUrl).toBeNull();
+    expect(chain.coverUrl).toBeNull();
+    // 无视觉输入：服务端按 id 哈希选定并持久化预设色（chain-appearance 设计 §3.1）
+    expect(chain.color).toBe(defaultChainColor(chain.id));
     expect(chain.icon).toBeNull();
 
     const members = await db.select().from(chainMembers).where(eq(chainMembers.chainId, chain.id));
@@ -44,14 +49,14 @@ describe('POST /api/chains', () => {
     expect(members[0].role).toBe('owner');
   });
 
-  it('201：可带预设色与图标', async () => {
+  it('201：旧 color+icon 组合按 Emoji 优先归一化（存 icon，清 color）', async () => {
     const res = await request(app)
       .post('/api/chains')
       .set('Authorization', auth(owner))
       .send({ name: '旅行', color: 'sky', icon: '✈️', template: 'daily' });
     expect(res.status).toBe(201);
-    expect(res.body.color).toBe('sky');
     expect(res.body.icon).toBe('✈️');
+    expect(res.body.color).toBeNull();
   });
 
   it('未登录 401；空 name 400 VALIDATION_ERROR', async () => {
@@ -120,21 +125,23 @@ describe('PATCH /api/chains/:chainId', () => {
     expect(res.body.visibility).toBe('link');
     expect(res.body.description).toBeNull();
 
+    // 旧 color+icon 组合按 Emoji 优先归一化：存 icon，清 color
     const look = await request(app)
       .patch(`/api/chains/${chain.id}`)
       .set('Authorization', auth(owner))
       .send({ color: 'mint', icon: '👶' });
     expect(look.status).toBe(200);
-    expect(look.body.color).toBe('mint');
     expect(look.body.icon).toBe('👶');
+    expect(look.body.color).toBeNull();
 
+    // 清空当前模式字段（icon）且无新模式 → 回退到服务端选定的持久化默认纯色
     const clearIcon = await request(app)
       .patch(`/api/chains/${chain.id}`)
       .set('Authorization', auth(owner))
       .send({ icon: null });
     expect(clearIcon.status).toBe(200);
     expect(clearIcon.body.icon).toBeNull();
-    expect(clearIcon.body.color).toBe('mint');
+    expect(clearIcon.body.color).toBe(defaultChainColor(chain.id));
 
     const forbidden = await request(app)
       .patch(`/api/chains/${chain.id}`)

@@ -1,8 +1,9 @@
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
-import { media, moments } from '../../src/db/schema.js';
+import { chains, media, moments } from '../../src/db/schema.js';
 import { createUser } from '../helpers/auth.js';
 import { createChainWithMembers } from '../helpers/chain.js';
 import { closeDb, resetDb } from '../helpers/db.js';
@@ -146,5 +147,46 @@ describe('GET /api/media/:id', () => {
     const mediaId = await insertReadyMedia({ uploaderId: alice.id, momentId: null });
     const res = await request(app).get(`/api/media/${mediaId}`);
     expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /api/media/:id — 链头像/封面引用', () => {
+  it('链头像：viewer 成员 → 302；非成员 → 404；非成员 uploader 本人也 → 404（链引用优先）', async () => {
+    const chainId = await createChainWithMembers(alice.id, [{ userId: bob.id, role: 'viewer' }]);
+    const mediaId = await insertReadyMedia({ uploaderId: carol.id, momentId: null });
+    await db.update(chains).set({ avatarMediaId: mediaId }).where(eq(chains.id, chainId));
+
+    const member = await request(app)
+      .get(`/api/media/${mediaId}`)
+      .set('Authorization', `Bearer ${bob.token}`);
+    expect(member.status).toBe(302);
+    expect(member.headers.location).toBe('https://fake.local/presigned-get');
+
+    // uploader 本人（carol）不是链成员 → 链引用优先，404
+    const uploader = await request(app)
+      .get(`/api/media/${mediaId}`)
+      .set('Authorization', `Bearer ${carol.token}`);
+    expect(uploader.status).toBe(404);
+  });
+
+  it('链封面：链成员 → 302；未被任何链引用的未绑定 media 仍只允许 uploader', async () => {
+    const chainId = await createChainWithMembers(alice.id, [{ userId: bob.id, role: 'viewer' }]);
+    const coverId = await insertReadyMedia({ uploaderId: alice.id, momentId: null });
+    await db.update(chains).set({ coverMediaId: coverId }).where(eq(chains.id, chainId));
+
+    const member = await request(app)
+      .get(`/api/media/${coverId}`)
+      .set('Authorization', `Bearer ${bob.token}`);
+    expect(member.status).toBe(302);
+
+    const unbound = await insertReadyMedia({ uploaderId: alice.id, momentId: null });
+    const own = await request(app)
+      .get(`/api/media/${unbound}`)
+      .set('Authorization', `Bearer ${alice.token}`);
+    expect(own.status).toBe(302);
+    const other = await request(app)
+      .get(`/api/media/${unbound}`)
+      .set('Authorization', `Bearer ${bob.token}`);
+    expect(other.status).toBe(404);
   });
 });

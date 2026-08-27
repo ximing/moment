@@ -262,7 +262,9 @@ export class MediaService {
    * 鉴权后返回预签名 GET URL（302 目标）：
    * - st !== undefined：share token 透传路径（spec §5.3），忽略登录态；
    * - 无 st：登录 + 成员/uploader 校验（Phase 3 原语义）；
-   * - 已绑定 moment：moment 未软删时校验所属链 viewer；未绑定：仅 uploader 本人。
+   * - 已绑定 moment：moment 未软删时校验所属链 viewer；未绑定 moment：
+   *   被链 avatar/cover 引用 → 该校验链 viewer（chain-appearance 设计 §4.4）；
+   *   未被任何业务资源引用 → 仅 uploader 本人临时预览。
    */
   async resolveAccessUrl(user: UserProfile | null, mediaId: string, st?: string): Promise<string> {
     const [row] = await db.select().from(media).where(eq(media.id, mediaId)).limit(1);
@@ -280,8 +282,17 @@ export class MediaService {
           .limit(1);
         if (!m || m.deletedAt) throw new NotFoundError('MEDIA_NOT_FOUND');
         await this.policy.require(user.id, m.chainId, 'viewer');
-      } else if (row.uploaderId !== user.id) {
-        throw new NotFoundError('MEDIA_NOT_FOUND');
+      } else {
+        const [boundChain] = await db
+          .select({ id: chains.id })
+          .from(chains)
+          .where(or(eq(chains.avatarMediaId, row.id), eq(chains.coverMediaId, row.id)))
+          .limit(1);
+        if (boundChain) {
+          await this.policy.require(user.id, boundChain.id, 'viewer');
+        } else if (row.uploaderId !== user.id) {
+          throw new NotFoundError('MEDIA_NOT_FOUND');
+        }
       }
     }
 
