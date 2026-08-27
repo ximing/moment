@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -14,9 +15,43 @@ const reactRoot = path.resolve(__dirname, './node_modules/react');
 const reactDomRoot = path.dirname(
   createRequire(import.meta.url).resolve('react-dom/package.json'),
 );
+// emojibase-data 在 hoisted 布局下落在根 node_modules，不在 apps/web/node_modules；
+// 用 createRequire 解析真实安装路径，再转回相对路径——vite-plugin-static-copy 会把
+// 绝对 src 的目录结构镜像进 dest（path.join(absolute) 会产出 vendor/emojibase/zh/node_modules/...）。
+const emojibaseRoot = path.relative(
+  __dirname,
+  path.dirname(createRequire(import.meta.url).resolve('emojibase-data/package.json')),
+);
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // 离线 Emoji 数据（spec §7.2）：Emojibase 中文数据与许可证随构建产物同源部署，
+    // frimousse 运行时只请求 /vendor/emojibase/**，不触碰公共 CDN。
+    viteStaticCopy({
+      // 插件永远保留 src 的目录前缀（README：Directory structure is always preserved）；
+      // hoisted 布局下 src 相对根含 ../../node_modules/...，落盘会出现
+      // vendor/.../node_modules/emojibase-data/... 嵌套。rename.stripBase 按段剥掉
+      // 目录前缀（dirClean 已去掉 ../ 段，只剩 node_modules/emojibase-data[/zh]）。
+      targets: [
+        {
+          src: path.join(emojibaseRoot, 'zh/data.json'),
+          dest: 'vendor/emojibase/zh',
+          rename: { stripBase: 3 },
+        },
+        {
+          src: path.join(emojibaseRoot, 'zh/messages.json'),
+          dest: 'vendor/emojibase/zh',
+          rename: { stripBase: 3 },
+        },
+        {
+          src: path.join(emojibaseRoot, 'LICENSE'),
+          dest: 'vendor/emojibase',
+          rename: { stripBase: 2 },
+        },
+      ],
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
