@@ -33,15 +33,11 @@ function frameClassName(className?: string): string {
   return className ? `${base} ${className}` : base;
 }
 
-function useBrokenGuard(): [boolean, (onError?: () => void) => void] {
-  const [broken, setBroken] = useState(false);
-  return [
-    broken,
-    (onError) => {
-      setBroken(true);
-      onError?.();
-    },
-  ];
+/** 当次回退守卫（与 ChainMark brokenSrc 同语义）：记失败的 URL；URL 变化自然重置，
+ *  裸 boolean 会把换链/换封面后的新图一并误伤。 */
+function useFailedUrl(): [string | null, (url: string) => void] {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  return [failedUrl, setFailedUrl];
 }
 
 /** 登录版封面：mediaId 经认证 blob 通道；URL 未就绪时只有 token 容器。 */
@@ -57,11 +53,20 @@ export function ChainCover({
   className?: string;
 }) {
   const url = useMediaObjectUrl(mediaId);
-  const [broken, markBroken] = useBrokenGuard();
-  if (broken) return null;
+  const [failedUrl, markFailed] = useFailedUrl();
+  if (url !== null && failedUrl === url) return null;
   return (
     <div aria-hidden className={frameClassName(className)}>
-      {url !== null && <CoverImage src={url} focus={focus} onError={() => markBroken(onError)} />}
+      {url !== null && (
+        <CoverImage
+          src={url}
+          focus={focus}
+          onError={() => {
+            markFailed(url);
+            onError?.();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -80,11 +85,19 @@ export function PublicChainCover({
   onError?: () => void;
   className?: string;
 }) {
-  const [broken, markBroken] = useBrokenGuard();
-  if (broken) return null;
+  const url = `${src}?st=${encodeURIComponent(shareToken)}`;
+  const [failedUrl, markFailed] = useFailedUrl();
+  if (failedUrl === url) return null;
   return (
     <div aria-hidden className={frameClassName(className)}>
-      <CoverImage src={`${src}?st=${encodeURIComponent(shareToken)}`} focus={focus} onError={() => markBroken(onError)} />
+      <CoverImage
+        src={url}
+        focus={focus}
+        onError={() => {
+          markFailed(url);
+          onError?.();
+        }}
+      />
     </div>
   );
 }

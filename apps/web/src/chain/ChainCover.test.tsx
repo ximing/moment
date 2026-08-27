@@ -47,6 +47,22 @@ describe('ChainCover（登录版）', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(container.querySelector('img')).toBeNull();
   });
+
+  it('onError 后 mediaId 变化重置回退态，新封面正常渲染（与 ChainMark brokenSrc 同语义）', () => {
+    const onError = vi.fn();
+    const { container, rerender } = render(<ChainCover mediaId="cover-a" focus={null} onError={onError} />);
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+
+    // 换链/换封面：新的 src 不受旧失败态影响
+    rerender(<ChainCover mediaId="cover-b" focus={null} onError={onError} />);
+    expect(container.querySelector('img')).toHaveAttribute('src', 'blob:mock-cover-b');
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    // 回到已失败的 src 仍当次回退（记的是坏 URL，不是永久开关）
+    rerender(<ChainCover mediaId="cover-a" focus={null} onError={onError} />);
+    expect(container.querySelector('img')).toBeNull();
+  });
 });
 
 describe('PublicChainCover（公开分享版）', () => {
@@ -68,6 +84,23 @@ describe('PublicChainCover（公开分享版）', () => {
     );
     fireEvent.error(container.querySelector('img')!);
     expect(onError).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('onError 后 src 变化重置回退态，新封面正常渲染', () => {
+    const onError = vi.fn();
+    const { container, rerender } = render(
+      <PublicChainCover src="/api/media/cover-a" shareToken="tok" focus={null} onError={onError} />,
+    );
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+
+    rerender(<PublicChainCover src="/api/media/cover-b" shareToken="tok" focus={null} onError={onError} />);
+    expect(container.querySelector('img')).toHaveAttribute('src', '/api/media/cover-b?st=tok');
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    // 回到已失败的 src 仍当次回退
+    rerender(<PublicChainCover src="/api/media/cover-a" shareToken="tok" focus={null} onError={onError} />);
     expect(container.querySelector('img')).toBeNull();
   });
 });
