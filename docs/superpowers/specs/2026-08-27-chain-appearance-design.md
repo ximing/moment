@@ -103,7 +103,8 @@ schema 迁移使用 `drizzle-kit generate`，生成后、首次执行前追加�
 
 ```ts
 type ChainPresetColor = (typeof CHAIN_COLORS)[number];
-type ChainColor = ChainPresetColor | `#${string}`;
+type ChainColor = ChainPresetColor; // 保持用户头像等既有消费方只接受预设色
+type ChainAppearanceColor = ChainPresetColor | `#${string}`;
 
 interface ChainImageFocus {
   x: number; // 0..1
@@ -111,7 +112,7 @@ interface ChainImageFocus {
 }
 ```
 
-- 颜色 schema 接受现有预设名或严格 `#RRGGBB`，服务端将 hex 规范化为大写。
+- 新增 `chainAppearanceColorSchema`，接受现有预设名或严格 `#RRGGBB`，服务端将 hex 规范化为大写；既有 `chainColorSchema/ChainColor` 保持预设色语义，避免无意扩大用户头像协议。
 - `CHAIN_ICONS` 保留并更名/别名为推荐列表，避免旧消费方断裂；实际 `ChainIcon` 变为字符串。
 - Emoji schema 使用 Unicode Emoji 正则，要求输入恰好是一个完整 Emoji 序列，允许肤色修饰、旗帜和 ZWJ 家庭等组合，拒绝普通文本和多个 Emoji。
 - 焦点 schema 的 x/y 均为有限数且在闭区间 `[0, 1]`。
@@ -121,7 +122,7 @@ interface ChainImageFocus {
 create/update 保持平铺字段以兼容现有客户端：
 
 ```ts
-color?: ChainColor | null;
+color?: ChainAppearanceColor | null;
 icon?: string | null;
 avatarMediaId?: string | null;
 avatarFocus?: ChainImageFocus;
@@ -131,7 +132,8 @@ coverFocus?: ChainImageFocus;
 
 规则：
 
-- 同一请求中 `color`、非空 `icon`、非空 `avatarMediaId` 最多出现一个；多个非空选择器返回 `VALIDATION_ERROR`。
+- `avatarMediaId` 与非空 `color/icon` 混传属于新协议歧义，返回 `VALIDATION_ERROR`。
+- 为兼容部署窗口中的旧 Web/RN 客户端，`color + icon` 组合请求继续接受，但按 Emoji 优先归一化：存 `icon`、清空 `color`。新 Web UI 不再产生这种组合。
 - update 传入其中一个非空选择器即切换到该模式，服务端清空另外两个字段。
 - 将当前模式字段显式传 null 且没有给出新模式时，回退到服务端选定并持久化的默认纯色。
 - `avatarFocus` 可与新 `avatarMediaId` 一起提交，也可单独调整当前图片；当前不是图片模式时单独传焦点返回 `CHAIN_AVATAR_FOCUS_INVALID`。
@@ -146,20 +148,28 @@ coverFocus?: ChainImageFocus;
 ```ts
 avatarMediaId: string | null;
 avatarUrl: string | null;
-avatarExpiresAt: string | null;
 avatarFocus: ChainImageFocus | null;
 coverUrl: string | null;
-coverExpiresAt: string | null;
 coverFocus: ChainImageFocus | null;
 ```
 
-`coverMediaId`、`color`、`icon` 保留。只有关联 media 存在且为 ready 时才签发 URL；图片无效时 URL/focus 返回 null，Web 按防御性优先级回退。
+`coverMediaId`、`color`、`icon` 保留。只有关联 media 存在且为 ready 时才返回稳定 URL；图片无效时 URL/focus 返回 null，Web 按防御性优先级回退。
 
-链列表、链详情、创建与更新响应均重新签发短期 GET URL，并返回对应过期时间。签发使用 media 行自己的 `storageMeta`，兼容 MinIO/S3 配置切换。
+更严格地说，每个图片 placement 只有在关联 media 为 ready 时才返回成组的 `mediaId`、URL 和 focus；关联缺失或非 ready 时三者全部为 null，避免客户端保留一个不可展示、也不可安全复用的 id。
 
-`PublicShareChainInfo` 增加同样的只读视觉字段。匿名分享 API 只在 token 有效时签发该链头像/封面 URL；不允许通过任意 media id 探测其他链资源。
+链列表、链详情、创建与更新响应返回稳定相对入口 `/api/media/:id`，不在 DTO 内嵌预签名 URL。稳定入口在每次读取时按 media 行自己的 `storageMeta` 生成短期 S3/MinIO URL 并 302 跳转，符合全仓 media 序列化约定。
 
-### 4.4 丢弃未绑定媒体
+`PublicShareChainInfo` 增加同样的只读视觉字段。公开分享页像现有 Moment 媒体一样给稳定 URL 追加 `?st=<shareToken>`；media 入口验证 token 只允许读取该分享链的头像/封面，不允许通过任意 media id 探测其他链资源。
+
+### 4.4 稳定媒体入口鉴权
+
+`MediaService.resolveAccessUrl` 扩展未绑定 Moment 的分支：
+
+- 登录请求：若 media 被链的 `avatarMediaId` 或 `coverMediaId` 引用，要求当前用户是该链 viewer；若未被任何业务资源引用，仍只允许 uploader 本人预览临时上传。
+- 分享请求：有效 token 可以读取该 token 所属链的 Moment 媒体、头像和封面，其他链或未绑定临时媒体统一返回 404。
+- 用户头像继续沿用既有用户资料签发逻辑，不借此入口放宽读取权限。
+
+### 4.5 丢弃未绑定媒体
 
 新增：
 
@@ -262,7 +272,7 @@ Frimousse 只负责 picker 行为，样式使用 Moment 的 spacing、radius、s
 
 `ChainMark` 统一按 `image > emoji > color > id hash color` 渲染：
 
-- 图片使用签名 URL、`object-fit: cover` 和保存的 `object-position`。
+- 图片使用稳定 media URL、`object-fit: cover` 和保存的 `object-position`。
 - Emoji 模式使用统一的柔和 token 背景，不叠加自定义纯色。
 - 图片加载失败时回退到 id 哈希纯色，不显示破损图片图标。
 
@@ -270,12 +280,12 @@ Frimousse 只负责 picker 行为，样式使用 Moment 的 spacing、radius、s
 
 ## 8. 错误处理与并发
 
-- DTO schema 拒绝多模式、非法 Emoji、非法颜色、越界焦点和无效 UUID，返回统一 `VALIDATION_ERROR`。
+- DTO schema 拒绝图片与其他模式混传、非法 Emoji、非法颜色、越界焦点和无效 UUID，返回统一 `VALIDATION_ERROR`；旧 `color + icon` 组合由服务端按 Emoji 优先归一化。
 - 媒体过大、MIME 不允许、上传中断、对象 head 校验失败沿用现有 media 错误；Web 映射为就地错误和可重试动作。
 - 非 owner 修改继续使用链权限错误；媒体不存在或不属于本人不泄露存在性。
 - 两个请求并发绑定同一 media 时由行锁串行，后到请求得到 `MEDIA_ALREADY_BOUND`/`MEDIA_INVALID`，不能覆盖先到请求。
 - 保存请求在前端防重复点击，但服务端仍保证替换幂等和事务一致性。
-- 签名 URL 过期后通过下一次链列表/详情加载刷新；图片 `onError` 当次回退，不做无限重试。
+- media 稳定入口请求失败时，图片 `onError` 当次回退，不做无限重试；后续重新渲染会再次走服务端权限校验与短期签名跳转。
 - 公开分享 token 无效、过期或吊销时仍统一 `SHARE_NOT_FOUND`，不单独暴露封面或头像。
 
 ## 9. 测试与验收
@@ -284,7 +294,7 @@ Frimousse 只负责 picker 行为，样式使用 Moment 的 spacing、radius、s
 
 - 预设色与 `#RRGGBB` 正常；短 hex、透明色、CSS 表达式拒绝。
 - 单 Emoji、肤色、旗帜、ZWJ 家庭正常；文本、空串、多个 Emoji 拒绝。
-- 三模式互斥、focus 边界、focus 与 media 组合规则。
+- 图片模式互斥、旧 `color + icon` 兼容、focus 边界及 focus 与 media 组合规则。
 - `ChainDto` 与 `PublicShareChainInfo` 新字段类型对齐。
 
 ### 9.2 Server
@@ -294,7 +304,7 @@ Frimousse 只负责 picker 行为，样式使用 Moment 的 spacing、radius、s
 - media uploader/status/MIME/未绑定/重复 id 校验。
 - 新绑定、同 id 幂等更新焦点、替换旧资源、删除资源。
 - copy 失败、事务回滚和 post-commit tmp 删除失败的状态与补偿。
-- 列表/详情/公开分享正确签发 URL，失效 share token 不签发。
+- 列表/详情返回稳定 media URL；登录成员和公开分享 token 只能经 media 入口访问对应链资源。
 - discard 端点不能删除用户头像、Moment 媒体或任意链的活资源。
 - stale ready 与 orphaned sweeper 的 cutoff、引用保护、dry-run、对象删除失败重试。
 - 迁移回填后历史链展示优先级和旧 orphaned 数据正确。
@@ -324,7 +334,7 @@ server 测试遵循真实测试库与 `--runInBand` 约束；迁移验证先使�
 
 ## 10. 安全与运维边界
 
-- 客户端只持有预签名 PUT/GET，不接触 S3/MinIO 密钥。
+- 客户端上传只持有预签名 PUT，读取只使用稳定 media 入口并跟随短期 GET 签名跳转，不接触 S3/MinIO 密钥。
 - 服务端不接受客户端提供的 object key、bucket 或任意图片 URL，只接受 mediaId。
 - SVG 不进入允许的头像/封面 MIME 列表，避免浏览器主动内容风险；沿用受控的 raster image allowlist。
 - 所有链资源读取都来自已通过链成员或 share token 校验的 DTO 序列化路径。
