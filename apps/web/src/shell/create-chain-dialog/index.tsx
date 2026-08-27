@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { ChainLookPicker } from '@/chain/ChainLookPicker';
+import { ChainAppearanceEditor, type ChainAppearanceActions } from '@/chain/ChainAppearanceEditor';
 import { humanError } from '@/lib/errors';
 // 必须显式指向 barrel：src/ui/ 下遗留 Button.tsx / Field.tsx / Banner.tsx
 // 会截获裸目录导入（见 ui/menu/index.ts 注释）
@@ -21,7 +21,21 @@ const CreateChainDialogContent = observer(function CreateChainDialogContent({ on
     void service.loadTemplates().catch(() => undefined); // 失败静默：选择器不渲染，默认 daily
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载时一次性加载
   }, []);
+  // 关闭/卸载：回收未持久化的 temp 上传（abort 在途 + best-effort DELETE）；
+  // submit 成功路径已先标 persisted，这里不会误删已绑定媒体
+  useEffect(() => () => service.disposeAppearanceDraft(), [service]);
   const submitting = service.$model.submit.loading;
+
+  // 外观编辑器是纯受控组件：draft 只读，所有变更经 action 回调进 service（组件不碰 client）
+  const appearanceActions: ChainAppearanceActions = {
+    onSetAvatarMode: (mode) => service.setAvatarMode(mode),
+    onSelectEmoji: (emoji) => service.selectEmoji(emoji),
+    onSelectColor: (color) => service.selectColor(color),
+    onPickImage: (placement, file) => service.selectAppearanceImage(placement, file),
+    onRemoveImage: (placement) => service.discardAppearanceImage(placement),
+    onRetryImage: (placement) => service.retryAppearanceImage(placement),
+    onSetFocus: (placement, focus) => service.setAppearanceFocus(placement, focus),
+  };
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -51,7 +65,7 @@ const CreateChainDialogContent = observer(function CreateChainDialogContent({ on
           <Button variant="quiet" disabled={submitting} onClick={onClose}>
             取消
           </Button>
-          <Button type="submit" form={FORM_ID} loading={submitting}>
+          <Button type="submit" form={FORM_ID} loading={submitting} disabled={!service.canSubmit}>
             创建
           </Button>
         </>
@@ -88,12 +102,7 @@ const CreateChainDialogContent = observer(function CreateChainDialogContent({ on
         <Field label="一句话（可选）">
           <Textarea value={service.description} onChange={(e) => (service.description = e.target.value)} />
         </Field>
-        <ChainLookPicker
-          color={service.color}
-          icon={service.icon}
-          onColor={(c) => (service.color = c)}
-          onIcon={(i) => (service.icon = i)}
-        />
+        <ChainAppearanceEditor draft={service.appearance} actions={appearanceActions} />
         {error && <Banner tone="error">{error}</Banner>}
         {service.$model.submit.error && <Banner tone="error">{humanError(service.$model.submit.error)}</Banner>}
       </form>

@@ -1,5 +1,5 @@
 import { Service } from '@rabjs/react';
-import type { ChainColor, ChainDto, ChainIcon, ShareLinkDto } from '@moment/dto';
+import type { ChainAppearanceColor, ChainDto, ChainIcon, ShareLinkDto } from '@moment/dto';
 import { client } from '../../lib/api';
 import type { ChainChangedPayload } from '../../lib/events';
 
@@ -12,10 +12,12 @@ export class ChainSettingsService extends Service {
   invites: Awaited<ReturnType<typeof client.listInvites>> = [];
   shareLinks: ShareLinkDto[] = [];
 
-  // 资料表单（name/description/color/icon；无封面——服务端 updateChain 不支持）
+  // 资料表单（name/description/color/icon；RN 不加图片/封面编辑——spec §1 非目标）
   formName = '';
   formDescription = '';
-  formColor: ChainColor = 'coral';
+  // 链外观色（chain-appearance DTO）：ChainDto.color 已放宽为预设色或 #RRGGBB；
+  // 只放宽链表单这一处，用户头像的 ChainColor 语义不动
+  formColor: ChainAppearanceColor = 'coral';
   formIcon: ChainIcon | null = null;
   formHydrated = false;
 
@@ -79,6 +81,17 @@ export class ChainSettingsService extends Service {
   async loadShareLinks(): Promise<void> {
     if (this.chain?.myRole !== 'owner') return;
     this.shareLinks = (await client.listShareLinks(this.chainId)).items;
+  }
+
+  /** 选颜色：同时清 Emoji——新协议三模式互斥，显式表达「纯色」而不是把决定权推给服务端归一化。 */
+  selectFormColor(color: ChainAppearanceColor): void {
+    this.formColor = color;
+    this.formIcon = null;
+  }
+
+  /** 选 Emoji：保留已选颜色，save 时服务端按 Emoji 优先归一化（§4.2 旧客户端兼容路径）。 */
+  selectFormIcon(icon: ChainIcon): void {
+    this.formIcon = icon;
   }
 
   async saveProfile(): Promise<void> {

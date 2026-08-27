@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { observer, useService } from '@rabjs/react';
 import { MoreHorizontal, X } from 'lucide-react';
-import type { ChainColor, ChainIcon, ShareLinkDto } from '@moment/dto';
+import type { ShareLinkDto } from '@moment/dto';
 import { AuthService } from '@/services/auth.service';
-import { ChainLookPicker } from '@/chain/ChainLookPicker';
+import { ChainAppearanceEditor, type ChainAppearanceActions } from '@/chain/ChainAppearanceEditor';
 import { humanError } from '@/lib/errors';
 import { canInvite, isOwner, roleLabel } from '@/lib/roles';
 import { Avatar } from '@/ui/Avatar';
@@ -354,6 +354,17 @@ const ProfileSection = observer(function ProfileSection() {
   const toast = useToast();
   const error = service.$model.saveProfile.error ?? service.$model.addTag.error ?? service.$model.deleteTag.error;
 
+  // 外观编辑器是纯受控组件：draft 只读，所有变更经 action 回调进 service（组件不碰 client）
+  const appearanceActions: ChainAppearanceActions = {
+    onSetAvatarMode: (mode) => service.setAvatarMode(mode),
+    onSelectEmoji: (emoji) => service.selectEmoji(emoji),
+    onSelectColor: (color) => service.selectColor(color),
+    onPickImage: (placement, file) => service.selectAppearanceImage(placement, file),
+    onRemoveImage: (placement) => service.discardAppearanceImage(placement),
+    onRetryImage: (placement) => service.retryAppearanceImage(placement),
+    onSetFocus: (placement, focus) => service.setAppearanceFocus(placement, focus),
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-medium">资料</h2>
@@ -363,15 +374,11 @@ const ProfileSection = observer(function ProfileSection() {
       <Field label="简介">
         <Textarea value={service.formDescription} onChange={(e) => (service.formDescription = e.target.value)} />
       </Field>
-      <ChainLookPicker
-        color={service.formColor}
-        icon={service.formIcon}
-        onColor={(c: ChainColor) => (service.formColor = c)}
-        onIcon={(i: ChainIcon | null) => (service.formIcon = i)}
-      />
+      <ChainAppearanceEditor draft={service.appearance} actions={appearanceActions} />
       {error && <Banner tone="error">{humanError(error)}</Banner>}
       <div>
         <Button
+          disabled={!service.canSave}
           loading={service.$model.saveProfile.loading}
           onClick={() =>
             void service

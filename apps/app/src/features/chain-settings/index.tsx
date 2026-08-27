@@ -134,14 +134,15 @@ const Content = observer(function Content() {
           <TextInput style={styles.input} value={service.formDescription} onChangeText={(v) => (service.formDescription = v)} placeholder="描述（可选）" placeholderTextColor={t.muted} multiline />
           <View style={styles.chipRow}>
             {CHAIN_COLORS.map((c) => (
-              <Pressable key={c} style={[styles.chip, service.formColor === c && styles.chipActive]} onPress={() => (service.formColor = c)}>
-                <Text style={[styles.chipText, service.formColor === c && styles.chipTextActive]}>{c}</Text>
+              // 选色同时清 Emoji（三模式互斥）；选 Emoji 保留颜色由服务端归一化
+              <Pressable key={c} style={[styles.chip, service.formColor === c && service.formIcon === null && styles.chipActive]} onPress={() => service.selectFormColor(c)}>
+                <Text style={[styles.chipText, service.formColor === c && service.formIcon === null && styles.chipTextActive]}>{c}</Text>
               </Pressable>
             ))}
           </View>
           <View style={styles.chipRow}>
             {CHAIN_ICONS.map((i) => (
-              <Pressable key={i} style={[styles.chip, service.formIcon === i && styles.chipActive]} onPress={() => (service.formIcon = i)}>
+              <Pressable key={i} style={[styles.chip, service.formIcon === i && styles.chipActive]} onPress={() => service.selectFormIcon(i)}>
                 <Text style={styles.chipText}>{i}</Text>
               </Pressable>
             ))}

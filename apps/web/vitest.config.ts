@@ -48,6 +48,10 @@ export default defineConfig({
     // react-router@7 同理：node_modules/react-router/node_modules/react@19.2.8
     // 与 apps/web 的 react 同版本但不同物理路径，externalize 时其内部
     // react 命中该嵌套副本 → 真实 App 首帧 useRef 读 null dispatcher。
+    // frimousse 同理（chain-appearance Task 8，controller 拍板）：pnpm 为 peer
+    // 解析放了 node_modules/frimousse/node_modules/react 物理副本，真实
+    // EmojiPicker.Root 挂载即 Invalid hook call；纳入同一预打包机制后
+    // 真实面板可在 jsdom 渲染（见 EmojiPickerPanel.test.tsx smoke）。
     deps: {
       optimizer: {
         client: {
@@ -58,6 +62,7 @@ export default defineConfig({
             '@testing-library/react',
             'react-aria-components',
             'react-router',
+            'frimousse',
           ],
         },
       },

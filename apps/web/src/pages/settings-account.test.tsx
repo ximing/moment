@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { RSRoot, register, resolve } from '@rabjs/react';
 import type { ChainDto, ChainMemberDto, NotificationDto, ShareLinkDto, UserProfile } from '@moment/dto';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { appearanceDraftFromChain } from '@/chain/appearance-model';
 import { AuthService } from '@/services/auth.service';
 import { NotificationService } from '@/services/notification.service';
 import { ThemeService } from '@/services/theme.service';
@@ -95,7 +96,12 @@ const CHAIN_BASE: Omit<ChainDto, 'myRole'> = {
   id: 'chain-1',
   name: '周末小家',
   description: '一起记录平凡日子',
+  avatarMediaId: null,
+  avatarUrl: null,
+  avatarFocus: null,
   coverMediaId: null,
+  coverUrl: null,
+  coverFocus: null,
   color: 'coral',
   icon: null,
   visibility: 'private',
@@ -154,6 +160,11 @@ function seedChainSettings(chain: ChainDto) {
   service.revokeLinkId = null;
   service.transferId = null;
   service.transferName = '';
+  // 资料表单与外观草稿按 loadChain 首载语义播种（保存闸 canSave 需要 name 非空）
+  service.formName = chain.name;
+  service.formDescription = chain.description ?? '';
+  service.formHydrated = true;
+  service.appearance = appearanceDraftFromChain(chain);
 }
 
 function renderChainSettings() {
