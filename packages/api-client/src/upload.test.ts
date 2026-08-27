@@ -11,6 +11,7 @@ interface Recorded {
 
 function makeClient(opts: {
   presignBody: Record<string, unknown>;
+  presignStatus?: number;
   onPut?: (url: string, partIndex: number) => { etag: string | null };
 }) {
   const calls: Recorded[] = [];
@@ -39,7 +40,7 @@ function makeClient(opts: {
         body: init?.body ? JSON.parse(init.body as string) : undefined,
       });
       if (u === '/api/media/presign') {
-        return Response.json(opts.presignBody, { status: 201 });
+        return Response.json(opts.presignBody, { status: opts.presignStatus ?? 201 });
       }
       if (u.endsWith('/parts')) {
         const { partNumbers } = calls[calls.length - 1]!.body as { partNumbers: number[] };
@@ -80,6 +81,78 @@ test('图片：presign(put) → 单次 PUT → complete(parts=[])；onProgress �
   ]);
   assert.deepEqual(calls[1]!.body, { parts: [] });
   assert.deepEqual(progress.at(-1), [blob.size, blob.size]);
+});
+
+test('onMediaId：单 PUT 形态，presign 成功后、首次 PUT 前恰好回调一次', async () => {
+  const seen: string[] = [];
+  const { client, putUrls } = makeClient({
+    presignBody: { mediaId: 'md1', method: 'put', url: 'https://s3/put', uploadId: null, partSize: null },
+  });
+  const blob = new Blob(['hello image']);
+  await client.uploadMedia({
+    file: blob,
+    mime: 'image/jpeg',
+    size: blob.size,
+    kind: 'image',
+    onMediaId: (mediaId) => {
+      assert.equal(putUrls.length, 0); // 回调时首次 PUT 尚未开始
+      seen.push(mediaId);
+    },
+  });
+  assert.deepEqual(seen, ['md1']);
+});
+
+test('onMediaId：multipart 形态，同样在首个 part PUT 前恰好回调一次', async () => {
+  const seen: string[] = [];
+  const { client, putUrls } = makeClient({
+    presignBody: { mediaId: 'md1', method: 'multipart', url: null, uploadId: 'up-1', partSize: VIDEO_PART_SIZE },
+  });
+  await client.uploadMedia({
+    file: new Blob(['v']),
+    mime: 'video/mp4',
+    size: VIDEO_PART_SIZE,
+    kind: 'video',
+    onMediaId: (mediaId) => {
+      assert.equal(putUrls.length, 0); // 回调时首个 part PUT 尚未开始
+      seen.push(mediaId);
+    },
+  });
+  assert.deepEqual(seen, ['md1']);
+});
+
+test('onMediaId：上传失败时已收到 id（供调用方 discard）', async () => {
+  const seen: string[] = [];
+  const { client } = makeClient({
+    presignBody: { mediaId: 'md1', method: 'put', url: 'https://s3/put', uploadId: null, partSize: null },
+    onPut: () => {
+      throw new ApiError('网络抖动', 0, 'NETWORK_ERROR');
+    },
+  });
+  await assert.rejects(() =>
+    client.uploadMedia({
+      file: new Blob(['x']),
+      mime: 'image/jpeg',
+      size: 1,
+      kind: 'image',
+      onMediaId: (mediaId) => seen.push(mediaId),
+    })
+  );
+  assert.deepEqual(seen, ['md1']);
+});
+
+test('onMediaId：presign 失败不回调', async () => {
+  const seen: string[] = [];
+  const { client } = makeClient({ presignBody: {}, presignStatus: 500 });
+  await assert.rejects(() =>
+    client.uploadMedia({
+      file: new Blob(['x']),
+      mime: 'image/jpeg',
+      size: 1,
+      kind: 'image',
+      onMediaId: (mediaId) => seen.push(mediaId),
+    })
+  );
+  assert.deepEqual(seen, []);
 });
 
 test('图片超 MAX_IMAGE_BYTES → 本地直接 413 MEDIA_TOO_LARGE，不发起任何请求', async () => {

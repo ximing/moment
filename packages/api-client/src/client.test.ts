@@ -157,6 +157,12 @@ test('media/comments/reactions/notifications/devices 路径', async () => {
   assert.deepEqual(calls[11]!.body, { expoToken: 'ExponentPushToken[x]', platform: 'ios' });
 });
 
+test('discardMedia：DELETE /api/media/:id', async () => {
+  const { client, calls } = harness();
+  await client.discardMedia('md1');
+  assert.deepEqual(calls.map((c) => `${c.method} ${c.url}`), ['DELETE http://x/api/media/md1']);
+});
+
 test('getFeed 空查询不带 query string', async () => {
   const { client, calls } = harness();
   await client.getFeed();

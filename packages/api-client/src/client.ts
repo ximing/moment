@@ -110,6 +110,8 @@ export interface MomentClient {
   presignMediaParts(mediaId: string, partNumbers: number[]): Promise<MediaPartsResponse>;
   completeMedia(mediaId: string, parts: { partNumber: number; etag: string }[]): Promise<MediaCompleteResponse>;
   abortMedia(mediaId: string): Promise<void>;
+  /** 204；回收 presign 后未完成/未引用的孤儿媒体（上传失败或用户放弃时由调用方触发） */
+  discardMedia(mediaId: string): Promise<void>;
   mediaUrl(mediaId: string): string;
   /** Web `<img>/<video>` 渲染的唯一来源：Blob → URL.createObjectURL（见 Global Constraints 媒体条目） */
   fetchMediaBlob(mediaId: string): Promise<Blob>;
@@ -226,6 +228,7 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
     completeMedia: (mediaId, parts) =>
       http.request(`/api/media/${mediaId}/complete`, { method: 'POST', body: { parts } }),
     abortMedia: (mediaId) => http.request(`/api/media/${mediaId}/abort`, { method: 'POST' }),
+    discardMedia: (mediaId) => http.request(`/api/media/${mediaId}`, { method: 'DELETE' }),
     mediaUrl: (mediaId) => `${baseUrl}/api/media/${mediaId}`,
     fetchMediaBlob: (mediaId) => http.requestBlob(`/api/media/${mediaId}`),
 

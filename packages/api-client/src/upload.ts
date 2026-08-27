@@ -17,6 +17,8 @@ export interface UploadMediaInput {
   sortOrder?: number;
   /** 已传字节 / 总字节。multipart 下 = 已完成 part 字节 + 当前 part 内进度 */
   onProgress?: (loaded: number, total: number) => void;
+  /** presign 成功后、首个 PUT 开始前恰好调用一次：上传失败/取消时调用方凭此 id 走 discardMedia 回收孤儿媒体 */
+  onMediaId?: (mediaId: string) => void;
   signal?: AbortSignal;
 }
 
@@ -54,6 +56,7 @@ export async function uploadMediaImpl(
       durationSeconds: input.durationSeconds,
     },
   });
+  input.onMediaId?.(presigned.mediaId);
 
   if (presigned.method === 'put') {
     const whole: Blob | FilePart = input.file
