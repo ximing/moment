@@ -201,6 +201,18 @@ describe('canSubmit 保存闸', () => {
     await vi.waitFor(() => expect(service.appearance.cover?.status).toBe('ready'));
     expect(service.canSubmit).toBe(true);
   });
+
+  it('封面上传失败（error 态）不可提交——防止 coverMediaId:null 静默删除已持久化封面', async () => {
+    const calls = pendingUploads();
+    const service = resolve(CreateChainDialogService);
+    service.name = '宝宝成长';
+
+    service.selectAppearanceImage('cover', file('c.png'));
+    calls[0]!.reject(new ApiError('直传失败（500）', 500, 'UPLOAD_FAILED'));
+    await vi.waitFor(() => expect(service.appearance.cover?.status).toBe('error'));
+
+    expect(service.canSubmit).toBe(false);
+  });
 });
 
 describe('上传 race 与回收', () => {

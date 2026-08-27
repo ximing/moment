@@ -50,13 +50,14 @@ function teardownSlot(slot: AppearanceSlot): void {
   slot.file = null;
 }
 
-/** 保存闸的固定条件：无 uploading；image 模式 avatar ready 且 mediaId 非空。 */
+/** 保存闸的固定条件：无 uploading；image 模式 avatar ready 且 mediaId 非空；非空 cover 必须 ready（error 态放行会把 coverMediaId:null 当成删除封面）。 */
 function appearanceSaveable(draft: ChainAppearanceDraft): boolean {
   if (draft.avatar?.status === 'uploading' || draft.cover?.status === 'uploading') return false;
   if (draft.avatarMode === 'image') {
     const avatar = draft.avatar;
     if (avatar === null || avatar.status !== 'ready' || avatar.mediaId === null) return false;
   }
+  if (draft.cover !== null && draft.cover.status !== 'ready') return false;
   return true;
 }
 

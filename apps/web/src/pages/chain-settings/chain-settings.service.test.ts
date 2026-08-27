@@ -280,6 +280,16 @@ describe('canSave 保存闸', () => {
     await vi.waitFor(() => expect(service.appearance.cover?.status).toBe('ready'));
     expect(service.canSave).toBe(true);
   });
+
+  it('封面上传失败（error 态）不可保存——防止 coverMediaId:null 静默删除已持久化封面', async () => {
+    api.uploadMedia.mockImplementation(() => Promise.reject(new Error('直传失败（500）')));
+    const service = await seedChain(makeChain({ color: 'mint' }));
+
+    service.selectAppearanceImage('cover', file('c.png'));
+    await vi.waitFor(() => expect(service.appearance.cover?.status).toBe('error'));
+
+    expect(service.canSave).toBe(false);
+  });
 });
 
 describe('卸载回收', () => {
