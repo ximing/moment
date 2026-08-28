@@ -6,6 +6,7 @@ import { chainMembers, chains, comments, media, moments, recaps, users } from '.
 import { getASRProvider } from '../llm/asr/factory.js';
 import { NonRetryableLLMError } from '../llm/base.provider.js';
 import { getLLMProvider } from '../llm/factory.js';
+import { getGeocodeProvider } from '../geocode/factory.js';
 import { generateRecap } from '../llm/recap/generate.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import {
@@ -169,6 +170,10 @@ export const handleMomentDeleted: OutboxHandler = async (payload) => {
  *  不截断会落出 API 写不出的值，破坏契约对称（spec §4.3 步骤 5）。 */
 const TRANSCRIPT_MAX_CHARS = 5000;
 
+/** 地名截断上限：对齐 moments.place_name varchar(255) 与 dto place name max(255)——
+ *  worker 回填绕过 API 校验，不截断会落出 API 写不出的值（同 TRANSCRIPT_MAX_CHARS 范式）。 */
+const PLACE_NAME_MAX_CHARS = 255;
+
 /** DashScope 异步拉取源文件：覆盖 5 分钟 provider 等待并留 55 分钟排队/下载余量。 */
 export const ASR_SOURCE_URL_TTL_SECONDS = 3_600;
 
@@ -299,6 +304,56 @@ export const handleMomentTranscribe: OutboxHandler = async (payload) => {
 };
 
 /**
+ * moment.geocode（spec people-place §4）：逆地理编码回填 place_name。
+ * 流程：重读 moment（不存在/已软删 → done 跳过，对齐既有 handler 范式）→
+ * provider null（AMAP_WEB_KEY 空，部署停用）→ done 跳过（坐标照存、place_name 留空，管线不阻断）→
+ * 仅当 place_source 仍为 'exif' 且 place_name 为空才调 reverse（用户后续手动编辑/AI 回填不被覆盖，
+ * spec §5 优先级 manual > exif > ai）→ 成功后条件 UPDATE 回填（WHERE 再校验 exif + 空名 + 未软删，
+ * IO 后竞态防御，对齐 transcribe 的 CAS 范式）。
+ *
+ * 坐标以重读的行为准：payload.lat/lng 是发射时快照，不消费（计划偏差 4）。
+ * 失败语义（计划偏差 3）：provider 抛错一律传播——processor 既有 5 档指数退避，
+ * attempts>5 由 processor 记 error 日志并标 failed（终败仅记日志，不重派；outbox 行状态即唯一记录）。
+ * 与 transcribe 的「NonRetryable 自落 failed」不同范式：geocode 无 moment 终态列可自落，
+ * 且高德 status!=='1' 混杂永久/时变错误（配额次日重置、限流），提前 done 会静默丢可恢复行。
+ */
+export const handleMomentGeocode: OutboxHandler = async (payload) => {
+  const momentId = str(payload.momentId);
+  if (!momentId) return;
+
+  // 步骤 1：幂等 + 软删竞态防御——不存在 / 已软删直接返回（spec §4/§5）
+  const [m] = await db.select().from(moments).where(eq(moments.id, momentId)).limit(1);
+  if (!m || m.deletedAt) return;
+
+  // 步骤 2：部署方停用（AMAP_WEB_KEY 空）→ 消费即跳过（坐标照存、place_name 留空）
+  const provider = getGeocodeProvider();
+  if (!provider) return;
+
+  // 步骤 3：前置形态守卫——非 exif / 名已非空 / 坐标列异常 → 跳过（不浪费远端调用）
+  if (m.placeSource !== 'exif' || m.placeName !== null || m.placeLat === null || m.placeLng === null) {
+    return;
+  }
+
+  // 步骤 4：逆地理（入参 WGS-84，GCJ-02 换算是 provider 内部细节）
+  const raw = await provider.reverse(m.placeLat, m.placeLng);
+  if (raw === null) return; // 确定无地址：done，place_name 留空
+
+  // 步骤 5：截断 + 条件回填（IO 后再校验 exif + 空名 + 未软删，防迟到结果覆盖并发手动编辑）
+  const name = raw.slice(0, PLACE_NAME_MAX_CHARS);
+  await db
+    .update(moments)
+    .set({ placeName: name })
+    .where(
+      and(
+        eq(moments.id, momentId),
+        isNull(moments.deletedAt),
+        eq(moments.placeSource, 'exif'),
+        isNull(moments.placeName),
+      ),
+    );
+};
+
+/**
  * recap.generate（spec §1）：调 generateRecap 生成回顾，成功后扇出 recap.ready 通知。
  *
  * 重试分类现由 generateRecap 内部处理（p3）：
@@ -368,4 +423,5 @@ export const handlers: Record<string, OutboxHandler> = {
   'moment.deleted': handleMomentDeleted,
   'recap.generate': handleRecapGenerate,
   'moment.transcribe': handleMomentTranscribe,
+  'moment.geocode': handleMomentGeocode,
 };

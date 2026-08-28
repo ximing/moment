@@ -87,6 +87,10 @@ export const envSchema = z.object({
   ASR_API_KEY: z.string().default(''),
   // 模型名
   ASR_MODEL: z.string().default('fun-asr'),
+  // ---------- 逆地理编码 geocode（spec people-place §4；高德 Web 服务 v3 regeo） ----------
+  // 高德 Web 服务 key；空串 = geocode 停用（坐标照存、place_name 留空、outbox 消费即跳过，spec §4/§8）。
+  // 隐私：配置后 worker 会把时刻坐标（GCJ-02 换算后）发送到高德（spec §8）。
+  AMAP_WEB_KEY: z.string().default(''),
 });
 
 export const config = envSchema.parse(process.env);

@@ -11,6 +11,7 @@ import {
   handleReactionCreated,
   handleRecapGenerate,
   handleMomentTranscribe,
+  handleMomentGeocode,
   handlers,
 } from '../../src/worker/handlers.js';
 import { closeDb, resetDb } from '../helpers/db.js';
@@ -180,14 +181,15 @@ describe('handleCommentCreated / handleReactionCreated', () => {
 });
 
 describe('handlers 注册表', () => {
-  it('六种事件均已注册（moment.deleted 为 orphaned 标记实现）', () => {
+  it('七种事件均已注册（moment.deleted 为 orphaned 标记实现）', () => {
     expect(handlers['moment.created']).toBe(handleMomentCreated);
     expect(handlers['comment.created']).toBe(handleCommentCreated);
     expect(handlers['reaction.created']).toBe(handleReactionCreated);
     expect(handlers['moment.deleted']).toBe(handleMomentDeleted);
     expect(handlers['recap.generate']).toBe(handleRecapGenerate);
     expect(handlers['moment.transcribe']).toBe(handleMomentTranscribe);
-    expect(Object.keys(handlers)).toHaveLength(6);
+    expect(handlers['moment.geocode']).toBe(handleMomentGeocode);
+    expect(Object.keys(handlers)).toHaveLength(7);
   });
 
   it('moment.deleted：无匹配 media 行时静默成功、不产生通知（Phase 8 已替换为 orphaned 标记实现）', async () => {
