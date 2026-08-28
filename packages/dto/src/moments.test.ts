@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createMomentInputSchema, listMomentsQuerySchema, patchMomentInputSchema } from './moments.js';
+import {
+  createMomentInputSchema,
+  listMomentsQuerySchema,
+  patchMomentInputSchema,
+  type MomentResponse,
+} from './moments.js';
 
 const base = {
   type: 'text' as const,
@@ -198,4 +203,91 @@ test('createMomentInputSchema：type=voice 传 posterMediaId → MEDIA_NOT_ALLOW
 test('patchMomentInputSchema：.strict() 拒绝 transcript / transcriptionStatus（转写不可经 API 改）', () => {
   assert.ok(!patchMomentInputSchema.safeParse({ transcript: 'x' }).success);
   assert.ok(!patchMomentInputSchema.safeParse({ transcriptionStatus: 'done' }).success);
+});
+
+const UUID_A = '123e4567-e89b-12d3-a456-426614174000';
+const UUID_B = '123e4567-e89b-12d3-a456-426614174001';
+
+test('createMomentInputSchema：接受 personIds 与 place（spec §6）', () => {
+  const r = createMomentInputSchema.safeParse({
+    ...base,
+    personIds: [UUID_A, UUID_B],
+    place: { name: '北京', lat: 39.9, lng: 116.4 },
+  });
+  assert.ok(r.success);
+});
+
+test('createMomentInputSchema：place 仅坐标合法（EXIF 路）；place:null 在 create 等价未传（spec §6）', () => {
+  assert.ok(createMomentInputSchema.safeParse({ ...base, place: { lat: 39.9, lng: 116.4 } }).success);
+  assert.ok(createMomentInputSchema.safeParse({ ...base, place: null }).success);
+});
+
+test('createMomentInputSchema：personIds 超 20 / 非 uuid 拒绝', () => {
+  assert.ok(
+    !createMomentInputSchema.safeParse({ ...base, personIds: Array.from({ length: 21 }, () => UUID_A) }).success
+  );
+  assert.ok(!createMomentInputSchema.safeParse({ ...base, personIds: ['not-a-uuid'] }).success);
+});
+
+test('createMomentInputSchema：place 缺一半坐标 / 空对象拒绝（PLACE_COORDS_INVALID）', () => {
+  assert.ok(!createMomentInputSchema.safeParse({ ...base, place: { lat: 39.9 } }).success);
+  assert.ok(!createMomentInputSchema.safeParse({ ...base, place: {} }).success);
+});
+
+test('patchMomentInputSchema：place:null 显式清除是合法非空 patch（spec §6）', () => {
+  assert.ok(patchMomentInputSchema.safeParse({ place: null }).success);
+});
+
+test('patchMomentInputSchema：personIds 空数组 = 清空全部人物，合法非空 patch', () => {
+  assert.ok(patchMomentInputSchema.safeParse({ personIds: [] }).success);
+});
+
+test('patchMomentInputSchema：personIds/place 全 undefined 仍 EMPTY_PATCH（缺省 = 不变，不是有效 patch）', () => {
+  assert.ok(!patchMomentInputSchema.safeParse({ personIds: undefined, place: undefined }).success);
+  assert.ok(!patchMomentInputSchema.safeParse({}).success);
+});
+
+test('patchMomentInputSchema：place 对象 refine 违规拒绝；未知键仍 strict 拒绝', () => {
+  assert.ok(!patchMomentInputSchema.safeParse({ place: { lng: 116.4 } }).success);
+  assert.ok(!patchMomentInputSchema.safeParse({ placeSource: 'manual' }).success); // source 只由 server 赋值
+});
+
+test('MomentResponse：含 persons/place 字段可赋值；P1 可省略（spec §6，见偏差 2）', () => {
+  const res: MomentResponse = {
+    id: UUID_A,
+    chainId: UUID_B,
+    author: { id: UUID_A, nickname: '爸爸', avatarUrl: null },
+    type: 'media',
+    content: '外婆家吃饭',
+    transcript: null,
+    transcriptionStatus: null,
+    kind: 'standard',
+    payload: null,
+    happenedAt: '2026-08-28T12:00:00.000Z',
+    happenedTzOffset: -480,
+    isBackfill: false,
+    createdAt: '2026-08-28T12:00:00.000Z',
+    media: [],
+    tags: [],
+    persons: [
+      { id: UUID_A, name: '外婆', userId: null, source: 'ai' },
+      { id: UUID_B, name: '爸爸', userId: UUID_A, source: 'manual' },
+    ],
+    place: { lat: 39.9042, lng: 116.4074, name: '北京市东城区', source: 'exif' },
+    commentCount: 0,
+    reactions: [],
+    myReaction: null,
+  };
+  assert.equal(res.persons.length, 2);
+  assert.equal(res.persons[0].source, 'ai');
+  assert.equal(res.place!.source, 'exif');
+
+  const noPlace: MomentResponse = { ...res, persons: [], place: null };
+  assert.equal(noPlace.place, null);
+
+  // P1 可选（偏差 2）：momentSerializer() 在 P1 不产出 persons/place，
+  // 显式置 undefined 的字面量也必须通过类型检查（必填会破 server typecheck 与 web 测试）
+  const legacy: MomentResponse = { ...res, persons: undefined, place: undefined };
+  assert.equal(legacy.persons, undefined);
+  assert.equal(legacy.place, undefined);
 });

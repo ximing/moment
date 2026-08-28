@@ -10,3 +10,4 @@ export * from './share.js';
 export * from './memories.js';
 export * from './templates.js';
 export * from './recaps.js';
+export * from './persons.js';

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ReactionSummary } from './comments.js';
 import type { TagBrief } from './tags.js';
+import { momentPersonIdsSchema, placeInputSchema, type MomentPlace, type PersonBrief } from './persons.js';
 
 export const momentTypeSchema = z.enum(['text', 'media', 'video', 'voice']);
 export type MomentType = z.infer<typeof momentTypeSchema>;
@@ -25,6 +26,10 @@ export const createMomentInputSchema = z
     /** 视频封面媒体 id（客户端截帧的普通 image 上传）；仅 type=video 可传，见 superRefine */
     posterMediaId: z.string().min(1).optional(),
     tagIds: momentTagIdsSchema.optional(),
+    /** 关联人物（spec §6）：提交即 manual 意图，server 做属链校验；create 缺省 = 无关联 */
+    personIds: momentPersonIdsSchema.optional(),
+    /** 地点（spec §6）：source 由 server 按赋值表判定（客户端不传 source）；create 上 null 等价未传（无既有状态可清除） */
+    place: placeInputSchema.nullable().optional(),
     /** 语义类别（spec §1.1）；standard = 普通 moment，其余由链模板 kinds 声明 */
     kind: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64).default('standard'),
     /** 结构化数据；standard moment 只允许模板 momentFields 声明的 key，kind moment 按 kind 的 payloadSchema（server 校验） */
@@ -68,6 +73,18 @@ export const patchMomentInputSchema = z
     happenedTzOffset: z.number().int().min(-840).max(840).optional(),
     isBackfill: z.boolean().optional(),
     tagIds: momentTagIdsSchema.optional(),
+    /**
+     * PATCH 全量替换（与 tagIds 对齐，spec §6）：提交的集合写 source=manual，
+     * 集合外原有行（manual 与 ai 一并）删除；空数组 [] = 清空全部人物。缺省 undefined = 不变——
+     * 客户端 dirty tracking：仅用户实际增删过人物才提交本字段（否则整包回传会把 ai 行静默升级 manual）。
+     */
+    personIds: momentPersonIdsSchema.optional(),
+    /**
+     * PATCH 语义（spec §6）：undefined = 不变（dirty tracking：仅用户实际改过地点才提交）；
+     * null = 显式清除 place 三列 + place_source；
+     * 对象 = server 按赋值表定 source（坐标+名字→manual / 仅坐标→exif / 仅名字→manual）。
+     */
+    place: placeInputSchema.nullable().optional(),
     kind: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64).optional(),
     payload: z.record(z.unknown()).nullable().optional(),
   })
@@ -120,6 +137,14 @@ export interface MomentResponse {
   media: MomentMedia[];
   /** moment 上的标签（同一 moment 内按 tagId 升序——确定性排序，非插入顺序） */
   tags: TagBrief[];
+  /**
+   * moment 上的人物（含 AI 抽取行；source 取自 moment_persons 关联行）。
+   * P1 声明为可选：momentSerializer() 在 P1 不产出本字段（见计划偏差 2），
+   * 必填化随 P2 的 includePrivate/批取序列化一并收紧（serializer 在 P2 owner 范围内）。
+   */
+  persons?: PersonBrief[];
+  /** 地点；无地点为 null。P1 同 persons 声明为可选（偏差 2），P2 一并必填化 */
+  place?: MomentPlace | null;
   /** 未软删评论数（批量 GROUP BY 产出） */
   commentCount: number;
   /** 按 emoji 分组的表情计数 */
