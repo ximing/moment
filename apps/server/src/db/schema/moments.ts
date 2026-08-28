@@ -44,6 +44,8 @@ export const moments = mysqlTable(
     placeSource: mysqlEnum('place_source', ['manual', 'exif', 'ai']),
     /** 上次 AI 抽取时 sha256(content + '\0' + transcript)（spec §5 幂等判据）；NULL = 从未抽取 */
     aiExtractHash: char('ai_extract_hash', { length: 64 }),
+    /** 上次嵌入指纹 sha256(...)（spec fused-retrieval §2.2）；NULL = 从未嵌入。computeEmbedHash 属 P5 */
+    embedHash: char('embed_hash', { length: 64 }),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow().onUpdateNow(),
     deletedAt: timestamp('deleted_at', { mode: 'date' }),

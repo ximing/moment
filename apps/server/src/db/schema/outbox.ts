@@ -9,6 +9,8 @@ export const outbox = mysqlTable(
     status: mysqlEnum('status', ['pending', 'done', 'failed']).notNull().default('pending'),
     attempts: int('attempts').notNull().default(0),
     nextRetryAt: timestamp('next_retry_at', { mode: 'date' }),
+    /** 最近一次 handler 错误摘要（spec fused-retrieval §2.3）；仅 processor 写，handler 不得改 outbox.status */
+    lastError: varchar('last_error', { length: 512 }),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
     processedAt: timestamp('processed_at', { mode: 'date' }),
   },

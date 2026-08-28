@@ -11,6 +11,21 @@ export const OUTBOX_MOMENT_GEOCODE = 'moment.geocode';
  *  P4 moments 写路径与 transcribe 回填发射，P4 worker 消费 */
 export const OUTBOX_MOMENT_EXTRACT = 'moment.extract';
 
+/** 派生图压缩（spec fused-retrieval §2.3）：payload camelCase { momentId, chainId, mediaId }；handler 属 P3 */
+export const OUTBOX_MOMENT_COMPRESS = 'moment.compress';
+export interface MomentCompressPayload {
+  momentId: string;
+  chainId: string;
+  mediaId: string;
+}
+
+/** 向量嵌入（spec fused-retrieval §2.3）：payload camelCase { momentId, chainId }；handler 属 P5 */
+export const OUTBOX_MOMENT_EMBED = 'moment.embed';
+export interface MomentEmbedPayload {
+  momentId: string;
+  chainId: string;
+}
+
 export type OutboxType =
   | typeof OUTBOX_MOMENT_CREATED
   | typeof OUTBOX_MOMENT_DELETED
@@ -19,4 +34,6 @@ export type OutboxType =
   | typeof OUTBOX_REACTION_CREATED
   | typeof OUTBOX_RECAP_GENERATE
   | typeof OUTBOX_MOMENT_GEOCODE
-  | typeof OUTBOX_MOMENT_EXTRACT;
+  | typeof OUTBOX_MOMENT_EXTRACT
+  | typeof OUTBOX_MOMENT_COMPRESS
+  | typeof OUTBOX_MOMENT_EMBED;
