@@ -24,7 +24,7 @@
 手动路：编辑器提交 personIds/place → moments create/update（校验人物属链、坐标范围）→ 落库
 EXIF 路：客户端选图 → 解析 GPS → 编辑器状态（可见/可改/可删）→ 随 create/update 提交（source=exif）
         → server 落库坐标 → 写 outbox（moment.geocode）→ worker 逆地理编码 → 回填 place_name
-AI 路：  moments create/update（content/transcript 变化）→ 写 outbox（moment.extract）
+AI 路：  moments create/update（content 变化）或 transcribe 回填完成 → 写 outbox（moment.extract）
         → worker 调 LLM 抽取 {persons[], places[]} → persons 链词典按名 upsert
         → moment_persons 补 source=ai 行；place 仅在完全为空时填文本名（source=ai）
 ```
@@ -44,7 +44,7 @@ AI 路：  moments create/update（content/transcript 变化）→ 写 outbox（
 | user_id | char(36) NULL，FK → users.id；可选链接到链成员用户（"爸爸"就是注册用户），供 M3 "爸爸发了哪些"类查询 |
 | created_at | timestamp notNull defaultNow |
 
-- `UNIQUE uk_persons_chain_name (chain_id, name)`；索引 `(chain_id)`。
+- `UNIQUE uk_persons_chain_name (chain_id, name)`（左前缀已覆盖按 chain_id 过滤，与 tags 一致，不另建 `(chain_id)` 索引）。
 - 名归一化在应用层（trim + 去内部连续空白），不写 DB 函数；中文名为主，不做大小写折叠之外的变换。
 
 ### 新表 `moment_persons`（镜像 `moment_tags`）
@@ -57,6 +57,7 @@ AI 路：  moments create/update（content/transcript 变化）→ 写 outbox（
 
 - `PRIMARY KEY (moment_id, person_id)`；索引 `idx_moment_persons_person_moment (person_id, moment_id)`（M2 按人物圈结果集的驱动索引，语义同 tags 的驱动索引）。
 - 同行升级：source=ai 的行被用户手动确认/重选后升级为 manual（见 §5 冲突规则），不允许同行两 source。
+- FK 均不写 onDelete，镜像 tags/moment_tags：链删除是 chain.service 删除 tx 内手动逐表 delete（recaps 的 cascade 仅其自身 chain_id 一列，不是关联表范式），该 tx 需同步补 `moment_persons`、`persons` 两行 delete。
 
 ### `moments` 表加列
 
@@ -94,6 +95,7 @@ EXIF 是文件头部结构化元数据，解析只读一小段二进制 buffer�
 ### app 端
 
 - `expo-image-picker` `launchImageLibraryAsync({ exif: true })` 读取**压缩前原始 asset** 的 EXIF（绕开压缩剥 EXIF 的失败模式）；GPSLatitude/GPSLongitude + Ref 半球归一。
+- **iOS/Android 返回结构差异**：部分 Expo 版本的 iOS 端把 GPS tag 嵌套在 `{GPS}` 子字典，而非扁平 `GPSLatitude`/`GPSLongitude` 键（Android 为扁平键）；解析代码需兼容两种结构。P6 实施时先写 fixture 测试验证两条解析路径，再真机确认。
 - 其余与 web 相同：编辑器草稿态 chip + 随提交上送。
 
 ### 安全与信任边界
@@ -106,7 +108,7 @@ EXIF 是文件头部结构化元数据，解析只读一小段二进制 buffer�
 - 新模块 `src/geocode/`：`base.provider.ts`（`reverse(lat, lng): Promise<string | null>`）+ `factory.ts`（singleton 三态 + `setGeocodeProvider` 测试注入，**完整复刻 `llm/factory.ts` 范式**）+ `amap.provider.ts`（高德 `restapi.amap.com/v3/geocode/regeo`，取 `regeocode.formatted_address`）。
 - **坐标系**：EXIF GPS 是 WGS-84，高德全家是 GCJ-02，直接用偏几十到几百米、地名可能跨街区。落库保留 WGS-84 原值（数据真相），**调用高德前做 WGS-84→GCJ-02 换算**（`src/geocode/gcj02.ts`，纯函数无依赖，约 50 行标准算法，含中国境外判断——境外不偏移直接请求）。后续地图足迹展示同样需要这层换算。
 - 新环境变量 `AMAP_WEB_KEY`（同步 `config.ts` zod + `.env.example`）。**空 key → provider null → 坐标照存、place_name 留空、outbox 行消费即跳过**，管线不阻断（同 recap 的 LLM_API_KEY 停用模式）。
-- outbox `moment.geocode` payload：`{moment_id, lat, lng}`。worker 成功回填 `place_name`；失败走 outbox 既有指数退避，终败仅记日志（坐标仍在，损失可接受，不重派）。
+- outbox `moment.geocode` payload：`{moment_id, lat, lng}`。worker 重读时刻不存在或已软删即跳过（对齐既有 handler 范式）；成功回填 `place_name`；失败走 outbox 既有指数退避，终败仅记日志（坐标仍在，损失可接受，不重派）。
 - 触发时机：place_source=exif 且 place_name 为空时，由 moments create/update 在同事务写 outbox 行。手动仅文本的 place 不触发（无坐标可编）。
 
 ## 5. AI 文本抽取
@@ -114,7 +116,8 @@ EXIF 是文件头部结构化元数据，解析只读一小段二进制 buffer�
 ### 触发与幂等
 
 - moments create/update 落库后，若 `sha256(content + '\0' + transcript) ≠ ai_extract_hash`，同事务写 outbox `moment.extract`（payload `{moment_id}`）。
-- worker 消费：重读 moment → 调 LLM 抽取 → 成功则更新 `ai_extract_hash`。**内容没变不重抽**；LLM_API_KEY 为空 → provider null → 消费即跳过（不写 hash，恢复 key 后下次内容变化自然补抽）。
+- **voice 时刻的独立触发**：transcript 由 `moment.transcribe` handler 异步回填（worker 直写 moments 表，不经过 MomentService.update），回填成功同事务必须同样写 `moment.extract` outbox 行——否则语音时刻（content 常为空、transcript 后补）只在 create 时以空素材抽取一次，转写文本永远进不了抽取管线。
+- worker 消费：重读 moment（不存在或已软删即跳过，对齐既有 handler 范式）→ 调 LLM 抽取 → 成功则更新 `ai_extract_hash`。**内容没变不重抽**；LLM_API_KEY 为空 → provider null → 消费即跳过（不写 hash，恢复 key 后下次内容变化自然补抽）。
 
 ### 抽取内容与落库规则
 
@@ -124,7 +127,7 @@ EXIF 是文件头部结构化元数据，解析只读一小段二进制 buffer�
 - persons 落库：名归一化后在链词典 upsert（已存在复用 id）；写 `moment_persons` source=ai 行——**仅补缺**：已存在 manual 行的 person 不动（不降级）。
 - place 落库：**仅当 place 三列全空时**填 `place_name = places[0]`、source=ai（无坐标）。exif/manual 已有 place 时 AI 永不覆盖；ai 的文本名可被后续 exif/manual 整体覆盖。
 - **冲突规则汇总**（manual > exif > ai）：
-  - 人物：manual 与 ai 并集共存，source 逐行标记；用户删除 ai 行后保持删除（hash 未变不重抽）；用户在编辑器里重新加回同一 person → 该行 source 升级 manual。
+  - 人物：manual 与 ai 并集共存，source 逐行标记；用户删除 ai 行后保持删除（hash 未变不重抽）；用户在编辑器里重新加回同一 person → 该行 source 升级 manual（与 §6 dirty tracking 无矛盾：只有用户实际操作人物时 personIds 才被提交，升级只发生在真实手动操作上）。
   - 地点：manual 显式提交（含显式清除） > exif 坐标 > ai 文本名；用户显式清除 place = 提交 place:null（§6），server 清空三列 + source，此后 AI 需等内容再次变化才可能重填，exif 需重新绑定新媒体才可能重填——符合用户直觉。
 
 ### 成本护栏与回填
@@ -148,8 +151,8 @@ EXIF 是文件头部结构化元数据，解析只读一小段二进制 buffer�
 ### Moments create/update 增量字段
 
 - `CreateMomentInput` / `PatchMomentInput` 增加：
-  - `personIds?: string[]`（uuid，max 20）。PATCH 语义 = **全量替换**（与 `tagIds` 对齐）；提交即视为 manual 意图——提交的 id 集合写 source=manual，**集合外原有的 ai 行删除**（编辑器展示全集、用户删 chip 即此路径），集合外原有 manual 行也删除（与 tagIds 替换语义一致）。
-  - `place?: {name: string(1..255), lat?: number, lng?: number} | null`；lat/lng 必须同有同无（zod refine，否则 400 `PLACE_COORDS_INVALID`）。PATCH `place: null` = 显式清除三列 + source。
+  - `personIds?: string[]`（uuid，max 20）。PATCH 语义 = **全量替换**（与 `tagIds` 对齐）；提交即视为 manual 意图——提交的 id 集合写 source=manual，**集合外原有的 ai 行删除**（编辑器展示全集、用户删 chip 即此路径），集合外原有 manual 行也删除（与 tagIds 替换语义一致）。缺省（undefined）= 不变，提交纪律见下文。
+  - `place?: {name?: string(1..255), lat?: number, lng?: number} | null`；lat/lng 必须同有同无，且 name 与坐标至少其一（zod refine，否则 400 `PLACE_COORDS_INVALID`）——EXIF 路只提交坐标（§3），name 不能必填。PATCH `place: null` = 显式清除三列 + source；`place` 缺省（undefined）= 不变。
 - server 端 source 赋值表：
 
   | 提交内容 | place_source | 后续动作 |
@@ -159,13 +162,17 @@ EXIF 是文件头部结构化元数据，解析只读一小段二进制 buffer�
   | 仅名字 | `manual` | 不触发 geocode |
   | null | 清空 | — |
 
+- **客户端提交纪律（dirty tracking）**：`personIds` 与 `place` 同一纪律——客户端仅在用户实际增删过人物 / 修改过地点时才提交对应字段（缺省 undefined = 不变）。web 现有编辑器对 content/tagIds 是全量提交范式，这两个字段不能照抄（happenedAt 的 timeEdited 判脏是既有先例）：
+  - personIds 若把展示态全集（含 ai 行）整包回传，用户只改正文保存就会把全部 AI person 静默升级为 manual——未改动的 ai 行不因保存被升级，source 只记录真实手动操作。
+  - place 若把展示态（EXIF 坐标 + geocode 回填名）整包回传，会被赋值表判为「坐标+名字 → manual」，exif source 被误升级、覆盖语义被破坏。
+  - tagIds 保持既有全量提交范式不动（无 source 概念，不受此纪律约束）。
 - 校验：`personIds` 必须全部属于该链词典，否则 400 `PERSON_NOT_IN_CHAIN`。
 
 ### 响应体与序列化
 
 - `MomentResponse` 增加：`persons: PersonBrief[]`（`{id, name, userId, source}`，source 取自 moment_persons 关联行）、`place: {lat, lng, name, source} | null`。词典端点 `GET persons` 返回 `{id, name, userId}`（词典行无 source 概念）。
 - feed/链时间线序列化按 tags 的**批取范式**（按 moment ids 一次 IN 查询再内存分组），禁止 N+1。
-- **share-album（公开分享）序列化器不包含这两个字段**（§8 红线），并有显式测试钉死。
+- **share-album（公开分享）输出不包含这两个字段**（§8 红线）。机制：`serializeMoments`（全局唯一序列化出口，share-album 经 share-link.service 复用同一出口）增加 `includePrivate` 选项，**默认 false**——链内路径（feed/时间线/详情）显式传 `true` 才输出 persons/place；share-album 路径不传，默认即安全。默认偏向安全侧的理由是失败模式不对称：内部调用方忘了传只是 UI 缺字段（可见易修），分享路径忘了剥离就是隐私泄漏（不可见有害）。两条路径各有显式测试钉死（§9）。
 
 ## 7. 各端 UX
 
@@ -179,7 +186,7 @@ EXIF 是文件头部结构化元数据，解析只读一小段二进制 buffer�
 
 ## 8. 隐私与安全
 
-- **红线**：share-album 公开输出零 persons/place 字段（显式测试钉死，§9）。
+- **红线**：share-album 公开输出零 persons/place 字段。机制为 `serializeMoments` 的 `includePrivate` 默认 false（§6），分享路径不传即安全，默认即红线。
 - 逆地理编码把坐标发给高德：spec 显式声明；`AMAP_WEB_KEY` 置空即整体停用该外发（坐标仍落库，仅缺地名）。
 - EXIF 提取在客户端完成后，上送的结构化坐标即用户可见的编辑器草稿——不存在"服务端偷偷读照片信息"的黑盒路径，符合家庭用户隐私直觉。
 - persons/place 的读写权限与时刻本体一致（链角色模型），无新增权限面。
@@ -192,8 +199,8 @@ EXIF 是文件头部结构化元数据，解析只读一小段二进制 buffer�
   - persons CRUD + 链角色守卫（requireChainRole 拒绝跨角色/跨链）+ 幂等创建 + 改名冲突。
   - moments create/update：personIds 属链校验、坐标范围与同有同无校验、source 赋值表全分支、PATCH 全量替换（ai 行删除/manual 保留语义）、place:null 清除。
   - geocode worker：mock provider（`setGeocodeProvider`）断言回填/空 key 跳过/终败不重派；gcj02 换算纯函数用例（境内偏移/境外不偏移）。
-  - AI 抽取 worker：mock LLM（`setLLMProvider`）断言 upsert 词典/仅补缺/manual 不降级/place 非空不覆盖/hash 幂等（同内容二投不重抽）。
-  - **share-album 序列化显式断言无 persons/place**（隐私红线测试）。
+  - AI 抽取 worker：mock LLM（`setLLMProvider`）断言 upsert 词典/仅补缺/manual 不降级/place 非空不覆盖/hash 幂等（同内容二投不重抽）；transcribe 回填完成写 `moment.extract` outbox 行（voice 时刻触发路径）；已软删时刻消费即跳过。
+  - **序列化 `includePrivate` 双路测试**：share-album 默认（不传 `includePrivate`）输出无 persons/place（隐私红线）；链内路径传 `true` 输出含 persons/place。
 - dto：zod schema 用例（lat/lng refine、personIds 上限、place:null 语义）。
 - web/app：编辑器人物选择器与 EXIF chip 的组件测试按各端既有范式；EXIF 解析函数用含 GPS 的 fixture buffer 单测。
 - e2e：建时刻带人物+坐标 → 响应回读 → geocode mock 回填 → AI mock 补缺；回填 sweep 幂等二跑。
