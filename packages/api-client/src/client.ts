@@ -25,6 +25,10 @@ import type {
   MonthIndexResponse,
   NotificationListResponse,
   PatchMomentInput, // 等价映射（依赖契约段免责条款）：Phase 3 计划名 PatchMomentInput / Phase 4 计划名 UpdateMomentInput——若 dto 实际导出为 UpdateMomentInput，改为 `UpdateMomentInput as PatchMomentInput`，禁止反向改 dto
+  PersonCreateInput,
+  PersonListResponse,
+  PersonPatchInput,
+  PersonResponse,
   PublicShareResponse,
   RecapDto,
   RecapListResponse,
@@ -105,6 +109,13 @@ export interface MomentClient {
   listTags(chainId: string): Promise<TagListResponse>;
   createTag(chainId: string, name: string): Promise<TagResponse>;
   deleteTag(tagId: string): Promise<void>;
+
+  /** 链 person 词典（编辑器选择器数据源，spec people-place §6；词典行无 source 概念） */
+  listPersons(chainId: string): Promise<PersonListResponse>;
+  /** 幂等创建（spec people-place §6）：新建 201 / 名归一化撞 uk 返回已存在行 200，两者 body 同形——返回值不区分，调用方按需重拉词典 */
+  createPerson(chainId: string, input: PersonCreateInput): Promise<PersonResponse>;
+  renamePerson(chainId: string, personId: string, input: PersonPatchInput): Promise<PersonResponse>;
+  removePerson(chainId: string, personId: string): Promise<void>;
 
   presignMedia(input: MediaPresignInput): Promise<MediaPresignResponse>;
   presignMediaParts(mediaId: string, partNumbers: number[]): Promise<MediaPartsResponse>;
@@ -221,6 +232,14 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
     listTags: (chainId) => http.request(`/api/chains/${chainId}/tags`),
     createTag: (chainId, name) => http.request(`/api/chains/${chainId}/tags`, { method: 'POST', body: { name } }),
     deleteTag: (tagId) => http.request(`/api/tags/${tagId}`, { method: 'DELETE' }),
+
+    listPersons: (chainId) => http.request(`/api/chains/${chainId}/persons`),
+    createPerson: (chainId, input) =>
+      http.request(`/api/chains/${chainId}/persons`, { method: 'POST', body: input }),
+    renamePerson: (chainId, personId, input) =>
+      http.request(`/api/chains/${chainId}/persons/${personId}`, { method: 'PATCH', body: input }),
+    removePerson: (chainId, personId) =>
+      http.request(`/api/chains/${chainId}/persons/${personId}`, { method: 'DELETE' }),
 
     presignMedia: (input) => http.request('/api/media/presign', { method: 'POST', body: input }),
     presignMediaParts: (mediaId, partNumbers) =>

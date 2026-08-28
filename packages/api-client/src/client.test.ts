@@ -292,3 +292,39 @@ describe('share 方法', () => {
     assert.equal(calls[1]!.url, `http://test.local/api/public/share/tok-1?cursor=${encodeURIComponent('cur/sor+1')}`);
   });
 });
+
+test('persons 资源路由与 body（people-place P2 契约；幂等 create 201/200 body 同形，client 不区分）', async () => {
+  const { client, calls } = harness();
+  await client.listPersons('c1');
+  await client.createPerson('c1', { name: '外婆' });
+  await client.createPerson('c1', { name: '爸爸', userId: 'u1' });
+  await client.renamePerson('c1', 'p1', { name: '姥姥' });
+  await client.removePerson('c1', 'p1');
+  assert.deepEqual(calls.map((c) => `${c.method} ${c.url}`), [
+    'GET http://x/api/chains/c1/persons',
+    'POST http://x/api/chains/c1/persons',
+    'POST http://x/api/chains/c1/persons',
+    'PATCH http://x/api/chains/c1/persons/p1',
+    'DELETE http://x/api/chains/c1/persons/p1',
+  ]);
+  assert.deepEqual(calls[1]!.body, { name: '外婆' });
+  assert.deepEqual(calls[2]!.body, { name: '爸爸', userId: 'u1' });
+  assert.deepEqual(calls[3]!.body, { name: '姥姥' });
+});
+
+test('moments create/update 携带 personIds/place（P1 dto 增量经 ZodInput/PatchMomentInput 类型直达，api-client 不改写）', async () => {
+  const { client, calls } = harness();
+  await client.createMoment('c1', {
+    type: 'text',
+    content: 'hi',
+    happenedAt: '2026-08-16T02:00:00.000Z',
+    happenedTzOffset: -480,
+    personIds: ['123e4567-e89b-12d3-a456-426614174000'],
+    place: { lat: 39.9042, lng: 116.4074 },
+  });
+  await client.updateMoment('m1', { personIds: [], place: null });
+  const createBody = calls[0]!.body as { personIds?: string[]; place?: unknown };
+  assert.deepEqual(createBody.personIds, ['123e4567-e89b-12d3-a456-426614174000']);
+  assert.deepEqual(createBody.place, { lat: 39.9042, lng: 116.4074 });
+  assert.deepEqual(calls[1]!.body, { personIds: [], place: null });
+});
