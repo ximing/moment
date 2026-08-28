@@ -139,12 +139,12 @@ export interface MomentResponse {
   tags: TagBrief[];
   /**
    * moment 上的人物（含 AI 抽取行；source 取自 moment_persons 关联行）。
-   * P1 声明为可选：momentSerializer() 在 P1 不产出本字段（见计划偏差 2），
-   * 必填化随 P2 的 includePrivate/批取序列化一并收紧（serializer 在 P2 owner 范围内）。
+   * 链内路径（serializeMoments 传 includePrivate:true）必产出；公开分享路径的
+   * PublicShareMoment 不含本字段（spec §8 红线，P1 偏差 2 由 P2 收口为必填）。
    */
-  persons?: PersonBrief[];
-  /** 地点；无地点为 null。P1 同 persons 声明为可选（偏差 2），P2 一并必填化 */
-  place?: MomentPlace | null;
+  persons: PersonBrief[];
+  /** 地点；无地点为 null。链内路径必产出；公开分享路径不含（spec §8 红线）。 */
+  place: MomentPlace | null;
   /** 未软删评论数（批量 GROUP BY 产出） */
   commentCount: number;
   /** 按 emoji 分组的表情计数 */

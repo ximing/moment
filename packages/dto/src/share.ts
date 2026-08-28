@@ -47,6 +47,12 @@ export interface PublicShareChainInfo {
   icon: ChainIcon | null;
 }
 
+/**
+ * 公开分享相册的 moment 视图（spec §8 红线）：不含 persons/place——家庭人物关系与
+ * 精确坐标绝不随公开链接外发。链内完整形态是 MomentResponse（persons/place 必填）。
+ */
+export type PublicShareMoment = Omit<MomentResponse, 'persons' | 'place'>;
+
 /** 匿名只读视图：计数只读展示（commentCount/reactions），myReaction 恒 null */
 export interface PublicShareResponse {
   chain: PublicShareChainInfo;
@@ -55,7 +61,8 @@ export interface PublicShareResponse {
   templateManifest: TemplateManifest;
   /** 该链模板声明的全部聚合投影（timeline 除外，由 moments 列表分章） */
   aggregates: AggregateResponse[];
-  moments: MomentResponse[];
+  /** 时刻列表（公开形：无 persons/place，spec §8 红线） */
+  moments: PublicShareMoment[];
   nextCursor: string | null;
   /** 最近一期 ready/degraded 回顾（share_recaps_enabled 开启时外发，generating/failed 不外发，spec §6） */
   recap?: RecapDto;

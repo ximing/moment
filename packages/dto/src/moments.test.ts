@@ -252,7 +252,7 @@ test('patchMomentInputSchema：place 对象 refine 违规拒绝；未知键仍 s
   assert.ok(!patchMomentInputSchema.safeParse({ placeSource: 'manual' }).success); // source 只由 server 赋值
 });
 
-test('MomentResponse：含 persons/place 字段可赋值；P1 可省略（spec §6，见偏差 2）', () => {
+test('MomentResponse：含 persons/place 字段可赋值（P2 已必填化）', () => {
   const res: MomentResponse = {
     id: UUID_A,
     chainId: UUID_B,
@@ -285,9 +285,7 @@ test('MomentResponse：含 persons/place 字段可赋值；P1 可省略（spec �
   const noPlace: MomentResponse = { ...res, persons: [], place: null };
   assert.equal(noPlace.place, null);
 
-  // P1 可选（偏差 2）：momentSerializer() 在 P1 不产出 persons/place，
-  // 显式置 undefined 的字面量也必须通过类型检查（必填会破 server typecheck 与 web 测试）
-  const legacy: MomentResponse = { ...res, persons: undefined, place: undefined };
-  assert.equal(legacy.persons, undefined);
-  assert.equal(legacy.place, undefined);
+  // P2 收口（P1 偏差 2）：persons/place 必填。tsx 不做类型检查，
+  // 必填由 pnpm --filter @moment/dto build（tsc）把关；运行时断言钉字段语义。
+  assert.equal(Array.isArray(res.persons), true);
 });
