@@ -383,7 +383,7 @@ git commit -m "feat(app): add native EXIF GPS parser with fixture tests and vite
 - Produces（Task 3 / P7 消费——**P7 消费 dirty tracking 纪律与 P5 Task 3 Produces 逐字同款**）:
   - `PickedImage` 增 `exif?: Record<string, unknown> | null`（picker 原始 asset 的 EXIF，压缩前）
   - ComposeService 状态：`personList: PersonResponse[]`、`members: ChainMemberDto[]`、`selectedPersons: PersonBrief[]`、`personQuery: string`、`personsTouched: boolean`、`placeName: string`、`placeCoords: { lat: number; lng: number } | null`、`placeTouched: boolean`、`exifDismissed: boolean`
-  - `loadPersons(): Promise<void>`（并行拉词典 + 成员，失败静默空列表，await 后链已切换则丢弃防串链）
+  - `loadPersons(): Promise<void>`（`Promise.allSettled([client.listPersons(chainId), client.listMembers(chainId)])`——两路独立成败，各自失败静默清各自列表（词典与成员是两个接口，词典失败不牵连成员置顶）；await 后链已切换则丢弃防串链）
   - `togglePerson(person: PersonBrief): void`（动作级判脏，置 `personsTouched`）
   - `toggleMember(member: ChainMemberDto): Promise<void>`（词典/已选集 userId 命中直接选；否则幂等 `createPerson {name, userId}`；失败**抛出**由组件 Alert）
   - `submitPersonQuery(): Promise<void>`（词典同名命中直接选不 POST；否则幂等 `createPerson {name}`；成功清空 query；失败抛出）
@@ -520,7 +520,8 @@ import { firstAssetGps } from '../../lib/exif-gps';
 
 ```ts
   /** 拉链 person 词典 + 成员（选择器数据源）。失败静默：辅助输入不阻塞发布主流程
-   *  （P5 偏差 12，对齐 loadManifest 失败静默先例）。 */
+   *  （P5 偏差 12，对齐 loadManifest 失败静默先例）。
+   *  两路独立成败（allSettled）：词典与成员来自两个接口，词典失败只清词典，不牵连成员置顶。 */
   async loadPersons(): Promise<void> {
     const chainId = this.activeChainId;
     if (!chainId) {
@@ -528,15 +529,13 @@ import { firstAssetGps } from '../../lib/exif-gps';
       this.members = [];
       return;
     }
-    try {
-      const [res, members] = await Promise.all([client.listPersons(chainId), client.listMembers(chainId)]);
-      if (this.activeChainId !== chainId) return; // 异步返回时链已切换则丢弃（防串链，对齐 loadManifest 守卫）
-      this.personList = res.persons;
-      this.members = members;
-    } catch {
-      this.personList = [];
-      this.members = [];
-    }
+    const [res, members] = await Promise.allSettled([
+      client.listPersons(chainId),
+      client.listMembers(chainId),
+    ]);
+    if (this.activeChainId !== chainId) return; // 异步返回时链已切换则丢弃（防串链，对齐 loadManifest 守卫）
+    this.personList = res.status === 'fulfilled' ? res.value.persons : [];
+    this.members = members.status === 'fulfilled' ? members.value : [];
   }
 
   /** 词典行 → PersonBrief（词典行无 source；选中态语义恒 manual，spec §6 提交即 manual 意图）。 */
