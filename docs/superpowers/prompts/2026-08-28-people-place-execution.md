@@ -63,7 +63,7 @@ T1 dto + server schema + 迁移 → T2 server persons CRUD + moments 集成（�
 | T3 | `docs/superpowers/plans/2026-08-28-people-place-p3-server-geocode.md` | ✅ 已起草并评审通过 |
 | T4 | `docs/superpowers/plans/2026-08-28-people-place-p4-server-extract.md` | ✅ 已起草并评审通过 |
 | T5 | `docs/superpowers/plans/2026-08-28-people-place-p5-web.md` | ✅ 已起草并评审通过 |
-| T6 | `docs/superpowers/plans/2026-08-28-people-place-p6-app.md` | ⬜ 待起草 |
+| T6 | `docs/superpowers/plans/2026-08-28-people-place-p6-app.md` | ✅ 已起草并评审通过 |
 | T7 | `docs/superpowers/plans/2026-08-28-people-place-p7-e2e.md` | ⬜ 待起草 |
 
 > Plan 起草流水线：每期 plan 由独立 SubAgent 起草（输入 = spec + CONVENTIONS.md + 本文件 T 节边界 + 相关源码），再由 ≠ 起草者的复审 SubAgent 对 spec/代码核实，fixer 修复后状态置 ✅。执行阶段本表状态改为「✅ 已实施」。
