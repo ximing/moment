@@ -9,6 +9,9 @@ export interface PickedImage {
   uri: string;
   width: number;
   height: number;
+  /** picker 原始 asset 的 EXIF（压缩前；spec people-place §3：exif:true 让 picker 读出，
+   *  绕开压缩剥 EXIF 的失败模式）。无 EXIF / 平台不支持为 null；GPS 解析见 lib/exif-gps.ts */
+  exif?: Record<string, unknown> | null;
 }
 
 /** 压缩完成、可直接进 uploadMedia 的图片 */
@@ -40,9 +43,10 @@ export async function pickImages(): Promise<PickedImage[]> {
     allowsMultipleSelection: true,
     selectionLimit: 9,
     quality: 1,
+    exif: true, // spec people-place §3：读压缩前原始 asset 的 EXIF（GPS 用于地点草稿回填）
   });
   if (result.canceled) return [];
-  return result.assets.map((a) => ({ uri: a.uri, width: a.width, height: a.height }));
+  return result.assets.map((a) => ({ uri: a.uri, width: a.width, height: a.height, exif: a.exif ?? null }));
 }
 
 export async function pickVideo(): Promise<PickedVideo | null> {

@@ -1,11 +1,12 @@
 import { Service } from '@rabjs/react';
-import { MAX_IMAGE_BYTES, type MediaCompleteResponse, type MomentResponse, type MomentType, type PatchMomentInput, type TemplateManifest } from '@moment/dto';
+import { MAX_IMAGE_BYTES, type ChainMemberDto, type MediaCompleteResponse, type MomentResponse, type MomentType, type PatchMomentInput, type PersonBrief, type PersonResponse, type TemplateManifest } from '@moment/dto';
 import { ApiError } from '@moment/api-client';
 import * as Location from 'expo-location';
 import { client } from '../../lib/api';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { compressImage, pickImages, pickVideo, uriToBlob, validateVideo, type PickedVideo, type ReadyImage } from '../../lib/media';
 import { summarizePayload } from '../../lib/template';
+import { firstAssetGps } from '../../lib/exif-gps';
 import { ChainListService } from '../../services/chain-list.service';
 
 /** 总尝试次数 = 初始 1 次 + ≤2 次重试；网络类（status 0）/5xx 才重试。
@@ -56,6 +57,25 @@ export class ComposeService extends Service {
 
   tagNames: { id: string; name: string }[] = [];
 
+  // ---- 人物与地点（spec people-place §3/§6/§7；dirty tracking 纪律镜像 P5 已评审结论）----
+  /** 链 person 词典（选择器数据源，spec §6 GET persons） */
+  personList: PersonResponse[] = [];
+  /** 链成员（置顶 chip 数据源；选中 = 以该用户建/复用 person，spec §7） */
+  members: ChainMemberDto[] = [];
+  /** 选中人物全集（展示态含 source 供 AI 角标；提交时只取 id，source 永不上送） */
+  selectedPersons: PersonBrief[] = [];
+  personQuery = '';
+  /** dirty tracking（spec §6）：仅用户实际增删过人物才提交 personIds——动作级判脏
+   *  （P5 偏差 3：删除后加回同一 ai person，id 集合与基线相同也要提交，spec §5 升级路径） */
+  personsTouched = false;
+  /** 地点草稿：name 手动输入；coords 来自 EXIF（或编辑回读）。两者独立可组合 */
+  placeName = '';
+  placeCoords: { lat: number; lng: number } | null = null;
+  /** dirty tracking（spec §6）：仅用户实际改过地点才提交 place；place:null = 显式清除 */
+  placeTouched = false;
+  /** 用户移除 EXIF chip 后本面板会话不再自动回填（否则删不掉，P5 偏差 2） */
+  exifDismissed = false;
+
   /** 当前链的模板 manifest（链详情内嵌，spec §3.2）；null = 未加载或无扩展 */
   manifest: TemplateManifest | null = null;
   /** 结构化类别（spec §1.1）；standard = 普通 moment。编辑模式锁定为原 kind（S4：不允许切 kind） */
@@ -89,12 +109,23 @@ export class ComposeService extends Service {
     this.payloadDraft = {};
     this.manifest = null;
     this.manifestChainId = '';
+    // 人物/地点草稿复位（spec §6）：新建面板每次进入都是干净草稿
+    this.personList = [];
+    this.members = [];
+    this.selectedPersons = [];
+    this.personQuery = '';
+    this.personsTouched = false;
+    this.placeName = '';
+    this.placeCoords = null;
+    this.placeTouched = false;
+    this.exifDismissed = false;
     // manifest 锚点用 activeChainId 而非原始路由参数（评审 B2）：含「回退第一条可编辑链」
     // 后的值——feed 首页 /compose 无 chainId、单链用户（无链 chips 可点）也要触发加载。
     // 此刻 ChainListService 可能未就绪（activeChainId undefined）→ 跳过，由组件 effect 重试（Step 3）
     const active = this.activeChainId;
     if (active) void this.loadManifest(active).catch(() => undefined);
     void this.loadTags().catch(() => undefined);
+    void this.loadPersons().catch(() => undefined);
   }
 
   /** 编辑预填：content/tagIds/type/isBackfill + 发生时间两次平移（spec §2）。
@@ -110,6 +141,16 @@ export class ComposeService extends Service {
     // 编辑模式：kind 锁定原值，payload 草稿从既有值水合（S4：提交时 kind+payload 始终显式携带）
     this.kind = m.kind;
     this.payloadDraft = { ...(m.payload ?? {}) };
+    // 人物/地点水合（spec §6）：编辑模式展示全集（含 ai 行，source 仅供角标）；
+    // touched 标志复位——未动过就不提交（undefined = 不变，P5 偏差 3/4 同款纪律）
+    this.selectedPersons = m.persons.map((p) => ({ ...p }));
+    this.personsTouched = false;
+    this.placeName = m.place?.name ?? '';
+    this.placeCoords =
+      m.place?.lat != null && m.place?.lng != null ? { lat: m.place.lat, lng: m.place.lng } : null;
+    this.placeTouched = false;
+    this.exifDismissed = false;
+    this.personQuery = '';
     // 时区换算（spec 公式，禁止走 Date 本地字段捷径）：
     // wallMs 是记录时区的墙钟毫秒；picker 按设备本地字段渲染 Date，
     // 所以显示值 = wallMs + deviceOffset，使该 Date 的设备本地字段恰好等于记录时区墙钟。
@@ -118,6 +159,7 @@ export class ComposeService extends Service {
     this.happenedAt = new Date(this.editWallMs + this.editDeviceOffset * 60_000);
     await this.loadTags();
     void this.loadManifest(m.chainId).catch(() => undefined);
+    void this.loadPersons().catch(() => undefined);
   }
 
   /** 实时读全局链列表（与 FeedService.chainList 同款 getter），无一次性快照的过期窗口。 */
@@ -143,8 +185,14 @@ export class ComposeService extends Service {
     this.payloadDraft = {};
     this.manifest = null;
     this.manifestChainId = '';
+    // 人物词典是链级作用域（spec §0）：切链丢弃旧链选择；place 草稿保留（镜像 images 切链行为）
+    this.personList = [];
+    this.members = [];
+    this.selectedPersons = [];
+    this.personsTouched = false;
     void this.loadTags().catch(() => undefined);
     void this.loadManifest(id).catch(() => undefined);
+    void this.loadPersons().catch(() => undefined);
   }
 
   /** 只拉当前活跃链的标签（链集合本身由 ChainListService 实时持有）。 */
@@ -218,11 +266,15 @@ export class ComposeService extends Service {
     const cap = this.type === 'voice' ? 8 : 9; // voice 附图 ≤8（1 audio + ≤8 图 ≤ 9 mediaIds，spec §2.2）
     const remain = cap - this.images.length;
     if (remain <= 0) throw new Error(this.type === 'voice' ? '语音时刻最多 8 张附图' : '图片最多 9 张');
+    const kept = picked.slice(0, remain);
+    // EXIF 自动回填（spec §3）：读的是压缩前原始 asset（pickImages exif:true）；
+    // 仅地点草稿完全为空时写入（P5 偏差 2）；非用户动作，不置 placeTouched
+    this.ingestExif(kept);
     let rejected = 0;
     const ready: ReadyImage[] = [];
     try {
       this.progressLabel = '压缩中…';
-      for (const img of picked.slice(0, remain)) {
+      for (const img of kept) {
         const r = await compressImage(img);
         if (r.size > MAX_IMAGE_BYTES) {
           rejected += 1; // 压缩后仍超限的个别图片（极端长图）跳过；常量唯一来源 @moment/dto
@@ -285,6 +337,86 @@ export class ComposeService extends Service {
     this.tagIds = this.tagIds.includes(id) ? this.tagIds.filter((t) => t !== id) : [...this.tagIds, id];
   }
 
+  /** 拉链 person 词典 + 成员（选择器数据源）。失败静默：辅助输入不阻塞发布主流程
+   *  （P5 偏差 12，对齐 loadManifest 失败静默先例）。
+   *  两路独立成败（allSettled）：词典与成员来自两个接口，词典失败只清词典，不牵连成员置顶。 */
+  async loadPersons(): Promise<void> {
+    const chainId = this.activeChainId;
+    if (!chainId) {
+      this.personList = [];
+      this.members = [];
+      return;
+    }
+    const [res, members] = await Promise.allSettled([
+      client.listPersons(chainId),
+      client.listMembers(chainId),
+    ]);
+    if (this.activeChainId !== chainId) return; // 异步返回时链已切换则丢弃（防串链，对齐 loadManifest 守卫）
+    this.personList = res.status === 'fulfilled' ? res.value.persons : [];
+    this.members = members.status === 'fulfilled' ? members.value : [];
+  }
+
+  /** 词典行 → PersonBrief（词典行无 source；选中态语义恒 manual，spec §6 提交即 manual 意图）。 */
+  private asBrief(person: PersonResponse | PersonBrief): PersonBrief {
+    return 'source' in person ? person : { ...person, source: 'manual' };
+  }
+
+  /** 人物增删切换；置 personsTouched——动作级判脏（P5 偏差 3，见字段注释）。 */
+  togglePerson(person: PersonBrief): void {
+    this.personsTouched = true;
+    this.selectedPersons = this.selectedPersons.some((p) => p.id === person.id)
+      ? this.selectedPersons.filter((p) => p.id !== person.id)
+      : [...this.selectedPersons, person];
+  }
+
+  /** 选中链成员 = 以该用户建/复用 person（spec §7；P5 偏差 7）：词典/已选集有 userId 命中
+   *  直接选；否则幂等 POST（P2 契约：撞名归一化返回已存在行）。失败抛出，组件 Alert humanError。 */
+  async toggleMember(member: ChainMemberDto): Promise<void> {
+    const existing =
+      this.personList.find((p) => p.userId === member.userId) ??
+      this.selectedPersons.find((p) => p.userId === member.userId);
+    if (existing) {
+      this.togglePerson(this.asBrief(existing));
+      return;
+    }
+    const chainId = this.activeChainId;
+    if (!chainId) return;
+    const person = await client.createPerson(chainId, { name: member.nickname, userId: member.userId });
+    if (!this.personList.some((p) => p.id === person.id)) this.personList = [...this.personList, person];
+    this.togglePerson({ id: person.id, name: person.name, userId: person.userId, source: 'manual' });
+  }
+
+  /** 词典同名命中直接选（不 POST）；否则自由文本回车新建（幂等 POST，spec §6/§7）。
+   *  失败抛出，组件 Alert humanError。 */
+  async submitPersonQuery(): Promise<void> {
+    const name = this.personQuery.trim();
+    const chainId = this.activeChainId;
+    if (!name || !chainId) return;
+    const existing =
+      this.personList.find((p) => p.name === name) ?? this.selectedPersons.find((p) => p.name === name);
+    if (existing) {
+      this.togglePerson(this.asBrief(existing));
+      this.personQuery = '';
+      return;
+    }
+    const person = await client.createPerson(chainId, { name });
+    if (!this.personList.some((p) => p.id === person.id)) this.personList = [...this.personList, person];
+    this.togglePerson({ id: person.id, name: person.name, userId: person.userId, source: 'manual' });
+    this.personQuery = '';
+  }
+
+  setPlaceName(name: string): void {
+    this.placeTouched = true;
+    this.placeName = name;
+  }
+
+  /** 移除 EXIF chip（spec §3「可点 × 移除」）：丢弃坐标且本面板会话不再自动回填（P5 偏差 2）。 */
+  removePlaceCoords(): void {
+    this.placeTouched = true;
+    this.exifDismissed = true;
+    this.placeCoords = null;
+  }
+
   /** 发生时间是否被改过（spec §2 判断式：还原成墙钟毫秒再比，不能直接比 getTime()）。 */
   private get timeEdited(): boolean {
     if (!this.edit) return false;
@@ -303,9 +435,30 @@ export class ComposeService extends Service {
     }
   }
 
+  /** EXIF 自动回填守卫（spec §3，P5 偏差 2 同款）：已移除 chip / 已有坐标 / 已手动输入
+   *  地点名任一命中即短路。多图取第一张含 GPS 的（firstAssetGps）。 */
+  private ingestExif(assets: { exif?: Record<string, unknown> | null }[]): void {
+    if (this.exifDismissed || this.placeCoords || this.placeName.trim() !== '') return;
+    const coords = firstAssetGps(assets);
+    if (coords) this.placeCoords = coords;
+  }
+
+  /** place 提交形态（spec §6 赋值表在 server 判 source，客户端只交 name/坐标）：
+   *  名字（trim 后，P5 偏差 5）与坐标皆空 → null（显式清除）；有坐标 ±名字 → 整体提交
+   *  （坐标+名字 → manual「确认后的形态」；仅坐标 → exif）；仅名字 → {name}（manual 文本）。
+   *  P5 偏差 4：改过名字坐标随行——仅提交名字会触发「仅名字 → manual 且坐标清空」，丢数据更差。 */
+  private placePayload(): { name?: string; lat?: number; lng?: number } | null {
+    const name = this.placeName.trim();
+    if (name === '' && !this.placeCoords) return null;
+    return this.placeCoords
+      ? { ...(name !== '' ? { name } : {}), lat: this.placeCoords.lat, lng: this.placeCoords.lng }
+      : { name };
+  }
+
   /** 提交：编辑态走 PATCH（submitEdit）；新建态串行上传（进度聚合）→ createMoment → emit。
    *  前置校验失败抛 Error（中文 message）。 */
   async submit(): Promise<void> {
+    if (this.selectedPersons.length > 20) throw new Error('最多关联 20 位人物');
     if (this.edit) return this.submitEdit();
     const activeChainId = this.activeChainId;
     if (!activeChainId) throw new Error('请选择要发布到的链（需要编辑权限）');
@@ -382,6 +535,10 @@ export class ComposeService extends Service {
         kind: this.kind,
         ...(this.posterMediaId ? { posterMediaId: this.posterMediaId } : {}),
         ...(Object.keys(this.payloadDraft).length > 0 ? { payload: this.payloadDraft } : {}),
+        // 人物/地点（spec people-place §6）：create 无 dirty 语义，选中即提交；
+        // EXIF 坐标未动过也照常上送（落 exif 分支，name 由 geocode 异步回填）
+        ...(this.selectedPersons.length > 0 ? { personIds: this.selectedPersons.map((p) => p.id) } : {}),
+        ...(this.placeTouched || this.placeCoords ? { place: this.placePayload() } : {}),
       });
       this.emit('moment:changed', { momentId: created.id, chainId: activeChainId, op: 'create' }, 'global');
     } finally {
@@ -402,6 +559,10 @@ export class ComposeService extends Service {
       tagIds: this.tagIds,
       kind: edit.kind,
       payload: Object.keys(this.payloadDraft).length > 0 ? this.payloadDraft : null,
+      // dirty tracking（spec §6，P5 偏差 3/4 同款）：undefined = 不变——未动过的人物/地点
+      // 绝不整包回传（否则 ai 行被静默升级 manual、exif place 误升级 manual，spec §6 警告）
+      ...(this.personsTouched ? { personIds: this.selectedPersons.map((p) => p.id) } : {}),
+      ...(this.placeTouched ? { place: this.placePayload() } : {}),
     };
     if (this.timeEdited) {
       // 还原：newWallMs = picker − deviceOffset；iso = newWallMs + 记录时区偏移（spec 公式）

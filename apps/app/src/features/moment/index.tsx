@@ -135,6 +135,21 @@ const MomentContent = observer(function MomentContent() {
             ))}
           </View>
         ) : null}
+        {/* 人物与地点（spec people-place §7）：只读展示，不可点击（过滤属 M2）；
+            name 为 null 的 exif 待回填坐标不显示地点行（P5 偏差 9 镜像） */}
+        {m.persons.length > 0 ? (
+          <View style={styles.personRow} accessibilityLabel="和谁在一起">
+            {m.persons.map((p) => (
+              <View key={p.id} style={styles.personChip}>
+                <Text style={styles.personChipText}>
+                  {p.name}
+                  {p.source === 'ai' ? <Text style={styles.personAi}> AI</Text> : null}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {m.place?.name ? <Text style={styles.placeLine}>📍 {m.place.name}</Text> : null}
 
         <View style={styles.reactionRow}>
           {REACTION_EMOJIS.map((emoji) => {
@@ -221,6 +236,11 @@ const createStyles = (t: Theme) =>
     video: { width: '100%', aspectRatio: 16 / 9, borderRadius: 8, backgroundColor: t.ink },
     tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
     tag: { color: t.tag, fontSize: t.fontSupport },
+    personRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
+    personChip: { paddingHorizontal: t.space3, paddingVertical: t.space1, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
+    personChipText: { fontSize: t.fontSupport, color: t.ink },
+    personAi: { color: t.muted, fontSize: t.fontCaption },
+    placeLine: { color: t.muted, fontSize: t.fontSupport },
     reactionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     reaction: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },
     reactionActive: { backgroundColor: t.select },

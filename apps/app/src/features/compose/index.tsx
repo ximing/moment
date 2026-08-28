@@ -15,6 +15,7 @@ import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { ComposeService } from './compose.service';
 import { TemplateFields } from './template-fields';
+import { PersonPicker } from './person-picker';
 import { VoiceRecorder } from './voice-recorder';
 
 const ComposeContent = observer(function ComposeContent() {
@@ -32,6 +33,13 @@ const ComposeContent = observer(function ComposeContent() {
     // loadManifest 同链幂等（manifestChainId 占位），重复调用无副作用
     const active = service.activeChainId;
     if (active) void service.loadManifest(active).catch(() => undefined);
+  }, [service, service.activeChainId]);
+
+  useEffect(() => {
+    // 镜像 P5 Task 4 (b)：activeChainId 经 observer 订阅 ChainListService，冷启动/深链时
+    // 链列表未就绪 → hydrate 内 loadPersons 早退清空；本 effect 在链就绪后重触发补拉。
+    // loadPersons 幂等（同链重复调用结果相同），与 hydrate/loadForEdit/setChain 内调用重复无害
+    if (service.activeChainId) void service.loadPersons().catch(() => undefined);
   }, [service, service.activeChainId]);
 
   async function onPickImages(): Promise<void> {
@@ -182,6 +190,8 @@ const ComposeContent = observer(function ComposeContent() {
           ))}
         </View>
       ) : null}
+
+      <PersonPicker service={service} />
 
       {service.progressLabel ? <Text style={styles.progress}>{service.progressLabel}</Text> : null}
       <Button

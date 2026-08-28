@@ -63,6 +63,23 @@ export function MomentCard({
         const geo = moment.payload?.geo as { place_name?: string } | undefined;
         return geo?.place_name ? <Text style={styles.tplLine}>📍 {geo.place_name}</Text> : null;
       })()}
+      {/* 人物与地点（spec people-place §7）：只读展示，不可点击（按人物/地点过滤属 M2）。
+          chip 为非交互 View/Text（hoverSoft 色面，镜像既有 chip 底色范式）；AI 行「AI」轻标识；
+          地点行镜像既有 geo payload 行样式（tplLine）；place.name 为 null（exif 坐标待
+          geocode 回填）不显示地点行——裸坐标对家庭用户无意义（P5 偏差 9 镜像）。 */}
+      {moment.persons.length > 0 ? (
+        <View style={styles.personRow} accessibilityLabel="和谁在一起">
+          {moment.persons.map((p) => (
+            <View key={p.id} style={styles.personChip}>
+              <Text style={styles.personChipText}>
+                {p.name}
+                {p.source === 'ai' ? <Text style={styles.personAi}> AI</Text> : null}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {moment.place?.name ? <Text style={styles.tplLine}>📍 {moment.place.name}</Text> : null}
       <View style={styles.footer}>
         {moment.tags.map((tag) => (
           <Text key={tag.id} style={styles.tag}>
@@ -87,6 +104,10 @@ const createStyles = (t: Theme) =>
     content: { fontSize: t.fontBody, lineHeight: 22, color: t.ink },
     footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.space2, marginTop: t.space2 },
     tplLine: { color: t.muted, fontSize: t.fontSupport, marginTop: t.space1 },
+    personRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2, marginTop: t.space1 },
+    personChip: { paddingHorizontal: t.space3, paddingVertical: t.space1, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
+    personChipText: { fontSize: t.fontSupport, color: t.ink },
+    personAi: { color: t.muted, fontSize: t.fontCaption },
     tag: { color: t.tag, fontSize: t.fontSupport },
     counts: { color: t.muted, fontSize: t.fontSupport, marginLeft: 'auto' },
   });
