@@ -4,7 +4,7 @@ import type { MomentResponse } from './moments.js';
 const uuidLoose = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** ISO 8601 datetime 字符串：先正则限定 ISO 形态（防 `2026/08/01` 这类 Date.parse 宽松解析漏网），再校验可解析 */
-const isoDatetime = z
+export const isoDatetime = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/, 'INVALID_TIMESTAMP')
   .refine((v) => !Number.isNaN(Date.parse(v)), { message: 'INVALID_TIMESTAMP' });
