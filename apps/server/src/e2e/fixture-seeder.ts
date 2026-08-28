@@ -11,10 +11,12 @@ import {
   chains,
   comments,
   media,
+  momentPersons,
   momentTags,
   moments,
   notifications,
   outbox,
+  persons,
   pushTokens,
   reactions,
   refreshTokens,
@@ -40,6 +42,7 @@ import {
   mediaId,
   momentId,
   ownerId,
+  personId,
   shareLinkId,
   tagId,
   viewerId,
@@ -50,6 +53,7 @@ export type DesignSystemFixture = {
   owner: { id: string; email: string; nickname: string };
   viewer: { id: string; email: string; nickname: string };
   tagId: string;
+  personId: string;
   chainId: string;
   momentId: string;
   imageMomentId: string;
@@ -73,7 +77,7 @@ export async function resetFixture(): Promise<{ ok: true }> {
   if (await storage.fileExists(FIXTURE_IMAGE_STORAGE_KEY)) {
     await storage.deleteFile(FIXTURE_IMAGE_STORAGE_KEY, storageMeta);
   }
-  // 外键逆序：pushTokens, notifications, reactions, comments, momentTags, tags,
+  // 外键逆序：pushTokens, notifications, reactions, comments, momentTags, momentPersons, tags, persons,
   // outbox, media, moments, chainInvites, chainMembers, shareLinks, chains, refreshTokens, users
   // chains→media 与 media→moments→chains 构成引用环：delete(media) 前先显式断开链的图片引用
   await db.delete(pushTokens);
@@ -81,7 +85,9 @@ export async function resetFixture(): Promise<{ ok: true }> {
   await db.delete(reactions);
   await db.delete(comments);
   await db.delete(momentTags);
+  await db.delete(momentPersons);
   await db.delete(tags);
+  await db.delete(persons);
   await db.delete(outbox);
   await db.update(chains).set({ avatarMediaId: null, coverMediaId: null });
   await db.delete(media);
@@ -116,6 +122,8 @@ export async function seedFixture(credentials: E2eFixtureCredentials): Promise<D
       await tx.insert(media).values(rows.media);
       await tx.insert(tags).values(rows.tags);
       await tx.insert(momentTags).values(rows.momentTags);
+      await tx.insert(persons).values(rows.persons);
+      await tx.insert(momentPersons).values(rows.momentPersons);
       await tx.insert(shareLinks).values(rows.shareLinks);
       await tx.insert(chainInvites).values(rows.chainInvites);
     });
@@ -127,6 +135,7 @@ export async function seedFixture(credentials: E2eFixtureCredentials): Promise<D
     owner: { id: ownerId, email: credentials.owner.email, nickname: FIXTURE_OWNER_NICKNAME },
     viewer: { id: viewerId, email: credentials.viewer.email, nickname: FIXTURE_VIEWER_NICKNAME },
     tagId,
+    personId,
     chainId,
     momentId,
     imageMomentId,

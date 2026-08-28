@@ -5,11 +5,13 @@
  */
 import type {
   chainMembers,
+  momentPersons,
   momentTags,
   NewChain,
   NewChainInvite,
   NewMedia,
   NewMoment,
+  NewPerson,
   NewShareLink,
   NewTag,
   NewUser,
@@ -30,6 +32,9 @@ export const mediaId = '00000000-0000-4000-8000-000000000017';
 export const shareLinkId = '00000000-0000-4000-8000-000000000018';
 export const inviteId = '00000000-0000-4000-8000-000000000019';
 
+/** persons 词典行（people-place P7 fixture）：外婆，未链接用户。 */
+export const personId = '00000000-0000-4000-8000-00000000001a';
+
 export const FIXTURE_FIXED_NOW = '2026-08-18T09:30:00.000Z';
 /** 3650 天（10 年）：share/invite 到期时间 = fixedNow + 3650d，2036 年前持续有效且可重复。 */
 export const FIXTURE_EXPIRY_MS = 315360000000;
@@ -43,12 +48,17 @@ export const FIXTURE_CHAIN_NAME = '我们一起走过的很长很长的时光链
 export const FIXTURE_TAG_NAME = '跨年旅行与新年第一束光和家人的漫长回忆';
 export const FIXTURE_TEXT_MOMENT_CONTENT = '2025 年最后一天：一起把这一年的温柔收好。';
 export const FIXTURE_IMAGE_MOMENT_CONTENT = '2026 年第一天：新年的第一束光。';
+export const FIXTURE_PERSON_NAME = '外婆';
+export const FIXTURE_PLACE_NAME = '北京市东城区东华门街道天安门广场';
+/** text moment 的人工关联（manual；AI 路在 fixture 中不出现——视觉回归只钉手动路展示形态）。 */
+export const FIXTURE_PERSON_SOURCE = 'manual' as const;
 
 export const FIXTURE_API_BASE_URL = 'http://127.0.0.1:3000/api';
 export const FIXTURE_WEB_BASE_URL = 'http://127.0.0.1:5173';
 
 type NewChainMember = typeof chainMembers.$inferInsert;
 type NewMomentTag = typeof momentTags.$inferInsert;
+type NewMomentPerson = typeof momentPersons.$inferInsert;
 
 export interface FixtureRows {
   users: NewUser[];
@@ -58,6 +68,8 @@ export interface FixtureRows {
   media: NewMedia[];
   tags: NewTag[];
   momentTags: NewMomentTag[];
+  persons: NewPerson[];
+  momentPersons: NewMomentPerson[];
   shareLinks: NewShareLink[];
   chainInvites: NewChainInvite[];
 }
@@ -153,6 +165,11 @@ export async function buildFixtureRows(
         createdAt: fixedNow,
         updatedAt: fixedNow,
         deletedAt: null,
+        // people-place（spec §6 赋值表「坐标 + 名字 → manual」形态）：视觉上地点行有名字可展示
+        placeLat: 39.9042,
+        placeLng: 116.4074,
+        placeName: FIXTURE_PLACE_NAME,
+        placeSource: 'manual',
       },
     ],
     media: [
@@ -184,6 +201,16 @@ export async function buildFixtureRows(
       },
     ],
     momentTags: [{ momentId, tagId }],
+    persons: [
+      {
+        id: personId,
+        chainId,
+        name: FIXTURE_PERSON_NAME,
+        userId: null,
+        createdAt: fixedNow,
+      },
+    ],
+    momentPersons: [{ momentId, personId, source: FIXTURE_PERSON_SOURCE }],
     shareLinks: [
       {
         id: shareLinkId,

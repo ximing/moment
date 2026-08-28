@@ -9,6 +9,8 @@ import {
   FIXTURE_FIXED_NOW,
   FIXTURE_INVITE_TOKEN,
   FIXTURE_OWNER_NICKNAME,
+  FIXTURE_PERSON_NAME,
+  FIXTURE_PLACE_NAME,
   FIXTURE_SHARE_TOKEN,
   FIXTURE_VIEWER_NICKNAME,
   imageMomentId,
@@ -16,6 +18,7 @@ import {
   mediaId,
   momentId,
   ownerId,
+  personId,
   shareLinkId,
   tagId,
   viewerId,
@@ -60,6 +63,9 @@ describe('fixture constants', () => {
     assert.equal(mediaId, '00000000-0000-4000-8000-000000000017');
     assert.equal(shareLinkId, '00000000-0000-4000-8000-000000000018');
     assert.equal(inviteId, '00000000-0000-4000-8000-000000000019');
+    assert.equal(personId, '00000000-0000-4000-8000-00000000001a');
+    assert.equal(FIXTURE_PERSON_NAME, '外婆');
+    assert.equal(FIXTURE_PLACE_NAME, '北京市东城区东华门街道天安门广场');
     assert.equal(FIXTURE_SHARE_TOKEN, 'e2e-design-system-share-token');
     assert.equal(FIXTURE_INVITE_TOKEN, 'e2e-design-system-invite-token');
     assert.equal(FIXTURE_FIXED_NOW, '2026-08-18T09:30:00.000Z');
@@ -182,6 +188,10 @@ describe('buildFixtureRows', () => {
           createdAt: fixedNow,
           updatedAt: fixedNow,
           deletedAt: null,
+          placeLat: 39.9042,
+          placeLng: 116.4074,
+          placeName: '北京市东城区东华门街道天安门广场',
+          placeSource: 'manual',
         },
       ],
       media: [
@@ -213,6 +223,16 @@ describe('buildFixtureRows', () => {
         },
       ],
       momentTags: [{ momentId, tagId }],
+      persons: [
+        {
+          id: personId,
+          chainId,
+          name: '外婆',
+          userId: null,
+          createdAt: fixedNow,
+        },
+      ],
+      momentPersons: [{ momentId, personId, source: 'manual' }],
       shareLinks: [
         {
           id: shareLinkId,
