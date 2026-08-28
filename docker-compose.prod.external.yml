@@ -3,7 +3,10 @@
 #   cp deploy/.env.external.example .env
 #   docker compose -f docker-compose.prod.external.yml pull
 #   docker compose -f docker-compose.prod.external.yml up -d
-#   docker compose -f docker-compose.prod.external.yml run --rm server node dist/db/migrate.js
+#
+# 数据库迁移由 migrate 一次性服务在 server/worker/backup 启动前自动执行
+# （漏跑迁移会让新代码读到旧 schema 直接 500）；如需手动重跑：
+#   docker compose -f docker-compose.prod.external.yml run --rm migrate
 #
 # 静态页交给宿主机 nginx，配置见 deploy/nginx.external.conf。
 # 一体栈（自带 mysql + nginx）用 docker-compose.prod.yml。
@@ -30,9 +33,21 @@ x-app: &app
   pull_policy: always
 
 services:
+  # 迁移一次性服务：应用成功后退出；server/worker/backup 门控在它之后。
+  # 失败则退出码非零，下游服务不启动——宁可停服也不让新代码读旧 schema。
+  # 外部 MySQL 必须已可连接（本服务没有 mysql 依赖项可等）。
+  migrate:
+    <<: *app
+    image: ghcr.io/ximing/moment-server:${MOMENT_IMAGE_TAG:-stable}
+    command: ['node', 'dist/db/migrate.js']
+    restart: 'no'
+
   server:
     <<: *app
     image: ghcr.io/ximing/moment-server:${MOMENT_IMAGE_TAG:-stable}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     ports:
       # 给同机 nginx 反代；远程 nginx 再把 MOMENT_API_BIND 改成 0.0.0.0
       - '${MOMENT_API_BIND:-127.0.0.1}:${MOMENT_API_PORT:-3000}:3000'
@@ -53,7 +68,13 @@ services:
     <<: *app
     image: ghcr.io/ximing/moment-server:${MOMENT_IMAGE_TAG:-stable}
     command: ['node', 'dist/worker/index.js']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   backup:
     <<: *app
     image: ghcr.io/ximing/moment-backup:${MOMENT_IMAGE_TAG:-stable}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
