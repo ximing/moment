@@ -64,7 +64,7 @@ export class MemoriesService {
     const years: MemoriesYearGroup[] = [];
     for (const [year, list] of byYear) {
       list.sort((a, b) => wallClockMs(a) - wallClockMs(b));
-      years.push({ year, moments: await serializeMoments(list, userId) });
+      years.push({ year, moments: await serializeMoments(list, userId, { includePrivate: true }) });
     }
     return { years };
   }

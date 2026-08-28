@@ -11,11 +11,13 @@ import { TemplateService } from '../templates/template.service.js';
 import { validateMomentPayload } from '../templates/payload-validator.js';
 import { queryMomentPage } from '../feed/moment-query.js';
 import { emitOutbox } from '../outbox/outbox.js';
-import { OUTBOX_MOMENT_CREATED, OUTBOX_MOMENT_DELETED, OUTBOX_MOMENT_TRANSCRIBE } from '../outbox/types.js';
+import { OUTBOX_MOMENT_CREATED, OUTBOX_MOMENT_DELETED, OUTBOX_MOMENT_GEOCODE, OUTBOX_MOMENT_TRANSCRIBE } from '../outbox/types.js';
 import { getStorage } from '../storage/factory.js';
 import type { StorageMetadata } from '../storage/base.adapter.js';
+import { replaceMomentPersons } from '../persons/replace-moment-persons.js';
 import { replaceMomentTags } from '../tags/replace-moment-tags.js';
 import { logger } from '../utils/logger.js';
+import { isGeocodePending, placeColumnsOf } from './moment-place.js';
 import { serializeMoments } from './moment-serializer.js';
 import { wallDateOf } from './wall-date.js';
 
@@ -42,6 +44,8 @@ export class MomentService {
     const payload = validateMomentPayload(manifest, input.kind, input.payload ?? null);
     const momentId = randomUUID();
     const happenedAt = new Date(input.happenedAt);
+    // place 赋值表（spec §6）纯函数预计算；create 上 place:null/缺省等价无地点（P1 偏差 4）
+    const placeCols = placeColumnsOf(input.place);
     const storage = getStorage();
     const copiedTmp: { key: string; metadata: StorageMetadata }[] = [];
 
@@ -106,6 +110,7 @@ export class MomentService {
         // wall_date 冗余投影随 happenedAt/happenedTzOffset 一并写入（spec memories-today §1）
         wallDate: wallDateOf(happenedAt, input.happenedTzOffset),
         isBackfill: input.isBackfill,
+        ...placeCols,
         // voice 创建即进入转写管线（spec §1：仅 voice 非空，其余类型恒 NULL；transcript 留 NULL）
         ...(input.type === 'voice' ? { transcriptionStatus: 'pending' as const } : {}),
       });
@@ -148,6 +153,17 @@ export class MomentService {
 
       await replaceMomentTags(tx, inserted.id, chainId, input.tagIds ?? []);
 
+      await replaceMomentPersons(tx, inserted.id, chainId, input.personIds ?? []);
+
+      // 仅坐标且 place_name 空（exif 形态）→ 同事务写 geocode outbox（spec §4；worker 属 P3）
+      if (isGeocodePending(placeCols)) {
+        await emitOutbox(tx, OUTBOX_MOMENT_GEOCODE, {
+          momentId,
+          lat: placeCols.placeLat,
+          lng: placeCols.placeLng,
+        });
+      }
+
       await emitOutbox(
         tx,
         OUTBOX_MOMENT_CREATED,
@@ -168,7 +184,7 @@ export class MomentService {
         logger.warn(`post-commit tmp cleanup failed (lifecycle will cover): ${t.key}`, err);
       });
     }
-    return (await serializeMoments([created], userId))[0];
+    return (await serializeMoments([created], userId, { includePrivate: true }))[0];
   }
 
   /** 链内时间线：与 feed 共用 queryMomentPage（order 固定 happened_at，游标同格式）。 */
@@ -194,7 +210,7 @@ export class MomentService {
       cursor: query.cursor,
       before: query.before,
     });
-    return { items: await serializeMoments(page.rows, userId), nextCursor: page.nextCursor };
+    return { items: await serializeMoments(page.rows, userId, { includePrivate: true }), nextCursor: page.nextCursor };
   }
 
   /** 详情：service 层反查 chainId 后走 ChainPolicy（CONVENTIONS §3.1）；软删 410。
@@ -204,7 +220,7 @@ export class MomentService {
     if (!m) throw new NotFoundError('MOMENT_NOT_FOUND');
     await this.policy.require(userId, m.chainId, 'viewer');
     if (m.deletedAt) throw new HttpError(410, 'MOMENT_DELETED');
-    return (await serializeMoments([m], userId))[0];
+    return (await serializeMoments([m], userId, { includePrivate: true }))[0];
   }
 
   /** 仅作者本人可改；媒体不可改（dto 层 .strict() 已拒绝 mediaIds/type 等未知键）。鉴权先于软删判断（同 get）。
@@ -233,6 +249,9 @@ export class MomentService {
       };
     }
 
+    // place 整体覆盖（spec §6）：undefined = 不变；null = 清空三列 + source；对象 = 赋值表整体覆盖
+    const placeSet = input.place !== undefined ? placeColumnsOf(input.place) : null;
+
     const updatedRow = await db.transaction(async (tx) => {
       // happenedAt 或 happenedTzOffset 任一变更即按全量新值重算 wall_date（spec memories-today §1；
       // 单独改 tzOffset 不改时间点也会改墙钟归日，必须重算）
@@ -248,6 +267,7 @@ export class MomentService {
           ...(recomputeWallDate ? { wallDate: wallDateOf(nextHappenedAt, nextTzOffset) } : {}),
           ...(input.isBackfill !== undefined ? { isBackfill: input.isBackfill } : {}),
           ...kindPayloadSet,
+          ...(placeSet ?? {}),
           updatedAt: new Date(),
         })
         .where(eq(moments.id, momentId));
@@ -256,9 +276,21 @@ export class MomentService {
       if (input.tagIds !== undefined) {
         await replaceMomentTags(tx, row.id, row.chainId, input.tagIds);
       }
+      if (input.personIds !== undefined) {
+        // 全量替换（spec §6）：提交集合写 manual、集合外 manual/ai 一并删；空数组 = 清空
+        await replaceMomentPersons(tx, row.id, row.chainId, input.personIds);
+      }
+      // 显式提交 place 且落在 exif 分支（仅坐标、无名字）→ 同事务写 geocode outbox（spec §4）
+      if (placeSet && isGeocodePending(placeSet)) {
+        await emitOutbox(tx, OUTBOX_MOMENT_GEOCODE, {
+          momentId,
+          lat: placeSet.placeLat,
+          lng: placeSet.placeLng,
+        });
+      }
       return row;
     });
-    return (await serializeMoments([updatedRow], userId))[0];
+    return (await serializeMoments([updatedRow], userId, { includePrivate: true }))[0];
   }
 
   /** 软删（幂等）：作者或链 owner；同事务 emitOutbox(moment.deleted)（sweeper 信号）。鉴权先于软删判断（同 get）。

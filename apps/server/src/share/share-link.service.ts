@@ -181,6 +181,7 @@ export class ShareLinkService {
       template: chain.template,
       templateManifest: manifest,
       aggregates: await this.aggregates.projectAll(link.chainId, manifest),
+      // 隐私红线（spec §8）：不传 includePrivate（默认 false）——公开相册输出零 persons/place。
       moments: await serializeMoments(page.rows),
       nextCursor: page.nextCursor,
       ...(recap ? {

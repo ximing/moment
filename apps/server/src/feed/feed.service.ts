@@ -35,7 +35,7 @@ export class FeedService {
       tagId: query.tagId,
       before: query.before,
     });
-    return { moments: await serializeMoments(page.rows, userId), nextCursor: page.nextCursor };
+    return { moments: await serializeMoments(page.rows, userId, { includePrivate: true }), nextCursor: page.nextCursor };
   }
 
   /** 月份索引：与 feed 同一可见范围（我的链；chain_ids 收窄时静默过滤非成员链）。 */

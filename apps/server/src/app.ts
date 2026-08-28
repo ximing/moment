@@ -15,6 +15,7 @@ import { MediaController } from './media/media.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
 import { MomentController, MomentItemController } from './moments/moment.controller.js';
 import { authRateLimiter, inviteAcceptRateLimiter, loginRateLimiter, publicShareRateLimiter } from './middlewares/rate-limit.js';
+import { PersonController } from './persons/person.controller.js';
 import { TagController } from './tags/tag.controller.js';
 import { FeedController } from './feed/feed.controller.js';
 import { MemoriesController } from './memories/memories.controller.js';
@@ -50,7 +51,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, PersonController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,

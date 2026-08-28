@@ -69,3 +69,16 @@ describe('momentSerializer（moment → API 响应唯一出口）', () => {
     expect(plain.transcriptionStatus).toBeNull();
   });
 });
+
+describe('momentSerializer 公开基形（spec §8：persons/place 不在基函数输出）', () => {
+  it('输出不含 persons/place 键——两键由 serializeMoments 在 includePrivate 路径拼接', () => {
+    const res = momentSerializer(moment, {
+      media: [],
+      author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
+    });
+    expect('persons' in res).toBe(false);
+    expect('place' in res).toBe(false);
+    expect(Object.keys(res)).not.toContain('persons');
+    expect(Object.keys(res)).not.toContain('place');
+  });
+});
