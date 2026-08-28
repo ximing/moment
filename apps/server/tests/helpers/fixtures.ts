@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
-import { chainMembers, chains, momentTags, moments, recaps } from '../../src/db/schema.js';
+import { chainMembers, chains, momentPersons, momentTags, moments, persons, recaps } from '../../src/db/schema.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
 import { listenLocal } from './http-server.js';
 
@@ -77,6 +77,26 @@ export async function insertMoment(opts: {
 /** 直插 moment-tag 关联。 */
 export async function attachTag(momentId: string, tagId: string): Promise<void> {
   await db.insert(momentTags).values({ momentId, tagId });
+}
+
+/** 直插 person 词典行（spec people-place §2；名归一化是 service 职责，夹具原样落库）。 */
+export async function insertPerson(opts: {
+  chainId: string;
+  name: string;
+  userId?: string | null;
+}): Promise<string> {
+  const id = randomUUID();
+  await db.insert(persons).values({ id, chainId: opts.chainId, name: opts.name, userId: opts.userId ?? null });
+  return id;
+}
+
+/** 直插 moment-person 关联（默认 source=manual；AI 抽取行传 'ai'）。 */
+export async function attachPerson(
+  momentId: string,
+  personId: string,
+  source: 'manual' | 'ai' = 'manual',
+): Promise<void> {
+  await db.insert(momentPersons).values({ momentId, personId, source });
 }
 
 /** 直插 recap 行（测试用，绕过 generate 管线）。默认 status=generating，可覆盖全字段。 */

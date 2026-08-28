@@ -6,10 +6,12 @@ import {
   chains,
   comments,
   media,
+  momentPersons,
   momentTags,
   moments,
   notifications,
   outbox,
+  persons,
   pushTokens,
   reactions,
   recaps,
@@ -53,7 +55,9 @@ export async function resetDb(): Promise<void> {
     await db.delete(reactions);
     await db.delete(comments);
     await db.delete(momentTags);
+    await db.delete(momentPersons);
     await db.delete(tags);
+    await db.delete(persons);
     await db.delete(outbox);
     // chains→media 与 media→moments→chains 构成引用环：先显式断链再 delete(media)
     // （不能只靠调整 delete 顺序；ON DELETE SET NULL 虽能兜底，显式断开才不受 FK 行为约束）

@@ -1,4 +1,4 @@
-import { boolean, char, date, index, int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
+import { boolean, char, date, decimal, index, int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from 'drizzle-orm/mysql-core';
 import type { AnyMySqlColumn } from 'drizzle-orm/mysql-core';
 import { chains } from './chains.js';
 import { users } from './users.js';
@@ -34,6 +34,16 @@ export const moments = mysqlTable(
         展示仍用 happened_at + happened_tz_offset */
     wallDate: date('wall_date', { mode: 'string' }).notNull(),
     isBackfill: boolean('is_backfill').notNull().default(false),
+    /** 地点（spec people-place §2）：WGS-84 原值（EXIF/手动均为 WGS-84 或已换算，§4）。
+        place 三列 + place_source 同生同灭（§6 清除语义）。v1 不加 place 索引（§2/§10）。
+        mode:'number'：decimal(10,7) 共 10 位有效数字，远在 double 精度内，读写免转换 */
+    placeLat: decimal('place_lat', { precision: 10, scale: 7, mode: 'number' }),
+    placeLng: decimal('place_lng', { precision: 10, scale: 7, mode: 'number' }),
+    /** 展示名（逆地理编码回填或手动/AI 文本） */
+    placeName: varchar('place_name', { length: 255 }),
+    placeSource: mysqlEnum('place_source', ['manual', 'exif', 'ai']),
+    /** 上次 AI 抽取时 sha256(content + '\0' + transcript)（spec §5 幂等判据）；NULL = 从未抽取 */
+    aiExtractHash: char('ai_extract_hash', { length: 64 }),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow().onUpdateNow(),
     deletedAt: timestamp('deleted_at', { mode: 'date' }),

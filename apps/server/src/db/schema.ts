@@ -14,3 +14,5 @@ export * from './schema/push-tokens.js';
 export * from './schema/share-links.js';
 export * from './schema/templates.js';
 export * from './schema/recaps.js';
+export * from './schema/persons.js';
+export * from './schema/moment-persons.js';
