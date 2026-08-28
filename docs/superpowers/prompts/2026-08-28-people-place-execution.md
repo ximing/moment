@@ -58,7 +58,7 @@ T1 dto + server schema + 迁移 → T2 server persons CRUD + moments 集成（�
 
 | Task | Plan 文件 | 状态 |
 |---|---|---|
-| T1 | `docs/superpowers/plans/2026-08-28-people-place-p1-dto-schema.md` | ⬜ 待起草 |
+| T1 | `docs/superpowers/plans/2026-08-28-people-place-p1-dto-schema.md` | ✅ 已起草并评审通过 |
 | T2 | `docs/superpowers/plans/2026-08-28-people-place-p2-server-persons.md` | ⬜ 待起草 |
 | T3 | `docs/superpowers/plans/2026-08-28-people-place-p3-server-geocode.md` | ⬜ 待起草 |
 | T4 | `docs/superpowers/plans/2026-08-28-people-place-p4-server-extract.md` | ⬜ 待起草 |
