@@ -11,6 +11,7 @@ import { AlertDialog, Sheet } from '@/ui/modal/index';
 import { ComposePanelService } from './compose-panel.service';
 import { VoiceRecorder } from './voice-recorder';
 import { VideoPosterPicker } from './video-poster';
+import { PersonPicker } from './person-picker';
 import { TemplateFields } from '@/compose/template-fields';
 
 // 发布面板 = Sheet（Modal 规范 §2：记下／编辑时刻）；内部表单复用 Field 家族
@@ -52,6 +53,9 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
   }, []);
   useEffect(() => {
     void service.loadTagList();
+  }, [service, service.chainId]);
+  useEffect(() => {
+    void service.loadPersons(); // 失败静默（service 注释），选择器保持空列表不阻塞发布
   }, [service, service.chainId]);
 
   const edit = service.edit;
@@ -112,6 +116,8 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
     if (service.happenedAt !== base.happenedAt) return true;
     if (service.selectedTags.length !== base.tagIds.length) return true;
     if (service.selectedTags.some((id) => !base.tagIds.includes(id))) return true;
+    // 人物/地点草稿（spec people-place §6）：用户动作级判脏（未动 = 不算草稿变化）
+    if (service.personsTouched || service.placeTouched) return true;
     // 结构化字段草稿相对水合基线（编辑模式的既有 payload）有变化也算 dirty
     return JSON.stringify(service.payloadDraft) !== JSON.stringify(edit?.payload ?? {});
   };
@@ -328,6 +334,8 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
               </form>
             </div>
           )}
+
+          {chainId && <PersonPicker service={service} />}
 
           {service.error && <Banner tone="error">{service.error}</Banner>}
           {service.progress && <InlineProgress variant="indeterminate" label={service.progress} />}

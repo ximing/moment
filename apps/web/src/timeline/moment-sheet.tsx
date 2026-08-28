@@ -1,6 +1,6 @@
 import { useEffect, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { type MomentMedia, type PublicShareMoment } from '@moment/dto';
+import { type MomentMedia, type MomentPlace, type MomentResponse, type PersonBrief, type PublicShareMoment } from '@moment/dto';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { MoreHorizontal } from 'lucide-react';
 import { AuthService } from '@/services/auth.service';
@@ -24,6 +24,15 @@ import { Lightbox } from './lightbox';
 import { ReactionBar } from './reaction-bar';
 import { MomentSheetService } from './moment-sheet.service';
 
+/**
+ * 卡片可消费的 moment 形态（spec people-place §8）：公开分享路径（PublicShareMoment）
+ * 无 persons/place 两键——隐私红线在类型层生效；链内路径传 MomentResponse（超集）。
+ */
+export type MomentSheetMoment = PublicShareMoment & {
+  persons?: PersonBrief[];
+  place?: MomentPlace | null;
+};
+
 // 时刻内容（C 端总规范 §6）：不是完整白卡，而是共享内容列左缘的一组内容。
 // 作者行 ··· 固定右缘；Tag 在正文前、同一文字流（--tag 色，不画胶囊）；纯文字
 // 用 --surface 色面（无阴影），媒体自成基底；情绪入口在左、回应（N 条回应）在右。
@@ -44,7 +53,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   templateManifest,
   ageLabel,
 }: {
-  moment: PublicShareMoment;
+  moment: MomentSheetMoment;
   chainName?: string;
   chainColor?: ChainAppearanceColor | null;
   chainIcon?: ChainIcon | null;
@@ -163,7 +172,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
               sheetTitle="这条时刻"
               trigger={<IconButton icon={MoreHorizontal} label="更多操作" className="-my-1" />}
               onAction={(key) => {
-                if (key === 'edit') composeSession.openCompose({ chainId: moment.chainId, edit: moment });
+                if (key === 'edit') composeSession.openCompose({ chainId: moment.chainId, edit: moment as MomentResponse });
                 if (key === 'delete') service.confirmDel = true;
               }}
             >
@@ -213,6 +222,21 @@ export const MomentSheetContent = observer(function MomentSheetContent({
           const geo = moment.payload?.geo as { place_name?: string } | undefined;
           return geo?.place_name ? <p className="mt-1 text-meta text-muted">📍 {geo.place_name}</p> : null;
         })()}
+        {/* 人物与地点（spec people-place §7）：只读展示，不可点击（按人物/地点过滤属 M2）。
+            chip 复用词表 chip 形状（rounded-full + text-caption + border-line，非交互 span），
+            不新增 token；AI 行角标 text-muted；place 行镜像既有 geo payload 行样式。
+            公开分享路径两键不存在（PublicShareMoment），两行自然不渲染（spec §8 红线）。 */}
+        {moment.persons && moment.persons.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-2" aria-label="和谁在一起">
+            {moment.persons.map((p) => (
+              <span key={p.id} className="rounded-full border border-line px-3 py-1 text-caption text-ink">
+                {p.name}
+                {p.source === 'ai' && <span className="ml-1 text-muted">AI</span>}
+              </span>
+            ))}
+          </div>
+        )}
+        {moment.place?.name && <p className="mt-1 text-meta text-muted">📍 {moment.place.name}</p>}
         {acts}
         {service.showComments && !readOnly && (
           <div className="mt-3 flex flex-col gap-2">

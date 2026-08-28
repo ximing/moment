@@ -1,8 +1,9 @@
 import { Service } from '@rabjs/react';
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VIDEO_DURATION_SECONDS } from '@moment/dto';
-import type { PublicShareMoment, TagResponse, TemplateManifest } from '@moment/dto';
+import type { ChainMemberDto, MomentResponse, PersonBrief, PersonResponse, PublicShareMoment, TagResponse, TemplateManifest } from '@moment/dto';
 import { client } from '@/api/client';
 import { compressImage } from '@/lib/compress';
+import { firstGps } from '@/compose/exif-gps';
 import { humanError } from '@/lib/errors';
 import { formatBytes, nowLocalInput, probeVideo } from '@/lib/media';
 import { canCompose } from '@/lib/roles';
@@ -55,6 +56,23 @@ export class ComposePanelService extends Service {
   /** momentFields / kind payload 的草稿值；key 与 manifest 声明一致 */
   payloadDraft: Record<string, unknown> = {};
   geoBusy = false;
+  // ---- 人物与地点（spec people-place §3/§6/§7）----
+  /** 链 person 词典（选择器数据源，spec §6 GET persons） */
+  personList: PersonResponse[] = [];
+  /** 链成员（置顶 chip 数据源；选中 = 以该用户建/复用 person，spec §7） */
+  members: ChainMemberDto[] = [];
+  /** 选中人物全集（展示态含 source 供 AI 角标；提交时只取 id，source 永不上送） */
+  selectedPersons: PersonBrief[] = [];
+  personQuery = '';
+  /** dirty tracking（spec §6）：仅用户实际增删过人物才提交 personIds（动作级判脏，见计划偏差 3） */
+  personsTouched = false;
+  /** 地点草稿：name 手动输入；coords 来自 EXIF（或编辑回读）。两者独立可组合 */
+  placeName = '';
+  placeCoords: { lat: number; lng: number } | null = null;
+  /** dirty tracking（spec §6）：仅用户实际改过地点才提交 place；place:null = 显式清除 */
+  placeTouched = false;
+  /** 用户点 × 移除 EXIF chip 后本面板会话不再自动回填（否则删不掉，见计划偏差 2） */
+  exifDismissed = false;
   private manifestChainId = '';
 
   get chainList(): ChainListService {
@@ -90,6 +108,23 @@ export class ComposePanelService extends Service {
     this.payloadDraft = { ...(request.edit?.payload ?? {}) };
     this.manifest = null;
     this.manifestChainId = '';
+    // 人物/地点水合（spec §6）：编辑模式展示全集（含 ai 行，source 仅供角标）；
+    // 三个 touched 标志复位——未动过就不提交（undefined = 不变）。
+    // cast：ComposeRequest.edit 类型为 PublicShareMoment（分享/编辑共用形态），
+    // 但编辑路径运行时必为链内完整 MomentResponse（plan 偏差 8 同款收窄，不改 ComposeRequest）
+    const editMoment = request.edit as MomentResponse | undefined;
+    this.selectedPersons = editMoment ? [...editMoment.persons] : [];
+    this.personsTouched = false;
+    this.placeName = editMoment?.place?.name ?? '';
+    this.placeCoords =
+      editMoment?.place?.lat != null && editMoment?.place?.lng != null
+        ? { lat: editMoment.place.lat, lng: editMoment.place.lng }
+        : null;
+    this.placeTouched = false;
+    this.exifDismissed = false;
+    this.personList = [];
+    this.members = [];
+    this.personQuery = '';
   }
 
   async loadTagList(): Promise<void> {
@@ -98,6 +133,24 @@ export class ComposePanelService extends Service {
       return;
     }
     this.tagList = (await client.listTags(this.chainId)).tags;
+  }
+
+  /** 拉链 person 词典 + 成员（选择器数据源）。失败静默：辅助输入不阻塞发布主流程（对齐 loadManifest 先例）。
+   *  两路独立成败（allSettled）：词典与成员来自两个接口，词典失败只清词典，不牵连成员置顶。 */
+  async loadPersons(): Promise<void> {
+    const chainId = this.chainId;
+    if (!chainId) {
+      this.personList = [];
+      this.members = [];
+      return;
+    }
+    const [res, members] = await Promise.allSettled([
+      client.listPersons(chainId),
+      client.listMembers(chainId),
+    ]);
+    if (this.chainId !== chainId) return; // 异步返回时链已切换则丢弃（防串链）
+    this.personList = res.status === 'fulfilled' ? res.value.persons : [];
+    this.members = members.status === 'fulfilled' ? members.value : [];
   }
 
   /** 面板内切链（评审 H4）：重置结构化状态——旧链的 kind/payload 草稿对新链模板无意义；
@@ -109,6 +162,11 @@ export class ComposePanelService extends Service {
     this.payloadDraft = {};
     this.manifest = null;
     this.manifestChainId = '';
+    // 人物词典是链级作用域（spec §0）：切链丢弃旧链选择
+    this.personList = [];
+    this.members = [];
+    this.selectedPersons = [];
+    this.personsTouched = false;
   }
 
   /** 链切换时拉模板 manifest（链详情内嵌；同链幂等）。失败静默：无扩展字段可填，主流程不阻塞。 */
@@ -178,8 +236,73 @@ export class ComposePanelService extends Service {
       : [...this.selectedTags, id];
   }
 
+  /** 词典行 → PersonBrief（词典行无 source；选中是用户主动选择，语义恒 manual，spec §6 提交即 manual 意图）。 */
+  private asBrief(person: PersonResponse | PersonBrief): PersonBrief {
+    return 'source' in person ? person : { ...person, source: 'manual' as const };
+  }
+
+  /** 人物增删切换；置 personsTouched（动作级判脏：删除后加回同一 ai person 也要提交，spec §5 升级路径）。 */
+  togglePerson(person: PersonBrief): void {
+    this.personsTouched = true;
+    this.selectedPersons = this.selectedPersons.some((p) => p.id === person.id)
+      ? this.selectedPersons.filter((p) => p.id !== person.id)
+      : [...this.selectedPersons, person];
+  }
+
+  /** 选中链成员 = 以该用户建/复用 person（spec §7）：词典/已选集有 userId 命中直接选，否则幂等 POST。 */
+  async toggleMember(member: ChainMemberDto): Promise<void> {
+    const existing =
+      this.personList.find((p) => p.userId === member.userId) ??
+      this.selectedPersons.find((p) => p.userId === member.userId);
+    if (existing) {
+      this.togglePerson(this.asBrief(existing));
+      return;
+    }
+    try {
+      const person = await client.createPerson(this.chainId, { name: member.nickname, userId: member.userId });
+      if (!this.personList.some((p) => p.id === person.id)) this.personList = [...this.personList, person];
+      this.togglePerson({ id: person.id, name: person.name, userId: person.userId, source: 'manual' });
+    } catch (e) {
+      this.error = humanError(e);
+    }
+  }
+
+  /** 词典搜索命中同名直接选；否则自由文本回车新建（幂等 POST，归一化撞名返回已存在行，spec §6/§7）。 */
+  async submitPersonQuery(): Promise<void> {
+    const name = this.personQuery.trim();
+    if (!name || !this.chainId) return;
+    const existing =
+      this.personList.find((p) => p.name === name) ?? this.selectedPersons.find((p) => p.name === name);
+    if (existing) {
+      this.togglePerson(this.asBrief(existing));
+      this.personQuery = '';
+      return;
+    }
+    try {
+      const person = await client.createPerson(this.chainId, { name });
+      if (!this.personList.some((p) => p.id === person.id)) this.personList = [...this.personList, person];
+      this.togglePerson({ id: person.id, name: person.name, userId: person.userId, source: 'manual' });
+      this.personQuery = '';
+    } catch (e) {
+      this.error = humanError(e);
+    }
+  }
+
+  setPlaceName(name: string): void {
+    this.placeTouched = true;
+    this.placeName = name;
+  }
+
+  /** 移除 EXIF chip（spec §3「可点 × 移除」）：丢弃坐标且本会话不再自动回填。 */
+  removePlaceCoords(): void {
+    this.placeTouched = true;
+    this.exifDismissed = true;
+    this.placeCoords = null;
+  }
+
   addImages(files: File[]): void {
     this.error = null;
+    void this.ingestExif(files).catch(() => undefined);
     const next = [...this.images];
     for (const file of files) {
       if (!file.type.startsWith('image/')) continue;
@@ -318,12 +441,43 @@ export class ComposePanelService extends Service {
     this.resetVoice();
   }
 
+  /**
+   * EXIF 自动回填（spec §3）：多图取第一张含 GPS 的；仅地点草稿完全为空时写入
+   * （已手动输入或已移除 chip 不覆盖，偏差 2）。非用户动作，不置 placeTouched。
+   */
+  private async ingestExif(files: File[]): Promise<void> {
+    if (this.exifDismissed || this.placeCoords || this.placeName.trim() !== '') return;
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    if (images.length === 0) return;
+    const coords = await firstGps(images);
+    if (coords && !this.exifDismissed && !this.placeCoords && this.placeName.trim() === '') {
+      this.placeCoords = coords;
+    }
+  }
+
+  /**
+   * place 提交形态（spec §6 赋值表在 server 判 source，客户端只交 name/坐标）：
+   * 名字（trim 后）与坐标皆空 → null（显式清除）；有坐标 ±名字 → 整体提交
+   * （坐标+名字 → manual「确认后的形态」；仅坐标 → exif）；仅名字 → {name}（manual 文本）。
+   */
+  private placePayload(): { name?: string; lat?: number; lng?: number } | null {
+    const name = this.placeName.trim();
+    if (name === '' && !this.placeCoords) return null;
+    return this.placeCoords
+      ? { ...(name !== '' ? { name } : {}), lat: this.placeCoords.lat, lng: this.placeCoords.lng }
+      : { name };
+  }
+
   async submit(): Promise<void> {
     this.error = null;
     const edit = this.edit;
     const chainId = this.chainId;
     if (!chainId) {
       this.error = '先选一条链';
+      return;
+    }
+    if (this.selectedPersons.length > 20) {
+      this.error = '最多关联 20 位人物';
       return;
     }
     const hasImages = this.images.length > 0;
@@ -356,6 +510,9 @@ export class ComposePanelService extends Service {
           tagIds: this.selectedTags,
           kind: edit.kind,
           payload: Object.keys(this.payloadDraft).length > 0 ? this.payloadDraft : null,
+          // dirty tracking（spec §6）：undefined = 不变——未动过的人物/地点绝不整包回传
+          ...(this.personsTouched ? { personIds: this.selectedPersons.map((p) => p.id) } : {}),
+          ...(this.placeTouched ? { place: this.placePayload() } : {}),
         });
         composeSession.emit('moment:changed', { momentId: edit.id, chainId: edit.chainId, op: 'update' }, 'global');
       } else {
@@ -437,6 +594,9 @@ export class ComposePanelService extends Service {
           kind: this.kind,
           ...(hasPayload ? { payload: this.payloadDraft } : {}),
           ...(this.posterMediaId ? { posterMediaId: this.posterMediaId } : {}),
+          ...(this.selectedPersons.length > 0 ? { personIds: this.selectedPersons.map((p) => p.id) } : {}),
+          // EXIF 路（spec §3）：未动过但有坐标 → {lat,lng}（exif 分支）；动过按 placePayload（含 null 清除）
+          ...(this.placeTouched || this.placeCoords ? { place: this.placePayload() } : {}),
         });
         composeSession.markCreated(res.id); // 「从链节长出来」微动效（spec §1.6）
         composeSession.emit('moment:changed', { momentId: res.id, chainId, op: 'create' }, 'global');
