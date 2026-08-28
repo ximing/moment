@@ -11,12 +11,19 @@ import { TemplateService } from '../templates/template.service.js';
 import { validateMomentPayload } from '../templates/payload-validator.js';
 import { queryMomentPage } from '../feed/moment-query.js';
 import { emitOutbox } from '../outbox/outbox.js';
-import { OUTBOX_MOMENT_CREATED, OUTBOX_MOMENT_DELETED, OUTBOX_MOMENT_GEOCODE, OUTBOX_MOMENT_TRANSCRIBE } from '../outbox/types.js';
+import {
+  OUTBOX_MOMENT_CREATED,
+  OUTBOX_MOMENT_DELETED,
+  OUTBOX_MOMENT_EXTRACT,
+  OUTBOX_MOMENT_GEOCODE,
+  OUTBOX_MOMENT_TRANSCRIBE,
+} from '../outbox/types.js';
 import { getStorage } from '../storage/factory.js';
 import type { StorageMetadata } from '../storage/base.adapter.js';
 import { replaceMomentPersons } from '../persons/replace-moment-persons.js';
 import { replaceMomentTags } from '../tags/replace-moment-tags.js';
 import { logger } from '../utils/logger.js';
+import { computeAiExtractHash } from './ai-extract-hash.js';
 import { isGeocodePending, placeColumnsOf } from './moment-place.js';
 import { serializeMoments } from './moment-serializer.js';
 import { wallDateOf } from './wall-date.js';
@@ -175,6 +182,11 @@ export class MomentService {
         await emitOutbox(tx, OUTBOX_MOMENT_TRANSCRIBE, { momentId });
       }
 
+      // AI 抽取（spec people-place §5）：create 时 ai_extract_hash 恒 NULL ≠ 当前内容 hash → 恒发射
+      //（判据字面）。空素材（content 与 transcript 均空，如无正文 media/voice 时刻）的行由
+      // handler 判空跳过、不写 hash；voice 时刻转写回填后由 transcribe 路径再次发射，转写文本必进管线。
+      await emitOutbox(tx, OUTBOX_MOMENT_EXTRACT, { momentId });
+
       return inserted;
     });
 
@@ -287,6 +299,13 @@ export class MomentService {
           lat: placeSet.placeLat,
           lng: placeSet.placeLng,
         });
+      }
+      // AI 抽取（spec people-place §5）：内容 hash 变化才发射。row 是本事务更新后重读的行；
+      // transcript 不随 PATCH 变化（只来自 transcribe 回填路径的自有发射），判据只看组合 hash。
+      // 重复 PATCH 同内容在消费前会重复发射（判据是 ai_extract_hash 而非 pending 去重，偏差 8），
+      // 消费侧 hash 幂等吸收。
+      if (computeAiExtractHash(row.content, row.transcript) !== row.aiExtractHash) {
+        await emitOutbox(tx, OUTBOX_MOMENT_EXTRACT, { momentId });
       }
       return row;
     });

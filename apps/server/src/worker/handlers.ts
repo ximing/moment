@@ -7,7 +7,10 @@ import { getASRProvider } from '../llm/asr/factory.js';
 import { NonRetryableLLMError } from '../llm/base.provider.js';
 import { getLLMProvider } from '../llm/factory.js';
 import { getGeocodeProvider } from '../geocode/factory.js';
+import { extractPersonsPlaces } from '../llm/extract/extract.js';
+import { persistExtraction } from '../llm/extract/persist.js';
 import { generateRecap } from '../llm/recap/generate.js';
+import { computeAiExtractHash } from '../moments/ai-extract-hash.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import {
   NOTIFICATION_COMMENT_CREATED,
@@ -15,6 +18,8 @@ import {
   NOTIFICATION_REACTION_CREATED,
   NOTIFICATION_RECAP_READY,
 } from '../notifications/types.js';
+import { emitOutbox } from '../outbox/outbox.js';
+import { OUTBOX_MOMENT_EXTRACT } from '../outbox/types.js';
 import type { PushService } from '../push/push-service.js';
 import { getStorage } from '../storage/factory.js';
 
@@ -292,6 +297,18 @@ export const handleMomentTranscribe: OutboxHandler = async (payload) => {
         .update(moments)
         .set({ content: truncated })
         .where(and(eq(moments.id, momentId), eq(moments.content, '')));
+      // AI 抽取（spec people-place §5 voice 独立触发）：转写回填成功的同事务补发 moment.extract——
+      // 否则 voice 时刻（content 常空、transcript 后补）只在 create 时以空素材进入管线一次，
+      // 转写文本永远进不了抽取。判据同 create/update：hash 变化才发（cur 是回填后的最新行，
+      // content 条件回填也计入）。
+      const [cur] = await tx
+        .select({ content: moments.content, transcript: moments.transcript, aiExtractHash: moments.aiExtractHash })
+        .from(moments)
+        .where(eq(moments.id, momentId))
+        .limit(1);
+      if (cur && computeAiExtractHash(cur.content, cur.transcript) !== cur.aiExtractHash) {
+        await emitOutbox(tx, OUTBOX_MOMENT_EXTRACT, { momentId });
+      }
     });
   } catch (err) {
     // NonRetryable：自落终态、不占 processor 退避额度（对齐 recap 范式）；Retryable 及其他抛出 → 传播退避
@@ -351,6 +368,66 @@ export const handleMomentGeocode: OutboxHandler = async (payload) => {
         isNull(moments.placeName),
       ),
     );
+};
+
+/**
+ * moment.extract（spec people-place §5）：LLM 从 content + transcript 抽取人物/地点并落库。
+ *
+ * 流程与守卫（顺序敏感）：
+ * 1. 重读 moment：不存在 / 已软删 → done 跳过（worker 软删竞态，编排硬约束）。
+ * 2. getLLMProvider() 为 null（LLM_API_KEY 空停用）→ 消费即跳过，**不写 hash**——
+ *    恢复 key 后内容再变化自然补抽，存量由 backfill sweep 补（spec §5）。
+ * 3. 空素材（content 与 transcript 均空）→ 跳过、不写 hash（对齐 sweep 素材判据，
+ *    避免空 prompt 的 LLM 调用；素材出现时由对应发射路径再触发，见偏差 6）。
+ * 4. hash 幂等：computeAiExtractHash(content, transcript) === ai_extract_hash → 不重抽
+ *    （同内容二投 no-op；用户删除 ai 行后内容未变即保持删除，spec §5 冲突规则）。
+ * 5. extractPersonsPlaces（输入截断护栏在 prompt 内，解析失败内部重试一次）。
+ * 6. 落库事务：行锁（FOR UPDATE）重读 moment → 软删/素材快照/hash 三重再校验——
+ *    LLM IO 期间素材可能已变：不一致即丢弃本次结果、不写 hash（变化路径自会发射新事件
+ *    按新素材重抽，见偏差 10）→ persistExtraction（词典 upsert + 仅补缺 + place 全空才填 + 写 hash）。
+ *
+ * 失败语义（对齐 P3 geocode，偏差 5）：本 handler 不 try/catch，一切错误（含解析终败抛出的
+ * NonRetryableLLMError、provider 的 Retryable/NonRetryable）传播给 processor → 既有 5 档指数退避
+ * → attempts>5 终败仅记日志不重派。extract 无 moment 级终态列（对照 transcribe 的
+ * transcriptionStatus / recap 的行 status），outbox 行状态即唯一记录。
+ */
+export const handleMomentExtract: OutboxHandler = async (payload) => {
+  const momentId = str(payload.momentId);
+  if (!momentId) return;
+
+  // 步骤 1：幂等 + 软删竞态防御——不存在 / 已软删直接返回（spec §5）
+  const [m] = await db.select().from(moments).where(eq(moments.id, momentId)).limit(1);
+  if (!m || m.deletedAt) return;
+
+  // 步骤 2：部署方停用（LLM_API_KEY 空）→ 消费即跳过，不写 hash（编排硬约束）
+  const provider = getLLMProvider();
+  if (!provider) return;
+
+  // 步骤 3：空素材跳过（偏差 6）——content notNull；transcript 可 null
+  const content = m.content;
+  const transcript = m.transcript;
+  if (content.length === 0 && (transcript ?? '').length === 0) return;
+
+  // 步骤 4：hash 幂等——内容没变不重抽（spec §5）
+  const extractHash = computeAiExtractHash(content, transcript);
+  if (extractHash === m.aiExtractHash) return;
+
+  // 步骤 5：LLM 抽取（一切错误传播给 processor 退避）
+  const extraction = await extractPersonsPlaces(content, transcript, { provider });
+
+  // 步骤 6：落库事务（行锁重读 + 三重守卫 + persistExtraction 原子落库）
+  await db.transaction(async (tx) => {
+    const [cur] = await tx
+      .select()
+      .from(moments)
+      .where(eq(moments.id, momentId))
+      .for('update')
+      .limit(1);
+    if (!cur || cur.deletedAt) return;
+    if (cur.content !== content || cur.transcript !== transcript) return; // IO 期间素材已变：丢弃（偏差 10）
+    if (cur.aiExtractHash === extractHash) return; // 并发已消费同内容（防御，worker 串行下不应发生）
+    await persistExtraction(tx, { id: cur.id, chainId: cur.chainId }, extraction, extractHash);
+  });
 };
 
 /**
@@ -424,4 +501,5 @@ export const handlers: Record<string, OutboxHandler> = {
   'recap.generate': handleRecapGenerate,
   'moment.transcribe': handleMomentTranscribe,
   'moment.geocode': handleMomentGeocode,
+  'moment.extract': handleMomentExtract,
 };

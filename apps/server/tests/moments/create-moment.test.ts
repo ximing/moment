@@ -74,7 +74,7 @@ describe('POST /api/chains/:chainId/moments', () => {
     const [row] = await db.select().from(moments).where(eq(moments.id, res.body.id));
     expect(row.happenedAt.toISOString()).toBe('2026-08-15T02:00:00.000Z');
 
-    const [event] = await db.select().from(outbox);
+    const [event] = await db.select().from(outbox).where(eq(outbox.type, 'moment.created'));
     expect(event).toMatchObject({ type: 'moment.created', status: 'pending' });
     expect(event.payload).toEqual({
       momentId: res.body.id,

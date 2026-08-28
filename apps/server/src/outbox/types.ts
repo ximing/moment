@@ -7,6 +7,9 @@ export const OUTBOX_REACTION_CREATED = 'reaction.created';
 export const OUTBOX_RECAP_GENERATE = 'recap.generate';
 /** 逆地理编码（spec people-place §4）：payload {momentId, lat, lng}（WGS-84；P2 moments 写路径发射，P3 worker 消费） */
 export const OUTBOX_MOMENT_GEOCODE = 'moment.geocode';
+/** AI 文本抽取（spec people-place §5）：payload {momentId}（camelCase，P2 偏差 1 同款）；
+ *  P4 moments 写路径与 transcribe 回填发射，P4 worker 消费 */
+export const OUTBOX_MOMENT_EXTRACT = 'moment.extract';
 
 export type OutboxType =
   | typeof OUTBOX_MOMENT_CREATED
@@ -15,4 +18,5 @@ export type OutboxType =
   | typeof OUTBOX_COMMENT_CREATED
   | typeof OUTBOX_REACTION_CREATED
   | typeof OUTBOX_RECAP_GENERATE
-  | typeof OUTBOX_MOMENT_GEOCODE;
+  | typeof OUTBOX_MOMENT_GEOCODE
+  | typeof OUTBOX_MOMENT_EXTRACT;

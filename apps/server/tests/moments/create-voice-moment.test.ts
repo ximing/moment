@@ -81,7 +81,7 @@ async function setup() {
 }
 
 describe('POST moments type=voice（spec voice-moment §3.2/§3.3）', () => {
-  it('成功：1 audio + 2 图，空 content；transcriptionStatus=pending；同事务两行 outbox', async () => {
+  it('成功：1 audio + 2 图，空 content；transcriptionStatus=pending；同事务三行 outbox', async () => {
     const { chainId } = await setup();
     const audioId = await readyMedia(alice.token, 'audio/wav', 'audio');
     const img1 = await readyMedia(alice.token, 'image/jpeg', 'image');
@@ -99,8 +99,8 @@ describe('POST moments type=voice（spec voice-moment §3.2/§3.3）', () => {
     expect(row.transcript).toBeNull();
 
     const events = await db.select().from(outbox);
-    expect(events).toHaveLength(2);
-    expect(events.map((e) => e.type).sort()).toEqual(['moment.created', 'moment.transcribe']);
+    expect(events).toHaveLength(3);
+    expect(events.map((e) => e.type).sort()).toEqual(['moment.created', 'moment.extract', 'moment.transcribe']);
     const transcribe = events.find((e) => e.type === 'moment.transcribe')!;
     expect(transcribe.payload).toEqual({ momentId: res.body.id });
 

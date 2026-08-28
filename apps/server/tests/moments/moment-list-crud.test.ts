@@ -358,8 +358,8 @@ describe('DELETE /api/chains/:id（Phase 3 级联，兑现 Phase 2 事务锚点�
     // 语义声明：删链不补发 moment.deleted、也不清理既有 outbox 行——
     // pending 的 moment.created 由 Phase 5 worker 按链不存在幂等跳过（见「留给后续 Phase 的接缝」）
     const events = await db.select().from(outbox);
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ type: 'moment.created', status: 'pending' });
+    expect(events).toHaveLength(2);
+    expect(events.map((e) => e.type).sort()).toEqual(['moment.created', 'moment.extract']);
   });
 
   it('链内有 tag 且 moment 已打标时 owner 删链 204：moment_tags 与 tags 一并级联硬删', async () => {

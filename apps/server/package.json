@@ -15,7 +15,8 @@
     "migrate:generate": "drizzle-kit generate",
     "migrate:studio": "drizzle-kit studio",
     "worker": "cross-env NODE_ENV=development nodemon --exec node --loader ts-node/esm ./src/worker/index.ts",
-    "setup:s3-lifecycle": "tsx scripts/setup-s3-lifecycle.ts"
+    "setup:s3-lifecycle": "tsx scripts/setup-s3-lifecycle.ts",
+    "backfill:extract": "tsx scripts/backfill-extract.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",
