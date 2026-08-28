@@ -439,9 +439,10 @@ git commit -m "feat(web): add EXIF GPS reader with sliced buffer and dynamic exi
 - Produces（Task 4 / P6 消费——**P6 抄这份的 dirty tracking 纪律与行为语义**）:
   - 状态：`personList: PersonResponse[]`、`members: ChainMemberDto[]`、`selectedPersons: PersonBrief[]`、`personQuery: string`、`personsTouched: boolean`、`placeName: string`、`placeCoords: { lat: number; lng: number } | null`、`placeTouched: boolean`、`exifDismissed: boolean`
   - `hydrate(request)`：编辑模式水合 `selectedPersons = [...edit.persons]`（含 ai 行及 source，供 AI 角标）、`placeName = edit.place?.name ?? ''`、`placeCoords` 从 `edit.place.lat/lng`（两者均非 null 才有）；三个 touched 标志与 `exifDismissed` 一律复位 false
-  - `loadPersons(): Promise<void>`：`Promise.all([client.listPersons(chainId), client.listMembers(chainId)])`；失败静默（空列表）；await 后链已切换则丢弃（防串链，对齐 `loadManifest`）
+  - `loadPersons(): Promise<void>`：`Promise.allSettled([client.listPersons(chainId), client.listMembers(chainId)])`——两路独立成败，各自失败静默清各自列表（词典与成员是两个接口，词典失败不牵连成员置顶）；await 后链已切换则丢弃（防串链，对齐 `loadManifest`）
   - `pickChain(chainId)`：切换时清空 personList/members/selectedPersons 并复位 `personsTouched`（词典是链级作用域，spec §0）；place 草稿**保留**（镜像 images 在切链时保留的既有行为）
   - `togglePerson(person: PersonBrief): void`：增删切换，置 `personsTouched = true`——**动作级判脏**（见计划偏差 3：删除后加回同一 ai person（id 集合与基线相同）也要提交，source 升级 manual 才会发生）
+  - `asBrief(person: PersonResponse | PersonBrief): PersonBrief`（private）：`'source' in person` 原样返回（PersonBrief）；词典行（PersonResponse 无 source）补 `source: 'manual'`——词典命中是用户主动选择，选中态语义恒 manual。`toggleMember`/`submitPersonQuery` 的 `existing` 经此收口再传 `togglePerson`（PersonResponse 不可直赋 PersonBrief）
   - `toggleMember(member: ChainMemberDto): Promise<void>`：词典（含已选集）有 `userId` 命中 → 直接 `togglePerson`；否则幂等 `client.createPerson(chainId, { name: member.nickname, userId: member.userId })` 后入册并选中；POST 失败写 `error`（humanError）
   - `submitPersonQuery(): Promise<void>`：trim 后为空直接返回；词典（含已选集）同名命中 → `togglePerson` 短路（不 POST）；否则幂等 `client.createPerson(chainId, { name })` 后入册并选中；成功清空 `personQuery`
   - `setPlaceName(name: string): void`：置 `placeTouched = true` 并写 `placeName`
@@ -794,7 +795,7 @@ describe('人物词典与链成员（spec §6/§7）', () => {
     expect(s.members).toEqual([]);
   });
 
-  it('loadPersons：并行拉词典与成员；失败静默（空列表，不阻塞主流程）', async () => {
+  it('loadPersons：并行拉词典与成员；词典失败静默只清词典，成员独立成功不受牵连', async () => {
     api.listPersons.mockRejectedValue(new Error('network'));
     api.listMembers.mockResolvedValue([
       { userId: 'u-1', nickname: '林晓满', avatarUrl: null, role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' },
@@ -872,7 +873,8 @@ import { firstGps } from '@/compose/exif-gps';
 (d) `loadTagList()` 之后追加：
 
 ```ts
-  /** 拉链 person 词典 + 成员（选择器数据源）。失败静默：辅助输入不阻塞发布主流程（对齐 loadManifest 先例）。 */
+  /** 拉链 person 词典 + 成员（选择器数据源）。失败静默：辅助输入不阻塞发布主流程（对齐 loadManifest 先例）。
+   *  两路独立成败（allSettled）：词典与成员来自两个接口，词典失败只清词典，不牵连成员置顶。 */
   async loadPersons(): Promise<void> {
     const chainId = this.chainId;
     if (!chainId) {
@@ -880,15 +882,13 @@ import { firstGps } from '@/compose/exif-gps';
       this.members = [];
       return;
     }
-    try {
-      const [res, members] = await Promise.all([client.listPersons(chainId), client.listMembers(chainId)]);
-      if (this.chainId !== chainId) return; // 异步返回时链已切换则丢弃（防串链）
-      this.personList = res.persons;
-      this.members = members;
-    } catch {
-      this.personList = [];
-      this.members = [];
-    }
+    const [res, members] = await Promise.allSettled([
+      client.listPersons(chainId),
+      client.listMembers(chainId),
+    ]);
+    if (this.chainId !== chainId) return; // 异步返回时链已切换则丢弃（防串链）
+    this.personList = res.status === 'fulfilled' ? res.value.persons : [];
+    this.members = members.status === 'fulfilled' ? members.value : [];
   }
 ```
 
@@ -905,6 +905,11 @@ import { firstGps } from '@/compose/exif-gps';
 (f) `toggleTag(id)` 之后追加：
 
 ```ts
+  /** 词典行 → PersonBrief（词典行无 source；选中是用户主动选择，语义恒 manual，spec §6 提交即 manual 意图）。 */
+  private asBrief(person: PersonResponse | PersonBrief): PersonBrief {
+    return 'source' in person ? person : { ...person, source: 'manual' as const };
+  }
+
   /** 人物增删切换；置 personsTouched（动作级判脏：删除后加回同一 ai person 也要提交，spec §5 升级路径）。 */
   togglePerson(person: PersonBrief): void {
     this.personsTouched = true;
@@ -919,7 +924,7 @@ import { firstGps } from '@/compose/exif-gps';
       this.personList.find((p) => p.userId === member.userId) ??
       this.selectedPersons.find((p) => p.userId === member.userId);
     if (existing) {
-      this.togglePerson(existing);
+      this.togglePerson(this.asBrief(existing));
       return;
     }
     try {
@@ -938,7 +943,7 @@ import { firstGps } from '@/compose/exif-gps';
     const existing =
       this.personList.find((p) => p.name === name) ?? this.selectedPersons.find((p) => p.name === name);
     if (existing) {
-      this.togglePerson(existing);
+      this.togglePerson(this.asBrief(existing));
       this.personQuery = '';
       return;
     }
