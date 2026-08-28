@@ -1,5 +1,5 @@
 import { Service } from '@rabjs/react';
-import type { CommentDto, MomentResponse } from '@moment/dto';
+import type { CommentDto, PublicShareMoment } from '@moment/dto';
 import { client } from '@/api/client';
 import type { CommentChangedPayload } from '@/lib/events';
 
@@ -8,12 +8,12 @@ export class MomentSheetService extends Service {
   lightboxIndex: number | null = null;
   showComments = false;
   confirmDel = false;
-  moment: MomentResponse | null = null;
+  moment: PublicShareMoment | null = null;
   preview: CommentDto[] = [];
   previewText = '';
   private loaded = false;
 
-  hydrate(moment: MomentResponse): void {
+  hydrate(moment: PublicShareMoment): void {
     this.moment = moment;
   }
 

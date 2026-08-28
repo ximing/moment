@@ -33,6 +33,8 @@ function moment(id: string): MomentResponse {
     createdAt: '2025-08-19T02:00:00.000Z',
     media: [],
     tags: [],
+    persons: [],
+    place: null,
     commentCount: 0,
     reactions: [],
     myReaction: null,

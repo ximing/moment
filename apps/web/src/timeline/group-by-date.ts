@@ -1,10 +1,10 @@
-import type { MomentResponse } from '@moment/dto';
+import type { PublicShareMoment } from '@moment/dto';
 import { localDateKey } from '@/lib/time';
 
 export interface DateGroup {
   /** YYYY-MM-DD（发生地墙钟日期） */
   date: string;
-  moments: MomentResponse[];
+  moments: PublicShareMoment[];
 }
 
 /**
@@ -12,8 +12,8 @@ export interface DateGroup {
  * 用 Map 按 key 归并而非相邻分段——跨页边界的同一天只渲染一枚日期贴纸，
  * key 为日期字符串，新页插入时分组稳定。
  */
-export function groupMomentsByDate(moments: MomentResponse[]): DateGroup[] {
-  const byDate = new Map<string, MomentResponse[]>();
+export function groupMomentsByDate(moments: PublicShareMoment[]): DateGroup[] {
+  const byDate = new Map<string, PublicShareMoment[]>();
   for (const m of moments) {
     const key = localDateKey(m.happenedAt, m.happenedTzOffset);
     const list = byDate.get(key);

@@ -1,5 +1,5 @@
 import { Service } from '@rabjs/react';
-import type { AggregateResponse, MomentResponse, RecapDto, TemplateManifest } from '@moment/dto';
+import type { AggregateResponse, PublicShareMoment, RecapDto, TemplateManifest } from '@moment/dto';
 import { client } from '@/api/client';
 
 export type PublicShareChain = Awaited<ReturnType<typeof client.getPublicShare>>['chain'];
@@ -8,7 +8,7 @@ export type PublicShareChain = Awaited<ReturnType<typeof client.getPublicShare>>
 export class ShareAlbumService extends Service {
   token = '';
   chain: PublicShareChain | null = null;
-  moments: MomentResponse[] = [];
+  moments: PublicShareMoment[] = [];
   nextCursor: string | null = null;
   /** 模板 manifest 与聚合投影（spec §3.2：分享响应附带，长辈可见里程碑轴/地图/心情线）。
    *  响应里的 template key 不落字段——当前无 UI 消费者（评审 S10），需要调试时从 templateManifest 推断。 */

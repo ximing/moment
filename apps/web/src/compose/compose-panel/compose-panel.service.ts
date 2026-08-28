@@ -1,6 +1,6 @@
 import { Service } from '@rabjs/react';
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VIDEO_DURATION_SECONDS } from '@moment/dto';
-import type { MomentResponse, TagResponse, TemplateManifest } from '@moment/dto';
+import type { PublicShareMoment, TagResponse, TemplateManifest } from '@moment/dto';
 import { client } from '@/api/client';
 import { compressImage } from '@/lib/compress';
 import { humanError } from '@/lib/errors';
@@ -69,7 +69,7 @@ export class ComposePanelService extends Service {
     return this.pickedChainId || this.writableChains[0]?.id || '';
   }
 
-  get edit(): MomentResponse | undefined {
+  get edit(): PublicShareMoment | undefined {
     return this.request?.edit;
   }
 

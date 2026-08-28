@@ -160,6 +160,8 @@ const TEXT_MOMENT: MomentResponse = {
   createdAt: '2026-08-17T14:00:00.000Z',
   media: [],
   tags: [],
+  persons: [],
+  place: null,
   commentCount: 0,
   reactions: [],
   myReaction: null,

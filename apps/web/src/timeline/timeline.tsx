@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { observer, useService } from '@rabjs/react';
-import type { MomentResponse, TemplateManifest } from '@moment/dto';
+import type { PublicShareMoment, TemplateManifest } from '@moment/dto';
 import type { ChainLook } from '@/chain/ChainMark';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { dayHeading } from '@/lib/time';
@@ -35,7 +35,7 @@ export const Timeline = observer(function Timeline({
   templateManifest,
   ageLabelOf,
 }: {
-  moments: MomentResponse[];
+  moments: PublicShareMoment[];
   chainLookById?: Map<string, ChainLook>;
   shareToken?: string;
   readOnly?: boolean;
@@ -50,12 +50,12 @@ export const Timeline = observer(function Timeline({
   entry?: ReactNode;
   templateManifest?: TemplateManifest | null;
   /** 年龄标注函数（chain-home 按链 payload.birthdate 提供；feed/分享页不传则不显示） */
-  ageLabelOf?: (m: MomentResponse) => string;
+  ageLabelOf?: (m: PublicShareMoment) => string;
 }) {
   const sentinelRef = useLoadMoreSentinel(!isPending && !isError, hasNextPage, isFetchingNextPage, fetchNextPage);
   const composeSession = useService(ComposeSessionService);
 
-  const renderSheet = (m: MomentResponse) => (
+  const renderSheet = (m: PublicShareMoment) => (
     <div key={m.id} className={m.id === composeSession.lastCreatedId ? 'animate-[grow-in_200ms_ease-out]' : undefined}>
       <MomentSheet
         moment={m}

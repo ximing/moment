@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { AggregateResponse, MomentResponse } from '@moment/dto';
+import type { AggregateResponse, PublicShareMoment } from '@moment/dto';
 import { METRIC_LABELS, groupMomentsByTrips, type Trip } from '@/lib/template';
 import { formatHappenedClock } from '@/lib/time';
 import { Banner, EmptyState } from '@/ui/feedback/index';
@@ -107,7 +107,7 @@ function MoodlineView({ aggregate }: { aggregate: Extract<AggregateResponse, { v
 
 /** 行程分章（timeline + groupBy:'trips'）：用已加载 moments 前端分组，不打聚合端点。
  *  已知限制（评审 H2）：只统计当前已加载的分页数据，视图内注明统计范围。 */
-function TripsView({ moments, chainPayload, hasMore }: { moments: MomentResponse[]; chainPayload: Record<string, unknown> | null; hasMore: boolean }) {
+function TripsView({ moments, chainPayload, hasMore }: { moments: PublicShareMoment[]; chainPayload: Record<string, unknown> | null; hasMore: boolean }) {
   const trips = (chainPayload?.trips ?? []) as Trip[];
   if (trips.length === 0) {
     return <EmptyState variant="plain" scope="section" title="还没有行程" description="在链设置里补一段行程（名称与起止日期），时刻会按行程归章。" />;
@@ -161,7 +161,7 @@ export function AggregateView({
 }: {
   view: string;
   aggregate: AggregateResponse | null;
-  moments: MomentResponse[];
+  moments: PublicShareMoment[];
   chainPayload: Record<string, unknown> | null;
   /** trips 分章统计范围提示用（H2）：时间线还有未加载页 */
   hasMore: boolean;

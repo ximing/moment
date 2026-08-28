@@ -1,4 +1,4 @@
-import type { MomentResponse, TemplateManifest } from '@moment/dto';
+import type { PublicShareMoment, TemplateManifest } from '@moment/dto';
 import { localDateKey } from './time';
 
 // 模板相关的纯函数（页面私有逻辑下沉 lib，web CLAUDE.md 放置约束）。
@@ -32,7 +32,7 @@ export function babyAgeLabel(birthdate: string, happenedAtIso: string, tzOffsetM
 }
 
 export interface TripSection extends Trip {
-  moments: MomentResponse[];
+  moments: PublicShareMoment[];
 }
 
 /**
@@ -40,13 +40,13 @@ export interface TripSection extends Trip {
  * 含首尾日；章节按 start 倒序（新的在前，与时间线同向）；不属于任何行程的进 outside。
  */
 export function groupMomentsByTrips(
-  moments: MomentResponse[],
+  moments: PublicShareMoment[],
   trips: Trip[],
-): { sections: TripSection[]; outside: MomentResponse[] } {
+): { sections: TripSection[]; outside: PublicShareMoment[] } {
   const sections: TripSection[] = [...trips]
     .sort((a, b) => (a.start < b.start ? 1 : -1))
     .map((t) => ({ ...t, moments: [] }));
-  const outside: MomentResponse[] = [];
+  const outside: PublicShareMoment[] = [];
   for (const m of moments) {
     const day = localDateKey(m.happenedAt, m.happenedTzOffset);
     const section = sections.find((s) => day >= s.start && day <= s.end);

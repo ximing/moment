@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react';
-import { REACTION_EMOJIS, type MomentResponse } from '@moment/dto';
+import { REACTION_EMOJIS, type PublicShareMoment } from '@moment/dto';
 import { Icon } from '@/ui/Icon';
 import { ReactionPopover } from '@/ui/popover/index';
 
@@ -12,7 +12,7 @@ export function ReactionBar({
   moment,
   onReact,
 }: {
-  moment: MomentResponse;
+  moment: PublicShareMoment;
   onReact: (emoji: string) => void;
 }) {
   const counted = REACTION_EMOJIS.map((emoji) => ({

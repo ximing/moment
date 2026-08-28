@@ -1,6 +1,6 @@
 import { useEffect, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { type MomentMedia, type MomentResponse } from '@moment/dto';
+import { type MomentMedia, type PublicShareMoment } from '@moment/dto';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { MoreHorizontal } from 'lucide-react';
 import { AuthService } from '@/services/auth.service';
@@ -44,7 +44,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   templateManifest,
   ageLabel,
 }: {
-  moment: MomentResponse;
+  moment: PublicShareMoment;
   chainName?: string;
   chainColor?: ChainAppearanceColor | null;
   chainIcon?: ChainIcon | null;
