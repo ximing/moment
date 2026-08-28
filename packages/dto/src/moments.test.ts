@@ -289,3 +289,81 @@ test('MomentResponse：含 persons/place 字段可赋值（P2 已必填化）', 
   // 必填由 pnpm --filter @moment/dto build（tsc）把关；运行时断言钉字段语义。
   assert.equal(Array.isArray(res.persons), true);
 });
+
+test('listMomentsQuerySchema：person_id/place/happened_from/to；before 松紧不变；limit 仍是 string', () => {
+  const q = listMomentsQuerySchema.parse({
+    person_id: UUID_A,
+    place: '朝阳公园',
+    happened_from: '2026-08-01T00:00:00.000Z',
+    happened_to: '2026-08-31T23:59:59.999Z',
+    cursor: 'abc',
+    limit: '50',
+  });
+  assert.equal(q.person_id, UUID_A);
+  assert.equal(q.place, '朝阳公园');
+  assert.equal(q.limit, '50');
+  assert.ok(!listMomentsQuerySchema.safeParse({ person_id: 'nope' }).success);
+  assert.ok(!listMomentsQuerySchema.safeParse({ happened_from: '2026/08/01' }).success);
+  // 既有 before 仍走 isoTimestampSchema：Date.parse 宽松串继续合法（isoDatetime 会拒 2026/08/01）
+  assert.ok(listMomentsQuerySchema.safeParse({ before: '2026/08/01' }).success);
+});
+
+test('listMomentsQuerySchema：from>to → VALIDATION_ERROR；无 RANGE_REQUIRES_HAPPENED_AT（无 order 字段）', () => {
+  const bad = listMomentsQuerySchema.safeParse({
+    happened_from: '2026-08-02T00:00:00.000Z',
+    happened_to: '2026-08-01T00:00:00.000Z',
+  });
+  assert.ok(!bad.success);
+  if (!bad.success) {
+    assert.ok(bad.error.issues.some((i) => i.message === 'VALIDATION_ERROR'));
+    assert.ok(!bad.error.issues.some((i) => i.message === 'RANGE_REQUIRES_HAPPENED_AT'));
+  }
+});
+
+test('MomentMedia：derivedUrl / posterDerivedUrl 可赋值；P1 可省略（偏差 1）', () => {
+  const ready: import('./moments.js').MomentMedia = {
+    id: UUID_A,
+    url: `/api/media/${UUID_A}`,
+    mime: 'image/jpeg',
+    width: 64,
+    height: 48,
+    duration: null,
+    sortOrder: 0,
+    posterMediaId: null,
+    posterUrl: null,
+    derivedUrl: `/api/media/${UUID_A}?variant=derived`,
+    posterDerivedUrl: null,
+  };
+  assert.equal(ready.derivedUrl, `/api/media/${UUID_A}?variant=derived`);
+
+  const video: import('./moments.js').MomentMedia = {
+    id: UUID_A,
+    url: `/api/media/${UUID_A}`,
+    mime: 'video/mp4',
+    width: 1280,
+    height: 720,
+    duration: 12,
+    sortOrder: 0,
+    posterMediaId: UUID_B,
+    posterUrl: `/api/media/${UUID_B}`,
+    derivedUrl: null,
+    posterDerivedUrl: `/api/media/${UUID_B}?variant=derived`,
+  };
+  assert.equal(video.posterDerivedUrl, `/api/media/${UUID_B}?variant=derived`);
+
+  // P1 可选：既有字面量不带这两键必须仍是合法 MomentMedia。
+  // dto `tsconfig.json` exclude `*.test.ts`，tsx 也不做类型检查——可选性由实现 `?:` 与本 Task Step 6 的 server typecheck 把关（serializer 媒体字面量缺这两键）。
+  const legacy: import('./moments.js').MomentMedia = {
+    id: UUID_A,
+    url: `/api/media/${UUID_A}`,
+    mime: 'image/jpeg',
+    width: 64,
+    height: 48,
+    duration: null,
+    sortOrder: 0,
+    posterMediaId: null,
+    posterUrl: null,
+  };
+  assert.equal(legacy.derivedUrl, undefined);
+});
+
