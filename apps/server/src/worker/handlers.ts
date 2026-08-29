@@ -22,6 +22,7 @@ import { emitOutbox } from '../outbox/outbox.js';
 import { OUTBOX_MOMENT_EXTRACT } from '../outbox/types.js';
 import type { PushService } from '../push/push-service.js';
 import { handleMomentCompress } from '../media/handle-moment-compress.js';
+import { handleMomentEmbed } from '../embedding/handle-moment-embed.js';
 import { getStorage } from '../storage/factory.js';
 
 export type OutboxHandler = (payload: Record<string, unknown>, deps: { push: PushService }) => Promise<void>;
@@ -504,4 +505,5 @@ export const handlers: Record<string, OutboxHandler> = {
   'moment.geocode': handleMomentGeocode,
   'moment.extract': handleMomentExtract,
   'moment.compress': handleMomentCompress,
+  'moment.embed': handleMomentEmbed,
 };
