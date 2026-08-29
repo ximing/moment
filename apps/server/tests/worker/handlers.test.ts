@@ -4,6 +4,7 @@ import { db } from '../../src/db/index.js';
 import { chainMembers, comments, moments, notifications, pushTokens } from '../../src/db/schema.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
 import { MockPushService } from '../../src/push/mock.js';
+import { handleMomentCompress } from '../../src/media/handle-moment-compress.js';
 import {
   handleCommentCreated,
   handleMomentCreated,
@@ -182,7 +183,7 @@ describe('handleCommentCreated / handleReactionCreated', () => {
 });
 
 describe('handlers 注册表', () => {
-  it('八种事件均已注册（moment.deleted 为 orphaned 标记实现）', () => {
+  it('九种事件均已注册（含 moment.compress）', () => {
     expect(handlers['moment.created']).toBe(handleMomentCreated);
     expect(handlers['comment.created']).toBe(handleCommentCreated);
     expect(handlers['reaction.created']).toBe(handleReactionCreated);
@@ -191,7 +192,8 @@ describe('handlers 注册表', () => {
     expect(handlers['moment.transcribe']).toBe(handleMomentTranscribe);
     expect(handlers['moment.geocode']).toBe(handleMomentGeocode);
     expect(handlers['moment.extract']).toBe(handleMomentExtract);
-    expect(Object.keys(handlers)).toHaveLength(8);
+    expect(handlers['moment.compress']).toBe(handleMomentCompress);
+    expect(Object.keys(handlers)).toHaveLength(9);
   });
 
   it('moment.deleted：无匹配 media 行时静默成功、不产生通知（Phase 8 已替换为 orphaned 标记实现）', async () => {
