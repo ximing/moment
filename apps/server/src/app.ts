@@ -28,6 +28,7 @@ import { TemplatesController } from './templates/template.controller.js';
 import { AggregateController } from './templates/aggregate.controller.js';
 import { InternalEmbeddingsController } from './embeddings/internal.controller.js';
 import { SearchController } from './search/search.controller.js';
+import { JobsController } from './jobs/jobs.controller.js';
 
 export function createApp(): express.Express {
   useContainer(Container);
@@ -54,7 +55,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, PersonController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController, InternalEmbeddingsController, SearchController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, PersonController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController, InternalEmbeddingsController, SearchController, JobsController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,
