@@ -16,6 +16,7 @@ import { useTheme } from '../../theme/use-theme';
 import { MomentPageService } from './moment.service';
 
 function MomentImage({ media }: { media: MomentMedia }) {
+  // Lightbox 同构（spec §7.3）：详情大图/视频永远 original，即使行上 derivedUrl 非空
   const uri = useMediaUri(media.id);
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
@@ -33,6 +34,7 @@ function ReadyVideo({ uri }: { uri: string }) {
 }
 
 function VideoBlock({ media }: { media: MomentMedia }) {
+  // Lightbox 同构（spec §7.3）：详情大图/视频永远 original，即使行上 derivedUrl 非空
   const uri = useMediaUri(media.id);
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
