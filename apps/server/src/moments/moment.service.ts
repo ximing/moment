@@ -11,7 +11,9 @@ import { TemplateService } from '../templates/template.service.js';
 import { validateMomentPayload } from '../templates/payload-validator.js';
 import { queryMomentPage } from '../feed/moment-query.js';
 import { emitOutbox } from '../outbox/outbox.js';
+import { isCompressibleMime } from '../media/derived.js';
 import {
+  OUTBOX_MOMENT_COMPRESS,
   OUTBOX_MOMENT_CREATED,
   OUTBOX_MOMENT_DELETED,
   OUTBOX_MOMENT_EXTRACT,
@@ -57,6 +59,7 @@ export class MomentService {
     const copiedTmp: { key: string; metadata: StorageMetadata }[] = [];
 
     const created = await db.transaction(async (tx) => {
+      const compressIds: string[] = [];
       let mediaRows: Media[] = [];
       let posterRow: Media | null = null;
       // poster 与媒体行走同一事务行锁（并发语义一致），但 poster 行单独持有——
@@ -140,8 +143,10 @@ export class MomentService {
             sortOrder,
             storageMeta: row.storageMeta,
             ...(input.posterMediaId ? { posterMediaId: input.posterMediaId } : {}),
+            ...(isCompressibleMime(row.mime) ? { derivedStatus: 'pending' as const } : {}),
           })
           .where(eq(media.id, row.id));
+        if (isCompressibleMime(row.mime)) compressIds.push(row.id);
       }
 
       // poster 绑定（copy 复用媒体循环的 copyObject 范式，update 分开——不写 sortOrder / storageMeta）：
@@ -152,7 +157,15 @@ export class MomentService {
         const finalKey = `chains/${chainId}/${momentId}/${posterRow.id}.${ext}`;
         await storage.copyObject(posterRow.s3Key, finalKey, posterRow.storageMeta);
         copiedTmp.push({ key: posterRow.s3Key, metadata: posterRow.storageMeta });
-        await tx.update(media).set({ s3Key: finalKey, momentId }).where(eq(media.id, posterRow.id));
+        await tx
+          .update(media)
+          .set({
+            s3Key: finalKey,
+            momentId,
+            ...(isCompressibleMime(posterRow.mime) ? { derivedStatus: 'pending' as const } : {}),
+          })
+          .where(eq(media.id, posterRow.id));
+        if (isCompressibleMime(posterRow.mime)) compressIds.push(posterRow.id);
       }
 
       const [inserted] = await tx.select().from(moments).where(eq(moments.id, momentId)).limit(1);
@@ -161,6 +174,10 @@ export class MomentService {
       await replaceMomentTags(tx, inserted.id, chainId, input.tagIds ?? []);
 
       await replaceMomentPersons(tx, inserted.id, chainId, input.personIds ?? []);
+
+      for (const mediaId of compressIds) {
+        await emitOutbox(tx, OUTBOX_MOMENT_COMPRESS, { momentId, chainId, mediaId });
+      }
 
       // 仅坐标且 place_name 空（exif 形态）→ 同事务写 geocode outbox（spec §4；worker 属 P3）
       if (isGeocodePending(placeCols)) {
