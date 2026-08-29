@@ -108,6 +108,7 @@ src/storage/factory.ts        → getStorage(): UnifiedStorageAdapter（按 conf
 | Phase 8 | `/api/chains/:chainId/share-links*`、`/api/share-links/:id`、`/api/public/share/:token` |
 | 模板系统（2026-08-20-templates） | `/api/templates*` |
 | 融合检索（2026-08-29-fused-retrieval） | `POST /api/search`、`GET /api/chains/:chainId/jobs`、`POST /api/internal/embeddings`、`DELETE /api/internal/embeddings/:momentId`；既有 `GET /api/feed` / `GET /api/chains/:chainId/moments` 追加 query `person_id`/`place`/`happened_from`/`happened_to`；既有 `GET /api/media/:id` 追加 query `variant=original|derived`（缺省 original，不改稳定入口） |
+| 地点 EXIF 预览（2026-08-30） | `POST /api/geocode/reverse`（登录；预览 EXIF 坐标地名，失败 `{name:null}`） |
 
 ## 4. 各端测试策略
 
