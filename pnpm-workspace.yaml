@@ -6,3 +6,20 @@ packages:
 onlyBuiltDependencies:
   - bcrypt
   - esbuild
+
+supportedArchitectures:
+  os:
+    - current
+    - linux
+    - darwin
+  cpu:
+    - current
+    - x64
+    - arm64
+  libc:
+    - current
+    - glibc
+
+ignoredOptionalDependencies:
+  - openai
+  - '@huggingface/transformers'
