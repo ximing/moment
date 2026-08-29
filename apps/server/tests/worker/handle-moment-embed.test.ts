@@ -7,7 +7,6 @@ import { config } from '../../src/config.js';
 import { db } from '../../src/db/index.js';
 import { media, moments, momentPersons, outbox, persons } from '../../src/db/schema.js';
 import type { EmbeddingProvider } from '../../src/embedding/base.provider.js';
-import { NonRetryableEmbeddingError } from '../../src/embedding/base.provider.js';
 import { setEmbeddingProvider } from '../../src/embedding/factory.js';
 import { handleMomentEmbed } from '../../src/embedding/handle-moment-embed.js';
 import { setBaAuthTokenForTests } from '../../src/embeddings/ba-auth.js';

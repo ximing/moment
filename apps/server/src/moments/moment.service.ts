@@ -13,6 +13,7 @@ import { queryMomentPage } from '../feed/moment-query.js';
 import { emitOutbox } from '../outbox/outbox.js';
 import { isCompressibleMime } from '../media/derived.js';
 import { maybeEmitMomentEmbed } from './embed-outbox.js';
+import { deleteVectorsByMomentId } from '../lancedb/repository.js';
 import {
   OUTBOX_MOMENT_COMPRESS,
   OUTBOX_MOMENT_CREATED,
@@ -349,5 +350,10 @@ export class MomentService {
         { momentId, chainId: m.chainId, authorId: m.authorId }
       );
     });
+    try {
+      await deleteVectorsByMomentId(momentId);
+    } catch (err) {
+      logger.warn('lancedb delete after moment soft-delete failed', err);
+    }
   }
 }

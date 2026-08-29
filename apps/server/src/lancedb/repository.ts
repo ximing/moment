@@ -66,3 +66,25 @@ export async function deleteVectorsByMomentId(momentId: string): Promise<number>
   await getLanceTable().delete(pred);
   return n;
 }
+
+export async function listVectorsByChainId(chainId: string): Promise<MomentVectorRow[]> {
+  const pred = lanceEqUuid('chainId', chainId);
+  if (!pred) return [];
+  const table = getLanceTable();
+  const q = table as unknown as { query: () => { where: (p: string) => { toArray: () => Promise<unknown[]> } } };
+  const raw = await q.query().where(pred).toArray();
+  return raw as MomentVectorRow[];
+}
+
+export async function deleteVectorsByChainId(chainId: string): Promise<number> {
+  const pred = lanceEqUuid('chainId', chainId);
+  if (!pred) {
+    logger.warn('lancedb delete ignored non-uuid chainId');
+    return 0;
+  }
+  const existing = await listVectorsByChainId(chainId);
+  const n = existing.length;
+  if (n === 0) return 0;
+  await getLanceTable().delete(pred);
+  return n;
+}

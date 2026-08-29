@@ -1,5 +1,6 @@
 import { closeLanceForTests, ensureLance, resetLanceForTests } from '../../src/lancedb/factory.js';
 import {
+  deleteVectorsByChainId,
   deleteVectorsByMomentId,
   listVectorsByMomentId,
   upsertMomentVector,
@@ -88,5 +89,28 @@ describe('upsertMomentVector / deleteVectorsByMomentId', () => {
     ).rejects.toThrow(/VALIDATION_ERROR/);
     expect(await deleteVectorsByMomentId("x' OR 1=1")).toBe(0);
     expect(await listVectorsByMomentId('not-a-uuid')).toEqual([]);
+  });
+
+  it('deleteVectorsByChainId 清该链全部 kind；非 uuid 返回 0', async () => {
+    const m2 = '123e4567-e89b-12d3-a456-426614174099';
+    await upsertMomentVector({
+      momentId: MOMENT,
+      chainId: CHAIN,
+      kind: 'moment',
+      vector: denseVector(0.1),
+      modelHash: HEX64_A,
+    });
+    await upsertMomentVector({
+      momentId: m2,
+      chainId: CHAIN,
+      kind: 'image',
+      mediaId: MEDIA,
+      vector: denseVector(0.2),
+      modelHash: HEX64_A,
+    });
+    expect(await deleteVectorsByChainId(CHAIN)).toBe(2);
+    expect(await listVectorsByMomentId(MOMENT)).toEqual([]);
+    expect(await listVectorsByMomentId(m2)).toEqual([]);
+    expect(await deleteVectorsByChainId("x' OR 1=1")).toBe(0);
   });
 });
