@@ -427,3 +427,11 @@ test('mediaUrl / fetchMediaBlob：variant + st 拼接（已有 ? 则 &st=）', a
     ],
   );
 });
+
+test('reverseGeocode：POST /api/geocode/reverse', async () => {
+  const { client, calls } = harness();
+  await client.reverseGeocode({ lat: 39.9042, lng: 116.4074 });
+  assert.equal(calls[0]!.method, 'POST');
+  assert.equal(calls[0]!.url, 'http://x/api/geocode/reverse');
+  assert.deepEqual(calls[0]!.body, { lat: 39.9042, lng: 116.4074 });
+});

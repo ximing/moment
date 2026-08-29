@@ -31,6 +31,8 @@ import type {
   PersonPatchInput,
   PersonResponse,
   PublicShareResponse,
+  ReverseGeocodeInput,
+  ReverseGeocodeResponse,
   RecapDto,
   RecapListResponse,
   RegisterInput,
@@ -133,6 +135,8 @@ export interface MomentClient {
   createPerson(chainId: string, input: PersonCreateInput): Promise<PersonResponse>;
   renamePerson(chainId: string, personId: string, input: PersonPatchInput): Promise<PersonResponse>;
   removePerson(chainId: string, personId: string): Promise<void>;
+  /** 登录预览 EXIF 坐标对应地名；失败 `{name:null}`，不挡选图 */
+  reverseGeocode(input: ReverseGeocodeInput): Promise<ReverseGeocodeResponse>;
 
   presignMedia(input: MediaPresignInput): Promise<MediaPresignResponse>;
   presignMediaParts(mediaId: string, partNumbers: number[]): Promise<MediaPartsResponse>;
@@ -274,6 +278,7 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
       http.request(`/api/chains/${chainId}/persons/${personId}`, { method: 'PATCH', body: input }),
     removePerson: (chainId, personId) =>
       http.request(`/api/chains/${chainId}/persons/${personId}`, { method: 'DELETE' }),
+    reverseGeocode: (input) => http.request('/api/geocode/reverse', { method: 'POST', body: input }),
 
     presignMedia: (input) => http.request('/api/media/presign', { method: 'POST', body: input }),
     presignMediaParts: (mediaId, partNumbers) =>
