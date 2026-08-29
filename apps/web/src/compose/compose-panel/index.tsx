@@ -335,7 +335,7 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
 
           <DateTimeField
             value={service.happenedAt}
-            onChange={(v) => (service.happenedAt = v)}
+            onChange={(v) => service.setHappenedAt(v)}
             hint={
               (edit && service.happenedAt === toWallClockInput(edit.happenedAt, edit.happenedTzOffset)
                 ? edit.isBackfill

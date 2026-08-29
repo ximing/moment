@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { extractGpsCoords, firstGps, parseExifGps, readGpsFromFile } from './exif-gps';
+import {
+  extractDateTimeOriginal,
+  extractGpsCoords,
+  firstGps,
+  parseExifDateToWallClock,
+  parseExifGps,
+  readGpsFromFile,
+} from './exif-gps';
 
 // jsdom 未实现 Blob.prototype.arrayBuffer（生产浏览器有）；用 FileReader 兜底，
 // 只在测试环境补、不改 setup.ts（基座文件不可动）也不改生产实现（plan 钉死）。
@@ -132,6 +139,33 @@ describe('readGpsFromFile / firstGps', () => {
     ]);
     expect(first?.lat).toBeCloseTo(39.9042, 4);
     expect(await firstGps([])).toBeNull();
+  });
+});
+
+describe('parseExifDateToWallClock / extractDateTimeOriginal', () => {
+  it('EXIF 冒号日期 → datetime-local', () => {
+    expect(parseExifDateToWallClock('2026:05:17 11:51:10')).toBe('2026-05-17T11:51');
+    expect(parseExifDateToWallClock('2026-05-17T11:51:10')).toBe('2026-05-17T11:51');
+  });
+
+  it('缺字段 / 非法月日 → null', () => {
+    expect(parseExifDateToWallClock('')).toBeNull();
+    expect(parseExifDateToWallClock('not-a-date')).toBeNull();
+    expect(parseExifDateToWallClock('2026:13:01 00:00:00')).toBeNull();
+  });
+
+  it('expanded tags 优先 DateTimeOriginal', () => {
+    expect(
+      extractDateTimeOriginal({
+        exif: { DateTimeOriginal: { description: '2026:05:17 11:51:10' } },
+      } as never),
+    ).toBe('2026-05-17T11:51');
+    expect(
+      extractDateTimeOriginal({
+        exif: { DateTimeDigitized: { description: '2026:01:02 03:04:05' } },
+      } as never),
+    ).toBe('2026-01-02T03:04');
+    expect(extractDateTimeOriginal({} as never)).toBeNull();
   });
 });
 

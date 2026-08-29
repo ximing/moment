@@ -13,7 +13,7 @@ import type {
 } from '@moment/dto';
 import { client } from '@/api/client';
 import { compressImage } from '@/lib/compress';
-import { firstGps } from '@/compose/exif-gps';
+import { firstExif } from '@/compose/exif-gps';
 import { humanError } from '@/lib/errors';
 import { formatBytes, nowLocalInput, probeVideo } from '@/lib/media';
 import { canCompose } from '@/lib/roles';
@@ -70,6 +70,8 @@ export class ComposePanelService extends Service {
   replaceConfirm: 'image' | 'video' | null = null;
   pendingFiles: File[] = [];
   happenedAt = nowLocalInput();
+  /** 用户改过发生时间后，选图不再用 EXIF 拍摄时间覆盖。 */
+  happenedAtTouched = false;
   selectedTags: string[] = [];
   newTag = '';
   progress: string | null = null;
@@ -137,6 +139,7 @@ export class ComposePanelService extends Service {
     this.happenedAt = request.edit
       ? toWallClockInput(request.edit.happenedAt, request.edit.happenedTzOffset)
       : nowLocalInput();
+    this.happenedAtTouched = false;
     this.selectedTags = request.edit?.tags.map((t) => t.id) ?? [];
     // 编辑模式：kind 锁定原值，payload 草稿从既有值水合（S4：提交时 kind+payload 始终显式携带）
     this.kind = request.edit?.kind ?? 'standard';
@@ -375,6 +378,11 @@ export class ComposePanelService extends Service {
     }
   }
 
+  setHappenedAt(value: string): void {
+    this.happenedAtTouched = true;
+    this.happenedAt = value;
+  }
+
   setPlaceName(name: string): void {
     this.placeTouched = true;
     this.placeName = name;
@@ -537,16 +545,27 @@ export class ComposePanelService extends Service {
   }
 
   /**
-   * EXIF 自动回填（spec §3）：多图取第一张含 GPS 的；仅地点草稿完全为空时写入
-   * （已手动输入或已移除 chip 不覆盖，偏差 2）。非用户动作，不置 placeTouched。
+   * EXIF 自动回填：拍摄时间写入发生时间（仅新建且用户未改过）；
+   * GPS 写入坐标，并预览逆地理地名到「在哪里」（失败静默，坐标仍保留）。
+   * 已手动输入或已移除 chip 不覆盖地点。
    */
   private async ingestExif(files: File[]): Promise<void> {
-    if (this.exifDismissed || this.placeCoords || this.placeName.trim() !== '') return;
     const images = files.filter((f) => f.type.startsWith('image/'));
     if (images.length === 0) return;
-    const coords = await firstGps(images);
-    if (coords && !this.exifDismissed && !this.placeCoords && this.placeName.trim() === '') {
-      this.placeCoords = coords;
+    const preview = await firstExif(images);
+    if (!this.edit && !this.happenedAtTouched && preview.dateTime) {
+      this.happenedAt = preview.dateTime;
+    }
+    if (this.exifDismissed || this.placeCoords || this.placeName.trim() !== '') return;
+    if (!preview.gps) return;
+    this.placeCoords = preview.gps;
+    try {
+      const res = await client.reverseGeocode(preview.gps);
+      if (res.name && !this.exifDismissed && this.placeName.trim() === '') {
+        this.placeName = res.name;
+      }
+    } catch {
+      // 地名预览失败不挡选图；提交仍可走仅坐标 + worker geocode
     }
   }
 

@@ -12,8 +12,8 @@ import { ComposePanelService } from './compose-panel.service';
 // - 动作级判脏：任一增删动作即提交当前全集；删除后加回同一 ai person
 //   （id 集合与基线相同）也提交（spec §5 升级路径）；
 // - place：改过才提交；显式清空（名字清空 + 移除坐标）→ place:null（spec §6 清除语义）；
-// - EXIF：仅地点草稿完全为空时自动回填（多图第一张含 GPS），提交 {lat,lng} 无 name
-//   （spec §3：落 exif 分支，name 由 geocode 异步回填）。
+// - EXIF：仅地点草稿完全为空时自动回填坐标；逆地理成功则填「在哪里」；
+//   拍摄时间在新建且用户未改过发生时间时回填表单。
 
 const api = vi.hoisted(() => ({
   listTags: vi.fn(),
@@ -23,9 +23,10 @@ const api = vi.hoisted(() => ({
   createMoment: vi.fn(),
   updateMoment: vi.fn(),
   uploadMedia: vi.fn(),
+  reverseGeocode: vi.fn(),
 }));
 
-const exif = vi.hoisted(() => ({ firstGps: vi.fn() }));
+const exif = vi.hoisted(() => ({ firstExif: vi.fn() }));
 const compress = vi.hoisted(() => ({ compressImage: vi.fn(async (f: File) => f) }));
 
 vi.mock('@/api/client', () => ({
@@ -39,7 +40,7 @@ vi.mock('@/api/client', () => ({
   cachedUser: () => null,
   cacheUser: () => undefined,
 }));
-vi.mock('@/compose/exif-gps', () => ({ firstGps: exif.firstGps }));
+vi.mock('@/compose/exif-gps', () => ({ firstExif: exif.firstExif }));
 vi.mock('@/lib/compress', () => ({ compressImage: compress.compressImage }));
 
 register(AuthService);
@@ -125,6 +126,8 @@ beforeEach(() => {
     size: 1,
   });
   compress.compressImage.mockClear();
+  api.reverseGeocode.mockResolvedValue({ name: null });
+  exif.firstExif.mockResolvedValue({ gps: null, dateTime: null });
   resolve(ChainListService).chains = [chain('chain-1')];
   const s = svc();
   // 单例跨用例复位（不走 hydrate，绕开 request 依赖）
@@ -144,6 +147,7 @@ beforeEach(() => {
   s.placeCoords = null;
   s.placeTouched = false;
   s.exifDismissed = false;
+  s.happenedAtTouched = false;
   s.error = null;
   s.keptMedia = [];
   s.keptAudio = null;
@@ -226,8 +230,8 @@ describe('编辑模式 dirty tracking（spec §6：undefined = 不变）', () =>
 });
 
 describe('新建模式：EXIF 自动回填与提交形态（spec §3）', () => {
-  it('加图触发 firstGps：草稿为空 → 写 coords（不置 placeTouched）；提交 place = {lat,lng} 无 name（exif 分支）', async () => {
-    exif.firstGps.mockResolvedValue({ lat: 39.9042, lng: 116.4074 });
+  it('加图触发 firstExif：草稿为空 → 写 coords（不置 placeTouched）；逆地理空 → 提交 {lat,lng} 无 name', async () => {
+    exif.firstExif.mockResolvedValue({ gps: { lat: 39.9042, lng: 116.4074 }, dateTime: null });
     const s = svc();
     s.hydrate({ chainId: 'chain-1' });
     s.content = '此刻';
@@ -240,21 +244,19 @@ describe('新建模式：EXIF 自动回填与提交形态（spec §3）', () => 
     expect(body.place).toEqual({ lat: 39.9042, lng: 116.4074 });
   });
 
-  it('草稿已有地点名 → EXIF 不覆盖（manual > exif，偏差 2）', () => {
-    exif.firstGps.mockResolvedValue({ lat: 39.9042, lng: 116.4074 });
+  it('草稿已有地点名 → EXIF 不覆盖坐标（manual > exif，偏差 2）', async () => {
+    exif.firstExif.mockResolvedValue({ gps: { lat: 39.9042, lng: 116.4074 }, dateTime: null });
     const s = svc();
     s.hydrate({ chainId: 'chain-1' });
     s.placeName = '外婆家';
     s.addImages([new File(['x'], 'a.jpg', { type: 'image/jpeg' })]);
-    // ingestExif 第一行守卫同步短路（先于 firstGps），不做 waitFor——直接断言结果态：
-    // firstGps 从未被调用，地点名保持原值、坐标仍为空
-    expect(exif.firstGps).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(exif.firstExif).toHaveBeenCalled());
     expect(s.placeCoords).toBeNull();
     expect(s.placeName).toBe('外婆家');
   });
 
   it('移除 chip（exifDismissed）后再加图不自动回填（偏差 2：「删不掉」防御）', async () => {
-    exif.firstGps.mockResolvedValue({ lat: 39.9042, lng: 116.4074 });
+    exif.firstExif.mockResolvedValue({ gps: { lat: 39.9042, lng: 116.4074 }, dateTime: null });
     const s = svc();
     s.hydrate({ chainId: 'chain-1' });
     s.addImages([new File(['x'], 'a.jpg', { type: 'image/jpeg' })]);
@@ -262,13 +264,40 @@ describe('新建模式：EXIF 自动回填与提交形态（spec §3）', () => 
     s.removePlaceCoords();
     expect(s.placeCoords).toBeNull();
     s.addImages([new File(['y'], 'b.jpg', { type: 'image/jpeg' })]);
-    // 第二次 addImages 的 ingestExif 守卫同步短路：exifDismissed 置位后不再调 firstGps，坐标不复活
-    expect(exif.firstGps).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(exif.firstExif).toHaveBeenCalledTimes(2));
     expect(s.placeCoords).toBeNull();
   });
 
+  it('逆地理成功 → 「在哪里」填地名；提交 {name,lat,lng}', async () => {
+    exif.firstExif.mockResolvedValue({ gps: { lat: 39.9042, lng: 116.4074 }, dateTime: null });
+    api.reverseGeocode.mockResolvedValue({ name: '北京大学人民医院' });
+    const s = svc();
+    s.hydrate({ chainId: 'chain-1' });
+    s.content = '此刻';
+    s.addImages([new File(['x'], 'a.jpg', { type: 'image/jpeg' })]);
+    await vi.waitFor(() => expect(s.placeName).toBe('北京大学人民医院'));
+    expect(s.placeTouched).toBe(false);
+    s.images = [];
+    await s.submit();
+    const body = api.createMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body.place).toEqual({ name: '北京大学人民医院', lat: 39.9042, lng: 116.4074 });
+  });
+
+  it('EXIF 拍摄时间回填发生时间；用户改过后不再覆盖', async () => {
+    exif.firstExif.mockResolvedValue({ gps: null, dateTime: '2026-05-17T11:51' });
+    const s = svc();
+    s.hydrate({ chainId: 'chain-1' });
+    s.addImages([new File(['x'], 'a.jpg', { type: 'image/jpeg' })]);
+    await vi.waitFor(() => expect(s.happenedAt).toBe('2026-05-17T11:51'));
+    s.setHappenedAt('2026-08-30T12:00');
+    exif.firstExif.mockResolvedValue({ gps: null, dateTime: '2026-01-01T00:00' });
+    s.addImages([new File(['y'], 'b.jpg', { type: 'image/jpeg' })]);
+    await vi.waitFor(() => expect(exif.firstExif).toHaveBeenCalledTimes(2));
+    expect(s.happenedAt).toBe('2026-08-30T12:00');
+  });
+
   it('手动名字 + EXIF 坐标 → place = {name, lat, lng}（赋值表「坐标+名字 → manual」）', async () => {
-    exif.firstGps.mockResolvedValue({ lat: 39.9042, lng: 116.4074 });
+    exif.firstExif.mockResolvedValue({ gps: { lat: 39.9042, lng: 116.4074 }, dateTime: null });
     const s = svc();
     s.hydrate({ chainId: 'chain-1' });
     s.content = '此刻';
