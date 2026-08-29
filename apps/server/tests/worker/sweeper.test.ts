@@ -6,6 +6,8 @@ import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage, type MockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
+import { handleMomentEmbed } from '../../src/embedding/handle-moment-embed.js';
+import { handleMomentCompress } from '../../src/media/handle-moment-compress.js';
 import { handleMomentDeleted, handleMomentTranscribe, handlers } from '../../src/worker/handlers.js';
 import {
   sweepOrphanedMedia,
@@ -328,7 +330,9 @@ describe('handleMomentDeleted（outbox moment.deleted → 标记 orphaned，幂�
   it('handlers 注册表含 moment.deleted', () => {
     expect(handlers['moment.deleted']).toBe(handleMomentDeleted);
     expect(handlers['moment.transcribe']).toBe(handleMomentTranscribe);
-    expect(Object.keys(handlers)).toHaveLength(8);
+    expect(handlers['moment.compress']).toBe(handleMomentCompress);
+    expect(handlers['moment.embed']).toBe(handleMomentEmbed);
+    expect(Object.keys(handlers)).toHaveLength(10);
   });
 });
 
