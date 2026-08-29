@@ -356,7 +356,7 @@ test('listMomentsQuerySchema：from>to → VALIDATION_ERROR；无 RANGE_REQUIRES
 test('MomentMedia：derivedUrl / posterDerivedUrl 必填（P1 偏差 1 由 P3 收口）', () => {
   const ready: import('./moments.js').MomentMedia = {
     id: UUID_A,
-    url: `/api/media/${UUID_A}`,
+    url: 'https://signed.example/orig',
     mime: 'image/jpeg',
     width: 64,
     height: 48,
@@ -364,25 +364,25 @@ test('MomentMedia：derivedUrl / posterDerivedUrl 必填（P1 偏差 1 由 P3 �
     sortOrder: 0,
     posterMediaId: null,
     posterUrl: null,
-    derivedUrl: `/api/media/${UUID_A}?variant=derived`,
+    derivedUrl: 'https://signed.example/derived',
     posterDerivedUrl: null,
   };
-  assert.equal(ready.derivedUrl, `/api/media/${UUID_A}?variant=derived`);
+  assert.equal(ready.derivedUrl, 'https://signed.example/derived');
   assert.equal(ready.posterDerivedUrl, null);
 
   const video: import('./moments.js').MomentMedia = {
     id: UUID_A,
-    url: `/api/media/${UUID_A}`,
+    url: 'https://signed.example/video',
     mime: 'video/mp4',
     width: 1280,
     height: 720,
     duration: 12,
     sortOrder: 0,
     posterMediaId: UUID_B,
-    posterUrl: `/api/media/${UUID_B}`,
+    posterUrl: 'https://signed.example/poster',
     derivedUrl: null,
-    posterDerivedUrl: `/api/media/${UUID_B}?variant=derived`,
+    posterDerivedUrl: 'https://signed.example/poster-derived',
   };
-  assert.equal(video.posterDerivedUrl, `/api/media/${UUID_B}?variant=derived`);
+  assert.equal(video.posterDerivedUrl, 'https://signed.example/poster-derived');
 });
 

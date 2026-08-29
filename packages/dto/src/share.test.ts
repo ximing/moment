@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createShareLinkInputSchema, publicShareQuerySchema, type PublicShareChainInfo, type PublicShareMoment } from './share.js';
 
-test('PublicShareChainInfo 包含只读视觉字段，并使用稳定相对媒体 URL', () => {
+test('PublicShareChainInfo 包含只读视觉字段，avatarUrl 为签发 GET', () => {
   const chain: PublicShareChainInfo = {
     name: '宝宝成长',
     description: '第一年',
     avatarMediaId: 'm1',
-    avatarUrl: '/api/media/m1',
+    avatarUrl: 'https://signed.example/avatar',
     avatarFocus: { x: 0.5, y: 0.5 },
     coverMediaId: null,
     coverUrl: null,
@@ -15,7 +15,7 @@ test('PublicShareChainInfo 包含只读视觉字段，并使用稳定相对媒�
     color: '#A1B2C3',
     icon: '👶🏽',
   };
-  assert.equal(chain.avatarUrl, '/api/media/m1');
+  assert.equal(chain.avatarUrl, 'https://signed.example/avatar');
   assert.equal('expires' in chain, false);
 });
 

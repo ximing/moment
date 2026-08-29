@@ -115,7 +115,7 @@ export type PatchMomentInput = z.infer<typeof patchMomentInputSchema>;
 export const updateMomentInputSchema = patchMomentInputSchema;
 export type UpdateMomentInput = PatchMomentInput;
 
-/** moment 响应中的媒体：只出稳定入口相对路径，不内嵌预签名 URL（CONVENTIONS §3.4） */
+/** moment 响应中的媒体：url / derivedUrl / poster* 为本次签发的预签名 GET（默认 6h） */
 export interface MomentMedia {
   id: string;
   url: string;
@@ -124,17 +124,14 @@ export interface MomentMedia {
   height: number | null;
   duration: number | null;
   sortOrder: number;
-  /** 视频封面媒体 id：登录态经 useMediaObjectUrl / useMediaUri(posterMediaId) 取 blob；仅视频行非空，无封面为 null */
+  /** 视频封面媒体 id；仅视频行非空，无封面为 null */
   posterMediaId: string | null;
-  /** 视频封面稳定入口相对路径 /api/media/:posterId（不内嵌预签名 URL，CONVENTIONS §3.4）；分享态拼 ?st= 用；仅视频行非空，无封面为 null */
+  /** 视频封面预签名 GET；仅视频行非空，无封面为 null */
   posterUrl: string | null;
-  /**
-   * 派生图稳定入口 `/api/media/:id?variant=derived`；仅 derived_status=ready 非空。
-   * 不内嵌预签名（CONVENTIONS §3.4）。
-   */
+  /** 派生图预签名 GET；仅 derived_status=ready 非空。 */
   derivedUrl: string | null;
   /**
-   * 视频封面派生入口 `/api/media/:posterId?variant=derived`；仅视频行且封面 derived_status=ready 非空，否则 null。
+   * 视频封面派生预签名 GET；仅视频行且封面 derived_status=ready 非空，否则 null。
    * 图片行恒 null。
    */
   posterDerivedUrl: string | null;
