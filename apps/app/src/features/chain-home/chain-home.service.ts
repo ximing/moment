@@ -1,6 +1,7 @@
 import { Service } from '@rabjs/react';
 import type { AggregateResponse, ChainDetailDto, MomentResponse, TagResponse } from '@moment/dto';
 import { client } from '../../lib/api';
+import { TIMELINE_PAGE_SIZE, buildChainMomentsQuery } from '../../lib/timeline-query';
 import { ChainListService } from '../../services/chain-list.service';
 import type { ChainChangedPayload } from '../../lib/events';
 
@@ -17,6 +18,9 @@ export class ChainHomeService extends Service {
   aggregate: AggregateResponse | null = null;
   /** 组件段切换时同步写入（段 state 留在组件 useState，加载逻辑在 service） */
   activeView = 'timeline';
+  personId: string | undefined = undefined;
+  personName: string | undefined = undefined;
+  place: string | undefined = undefined;
   private nextCursor: string | null = null;
   private gen = 0;
   private loadingMore = false;
@@ -58,6 +62,10 @@ export class ChainHomeService extends Service {
     return role === 'owner' || role === 'editor';
   }
 
+  get filtered(): boolean {
+    return Boolean(this.personId || this.place);
+  }
+
   hydrate(chainId: string): void {
     if (this.chainId === chainId) return;
     this.chainId = chainId;
@@ -66,6 +74,9 @@ export class ChainHomeService extends Service {
     this.tags = [];
     this.aggregate = null;
     this.activeView = 'timeline';
+    this.personId = undefined;
+    this.personName = undefined;
+    this.place = undefined;
     this.sectionsLoaded = false;
     void this.loadChain().catch(() => undefined);
     void this.loadFirst().catch(() => undefined);
@@ -81,7 +92,15 @@ export class ChainHomeService extends Service {
 
   async loadFirst(): Promise<void> {
     const gen = ++this.gen;
-    const page = await client.listChainMoments(this.chainId, { cursor: undefined, limit: 20 });
+    const page = await client.listChainMoments(
+      this.chainId,
+      buildChainMomentsQuery({
+        cursor: undefined,
+        personId: this.personId,
+        place: this.place,
+        limit: TIMELINE_PAGE_SIZE,
+      }),
+    );
     if (gen !== this.gen) return;
     this.moments = page.moments;
     this.nextCursor = page.nextCursor ?? null;
@@ -92,13 +111,48 @@ export class ChainHomeService extends Service {
     this.loadingMore = true;
     const gen = this.gen;
     try {
-      const page = await client.listChainMoments(this.chainId, { cursor: this.nextCursor, limit: 20 });
+      const page = await client.listChainMoments(
+        this.chainId,
+        buildChainMomentsQuery({
+          cursor: this.nextCursor,
+          personId: this.personId,
+          place: this.place,
+          limit: TIMELINE_PAGE_SIZE,
+        }),
+      );
       if (gen !== this.gen) return;
       this.moments = [...this.moments, ...page.moments];
       this.nextCursor = page.nextCursor ?? null;
     } finally {
       this.loadingMore = false;
     }
+  }
+
+  togglePersonFilter(person: { id: string; name: string }): void {
+    if (this.personId === person.id) {
+      this.personId = undefined;
+      this.personName = undefined;
+    } else {
+      this.personId = person.id;
+      this.personName = person.name;
+    }
+    void this.loadFirst().catch(() => undefined);
+  }
+
+  togglePlaceFilter(place: string): void {
+    this.place = this.place === place ? undefined : place;
+    void this.loadFirst().catch(() => undefined);
+  }
+
+  clearPersonFilter(): void {
+    this.personId = undefined;
+    this.personName = undefined;
+    void this.loadFirst().catch(() => undefined);
+  }
+
+  clearPlaceFilter(): void {
+    this.place = undefined;
+    void this.loadFirst().catch(() => undefined);
   }
 
   async loadTags(): Promise<void> {
