@@ -1,7 +1,7 @@
 # 时刻 Moment — 融合检索 Design（M2：意图理解 + 标量过滤 + 向量召回）
 
 > 日期：2026-08-29
-> 状态：设计已与用户对齐，并完成校对，作为实施计划唯一真相源
+> 状态：已实现（P1–P10 合入，2026-08-29）
 > 范围：server（标量过滤扩展 + LanceDB 向量索引 + 意图解析 + 派生图压缩管线 + BA 内部写入）+ dto + api-client + web + app
 > 权威边界：M1 数据地基以 `2026-08-28-moment-people-place-design.md` 为准（persons / `moment_persons` / place 列 / `serializeMoments({ includePrivate })` / `getLLMProvider` / `getGeocodeProvider` 均已落地）；outbox/worker 以 `2026-08-15-moment-design.md` §5.4 为准；LLM provider 以 `2026-08-20-ai-recap-design.md` §3 与 M1 §5 为准；那年今日以 `2026-08-18-memories-today-design.md` 为准（独立入口，本 spec 不调用 `/api/memories/today`）；视频封面以 `2026-08-22-video-poster-design.md` 为准（本 spec 不改 `poster_media_id` / `posterUrl` 语义，只给封面行同样走派生图）。CONVENTIONS §3 已落地符号不得改名/改语义；本 spec 只追加（outbox 类型常量、`getObject`、路由、dto 字段）。
 > 下游依赖：本 spec 是 M3（AI 时光对话）的检索层；不包含地图足迹、persons 合并、视频向量。
