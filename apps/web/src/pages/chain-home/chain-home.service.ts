@@ -12,7 +12,7 @@ import { client } from '@/api/client';
 import { currentTzOffset } from '@/lib/time';
 import { feedQuery } from '@/lib/feed';
 import type { RailFilter } from '@/timeline/timeline-rail';
-import type { ChainChangedPayload } from '@/lib/events';
+import type { ChainChangedPayload, CommentChangedPayload, MomentChangedPayload } from '@/lib/events';
 
 /** 链页状态（spec §4.3）：getFeed 恒带 chainIds:[chainId]；hydrate 由路由 param 驱动。 */
 export class ChainHomeService extends Service {
@@ -39,7 +39,11 @@ export class ChainHomeService extends Service {
     super();
     this.on(
       'moment:changed',
-      () => {
+      (p: MomentChangedPayload) => {
+        if (p.op === 'react') {
+          void this.refreshListedMoment(p.momentId);
+          return;
+        }
         void this.loadFirst();
         void this.loadMeta();
         if (this.activeView !== 'timeline' && this.activeView !== 'trips') void this.loadAggregate().catch(() => undefined);
@@ -48,9 +52,8 @@ export class ChainHomeService extends Service {
     );
     this.on(
       'comment:changed',
-      () => {
-        void this.loadFirst();
-        void this.loadMeta();
+      (p: CommentChangedPayload) => {
+        void this.refreshListedMoment(p.momentId);
       },
       'global',
     );
@@ -130,6 +133,23 @@ export class ChainHomeService extends Service {
     this.searchParsed = null;
     this.searchError = null;
     await this.loadFirst();
+  }
+
+  /** 点赞/评论只刷新这一条，避免 loadFirst 丢掉已翻页列表并把滚动打回顶部。 */
+  async refreshListedMoment(momentId: string): Promise<void> {
+    if (!momentId) return;
+    const idx = this.moments.findIndex((m) => m?.id === momentId);
+    if (idx === -1) return;
+    try {
+      const updated = await client.getMoment(momentId);
+      if (!updated?.id) return;
+      const next = this.moments.slice();
+      if (next[idx]?.id !== momentId) return;
+      next[idx] = updated;
+      this.moments = next;
+    } catch {
+      // 单条失败不打整页；计数可能短暂旧，下次整表刷新纠正
+    }
   }
 
   async loadChain(): Promise<void> {

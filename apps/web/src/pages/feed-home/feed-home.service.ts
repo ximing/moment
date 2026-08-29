@@ -1,6 +1,7 @@
 import { Service } from '@rabjs/react';
 import { SEARCH_MAX_LIMIT, type MonthIndexEntry, type MomentResponse, type SearchParsed, type TagResponse } from '@moment/dto';
 import { client } from '@/api/client';
+import type { CommentChangedPayload, MomentChangedPayload } from '@/lib/events';
 import { currentTzOffset } from '@/lib/time';
 import { feedQuery } from '@/lib/feed';
 import type { RailFilter } from '@/timeline/timeline-rail';
@@ -26,7 +27,11 @@ export class FeedHomeService extends Service {
     void this.loadMeta();
     this.on(
       'moment:changed',
-      () => {
+      (p: MomentChangedPayload) => {
+        if (p.op === 'react') {
+          void this.refreshListedMoment(p.momentId);
+          return;
+        }
         void this.loadFirst();
         void this.loadMeta();
       },
@@ -34,9 +39,8 @@ export class FeedHomeService extends Service {
     );
     this.on(
       'comment:changed',
-      () => {
-        void this.loadFirst();
-        void this.loadMeta();
+      (p: CommentChangedPayload) => {
+        void this.refreshListedMoment(p.momentId);
       },
       'global',
     );
@@ -103,6 +107,23 @@ export class FeedHomeService extends Service {
     this.searchParsed = null;
     this.searchError = null;
     await this.loadFirst();
+  }
+
+  /** 点赞/评论只刷新这一条，避免 loadFirst 丢掉已翻页列表并把滚动打回顶部。 */
+  async refreshListedMoment(momentId: string): Promise<void> {
+    if (!momentId) return;
+    const idx = this.moments.findIndex((m) => m?.id === momentId);
+    if (idx === -1) return;
+    try {
+      const updated = await client.getMoment(momentId);
+      if (!updated?.id) return;
+      const next = this.moments.slice();
+      if (next[idx]?.id !== momentId) return;
+      next[idx] = updated;
+      this.moments = next;
+    } catch {
+      // 单条失败不打整页；计数可能短暂旧，下次整表刷新纠正
+    }
   }
 
   async loadFirst(): Promise<void> {

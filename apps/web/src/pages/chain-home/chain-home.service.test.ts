@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   getMonthIndex: vi.fn().mockResolvedValue({ months: [] }),
   listTags: vi.fn().mockResolvedValue({ tags: [] }),
   getChain: vi.fn().mockResolvedValue({ id: 'c-1', myRole: 'owner', templateManifest: { version: 1 } }),
+  getMoment: vi.fn(),
   searchMoments: vi.fn().mockResolvedValue({
     moments: [],
     nextCursor: null,
@@ -23,6 +24,7 @@ beforeEach(() => {
   api.getMonthIndex.mockReset().mockResolvedValue({ months: [] });
   api.listTags.mockReset().mockResolvedValue({ tags: [] });
   api.getChain.mockReset().mockResolvedValue({ id: 'c-1', myRole: 'owner', templateManifest: { version: 1 } });
+  api.getMoment.mockReset();
   api.searchMoments.mockReset().mockResolvedValue({
     moments: [],
     nextCursor: null,
@@ -70,6 +72,21 @@ describe('ChainHomeService chip 过滤', () => {
     );
     const body = api.searchMoments.mock.calls[0]![0] as Record<string, unknown>;
     expect(body).not.toHaveProperty('before');
+  });
+});
+
+describe('ChainHomeService 点赞/评论不整表重拉', () => {
+  it('comment:changed 只 getMoment 替换该条，不 getFeed', async () => {
+    const s = resolve(ChainHomeService);
+    const kept = { id: 'm-keep', commentCount: 0 } as never;
+    s.moments = [kept, { id: 'm-1', commentCount: 0 } as never];
+    api.getMoment.mockResolvedValueOnce({ id: 'm-1', commentCount: 2 });
+    api.getFeed.mockClear();
+    s.emit('comment:changed', { momentId: 'm-1' }, 'global');
+    await vi.waitFor(() => expect(s.moments[1]).toEqual({ id: 'm-1', commentCount: 2 }));
+    expect(s.moments[0]).toEqual(kept);
+    expect(api.getMoment).toHaveBeenCalledWith('m-1');
+    expect(api.getFeed).not.toHaveBeenCalled();
   });
 });
 

@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   getFeed: vi.fn().mockResolvedValue({ moments: [], nextCursor: null }),
   getMonthIndex: vi.fn().mockResolvedValue({ months: [] }),
   listTags: vi.fn().mockResolvedValue({ tags: [] }),
+  getMoment: vi.fn(),
   searchMoments: vi.fn().mockResolvedValue({
     moments: [],
     nextCursor: null,
@@ -23,6 +24,7 @@ beforeEach(() => {
   api.getFeed.mockReset().mockResolvedValue(emptyPage);
   api.getMonthIndex.mockReset().mockResolvedValue({ months: [] });
   api.listTags.mockReset().mockResolvedValue({ tags: [] });
+  api.getMoment.mockReset();
   api.searchMoments.mockReset().mockResolvedValue({
     moments: [],
     nextCursor: null,
@@ -172,6 +174,36 @@ describe('FeedHomeService 搜索（spec §7.2）', () => {
     expect(s.moments).toEqual([{ id: 'keep' }]);
     expect(s.searchError).toBeInstanceOf(ApiError);
     expect((s.searchError as { code: string }).code).toBe('RATE_LIMITED');
+  });
+});
+
+describe('FeedHomeService 点赞/评论不整表重拉', () => {
+  it('comment:changed 只 getMoment 替换该条，不 getFeed', async () => {
+    const s = resolve(FeedHomeService);
+    const kept = { id: 'm-keep', commentCount: 0 } as never;
+    const target = { id: 'm-1', commentCount: 0 } as never;
+    s.moments = [kept, target];
+    api.getMoment.mockResolvedValueOnce({ id: 'm-1', commentCount: 3 });
+    api.getFeed.mockClear();
+    s.emit('comment:changed', { momentId: 'm-1' }, 'global');
+    await vi.waitFor(() => expect(s.moments[1]).toEqual({ id: 'm-1', commentCount: 3 }));
+    expect(s.moments[0]).toEqual(kept);
+    expect(api.getMoment).toHaveBeenCalledWith('m-1');
+    expect(api.getFeed).not.toHaveBeenCalled();
+  });
+
+  it('moment:changed react 只 getMoment；create 仍 loadFirst', async () => {
+    const s = resolve(FeedHomeService);
+    s.moments = [{ id: 'm-1', myReaction: null } as never];
+    api.getMoment.mockResolvedValueOnce({ id: 'm-1', myReaction: '❤️' });
+    api.getFeed.mockClear();
+    s.emit('moment:changed', { momentId: 'm-1', chainId: 'c-1', op: 'react' }, 'global');
+    await vi.waitFor(() => expect(s.moments[0]).toEqual({ id: 'm-1', myReaction: '❤️' }));
+    expect(api.getFeed).not.toHaveBeenCalled();
+
+    api.getFeed.mockResolvedValueOnce({ moments: [{ id: 'm-new' }], nextCursor: null });
+    s.emit('moment:changed', { momentId: 'm-new', chainId: 'c-1', op: 'create' }, 'global');
+    await vi.waitFor(() => expect(api.getFeed).toHaveBeenCalled());
   });
 });
 
