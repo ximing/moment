@@ -6,11 +6,14 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { babyAgeLabel } from '../../lib/template';
+import { ErrorText } from '../../components/ErrorText';
 import { FilterChips } from '../../components/FilterChips';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { SegmentBar } from '../../components/SegmentBar';
 import { Button } from '../../components/Button';
+import { TimelineSearchField } from '../../components/TimelineSearchField';
+import { formatSearchParsed } from '../../lib/search-summary';
 import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -69,6 +72,25 @@ const Content = observer(function Content() {
 
       {segment === 'timeline' ? (
         <View style={styles.timelinePane}>
+          <TimelineSearchField
+            onSubmit={(q) => void service.submitSearch(q)}
+            onClear={() => {
+              if (service.searching) void service.exitSearch();
+            }}
+          />
+          {service.searchError ? (
+            <View style={styles.searchBanner}>
+              <ErrorText message={humanError(service.searchError)} />
+            </View>
+          ) : null}
+          {service.searching && service.searchParsed && !service.searchError ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryText}>{formatSearchParsed(service.searchParsed)}</Text>
+              <Button variant="quiet" onPress={() => void service.exitSearch()}>
+                关闭
+              </Button>
+            </View>
+          ) : null}
           <FilterChips
             personId={service.personId}
             personName={service.personName}
@@ -106,9 +128,20 @@ const Content = observer(function Content() {
               />
             )}
             ListEmptyComponent={
-              <Text style={styles.empty}>
-                {service.personId || service.place ? '没有符合条件的时刻' : '还没有时刻'}
-              </Text>
+              <View style={styles.emptyWrap}>
+                <Text style={styles.empty}>
+                  {service.searching
+                    ? '没有找到相关时刻'
+                    : service.personId || service.place
+                      ? '没有符合条件的时刻'
+                      : '还没有时刻'}
+                </Text>
+                {service.searching ? (
+                  <Button variant="quiet" onPress={() => void service.exitSearch()}>
+                    退出搜索
+                  </Button>
+                ) : null}
+              </View>
             }
           />
         </View>
@@ -200,7 +233,17 @@ const createStyles = (t: Theme) =>
     list: { paddingBottom: t.space4 },
     timelinePane: { flex: 1 },
     timelineList: { flex: 1 },
-    empty: { color: t.muted, textAlign: 'center', padding: t.space8 },
+    searchBanner: { paddingHorizontal: t.space3, paddingVertical: t.space2 },
+    summaryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space2,
+      paddingHorizontal: t.space3,
+      paddingVertical: t.space2,
+    },
+    summaryText: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
+    emptyWrap: { padding: t.space8, alignItems: 'center', gap: t.space2 },
+    empty: { color: t.muted, textAlign: 'center' },
     section: { padding: t.space4, gap: 10 },
     row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: t.surface, borderRadius: 8, padding: 14 },
     rowMain: { flex: 1, fontSize: t.fontBody, color: t.ink },

@@ -1,7 +1,7 @@
 import { Service } from '@rabjs/react';
-import type { AggregateResponse, ChainDetailDto, MomentResponse, TagResponse } from '@moment/dto';
+import type { AggregateResponse, ChainDetailDto, MomentResponse, SearchParsed, TagResponse } from '@moment/dto';
 import { client } from '../../lib/api';
-import { TIMELINE_PAGE_SIZE, buildChainMomentsQuery } from '../../lib/timeline-query';
+import { TIMELINE_PAGE_SIZE, buildChainMomentsQuery, buildSearchInput } from '../../lib/timeline-query';
 import { ChainListService } from '../../services/chain-list.service';
 import type { ChainChangedPayload } from '../../lib/events';
 
@@ -21,6 +21,10 @@ export class ChainHomeService extends Service {
   personId: string | undefined = undefined;
   personName: string | undefined = undefined;
   place: string | undefined = undefined;
+  searching = false;
+  searchQ = '';
+  searchParsed: SearchParsed | null = null;
+  searchError: unknown = null;
   private nextCursor: string | null = null;
   private gen = 0;
   private loadingMore = false;
@@ -77,6 +81,10 @@ export class ChainHomeService extends Service {
     this.personId = undefined;
     this.personName = undefined;
     this.place = undefined;
+    this.searching = false;
+    this.searchQ = '';
+    this.searchParsed = null;
+    this.searchError = null;
     this.sectionsLoaded = false;
     void this.loadChain().catch(() => undefined);
     void this.loadFirst().catch(() => undefined);
@@ -91,19 +99,44 @@ export class ChainHomeService extends Service {
   }
 
   async loadFirst(): Promise<void> {
+    if (!this.chainId) return;
     const gen = ++this.gen;
-    const page = await client.listChainMoments(
-      this.chainId,
-      buildChainMomentsQuery({
-        cursor: undefined,
-        personId: this.personId,
-        place: this.place,
-        limit: TIMELINE_PAGE_SIZE,
-      }),
-    );
-    if (gen !== this.gen) return;
-    this.moments = page.moments;
-    this.nextCursor = page.nextCursor ?? null;
+    try {
+      if (this.searching) {
+        const page = await client.searchMoments(
+          buildSearchInput({
+            q: this.searchQ,
+            tzOffset: new Date().getTimezoneOffset(),
+            chainIds: [this.chainId],
+            limit: TIMELINE_PAGE_SIZE,
+            personId: this.personId,
+            place: this.place,
+          }),
+        );
+        if (gen !== this.gen) return;
+        this.moments = page.moments;
+        this.nextCursor = page.nextCursor ?? null;
+        this.searchParsed = page.parsed;
+        this.searchError = null;
+        return;
+      }
+      const page = await client.listChainMoments(
+        this.chainId,
+        buildChainMomentsQuery({
+          cursor: undefined,
+          personId: this.personId,
+          place: this.place,
+          limit: TIMELINE_PAGE_SIZE,
+        }),
+      );
+      if (gen !== this.gen) return;
+      this.moments = page.moments;
+      this.nextCursor = page.nextCursor ?? null;
+    } catch (err) {
+      if (gen !== this.gen) return;
+      if (this.searching) this.searchError = err;
+      else throw err;
+    }
   }
 
   async loadMore(): Promise<void> {
@@ -111,15 +144,27 @@ export class ChainHomeService extends Service {
     this.loadingMore = true;
     const gen = this.gen;
     try {
-      const page = await client.listChainMoments(
-        this.chainId,
-        buildChainMomentsQuery({
-          cursor: this.nextCursor,
-          personId: this.personId,
-          place: this.place,
-          limit: TIMELINE_PAGE_SIZE,
-        }),
-      );
+      const page = this.searching
+        ? await client.searchMoments(
+            buildSearchInput({
+              q: this.searchQ,
+              tzOffset: new Date().getTimezoneOffset(),
+              chainIds: [this.chainId],
+              cursor: this.nextCursor,
+              limit: TIMELINE_PAGE_SIZE,
+              personId: this.personId,
+              place: this.place,
+            }),
+          )
+        : await client.listChainMoments(
+            this.chainId,
+            buildChainMomentsQuery({
+              cursor: this.nextCursor,
+              personId: this.personId,
+              place: this.place,
+              limit: TIMELINE_PAGE_SIZE,
+            }),
+          );
       if (gen !== this.gen) return;
       this.moments = [...this.moments, ...page.moments];
       this.nextCursor = page.nextCursor ?? null;
@@ -153,6 +198,24 @@ export class ChainHomeService extends Service {
   clearPlaceFilter(): void {
     this.place = undefined;
     void this.loadFirst().catch(() => undefined);
+  }
+
+  async submitSearch(q: string): Promise<void> {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    this.searchQ = trimmed;
+    this.searching = true;
+    this.searchParsed = null;
+    this.searchError = null;
+    await this.loadFirst();
+  }
+
+  async exitSearch(): Promise<void> {
+    this.searching = false;
+    this.searchQ = '';
+    this.searchParsed = null;
+    this.searchError = null;
+    await this.loadFirst();
   }
 
   async loadTags(): Promise<void> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TIMELINE_PAGE_SIZE, buildChainMomentsQuery, buildFeedQuery } from './timeline-query';
+import { TIMELINE_PAGE_SIZE, buildChainMomentsQuery, buildFeedQuery, buildSearchInput } from './timeline-query';
 
 describe('TIMELINE_PAGE_SIZE', () => {
   it('锁 20（偏差 7：对齐现网 feed/链列表，不是 web 的 50）', () => {
@@ -62,5 +62,45 @@ describe('buildChainMomentsQuery（spec §6.1 app 链页 listChainMoments）', (
     expect(q).not.toHaveProperty('before');
     expect(q).not.toHaveProperty('order');
     expect(q).not.toHaveProperty('source');
+  });
+});
+
+describe('buildSearchInput（spec §7.2：不带 before/order/source）', () => {
+  it('POST body 含 q/tzOffset/chainIds/personId/tagId/place/limit/cursor，不含 before/order/source/parsed', () => {
+    const body = buildSearchInput({
+      q: '去年今天和外婆',
+      tzOffset: -480,
+      chainIds: ['c-1'],
+      cursor: 's-cur',
+      limit: TIMELINE_PAGE_SIZE,
+      personId: 'p-1',
+      tagId: 't-1',
+      place: '朝阳公园',
+    });
+    expect(body).toEqual({
+      q: '去年今天和外婆',
+      tzOffset: -480,
+      chainIds: ['c-1'],
+      cursor: 's-cur',
+      limit: 20,
+      personId: 'p-1',
+      tagId: 't-1',
+      place: '朝阳公园',
+    });
+    expect(body).not.toHaveProperty('before');
+    expect(body).not.toHaveProperty('order');
+    expect(body).not.toHaveProperty('source');
+    expect(body).not.toHaveProperty('parsed');
+  });
+
+  it('可选键缺省时不出现在对象上', () => {
+    const body = buildSearchInput({ q: '外婆', tzOffset: -480, limit: 20 });
+    expect(body).toEqual({ q: '外婆', tzOffset: -480, limit: 20 });
+    expect(body).not.toHaveProperty('chainIds');
+    expect(body).not.toHaveProperty('personId');
+    expect(body).not.toHaveProperty('tagId');
+    expect(body).not.toHaveProperty('place');
+    expect(body).not.toHaveProperty('cursor');
+    expect(body).not.toHaveProperty('before');
   });
 });

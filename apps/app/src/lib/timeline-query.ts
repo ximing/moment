@@ -1,3 +1,5 @@
+import type { SearchInput } from '@moment/dto';
+
 /** app 时间线页大小（现网 feed / 链列表均为 20；搜索同页大小，偏差 7）。 */
 export const TIMELINE_PAGE_SIZE = 20;
 
@@ -45,5 +47,27 @@ export function buildChainMomentsQuery(args: {
     personId: args.personId,
     place: args.place,
     limit: args.limit,
+  };
+}
+
+export function buildSearchInput(args: {
+  q: string;
+  tzOffset: number;
+  chainIds?: string[];
+  cursor?: string;
+  limit: number;
+  personId?: string;
+  tagId?: string;
+  place?: string;
+}): SearchInput {
+  return {
+    q: args.q,
+    tzOffset: args.tzOffset,
+    limit: args.limit,
+    ...(args.chainIds ? { chainIds: args.chainIds } : {}),
+    ...(args.cursor ? { cursor: args.cursor } : {}),
+    ...(args.personId ? { personId: args.personId } : {}),
+    ...(args.tagId ? { tagId: args.tagId } : {}),
+    ...(args.place ? { place: args.place } : {}),
   };
 }
