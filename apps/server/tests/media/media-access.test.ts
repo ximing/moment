@@ -10,6 +10,7 @@ import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage, type MockStorage } from '../helpers/storage.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
+import { config } from '../../src/config.js';
 import { listenLocal } from '../helpers/http-server.js';
 
 const app = listenLocal(createApp());
@@ -81,8 +82,7 @@ describe('GET /api/media/:id', () => {
       expect.any(Date)
     );
     const ttlArg = storage.generateAccessUrl.mock.calls[0]![2] as number;
-    expect(ttlArg).toBeGreaterThan(3600);
-    expect(ttlArg).toBeLessThanOrEqual(7200);
+    expect(ttlArg).toBe(config.PRESIGN_GET_TTL_SECONDS + 3600);
     expect(storage.getObject).not.toHaveBeenCalled();
   });
 

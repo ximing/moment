@@ -16,18 +16,62 @@ const moment = {
   createdAt: new Date('2026-08-15T02:00:01Z'),
 };
 
+function mediaRow(
+  partial: Partial<{
+    id: string;
+    mime: string;
+    width: number | null;
+    height: number | null;
+    duration: number | null;
+    sortOrder: number;
+    posterMediaId: string | null;
+    url: string;
+    derivedUrl: string | null;
+    posterUrl: string | null;
+    posterDerivedUrl: string | null;
+  }> = {},
+) {
+  return {
+    id: 'md-1',
+    mime: 'image/jpeg',
+    width: 10,
+    height: 10,
+    duration: null as number | null,
+    sortOrder: 0,
+    posterMediaId: null as string | null,
+    url: 'https://signed.example/orig',
+    derivedUrl: null as string | null,
+    posterUrl: null as string | null,
+    posterDerivedUrl: null as string | null,
+    ...partial,
+  };
+}
+
 describe('momentSerializer（moment → API 响应唯一出口）', () => {
-  it('media 按 sortOrder 升序，url 是稳定入口相对路径（不内嵌预签名）', () => {
+  it('media 按 sortOrder 升序，透传已签发的 url', () => {
     const res = momentSerializer(moment, {
       media: [
-        { id: 'md-2', mime: 'image/jpeg', width: 100, height: 200, duration: null, sortOrder: 1, posterMediaId: null },
-        { id: 'md-1', mime: 'image/png', width: 10, height: 20, duration: null, sortOrder: 0, posterMediaId: null },
+        mediaRow({
+          id: 'md-2',
+          mime: 'image/jpeg',
+          width: 100,
+          height: 200,
+          sortOrder: 1,
+          url: 'https://signed.example/md-2',
+        }),
+        mediaRow({
+          id: 'md-1',
+          mime: 'image/png',
+          width: 10,
+          height: 20,
+          sortOrder: 0,
+          url: 'https://signed.example/md-1',
+        }),
       ],
       author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
     });
     expect(res.media.map((m) => m.id)).toEqual(['md-1', 'md-2']);
-    expect(res.media[0].url).toBe('/api/media/md-1');
-    expect(JSON.stringify(res)).not.toContain('https://');
+    expect(res.media[0].url).toBe('https://signed.example/md-1');
     expect(res.happenedAt).toBe('2026-08-15T02:00:00.000Z');
     expect(res.author).toEqual({ id: 'u-1', nickname: 'Alice', avatarUrl: null });
     expect(res.tags).toEqual([]);
@@ -84,87 +128,55 @@ describe('momentSerializer 公开基形（spec §8：persons/place 不在基函�
 });
 
 describe('momentSerializer derivedUrl / posterDerivedUrl（spec fused-retrieval §2.1）', () => {
-  it('仅 derivedStatus=ready 出 derivedUrl；pending/skipped/failed/缺省为 null；不内嵌预签名', () => {
+  it('透传已签发的 derivedUrl；空则保持 null', () => {
     const ready = momentSerializer(moment, {
       media: [
-        {
-          id: 'md-1',
-          mime: 'image/jpeg',
+        mediaRow({
           width: 512,
           height: 256,
-          duration: null,
-          sortOrder: 0,
-          posterMediaId: null,
-          derivedStatus: 'ready',
-          posterDerivedStatus: null,
-        },
+          url: 'https://signed.example/orig',
+          derivedUrl: 'https://signed.example/derived',
+        }),
       ],
       author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
     });
-    expect(ready.media[0].derivedUrl).toBe('/api/media/md-1?variant=derived');
+    expect(ready.media[0].derivedUrl).toBe('https://signed.example/derived');
     expect(ready.media[0].posterDerivedUrl).toBeNull();
-    expect(ready.media[0].url).toBe('/api/media/md-1');
-    expect(JSON.stringify(ready)).not.toContain('https://');
+    expect(ready.media[0].url).toBe('https://signed.example/orig');
 
-    for (const derivedStatus of ['pending', 'skipped', 'failed', null] as const) {
-      const res = momentSerializer(moment, {
-        media: [
-          {
-            id: 'md-1',
-            mime: 'image/jpeg',
-            width: 10,
-            height: 10,
-            duration: null,
-            sortOrder: 0,
-            posterMediaId: null,
-            derivedStatus,
-            posterDerivedStatus: null,
-          },
-        ],
-        author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
-      });
-      expect(res.media[0].derivedUrl).toBeNull();
-    }
+    const empty = momentSerializer(moment, {
+      media: [mediaRow()],
+      author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
+    });
+    expect(empty.media[0].derivedUrl).toBeNull();
   });
 
-  it('视频行：封面 ready → posterDerivedUrl；图片行恒 null', () => {
+  it('视频行：透传 posterUrl / posterDerivedUrl；图片行 posterDerivedUrl 恒 null', () => {
     const video = momentSerializer(
       { ...moment, type: 'video' },
       {
         media: [
-          {
+          mediaRow({
             id: 'vid-1',
             mime: 'video/mp4',
             width: 1280,
             height: 720,
             duration: 12,
-            sortOrder: 0,
             posterMediaId: 'poster-1',
-            derivedStatus: null,
-            posterDerivedStatus: 'ready',
-          },
+            url: 'https://signed.example/vid',
+            posterUrl: 'https://signed.example/poster',
+            posterDerivedUrl: 'https://signed.example/poster-derived',
+          }),
         ],
         author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
       },
     );
     expect(video.media[0].derivedUrl).toBeNull();
-    expect(video.media[0].posterUrl).toBe('/api/media/poster-1');
-    expect(video.media[0].posterDerivedUrl).toBe('/api/media/poster-1?variant=derived');
+    expect(video.media[0].posterUrl).toBe('https://signed.example/poster');
+    expect(video.media[0].posterDerivedUrl).toBe('https://signed.example/poster-derived');
 
     const image = momentSerializer(moment, {
-      media: [
-        {
-          id: 'md-1',
-          mime: 'image/jpeg',
-          width: 10,
-          height: 10,
-          duration: null,
-          sortOrder: 0,
-          posterMediaId: null,
-          derivedStatus: 'ready',
-          posterDerivedStatus: 'ready',
-        },
-      ],
+      media: [mediaRow({ derivedUrl: 'https://signed.example/derived' })],
       author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
     });
     expect(image.media[0].posterDerivedUrl).toBeNull();

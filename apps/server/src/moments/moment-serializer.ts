@@ -10,6 +10,8 @@ import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { avatarUrlsByUserIds } from '../auth/avatar.js';
 import { db } from '../db/index.js';
 import { comments, media, momentPersons, momentTags, persons, reactions, tags, users, type Moment } from '../db/schema.js';
+import { signMediaGetUrl } from '../media/sign-get.js';
+import type { StorageMetadata } from '../storage/base.adapter.js';
 
 /** serializer 依赖的最小形状（db 的 Moment/Media 行结构兼容，便于事务内未落库行复用） */
 export interface MomentLike {
@@ -39,9 +41,11 @@ export interface MediaLike {
   sortOrder: number;
   /** 视频封面媒体行 id（db 行自带该列，类型对齐即可）；无封面为 null */
   posterMediaId: string | null;
-  derivedStatus?: 'pending' | 'ready' | 'skipped' | 'failed' | null;
-  /** 视频封面行的 derived_status；图片行 null */
-  posterDerivedStatus?: 'pending' | 'ready' | 'skipped' | 'failed' | null;
+  /** 已签发的原图 GET URL */
+  url: string;
+  derivedUrl: string | null;
+  posterUrl: string | null;
+  posterDerivedUrl: string | null;
 }
 
 /** 互动计数（spec §5.1：批量 GROUP BY 产出，禁止 N+1） */
@@ -60,10 +64,10 @@ export interface SerializerExtras {
 }
 
 /**
- * moment → API 响应的唯一出口（CONVENTIONS §3.4）；media 只出稳定入口相对路径。
- * 返回公开基形 PublicShareMoment（不含 persons/place）——两键是链内私有字段，由
- * serializeMoments 在 includePrivate 路径拼接（spec §6/§8：share-album 输出零
- * persons/place 键，默认偏向安全侧）。
+ * moment → API 响应的唯一出口（CONVENTIONS §3.4）；media.url / derivedUrl / poster* 为
+ * 本次签发的预签名 GET（默认 6h）。返回公开基形 PublicShareMoment（不含 persons/place）——
+ * 两键是链内私有字段，由 serializeMoments 在 includePrivate 路径拼接（spec §6/§8：share-album
+ * 输出零 persons/place 键，默认偏向安全侧）。
  */
 export function momentSerializer(m: MomentLike, extras: SerializerExtras): PublicShareMoment {
   return {
@@ -84,19 +88,16 @@ export function momentSerializer(m: MomentLike, extras: SerializerExtras): Publi
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((x) => ({
         id: x.id,
-        url: `/api/media/${x.id}`,
+        url: x.url,
         mime: x.mime,
         width: x.width,
         height: x.height,
         duration: x.duration,
         sortOrder: x.sortOrder,
         posterMediaId: x.posterMediaId,
-        posterUrl: x.posterMediaId ? `/api/media/${x.posterMediaId}` : null,
-        derivedUrl: x.derivedStatus === 'ready' ? `/api/media/${x.id}?variant=derived` : null,
-        posterDerivedUrl:
-          x.posterMediaId && x.posterDerivedStatus === 'ready'
-            ? `/api/media/${x.posterMediaId}?variant=derived`
-            : null,
+        posterUrl: x.posterUrl,
+        derivedUrl: x.derivedUrl,
+        posterDerivedUrl: x.posterDerivedUrl,
       })),
     tags: extras.tags ?? [],
     commentCount: extras.counts?.commentCount ?? 0,
@@ -197,25 +198,67 @@ export async function serializeMoments(
     mediaRows.map((r) => r.posterMediaId).filter((id): id is string => id !== null)
   );
   const rowById = new Map(mediaRows.map((r) => [r.id, r]));
+  const pending = mediaRows.flatMap((m) => {
+    if (!m.momentId || posterIds.has(m.id)) return [];
+    const poster = m.posterMediaId ? rowById.get(m.posterMediaId) : undefined;
+    return [
+      {
+        momentId: m.momentId,
+        id: m.id,
+        mime: m.mime,
+        width: m.width,
+        height: m.height,
+        duration: m.duration,
+        sortOrder: m.sortOrder,
+        posterMediaId: m.posterMediaId,
+        s3Key: m.s3Key,
+        storageMeta: m.storageMeta as StorageMetadata,
+        derivedS3Key: m.derivedS3Key,
+        derivedReady: m.derivedStatus === 'ready' && Boolean(m.derivedS3Key),
+        poster: poster
+          ? {
+              s3Key: poster.s3Key,
+              storageMeta: poster.storageMeta as StorageMetadata,
+              derivedS3Key: poster.derivedS3Key,
+              derivedReady: poster.derivedStatus === 'ready' && Boolean(poster.derivedS3Key),
+            }
+          : null,
+      },
+    ];
+  });
+  const signed = await Promise.all(
+    pending.map(async (p) => {
+      const [url, derivedUrl, posterUrl, posterDerivedUrl] = await Promise.all([
+        signMediaGetUrl(p.s3Key, p.storageMeta),
+        p.derivedReady && p.derivedS3Key
+          ? signMediaGetUrl(p.derivedS3Key, p.storageMeta)
+          : Promise.resolve(null),
+        p.poster ? signMediaGetUrl(p.poster.s3Key, p.poster.storageMeta) : Promise.resolve(null),
+        p.poster?.derivedReady && p.poster.derivedS3Key
+          ? signMediaGetUrl(p.poster.derivedS3Key, p.poster.storageMeta)
+          : Promise.resolve(null),
+      ]);
+      const like: MediaLike = {
+        id: p.id,
+        mime: p.mime,
+        width: p.width,
+        height: p.height,
+        duration: p.duration,
+        sortOrder: p.sortOrder,
+        posterMediaId: p.posterMediaId,
+        url,
+        derivedUrl,
+        posterUrl,
+        posterDerivedUrl,
+      };
+      return { momentId: p.momentId, like };
+    }),
+  );
   const mediaBy = new Map<string, MediaLike[]>();
-  for (const m of mediaRows) {
-    if (!m.momentId) continue;
-    if (posterIds.has(m.id)) continue;
-    const list = mediaBy.get(m.momentId) ?? [];
-    list.push({
-      id: m.id,
-      mime: m.mime,
-      width: m.width,
-      height: m.height,
-      duration: m.duration,
-      sortOrder: m.sortOrder,
-      posterMediaId: m.posterMediaId,
-      derivedStatus: m.derivedStatus,
-      posterDerivedStatus: m.posterMediaId
-        ? (rowById.get(m.posterMediaId)?.derivedStatus ?? null)
-        : null,
-    });
-    mediaBy.set(m.momentId, list);
+  for (const s of signed) {
+    const list = mediaBy.get(s.momentId) ?? [];
+    list.push(s.like);
+    mediaBy.set(s.momentId, list);
   }
   const avatarBy = await avatarUrlsByUserIds(authorRows.map((a) => a.id));
   const authorBy = new Map(

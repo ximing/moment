@@ -52,7 +52,7 @@ async function insertBoundImage(opts: {
 }
 
 describe('serializeMoments derivedUrl（spec §2.1 / §9）', () => {
-  it('链内 GET：ready 出 derivedUrl；pending 为 null；JSON 无预签名；不 getObject', async () => {
+  it('链内 GET：ready 出 derivedUrl；pending 为 null；JSON 为预签名 GET；不 getObject', async () => {
     const owner = await registerUser();
     const chainId = await createChain(owner.id);
     const readyMoment = await insertMoment({
@@ -80,11 +80,11 @@ describe('serializeMoments derivedUrl（spec §2.1 / §9）', () => {
     expect(res.status).toBe(200);
     const readyItem = res.body.items.find((m: { id: string }) => m.id === readyMoment);
     const pendingItem = res.body.items.find((m: { id: string }) => m.id === pendingMoment);
-    expect(readyItem.media[0].derivedUrl).toBe(`/api/media/${readyId}?variant=derived`);
-    expect(readyItem.media[0].url).toBe(`/api/media/${readyId}`);
+    expect(readyItem.media[0].url).toBe('https://fake.local/presigned-get');
+    expect(readyItem.media[0].derivedUrl).toBe('https://fake.local/presigned-get');
     expect(readyItem.media[0].posterDerivedUrl).toBeNull();
     expect(pendingItem.media[0].derivedUrl).toBeNull();
-    expect(JSON.stringify(res.body)).not.toContain('https://');
+    expect(storage.generateAccessUrl).toHaveBeenCalled();
     expect(storage.getObject).not.toHaveBeenCalled();
   });
 
@@ -121,8 +121,8 @@ describe('serializeMoments derivedUrl（spec §2.1 / §9）', () => {
     expect(res.body.media).toHaveLength(1);
     expect(res.body.media[0].id).toBe(videoId);
     expect(res.body.media[0].posterMediaId).toBe(posterId);
-    expect(res.body.media[0].posterUrl).toBe(`/api/media/${posterId}`);
-    expect(res.body.media[0].posterDerivedUrl).toBe(`/api/media/${posterId}?variant=derived`);
+    expect(res.body.media[0].posterUrl).toBe('https://fake.local/presigned-get');
+    expect(res.body.media[0].posterDerivedUrl).toBe('https://fake.local/presigned-get');
     expect(res.body.media[0].derivedUrl).toBeNull();
   });
 
@@ -150,7 +150,7 @@ describe('serializeMoments derivedUrl（spec §2.1 / §9）', () => {
     expect(res.body.moments).toHaveLength(1);
     expect('persons' in res.body.moments[0]).toBe(false);
     expect('place' in res.body.moments[0]).toBe(false);
-    expect(res.body.moments[0].media[0].derivedUrl).toBe(`/api/media/${imageId}?variant=derived`);
+    expect(res.body.moments[0].media[0].derivedUrl).toBe('https://fake.local/presigned-get');
     expect(storage.getObject).not.toHaveBeenCalled();
   });
 });

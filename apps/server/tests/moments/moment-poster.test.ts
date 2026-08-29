@@ -90,7 +90,7 @@ describe('POST moments with posterMediaId（视频封面绑定）', () => {
     expect(res.body.media).toHaveLength(1);
     expect(res.body.media[0].id).toBe(videoId);
     expect(res.body.media[0].posterMediaId).toBe(posterId);
-    expect(res.body.media[0].posterUrl).toBe(`/api/media/${posterId}`);
+    expect(res.body.media[0].posterUrl).toBe('https://fake.local/presigned-get');
 
     const [posterRow] = await db.select().from(media).where(eq(media.id, posterId));
     expect(posterRow.momentId).toBe(res.body.id);

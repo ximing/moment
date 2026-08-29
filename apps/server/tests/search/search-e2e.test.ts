@@ -245,8 +245,8 @@ describe('融合检索 e2e（spec §9：建时刻人+地点+图 → compress moc
     expect(feed.status).toBe(200);
     expect(feed.body.moments.map((m: { id: string }) => m.id)).toEqual([momentId]);
     expect(feed.body.moments[0].persons[0].name).toBe('外婆');
-    expect(feed.body.moments[0].media[0].derivedUrl).toBe(`/api/media/${mediaId}?variant=derived`);
-    expect(feed.body.moments[0].media[0].url).toBe(`/api/media/${mediaId}`);
+    expect(feed.body.moments[0].media[0].derivedUrl).toBe('https://fake.local/presigned-get');
+    expect(feed.body.moments[0].media[0].url).toBe('https://fake.local/presigned-get');
 
     const list = await request(app)
       .get(`/api/chains/${chainId}/moments?person_id=${personId}`)
@@ -335,7 +335,7 @@ describe('融合检索 e2e（spec §9：建时刻人+地点+图 → compress moc
     expect(Object.keys(shared)).not.toContain('persons');
     expect(Object.keys(shared)).not.toContain('place');
     expect(shared.content).toBe('第一次翻身，在外婆家');
-    expect(shared.media[0].derivedUrl).toBe(`/api/media/${mediaId}?variant=derived`);
+    expect(shared.media[0].derivedUrl).toBe('https://fake.local/presigned-get');
 
     const pending = await db.select().from(outbox).where(eq(outbox.status, 'pending'));
     expect(pending).toHaveLength(0);

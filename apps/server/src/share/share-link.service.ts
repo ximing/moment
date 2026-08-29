@@ -14,8 +14,9 @@ import { Service } from 'typedi';
 import { focusFromDb } from '../chains/chain-appearance.js';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
-import { chains, media, recaps, shareLinks, type ShareLink } from '../db/schema.js';
+import { chains, recaps, shareLinks, type ShareLink } from '../db/schema.js';
 import { queryMomentPage } from '../feed/moment-query.js';
+import { signReadyMediaUrls } from '../media/sign-get.js';
 import { serializeMoments } from '../moments/moment-serializer.js';
 import { AggregateService } from '../templates/aggregate.service.js';
 import { TemplateService } from '../templates/template.service.js';
@@ -127,16 +128,9 @@ export class ShareLinkService {
     const appearanceMediaIds = [chain.avatarMediaId, chain.coverMediaId].filter(
       (id): id is string => id !== null,
     );
-    const readyMedia = new Set<string>();
-    if (appearanceMediaIds.length > 0) {
-      const readyRows = await db
-        .select({ id: media.id })
-        .from(media)
-        .where(and(inArray(media.id, appearanceMediaIds), eq(media.status, 'ready')));
-      for (const r of readyRows) readyMedia.add(r.id);
-    }
-    const avatarReady = chain.avatarMediaId !== null && readyMedia.has(chain.avatarMediaId);
-    const coverReady = chain.coverMediaId !== null && readyMedia.has(chain.coverMediaId);
+    const signedMedia = await signReadyMediaUrls(appearanceMediaIds);
+    const avatarReady = chain.avatarMediaId !== null && signedMedia.has(chain.avatarMediaId);
+    const coverReady = chain.coverMediaId !== null && signedMedia.has(chain.coverMediaId);
     const icon = avatarReady ? null : chain.icon;
     const color = avatarReady || icon !== null ? null : asAppearanceColor(chain.color);
 
@@ -170,10 +164,10 @@ export class ShareLinkService {
         name: chain.name,
         description: chain.description,
         avatarMediaId: avatarReady ? chain.avatarMediaId : null,
-        avatarUrl: avatarReady ? `/api/media/${chain.avatarMediaId}` : null,
+        avatarUrl: avatarReady && chain.avatarMediaId ? (signedMedia.get(chain.avatarMediaId) ?? null) : null,
         avatarFocus: avatarReady ? focusFromDb(chain.avatarFocusX, chain.avatarFocusY) : null,
         coverMediaId: coverReady ? chain.coverMediaId : null,
-        coverUrl: coverReady ? `/api/media/${chain.coverMediaId}` : null,
+        coverUrl: coverReady && chain.coverMediaId ? (signedMedia.get(chain.coverMediaId) ?? null) : null,
         coverFocus: coverReady ? focusFromDb(chain.coverFocusX, chain.coverFocusY) : null,
         color,
         icon,

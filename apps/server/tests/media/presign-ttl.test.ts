@@ -15,6 +15,15 @@ describe('alignedGetPresign（签名时刻 + TTL 双整点对齐，spec §5.3）
     }
   });
 
+  it('TTL=6h 时窗内任意时刻剩余 ≥ 6h，expiresIn = 21600 + 3600', () => {
+    const ttl = 6 * 3600;
+    for (const nowMs of [3_600_000, 3_600_000 + 1, 7_200_000 - 1000]) {
+      const { signingDate, expiresIn } = alignedGetPresign(nowMs, ttl);
+      expect(signingDate.getTime() + expiresIn * 1000 - nowMs).toBeGreaterThanOrEqual(ttl * 1000);
+    }
+    expect(alignedGetPresign(0, ttl).expiresIn).toBe(ttl + 3600);
+  });
+
   it('跨窗后 signingDate 切换（URL 只随整点变化）', () => {
     expect(alignedGetPresign(7_200_000 - 1, 3600).signingDate.getTime()).toBe(3_600_000);
     expect(alignedGetPresign(7_200_000, 3600).signingDate.getTime()).toBe(7_200_000);

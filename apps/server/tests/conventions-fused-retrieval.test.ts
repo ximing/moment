@@ -20,7 +20,7 @@ describe('CONVENTIONS §3 fused-retrieval additive（spec-review：只追加 get
     expect(text).toContain('abortMultipart');
   });
 
-  it('§3.6 融合检索路由行；ChainPolicy / 媒体稳定入口句未改', () => {
+  it('§3.6 融合检索路由行；ChainPolicy / 媒体 URL 签发句', () => {
     expect(text).toContain('融合检索（2026-08-29-fused-retrieval）');
     expect(text).toContain('POST /api/search');
     expect(text).toContain('GET /api/chains/:chainId/jobs');
@@ -29,7 +29,8 @@ describe('CONVENTIONS §3 fused-retrieval additive（spec-review：只追加 get
     expect(text).toContain('person_id');
     expect(text).toContain('variant=original|derived');
     expect(text).toContain("export function requireChainRole(minRole: ChainRole): RequestHandler;");
-    expect(text).toContain('媒体 URL：响应中 media 只出稳定入口 `/api/media/:id`（相对路径），**不得**内嵌预签名 URL。');
+    expect(text).toContain('媒体 URL：列表/详情每次签发预签名 GET（`PRESIGN_GET_TTL_SECONDS` 默认 21600，整点窗对齐）');
+    expect(text).toContain('`GET /api/media/:id` 仍 302');
     expect(text).toContain('`order=happened_at` 时 `{h: <epochMs>, i: <momentId>}`');
   });
 });

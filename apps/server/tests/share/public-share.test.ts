@@ -3,10 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../../src/db/index.js';
 import { chains, media, shareLinks } from '../../src/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { setStorageAdapter } from '../../src/storage/factory.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { app, createChain, insertMoment, registerUser } from '../helpers/fixtures.js';
+import { installMockStorage } from '../helpers/storage.js';
 
-/** 直插未绑定 moment 的 media（链头像/封面场景；稳定 URL 不含预签名，无需 mock storage）。 */
+/** 直插未绑定 moment 的 media（链头像/封面；响应里签发预签名 GET）。 */
 async function insertChainMedia(uploaderId: string, status: 'ready' | 'uploading'): Promise<string> {
   const id = randomUUID();
   await db.insert(media).values({
@@ -33,6 +35,7 @@ let shareToken: string;
 
 beforeEach(async () => {
   await resetDb();
+  installMockStorage();
   owner = await registerUser();
   chainId = await createChain(owner.id, '宝宝成长');
   const res = await request(app)
@@ -41,6 +44,7 @@ beforeEach(async () => {
     .send({});
   shareToken = res.body.token;
 });
+afterEach(() => setStorageAdapter(null));
 afterAll(closeDb);
 
 describe('GET /api/public/share/:token（匿名）', () => {
@@ -172,16 +176,15 @@ describe('GET /api/public/share/:token（匿名）', () => {
       name: '宝宝成长',
       description: null,
       avatarMediaId: avatarId,
-      avatarUrl: `/api/media/${avatarId}`,
+      avatarUrl: 'https://fake.local/presigned-get',
       avatarFocus: { x: 0.25, y: 0.75 },
       coverMediaId: coverId,
-      coverUrl: `/api/media/${coverId}`,
+      coverUrl: 'https://fake.local/presigned-get',
       coverFocus: { x: 1, y: 0 },
       color: null,
       icon: null,
     });
-    // DTO 不内嵌预签名参数（稳定相对入口，鉴权由 ?st= 完成）
-    expect(res.body.chain.avatarUrl).not.toContain('?');
+    expect(res.body.chain.avatarUrl).toMatch(/^https:\/\//);
   });
 
   it('链视觉：avatar 非 ready → mediaId/URL/focus 三者全 null，回退已存 color', async () => {

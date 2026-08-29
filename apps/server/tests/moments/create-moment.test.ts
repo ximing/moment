@@ -112,8 +112,8 @@ describe('POST /api/chains/:chainId/moments', () => {
     });
     expect(res.status).toBe(201);
     expect(res.body.media.map((m: { id: string; url: string }) => [m.id, m.url])).toEqual([
-      [md2, `/api/media/${md2}`],
-      [md1, `/api/media/${md1}`],
+      [md2, 'https://fake.local/presigned-get'],
+      [md1, 'https://fake.local/presigned-get'],
     ]);
 
     const momentId = res.body.id as string;

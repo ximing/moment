@@ -137,7 +137,7 @@ describe('链视觉归一化（创建）', () => {
     expect(res.status).toBe(201);
     const chain = res.body as ChainDto;
     expect(chain.avatarMediaId).toBe(avatarId);
-    expect(chain.avatarUrl).toBe(`/api/media/${avatarId}`);
+    expect(chain.avatarUrl).toBe('https://fake.local/presigned-get');
     expect(chain.avatarFocus).toEqual({ x: 0.5, y: 0.5 });
     expect(chain.color).toBeNull();
     expect(chain.icon).toBeNull();
@@ -161,7 +161,7 @@ describe('链视觉归一化（创建）', () => {
     expect(res.status).toBe(201);
     const chain = res.body as ChainDto;
     expect(chain.coverMediaId).toBe(coverId);
-    expect(chain.coverUrl).toBe(`/api/media/${coverId}`);
+    expect(chain.coverUrl).toBe('https://fake.local/presigned-get');
     expect(chain.coverFocus).toEqual({ x: 0.25, y: 0.75 });
     expect(storage.copyObject).toHaveBeenCalledWith(
       `tmp/${coverId}.jpeg`,
@@ -300,7 +300,7 @@ describe('链视觉归一化（更新）', () => {
     const toImage = await patchChain(chain.id, { avatarMediaId: avatarB });
     expect(toImage.status).toBe(200);
     expect(toImage.body.avatarMediaId).toBe(avatarB);
-    expect(toImage.body.avatarUrl).toBe(`/api/media/${avatarB}`);
+    expect(toImage.body.avatarUrl).toBe('https://fake.local/presigned-get');
     expect(toImage.body.color).toBeNull();
     expect(toImage.body.icon).toBeNull();
   });
@@ -480,8 +480,8 @@ describe('稳定 DTO 与链删除', () => {
 
     const list = await request(app).get('/api/chains').set('Authorization', auth(owner));
     const listed = (list.body as ChainDto[]).find((c) => c.id === chain.id)!;
-    expect(listed.avatarUrl).toBe(`/api/media/${avatarId}`);
-    expect(listed.coverUrl).toBe(`/api/media/${coverId}`);
+    expect(listed.avatarUrl).toBe('https://fake.local/presigned-get');
+    expect(listed.coverUrl).toBe('https://fake.local/presigned-get');
 
     // 关联 media 变为非 ready：该 placement 三项全部 null
     await db.update(media).set({ status: 'uploading' }).where(eq(media.id, avatarId));
@@ -490,7 +490,7 @@ describe('稳定 DTO 与链删除', () => {
     expect(detail.body.avatarMediaId).toBeNull();
     expect(detail.body.avatarUrl).toBeNull();
     expect(detail.body.avatarFocus).toBeNull();
-    expect(detail.body.coverUrl).toBe(`/api/media/${coverId}`);
+    expect(detail.body.coverUrl).toBe('https://fake.local/presigned-get');
   });
 
   it('删链把 avatar/cover media 标 orphaned 并写 orphanedAt', async () => {

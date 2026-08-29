@@ -151,7 +151,7 @@ describe('GET /api/chains/:chainId/moments（复合游标分页）', () => {
     const withMedia = res.body.items.find((i: { id: string }) => i.id === created.body.id);
     expect(withMedia.author).toEqual({ id: alice.id, nickname: 'alice', avatarUrl: null });
     expect(withMedia.media).toHaveLength(1);
-    expect(withMedia.media[0].url).toBe(`/api/media/${presigned.body.mediaId}`);
+    expect(withMedia.media[0].url).toBe('https://fake.local/presigned-get');
   });
 
   it('非法 cursor → 400 INVALID_CURSOR；limit 越界 → 400 INVALID_LIMIT；非成员 → 404', async () => {

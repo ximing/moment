@@ -83,7 +83,7 @@ src/storage/factory.ts        → getStorage(): UnifiedStorageAdapter（按 conf
 
 - key 布局：`{ATTACHMENT_S3_PREFIX}/tmp/{mediaId}.{ext}` → complete 时服务端 copy 到 `{prefix}/chains/{chainId}/{momentId}/{mediaId}.{ext}` 并删 tmp。
 - media 行 `storage_meta`（json）记录写入时存储配置；读取一律按行上 meta 签名，不用全局配置。
-- 环境变量沿用 `ATTACHMENT_S3_*` + `PRESIGN_GET_TTL_SECONDS`(3600) / `PRESIGN_PUT_TTL_SECONDS`(900)，config.ts 相应扩展。
+- 环境变量沿用 `ATTACHMENT_S3_*` + `PRESIGN_GET_TTL_SECONDS`(21600) / `PRESIGN_PUT_TTL_SECONDS`(900)，config.ts 相应扩展。
 - **测试策略**：单元/集成测试 mock `UnifiedStorageAdapter`（通过 factory 的可注入点替换）；另提供 `RUN_S3_IT=1` 才跑的真实桶 smoke 测试（默认跳过，用 `describe.skipIf` / 条件跳过），严禁默认测试依赖外部桶状态。
 
 ### 3.4 Feed 游标与序列化器（Phase 4 建立，Phase 5 扩展）
@@ -91,7 +91,7 @@ src/storage/factory.ts        → getStorage(): UnifiedStorageAdapter（按 conf
 - 游标 = base64url(JSON)，`order=happened_at` 时 `{h: <epochMs>, i: <momentId>}`；`order=created_at` 时 `{c: <epochMs>, i: <momentId>}`。解析失败抛 `BadRequestError('INVALID_CURSOR')`。
 - 「全仓无第二份游标实现」仅约束 **moments 分页**；评论、通知等其他资源域可各自实现同风格游标（如 Phase 5 的 `comment-cursor.ts`），不算违反。
 - `momentSerializer`（`src/moments/moment-serializer.ts`）是 moment → API 响应的**唯一出口**；Phase 5 在其上加批量计数（一次 `GROUP BY`，禁止 N+1）。
-- 媒体 URL：响应中 media 只出稳定入口 `/api/media/:id`（相对路径），**不得**内嵌预签名 URL。
+- 媒体 URL：列表/详情每次签发预签名 GET（`PRESIGN_GET_TTL_SECONDS` 默认 21600，整点窗对齐），写入 `url` / `derivedUrl` / `posterUrl` / `posterDerivedUrl` / 链 `avatarUrl`/`coverUrl`。`GET /api/media/:id` 仍 302（分享 `?st=`、未绑定预览）。客户端 `<img>`/`<video>` 直出响应里的 https URL，登录态不再 fetch blob。
 
 ### 3.5 dto 扩展约定
 

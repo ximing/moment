@@ -39,6 +39,7 @@ import {
   rollbackBoundMedia,
   type ChainMediaBinding,
 } from './chain-media.js';
+import { signReadyMediaUrls } from '../media/sign-get.js';
 
 /** 读取防御：color 列只接受预设色或 #RRGGBB（历史异常值 → null，由客户端哈希回退）。 */
 function asAppearanceColor(v: string | null): ChainAppearanceColor | null {
@@ -407,6 +408,7 @@ export class ChainService {
     myRole: ChainRole | undefined,
     extras: { membersPreview: ChainMemberPreview[]; memberCount: number },
     readyMedia: ReadonlySet<string>,
+    signedMedia: ReadonlyMap<string, string>,
   ): ChainDto {
     // 每个图片 placement 只在关联 media 存在且 ready 时返回成组的 mediaId/稳定 URL/focus；
     // 关联缺失或非 ready 时三者全部 null（设计 §4.3），客户端按防御性优先级回退。
@@ -420,10 +422,10 @@ export class ChainService {
       name: chain.name,
       description: chain.description,
       avatarMediaId: avatarReady ? chain.avatarMediaId : null,
-      avatarUrl: avatarReady ? `/api/media/${chain.avatarMediaId}` : null,
+      avatarUrl: avatarReady && chain.avatarMediaId ? (signedMedia.get(chain.avatarMediaId) ?? null) : null,
       avatarFocus: avatarReady ? focusFromDb(chain.avatarFocusX, chain.avatarFocusY) : null,
       coverMediaId: coverReady ? chain.coverMediaId : null,
-      coverUrl: coverReady ? `/api/media/${chain.coverMediaId}` : null,
+      coverUrl: coverReady && chain.coverMediaId ? (signedMedia.get(chain.coverMediaId) ?? null) : null,
       coverFocus: coverReady ? focusFromDb(chain.coverFocusX, chain.coverFocusY) : null,
       color,
       icon,
@@ -451,12 +453,10 @@ export class ChainService {
       ),
     ];
     const readyMedia = new Set<string>();
+    let signedMedia = new Map<string, string>();
     if (appearanceMediaIds.length > 0) {
-      const readyRows = await db
-        .select({ id: media.id })
-        .from(media)
-        .where(and(inArray(media.id, appearanceMediaIds), eq(media.status, 'ready')));
-      for (const r of readyRows) readyMedia.add(r.id);
+      signedMedia = await signReadyMediaUrls(appearanceMediaIds);
+      for (const id of signedMedia.keys()) readyMedia.add(id);
     }
     const rows = await db
       .select({
@@ -503,7 +503,7 @@ export class ChainService {
           avatarUrl: avatarBy.get(p.userId) ?? null,
           role: p.role,
         })),
-      }, readyMedia);
+      }, readyMedia, signedMedia);
     });
   }
 

@@ -28,8 +28,9 @@ export const envSchema = z.object({
     .default('false')
     .refine((v) => v === 'false', { message: 'PUBLIC_BUCKET_UNSUPPORTED: MVP 仅支持私有桶（spec §5.3）' })
     .transform((v) => (v as string) === 'true'),
-  // GET TTL 上限 3600：alignedGetPresign 的「过期时刻落在下一窗内」推导要求 TTL ≤ 一个窗长（3600s）
-  PRESIGN_GET_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(3600),
+  // 媒体 GET 预签名：默认 6 小时。alignedGetPresign 的 expiresIn = TTL + 3600，保证整点窗内剩余 ≥ TTL。
+  // 上限 7 天（S3 SigV4 IAM 用户上限）。
+  PRESIGN_GET_TTL_SECONDS: z.coerce.number().int().min(1).max(7 * 24 * 3600).default(6 * 3600),
   PRESIGN_PUT_TTL_SECONDS: z.coerce.number().int().min(1).default(900),
   /** 头像预签名 GET：默认 6 天。S3 SigV4 IAM 用户上限 7 天。 */
   AVATAR_PRESIGN_TTL_SECONDS: z.coerce.number().int().min(60).max(7 * 24 * 3600).default(6 * 24 * 3600),
