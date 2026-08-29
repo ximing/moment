@@ -1,6 +1,16 @@
 import { Service } from '@rabjs/react';
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_VIDEO_DURATION_SECONDS } from '@moment/dto';
-import type { ChainMemberDto, MomentResponse, PersonBrief, PersonResponse, PublicShareMoment, TagResponse, TemplateManifest } from '@moment/dto';
+import type {
+  ChainMemberDto,
+  MomentMedia,
+  MomentResponse,
+  MomentType,
+  PersonBrief,
+  PersonResponse,
+  PublicShareMoment,
+  TagResponse,
+  TemplateManifest,
+} from '@moment/dto';
 import { client } from '@/api/client';
 import { compressImage } from '@/lib/compress';
 import { firstGps } from '@/compose/exif-gps';
@@ -28,6 +38,22 @@ export interface PickedVideo {
 function isPastHappenedAt(ms: number): boolean {
   return Number.isFinite(ms) && Math.abs(ms - Date.now()) > 5 * 60_000;
 }
+
+export function editImageCap(edit: { type: MomentType }): 8 | 9 {
+  return edit.type === 'voice' ? 8 : 9;
+}
+
+export function editOccupied(keptMedia: MomentMedia[], images: { file: File }[]): number {
+  return keptMedia.length + images.length;
+}
+
+/** hydrate 快照：dirty 对照写在长寿命 Service 上，不能放 fiber useRef（StrictMode 重挂载会丢掉）。 */
+export type ComposeDraftBaseline = {
+  content: string;
+  happenedAt: string;
+  tagIds: string[];
+  mediaIds: string[];
+};
 
 /** 发布面板（spec §4.6）：草稿活在面板生命周期；submit 成功 emit + markCreated + close。 */
 export class ComposePanelService extends Service {
@@ -73,6 +99,15 @@ export class ComposePanelService extends Service {
   placeTouched = false;
   /** 用户点 × 移除 EXIF chip 后本面板会话不再自动回填（否则删不掉，见计划偏差 2） */
   exifDismissed = false;
+  /** 编辑态留下的已发布内容格（image/*；media 存量 video/* 也占格）。audio 永不进入。 */
+  keptMedia: MomentMedia[] = [];
+  /** 仅 voice 编辑：原 audio 行。hydrate 会把 this.voice 清掉，cap 禁止再读 this.voice。 */
+  keptAudio: MomentMedia | null = null;
+  /** 动作级 dirty：叉/加过媒体才把 mediaIds 放进 PATCH */
+  mediaTouched = false;
+  baselineMediaIds: string[] = [];
+  /** 关闭确认的 dirty 基线；每次 hydrate 重写。判脏读这里，不读组件 ref。 */
+  baseline: ComposeDraftBaseline | null = null;
   private manifestChainId = '';
 
   get chainList(): ChainListService {
@@ -125,6 +160,58 @@ export class ComposePanelService extends Service {
     this.personList = [];
     this.members = [];
     this.personQuery = '';
+    this.images.forEach((i) => URL.revokeObjectURL(i.previewUrl));
+    this.images = [];
+    if (this.video) URL.revokeObjectURL(this.video.previewUrl);
+    this.video = null;
+    this.resetPoster();
+    this.resetVoice();
+    this.replaceConfirm = null;
+    this.pendingFiles = [];
+    this.mediaTouched = false;
+    const edit = request.edit;
+    if (edit?.type === 'media') {
+      this.keptMedia = [...edit.media];
+      this.keptAudio = null;
+      this.baselineMediaIds = this.keptMedia.map((m) => m.id);
+    } else if (edit?.type === 'voice') {
+      this.keptAudio = edit.media.find((m) => m.mime.startsWith('audio/')) ?? null;
+      this.keptMedia = edit.media.filter((m) => m.mime.startsWith('image/'));
+      this.baselineMediaIds = this.keptAudio
+        ? [this.keptAudio.id, ...this.keptMedia.map((m) => m.id)]
+        : [];
+    } else {
+      this.keptMedia = [];
+      this.keptAudio = null;
+      this.baselineMediaIds = [];
+    }
+    this.baseline = {
+      content: this.content,
+      happenedAt: this.happenedAt,
+      tagIds: [...this.selectedTags],
+      mediaIds: [...this.baselineMediaIds],
+    };
+  }
+
+  /** 相对 hydrate 基线的 dirty。媒体/人物/地点动作级标志不依赖 baseline 是否还在。 */
+  isDirty(): boolean {
+    if (this.mediaTouched) return true;
+    if (this.images.length > 0 || this.video || this.voice) return true;
+    if (this.personsTouched || this.placeTouched) return true;
+    const base = this.baseline;
+    if (!base) return false;
+    if (this.content !== base.content) return true;
+    const currentIds =
+      this.edit?.type === 'voice' && this.keptAudio
+        ? [this.keptAudio.id, ...this.keptMedia.map((m) => m.id)]
+        : this.keptMedia.map((m) => m.id);
+    if (currentIds.length !== base.mediaIds.length || currentIds.some((id, i) => id !== base.mediaIds[i])) {
+      return true;
+    }
+    if (this.happenedAt !== base.happenedAt) return true;
+    if (this.selectedTags.length !== base.tagIds.length) return true;
+    if (this.selectedTags.some((id) => !base.tagIds.includes(id))) return true;
+    return JSON.stringify(this.payloadDraft) !== JSON.stringify(this.edit?.payload ?? {});
   }
 
   async loadTagList(): Promise<void> {
@@ -310,14 +397,16 @@ export class ComposePanelService extends Service {
         this.error = `「${file.name}」超过图片上限（${formatBytes(MAX_IMAGE_BYTES)}）`;
         continue;
       }
-      const cap = this.voice ? 8 : 9; // voice 附图 ≤8（1 audio + ≤8 图 ≤ 9 mediaIds，spec §2.2）
-      if (next.length >= cap) {
-        this.error = this.voice ? '语音时刻最多 8 张附图' : '最多 9 张图片';
+      const cap = this.edit ? editImageCap(this.edit) : this.voice ? 8 : 9;
+      const occupied = this.edit ? editOccupied(this.keptMedia, next) : next.length;
+      if (occupied >= cap) {
+        this.error = this.edit?.type === 'voice' || this.voice ? '语音时刻最多 8 张附图' : '最多 9 张图片';
         break;
       }
       next.push({ file, previewUrl: URL.createObjectURL(file) });
     }
     this.images = next;
+    if (this.edit) this.mediaTouched = true;
   }
 
   /** 截帧组件回调；blob 为 null = 截帧失败降级（静默无封面） */
@@ -418,9 +507,15 @@ export class ComposePanelService extends Service {
     this.pendingFiles = [];
   }
 
+  removeKeptMedia(id: string): void {
+    this.keptMedia = this.keptMedia.filter((m) => m.id !== id);
+    this.mediaTouched = true;
+  }
+
   removeImage(index: number): void {
     URL.revokeObjectURL(this.images[index]!.previewUrl); // 显式 revoke
     this.images = this.images.filter((_, i) => i !== index);
+    if (this.edit) this.mediaTouched = true;
   }
 
   /** 关闭/取消/Escape：先 revoke 全部预览，再关会话（不依赖 destroy/GC，spec §5） */
@@ -484,7 +579,30 @@ export class ComposePanelService extends Service {
     const hasVideo = Boolean(this.video);
     const hasVoice = Boolean(this.voice);
     const structuredOnly = this.kind !== 'standard';
-    if (!hasImages && !hasVideo && !hasVoice && this.content.trim().length === 0 && !structuredOnly) {
+    if (edit) {
+      const resultCount = this.keptMedia.length + this.images.length;
+      if (
+        edit.type === 'text' &&
+        resultCount === 0 &&
+        this.kind === 'standard' &&
+        this.content.trim().length === 0
+      ) {
+        this.error = '先写一句此刻吧';
+        return;
+      }
+      if (edit.type === 'media' && resultCount === 0) {
+        this.error = '至少留一张图';
+        return;
+      }
+      if (this.mediaTouched && this.keptMedia.some((m) => m.mime.startsWith('video/'))) {
+        this.error = '改图片前请先移除宫格里的视频';
+        return;
+      }
+      if (edit.type === 'voice' && !this.keptAudio) {
+        this.error = '录音不能换';
+        return;
+      }
+    } else if (!hasImages && !hasVideo && !hasVoice && this.content.trim().length === 0 && !structuredOnly) {
       this.error = '先写一句此刻吧';
       return;
     }
@@ -503,6 +621,23 @@ export class ComposePanelService extends Service {
     const composeSession = this.resolve(ComposeSessionService);
     try {
       if (edit) {
+        let mediaIds: string[] | undefined;
+        if (this.mediaTouched) {
+          const uploaded: string[] = [];
+          for (let i = 0; i < this.images.length; i++) {
+            this.progress = `上传图片 ${i + 1}/${this.images.length}`;
+            const file = await compressImage(this.images[i]!.file);
+            const res = await client.uploadMedia({
+              file,
+              mime: file.type,
+              size: file.size,
+              kind: 'image',
+            });
+            uploaded.push(res.mediaId);
+          }
+          const imageIds = [...this.keptMedia.map((m) => m.id), ...uploaded];
+          mediaIds = edit.type === 'voice' && this.keptAudio ? [this.keptAudio.id, ...imageIds] : imageIds;
+        }
         await client.updateMoment(edit.id, {
           content: this.content,
           ...(timeEdited ? { happenedAt: happenedIso, happenedTzOffset: edit.happenedTzOffset } : {}),
@@ -513,6 +648,7 @@ export class ComposePanelService extends Service {
           // dirty tracking（spec §6）：undefined = 不变——未动过的人物/地点绝不整包回传
           ...(this.personsTouched ? { personIds: this.selectedPersons.map((p) => p.id) } : {}),
           ...(this.placeTouched ? { place: this.placePayload() } : {}),
+          ...(this.mediaTouched ? { mediaIds } : {}),
         });
         composeSession.emit('moment:changed', { momentId: edit.id, chainId: edit.chainId, op: 'update' }, 'global');
       } else {

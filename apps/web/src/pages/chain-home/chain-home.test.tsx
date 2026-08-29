@@ -458,6 +458,64 @@ describe('发布面板草稿保护', () => {
     expect(resolve(ComposeSessionService).request).not.toBeNull();
   });
 
+  function renderEdit(edit: MomentResponse) {
+    resolve(ComposeSessionService).request = { chainId: 'chain-1', edit };
+    return render(
+      <RSRoot>
+        <ComposePanel />
+      </RSRoot>,
+    );
+  }
+
+  it('编辑 media 出现加图片且可叉已有格', () => {
+    renderEdit(IMAGE_MOMENT);
+    expect(screen.getByRole('button', { name: '加图片' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '加视频' })).toBeNull();
+    expect(screen.queryByText('已发布的媒体不能更换')).toBeNull();
+    expect(screen.getByRole('button', { name: '移除这张图片' })).toBeInTheDocument();
+  });
+
+  it('编辑 text 出现加图片', () => {
+    renderEdit({ ...IMAGE_MOMENT, id: 'moment-text-edit', type: 'text', media: [] });
+    expect(screen.getByRole('button', { name: '加图片' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '加视频' })).toBeNull();
+  });
+
+  it('编辑 voice 出现加图片且可叉附图', () => {
+    renderEdit({
+      ...IMAGE_MOMENT,
+      id: 'moment-voice-edit',
+      type: 'voice',
+      media: [
+        { ...IMAGE_MOMENT.media[0]!, id: 'aud', mime: 'audio/wav', url: 'https://signed.example/aud' },
+        IMAGE_MOMENT.media[0]!,
+      ],
+    });
+    expect(screen.getByRole('button', { name: '加图片' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '移除这张图片' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '加视频' })).toBeNull();
+  });
+
+  it('编辑 video 只读文案，无加图按钮', () => {
+    renderEdit({
+      ...IMAGE_MOMENT,
+      id: 'moment-video-edit',
+      type: 'video',
+      media: [{ ...IMAGE_MOMENT.media[0]!, id: 'vid', mime: 'video/mp4' }],
+    });
+    expect(screen.getByText('视频发布后不能更换')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '加图片' })).toBeNull();
+  });
+
+  it('编辑叉掉已有图后点取消先弹放弃确认', async () => {
+    const user = userEvent.setup();
+    renderEdit(IMAGE_MOMENT);
+    await user.click(screen.getByRole('button', { name: '移除这张图片' }));
+    await user.click(screen.getByRole('button', { name: '取消' }));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(resolve(ComposeSessionService).request).not.toBeNull();
+  });
+
   it('无草稿时直接关闭，不弹 AlertDialog', async () => {
     const user = userEvent.setup();
     renderCompose();

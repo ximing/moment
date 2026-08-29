@@ -1,6 +1,6 @@
 import { register, resolve } from '@rabjs/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChainDto, MomentResponse } from '@moment/dto';
+import type { ChainDto, MomentMedia, MomentResponse } from '@moment/dto';
 import { AuthService } from '@/services/auth.service';
 import { ChainListService } from '@/services/chain-list.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
@@ -22,9 +22,11 @@ const api = vi.hoisted(() => ({
   createPerson: vi.fn(),
   createMoment: vi.fn(),
   updateMoment: vi.fn(),
+  uploadMedia: vi.fn(),
 }));
 
 const exif = vi.hoisted(() => ({ firstGps: vi.fn() }));
+const compress = vi.hoisted(() => ({ compressImage: vi.fn(async (f: File) => f) }));
 
 vi.mock('@/api/client', () => ({
   client: api,
@@ -38,6 +40,7 @@ vi.mock('@/api/client', () => ({
   cacheUser: () => undefined,
 }));
 vi.mock('@/compose/exif-gps', () => ({ firstGps: exif.firstGps }));
+vi.mock('@/lib/compress', () => ({ compressImage: compress.compressImage }));
 
 register(AuthService);
 register(ChainListService);
@@ -115,6 +118,13 @@ beforeEach(() => {
   api.listMembers.mockResolvedValue([]);
   api.createMoment.mockResolvedValue(editMoment());
   api.updateMoment.mockResolvedValue(editMoment());
+  api.uploadMedia.mockResolvedValue({
+    mediaId: '11111111-1111-4111-8111-111111111111',
+    status: 'ready',
+    mime: 'image/jpeg',
+    size: 1,
+  });
+  compress.compressImage.mockClear();
   resolve(ChainListService).chains = [chain('chain-1')];
   const s = svc();
   // 单例跨用例复位（不走 hydrate，绕开 request 依赖）
@@ -135,6 +145,11 @@ beforeEach(() => {
   s.placeTouched = false;
   s.exifDismissed = false;
   s.error = null;
+  s.keptMedia = [];
+  s.keptAudio = null;
+  s.mediaTouched = false;
+  s.baselineMediaIds = [];
+  s.baseline = null;
 });
 
 describe('编辑模式 dirty tracking（spec §6：undefined = 不变）', () => {
@@ -346,5 +361,209 @@ describe('人物词典与链成员（spec §6/§7）', () => {
     await s.loadPersons();
     expect(s.personList).toEqual([]);
     expect(s.members.map((m) => m.nickname)).toEqual(['林晓满']);
+  });
+});
+
+function img(id: string, mime = 'image/jpeg'): MomentMedia {
+  return {
+    id,
+    url: `https://signed.example/${id}`,
+    mime,
+    width: 64,
+    height: 48,
+    duration: null,
+    sortOrder: 0,
+    posterMediaId: null,
+    posterUrl: null,
+    derivedUrl: null,
+    posterDerivedUrl: null,
+  };
+}
+
+describe('编辑模式媒体 dirty / cap / submit（spec §6）', () => {
+  it('未动媒体 → updateMoment 请求体无 mediaIds 键', async () => {
+    const s = svc();
+    s.hydrate({ edit: editMoment({ type: 'media', media: [img('m-keep')] }) });
+    s.content = '只改正文';
+    await s.submit();
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('mediaIds');
+    expect(body).not.toHaveProperty('type');
+    expect(body).not.toHaveProperty('posterMediaId');
+    expect(api.uploadMedia).not.toHaveBeenCalled();
+  });
+
+  it('叉一张再保存 → 先 compressImage + uploadMedia({kind:image}) 再 updateMoment；mediaIds 为剩余 id（无新图则不 upload）', async () => {
+    const s = svc();
+    s.hydrate({ edit: editMoment({ type: 'media', media: [img('keep-1'), img('keep-2')] }) });
+    s.removeKeptMedia('keep-2');
+    const order: string[] = [];
+    compress.compressImage.mockImplementation(async (f) => {
+      order.push('compress');
+      return f;
+    });
+    api.uploadMedia.mockImplementation(async () => {
+      order.push('upload');
+      return { mediaId: 'n1' };
+    });
+    api.updateMoment.mockImplementation(async () => {
+      order.push('update');
+      return editMoment();
+    });
+    await s.submit();
+    expect(api.uploadMedia).not.toHaveBeenCalled(); // 无新本地图
+    expect(order).toEqual(['update']);
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body.mediaIds).toEqual(['keep-1']);
+  });
+
+  it('text 加图 → 串行 compress+upload 后再 PATCH，mediaIds 仅新 id', async () => {
+    const s = svc();
+    s.hydrate({ edit: editMoment({ type: 'text', media: [], content: '' }) });
+    s.addImages([new File(['x'], 'a.jpg', { type: 'image/jpeg' })]);
+    const order: string[] = [];
+    compress.compressImage.mockImplementation(async (f) => {
+      order.push('compress');
+      return f;
+    });
+    api.uploadMedia.mockImplementation(async (input: { kind: string }) => {
+      order.push('upload');
+      expect(input.kind).toBe('image');
+      return { mediaId: 'new-1', status: 'ready', mime: 'image/jpeg', size: 1 };
+    });
+    api.updateMoment.mockImplementation(async () => {
+      order.push('update');
+      return editMoment();
+    });
+    await s.submit();
+    expect(order).toEqual(['compress', 'upload', 'update']);
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body.mediaIds).toEqual(['new-1']);
+    expect(body).not.toHaveProperty('type');
+  });
+
+  it('video 编辑不调用 upload、不带 mediaIds', async () => {
+    const s = svc();
+    s.hydrate({
+      edit: editMoment({
+        type: 'video',
+        media: [{ ...img('vid'), mime: 'video/mp4' }],
+      }),
+    });
+    s.content = '改配文';
+    await s.submit();
+    expect(api.uploadMedia).not.toHaveBeenCalled();
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('mediaIds');
+  });
+
+  it('voice 编辑 keptMedia 已 8 张时再 addImages 第 9 张被拒，即使 this.voice === null', async () => {
+    const s = svc();
+    const pictures = Array.from({ length: 8 }, (_, i) => img(`p-${i}`));
+    s.hydrate({
+      edit: editMoment({
+        type: 'voice',
+        media: [{ ...img('aud'), mime: 'audio/wav' }, ...pictures],
+      }),
+    });
+    expect(s.voice).toBeNull();
+    expect(s.keptMedia).toHaveLength(8);
+    expect(s.keptAudio?.id).toBe('aud');
+    s.addImages([new File(['x'], 'nine.jpg', { type: 'image/jpeg' })]);
+    expect(s.error).toBe('语音时刻最多 8 张附图');
+    expect(s.images).toHaveLength(0);
+  });
+
+  it('media 已有 8 张再 paste 第 10 张内容被拒（最多 9 张图片）', async () => {
+    const s = svc();
+    s.hydrate({ edit: editMoment({ type: 'media', media: Array.from({ length: 8 }, (_, i) => img(`k-${i}`)) }) });
+    s.addImages([new File(['a'], '9.jpg', { type: 'image/jpeg' })]);
+    expect(s.images).toHaveLength(1);
+    s.addImages([new File(['b'], '10.jpg', { type: 'image/jpeg' })]);
+    expect(s.error).toBe('最多 9 张图片');
+    expect(s.images).toHaveLength(1);
+  });
+
+  it('hydrate 清掉上一轮新建草稿（images/video），避免记下→编辑残留', async () => {
+    const s = svc();
+    s.images = [{ file: new File(['x'], 'old.jpg', { type: 'image/jpeg' }), previewUrl: 'blob:old' }];
+    s.video = { file: new File(['v'], 'old.mp4', { type: 'video/mp4' }), previewUrl: 'blob:vid', durationSeconds: 3 };
+    s.hydrate({ edit: editMoment({ type: 'media', media: [img('keep')] }) });
+    expect(s.images).toEqual([]);
+    expect(s.voice).toBeNull();
+    expect(s.video).toBeNull();
+    expect(s.keptMedia.map((m) => m.id)).toEqual(['keep']);
+    expect(s.mediaTouched).toBe(false);
+  });
+
+  it('原 media 空正文、只留已有图 → 不拦「先写一句此刻吧」，不 upload', async () => {
+    const s = svc();
+    s.hydrate({ edit: editMoment({ type: 'media', content: '', media: [img('keep')] }) });
+    await s.submit();
+    expect(s.error).toBeNull();
+    expect(api.uploadMedia).not.toHaveBeenCalled();
+    expect(api.updateMoment).toHaveBeenCalledTimes(1);
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('mediaIds');
+    expect(body.content).toBe('');
+  });
+
+  it('原 media 结果 0 图 → error 至少留一张图，不打 API', async () => {
+    const s = svc();
+    s.hydrate({ edit: editMoment({ type: 'media', media: [img('only')] }) });
+    s.removeKeptMedia('only');
+    await s.submit();
+    expect(s.error).toBe('至少留一张图');
+    expect(api.updateMoment).not.toHaveBeenCalled();
+  });
+
+  it('混排残留 video 且 mediaTouched → 改图片前请先移除宫格里的视频', async () => {
+    const s = svc();
+    s.hydrate({
+      edit: editMoment({
+        type: 'media',
+        media: [img('pic'), { ...img('clip'), mime: 'video/mp4' }],
+      }),
+    });
+    s.removeKeptMedia('pic');
+    await s.submit();
+    expect(s.error).toBe('改图片前请先移除宫格里的视频');
+    expect(api.updateMoment).not.toHaveBeenCalled();
+  });
+
+  it('hydrate 把 dirty 基线写在 service.baseline，改草稿不冲掉快照', () => {
+    const s = svc();
+    s.hydrate({ edit: editMoment({ type: 'media', media: [img('keep')], content: '原文' }) });
+    expect(s.baseline).toEqual({
+      content: '原文',
+      happenedAt: s.happenedAt,
+      tagIds: [],
+      mediaIds: ['keep'],
+    });
+    s.content = '改过了';
+    s.removeKeptMedia('keep');
+    expect(s.baseline).toEqual({
+      content: '原文',
+      happenedAt: s.happenedAt,
+      tagIds: [],
+      mediaIds: ['keep'],
+    });
+  });
+
+  it('isDirty：改正文后不重跑 hydrate 仍为 true（模拟 fiber 重挂载跳过 hydrate）', () => {
+    const s = svc();
+    s.hydrate({ chainId: 'chain-1' });
+    expect(s.isDirty()).toBe(false);
+    s.content = '今天吃了蛋糕';
+    expect(s.isDirty()).toBe(true);
+  });
+
+  it('isDirty：mediaTouched 在 baseline 丢失时仍为 true（旧 fiber ref 空不得误关）', () => {
+    const s = svc();
+    s.hydrate({ edit: editMoment({ type: 'media', media: [img('keep')] }) });
+    s.removeKeptMedia('keep');
+    s.baseline = null;
+    expect(s.mediaTouched).toBe(true);
+    expect(s.isDirty()).toBe(true);
   });
 });

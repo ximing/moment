@@ -8,11 +8,14 @@ import { Button, IconButton } from '@/ui/button/index';
 import { Banner, InlineProgress } from '@/ui/feedback/index';
 import { DateTimeField, Input, TextareaField } from '@/ui/field/index';
 import { AlertDialog, Sheet } from '@/ui/modal/index';
-import { ComposePanelService } from './compose-panel.service';
+import { ComposePanelService, editImageCap, editOccupied } from './compose-panel.service';
 import { VoiceRecorder } from './voice-recorder';
 import { VideoPosterPicker } from './video-poster';
 import { PersonPicker } from './person-picker';
 import { TemplateFields } from '@/compose/template-fields';
+import { AudioBar } from '@/media/AudioBar';
+import { MediaBlock } from '@/media/MediaBlock';
+import { cardDisplayUrl } from '@/lib/media-src';
 
 // 发布面板 = Sheet（Modal 规范 §2：记下／编辑时刻）；内部表单复用 Field 家族
 // （TextareaField / DateTimeField / Input）与 Button。关闭语义（Modal 规范 §9）：
@@ -26,9 +29,6 @@ export const ComposePanel = observer(function ComposePanel() {
   return <ComposeBody />;
 });
 
-/** hydrate 后的草稿基线：dirty 判定以它为准，不改动 ComposePanelService 语义。 */
-type DraftBaseline = { content: string; happenedAt: string; tagIds: string[] };
-
 const ComposeBodyContent = observer(function ComposeBodyContent() {
   const service = useService(ComposePanelService);
   const composeSession = useService(ComposeSessionService);
@@ -40,17 +40,12 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
   const [discardOpen, setDiscardOpen] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const dragDepthRef = useRef(0);
-  const baselineRef = useRef<DraftBaseline | null>(null);
-
-  useEffect(() => {
-    service.hydrate(composeSession.request!);
-    baselineRef.current = {
-      content: service.content,
-      happenedAt: service.happenedAt,
-      tagIds: [...service.selectedTags],
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载时一次性水合
-  }, []);
+  const req = composeSession.request;
+  // 渲染期水合：首帧就要按编辑/新建画，避免先闪「加图片」；jsdom 下 effect 也不触发 observer 重渲。
+  // dirty 基线写在 service.hydrate → service.baseline，不写 fiber ref（StrictMode 重挂载会丢掉 ref、跳过 hydrate）。
+  if (req && service.request !== req) {
+    service.hydrate(req);
+  }
   useEffect(() => {
     void service.loadTagList();
   }, [service, service.chainId]);
@@ -68,10 +63,27 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
     if (chainId) void service.loadManifest(chainId).catch(() => undefined); // 失败静默（service 注释）
   }, [service, chainId]);
 
+  if (!req) return null;
+
   const title = edit ? '改这条时刻' : '记下此刻';
 
   const addMediaFiles = (files: File[]): boolean => {
     if (files.length === 0) return false;
+    if (edit) {
+      if (edit.type === 'video') return false;
+      const images = files.filter((file) => file.type.startsWith('image/'));
+      const videos = files.filter((file) => file.type.startsWith('video/'));
+      if (videos.length > 0) {
+        service.error = '编辑时不能换成视频';
+        return true;
+      }
+      if (images.length !== files.length) {
+        service.error = '这里只能添加图片或视频';
+        return true;
+      }
+      service.addImages(images);
+      return true;
+    }
     const images = files.filter((file) => file.type.startsWith('image/'));
     const videos = files.filter((file) => file.type.startsWith('video/'));
     if (images.length + videos.length !== files.length) {
@@ -92,7 +104,7 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
-    if (edit || busy) return;
+    if (busy || edit?.type === 'video') return;
     const files = Array.from(event.clipboardData.files);
     if (files.length === 0) return; // 普通文字粘贴保持浏览器原行为
     event.preventDefault();
@@ -103,27 +115,12 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
     event.preventDefault();
     dragDepthRef.current = 0;
     setDragActive(false);
-    if (busy) return;
+    if (busy || edit?.type === 'video') return;
     addMediaFiles(Array.from(event.dataTransfer.files));
   };
 
-  /** 相对 hydrate 基线的 dirty 判定：正文 / 媒体 / 发生时间 / 标签任一变化即 dirty。 */
-  const isDirty = (): boolean => {
-    const base = baselineRef.current;
-    if (!base) return false;
-    if (service.content !== base.content) return true;
-    if (service.images.length > 0 || service.video || service.voice) return true;
-    if (service.happenedAt !== base.happenedAt) return true;
-    if (service.selectedTags.length !== base.tagIds.length) return true;
-    if (service.selectedTags.some((id) => !base.tagIds.includes(id))) return true;
-    // 人物/地点草稿（spec people-place §6）：用户动作级判脏（未动 = 不算草稿变化）
-    if (service.personsTouched || service.placeTouched) return true;
-    // 结构化字段草稿相对水合基线（编辑模式的既有 payload）有变化也算 dirty
-    return JSON.stringify(service.payloadDraft) !== JSON.stringify(edit?.payload ?? {});
-  };
-
   const requestClose = () => {
-    if (isDirty()) setDiscardOpen(true);
+    if (service.isDirty()) setDiscardOpen(true);
     else service.resetAndClose();
   };
 
@@ -183,7 +180,14 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
             placeholder="这一刻…"
           />
 
-          {!edit && (
+          {edit?.type === 'video' && (
+            <div className="flex flex-col gap-3">
+              <MediaBlock media={edit.media} />
+              <p className="text-meta text-muted">视频发布后不能更换</p>
+            </div>
+          )}
+
+          {edit?.type !== 'video' && (
             <div
               role="region"
               aria-label="添加图片或视频"
@@ -192,7 +196,7 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
               }`}
               onDragEnter={(event) => {
                 event.preventDefault();
-                if (busy) return;
+                if (busy || edit?.type === 'video') return;
                 dragDepthRef.current += 1;
                 setDragActive(true);
               }}
@@ -203,8 +207,42 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
               }}
               onDrop={handleDrop}
             >
-              {service.images.length > 0 && (
+              {edit?.type === 'voice' && service.keptAudio && (
+                <AudioBar key={service.keptAudio.id} media={service.keptAudio} />
+              )}
+              {(service.keptMedia.length > 0 || service.images.length > 0) && (
                 <div className="grid grid-cols-4 gap-2">
+                  {service.keptMedia.map((m) =>
+                    m.mime.startsWith('video/') ? (
+                      <div key={m.id} className="relative">
+                        <div className="flex aspect-square w-full items-center justify-center rounded-surface-md bg-ink">
+                          <span className="text-caption text-bg">视频</span>
+                        </div>
+                        <IconButton
+                          icon={X}
+                          label="移除这段视频"
+                          variant="secondary"
+                          className="absolute -right-1 -top-1"
+                          onClick={() => service.removeKeptMedia(m.id)}
+                        />
+                      </div>
+                    ) : (
+                      <div key={m.id} className="relative">
+                        <img
+                          src={cardDisplayUrl(m)!}
+                          alt=""
+                          className="aspect-square w-full rounded-surface-md border border-line object-cover"
+                        />
+                        <IconButton
+                          icon={X}
+                          label="移除这张图片"
+                          variant="secondary"
+                          className="absolute -right-1 -top-1"
+                          onClick={() => service.removeKeptMedia(m.id)}
+                        />
+                      </div>
+                    ),
+                  )}
                   {service.images.map((img, i) => (
                     <div key={img.previewUrl} className="relative">
                       <img
@@ -237,10 +275,19 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
                 />
               )}
               <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" leadingIcon={ImageIcon} onClick={() => imgRef.current?.click()}>
+                <Button
+                  variant="secondary"
+                  leadingIcon={ImageIcon}
+                  disabled={
+                    edit
+                      ? editOccupied(service.keptMedia, service.images) >= editImageCap(edit)
+                      : service.images.length >= (service.voice ? 8 : 9)
+                  }
+                  onClick={() => imgRef.current?.click()}
+                >
                   加图片
                 </Button>
-                {!service.voice && (
+                {!edit && !service.voice && (
                   <Button variant="secondary" leadingIcon={VideoIcon} onClick={() => vidRef.current?.click()}>
                     加视频
                   </Button>
@@ -254,26 +301,30 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
                   onChange={(e) => {
                     const files = Array.from(e.target.files ?? []);
                     e.target.value = '';
-                    service.onPickImages(files);
+                    if (edit) service.addImages(files);
+                    else service.onPickImages(files);
                   }}
                 />
-                <input
-                  ref={vidRef}
-                  type="file"
-                  accept="video/*"
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = '';
-                    if (file) service.onPickVideo(file);
-                  }}
-                />
+                {!edit && (
+                  <input
+                    ref={vidRef}
+                    type="file"
+                    accept="video/*"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) service.onPickVideo(file);
+                    }}
+                  />
+                )}
               </div>
               <p className="flex items-center gap-2 text-caption text-muted">
                 <Upload aria-hidden="true" size={16} />
                 粘贴图片，或把图片／视频拖到这里
               </p>
-              {!service.video &&
+              {!edit &&
+                !service.video &&
                 (voiceSupported ? (
                   <VoiceRecorder onChange={(draft) => service.setVoice(draft)} />
                 ) : (
