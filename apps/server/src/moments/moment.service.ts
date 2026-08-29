@@ -12,6 +12,7 @@ import { validateMomentPayload } from '../templates/payload-validator.js';
 import { queryMomentPage } from '../feed/moment-query.js';
 import { emitOutbox } from '../outbox/outbox.js';
 import { isCompressibleMime } from '../media/derived.js';
+import { maybeEmitMomentEmbed } from './embed-outbox.js';
 import {
   OUTBOX_MOMENT_COMPRESS,
   OUTBOX_MOMENT_CREATED,
@@ -203,6 +204,7 @@ export class MomentService {
       //（判据字面）。空素材（content 与 transcript 均空，如无正文 media/voice 时刻）的行由
       // handler 判空跳过、不写 hash；voice 时刻转写回填后由 transcribe 路径再次发射，转写文本必进管线。
       await emitOutbox(tx, OUTBOX_MOMENT_EXTRACT, { momentId });
+      await maybeEmitMomentEmbed(tx, momentId);
 
       return inserted;
     });
@@ -324,6 +326,7 @@ export class MomentService {
       if (computeAiExtractHash(row.content, row.transcript) !== row.aiExtractHash) {
         await emitOutbox(tx, OUTBOX_MOMENT_EXTRACT, { momentId });
       }
+      await maybeEmitMomentEmbed(tx, momentId);
       return row;
     });
     return (await serializeMoments([updatedRow], userId, { includePrivate: true }))[0];

@@ -78,6 +78,31 @@ async function seed(opts?: {
   return { mediaId, momentId: momentId ?? '', chainId, s3Key };
 }
 
+async function seedSibling(
+  parent: { momentId: string; chainId: string },
+  size: number,
+): Promise<{ mediaId: string; momentId: string; chainId: string; s3Key: string }> {
+  const [row] = await db
+    .select({ uploaderId: media.uploaderId })
+    .from(media)
+    .where(eq(media.momentId, parent.momentId))
+    .limit(1);
+  const mediaId = randomUUID();
+  const s3Key = `chains/${parent.chainId}/${parent.momentId}/${mediaId}.jpeg`;
+  await db.insert(media).values({
+    id: mediaId,
+    momentId: parent.momentId,
+    uploaderId: row!.uploaderId,
+    s3Key,
+    mime: 'image/jpeg',
+    size,
+    status: 'ready',
+    storageMeta: TEST_META,
+    derivedStatus: 'pending',
+  });
+  return { mediaId, momentId: parent.momentId, chainId: parent.chainId, s3Key };
+}
+
 async function derivedCols(mediaId: string) {
   const [row] = await db
     .select({
@@ -260,6 +285,49 @@ describe('handleMomentCompress（spec fused-retrieval §4.2）', () => {
     expect(ob.nextRetryAt).toBeNull();
     expect(ob.lastError).toBe('OBJECT_TOO_LARGE');
     expect((await derivedCols(mediaId)).derivedStatus).toBe('failed');
+  });
+
+  it('全部可压图终态 ready → emit moment.embed；仍 pending 则不发', async () => {
+    const jpeg = await jpegOf(2000, 1000);
+    const a = await seed({ size: jpeg.length });
+    const b = await seedSibling(a, jpeg.length);
+    storage.getObject.mockResolvedValue(jpeg);
+
+    await handleMomentCompress({ momentId: a.momentId, chainId: a.chainId, mediaId: a.mediaId }, { push: mockPush });
+    expect(await db.select().from(outbox).where(eq(outbox.type, 'moment.embed'))).toHaveLength(0);
+
+    storage.getObject.mockResolvedValue(jpeg);
+    await handleMomentCompress({ momentId: b.momentId, chainId: b.chainId, mediaId: b.mediaId }, { push: mockPush });
+    const embeds = await db.select().from(outbox).where(eq(outbox.type, 'moment.embed'));
+    expect(embeds).toHaveLength(1);
+    expect(embeds[0].payload).toEqual({ momentId: a.momentId, chainId: a.chainId });
+  });
+
+  it('一张 failed、其余 ready：仍 emit embed（failed 不阻塞）', async () => {
+    const jpeg = await jpegOf(2000, 1000);
+    const ready = await seed({ size: jpeg.length });
+    const fail = await seedSibling(ready, 1024);
+    storage.getObject.mockResolvedValue(jpeg);
+    await handleMomentCompress(
+      { momentId: ready.momentId, chainId: ready.chainId, mediaId: ready.mediaId },
+      { push: mockPush },
+    );
+    storage.getObject.mockRejectedValue(new ObjectTooLargeError(fail.s3Key, MAX_IMAGE_BYTES));
+    await expect(
+      handleMomentCompress({ momentId: fail.momentId, chainId: fail.chainId, mediaId: fail.mediaId }, { push: mockPush }),
+    ).rejects.toMatchObject({ name: 'NonRetryableCompressError' });
+    const embeds = await db.select().from(outbox).where(eq(outbox.type, 'moment.embed'));
+    expect(embeds).toHaveLength(1);
+    expect((await derivedCols(fail.mediaId)).derivedStatus).toBe('failed');
+  });
+
+  it('skipped 终态同样可触发 embed', async () => {
+    const jpeg = await jpegOf(64, 48);
+    const row = await seed({ size: 1 });
+    storage.getObject.mockResolvedValue(jpeg);
+    await handleMomentCompress({ momentId: row.momentId, chainId: row.chainId, mediaId: row.mediaId }, { push: mockPush });
+    expect((await derivedCols(row.mediaId)).derivedStatus).toBe('skipped');
+    expect(await db.select().from(outbox).where(eq(outbox.type, 'moment.embed'))).toHaveLength(1);
   });
 
   it('handlers 登记 moment.compress', () => {

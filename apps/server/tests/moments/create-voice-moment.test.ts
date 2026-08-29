@@ -100,13 +100,9 @@ describe('POST moments type=voice（spec voice-moment §3.2/§3.3）', () => {
 
     const events = await db.select().from(outbox);
     expect(events).toHaveLength(5);
-    expect(events.map((e) => e.type).sort()).toEqual([
-      'moment.compress',
-      'moment.compress',
-      'moment.created',
-      'moment.extract',
-      'moment.transcribe',
-    ]);
+    expect(events.map((e) => e.type).sort()).toEqual(
+      ['moment.compress', 'moment.compress', 'moment.created', 'moment.extract', 'moment.transcribe'].sort(),
+    );
     const compressMediaIds = events
       .filter((e) => e.type === 'moment.compress')
       .map((e) => (e.payload as { mediaId: string }).mediaId)
@@ -130,6 +126,10 @@ describe('POST moments type=voice（spec voice-moment §3.2/§3.3）', () => {
     expect(res.status).toBe(201);
     expect(res.body.media).toHaveLength(1);
     expect(res.body.media[0].mime).toBe('audio/mp4');
+    const events = await db.select().from(outbox);
+    expect(events.map((e) => e.type).sort()).toEqual(
+      ['moment.created', 'moment.embed', 'moment.extract', 'moment.transcribe'].sort(),
+    );
   });
 
   it('2 条 audio → 400 MEDIA_INVALID（恰好 1 条 audio/*）', async () => {
