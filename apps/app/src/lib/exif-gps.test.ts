@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { extractAssetGps, firstAssetGps } from './exif-gps';
+import {
+  extractAssetDateTime,
+  extractAssetGps,
+  firstAssetDateTime,
+  firstAssetGps,
+  parseExifDateToWallClock,
+  wallClockToLocalDate,
+} from './exif-gps';
 
 // EXIF GPS 解析契约（spec people-place §3 app 端 + 编排 T6「先 fixture 测试验证两条
 // 解析路径再真机确认」）：
@@ -150,6 +157,40 @@ describe('extractAssetGps：静默 null 的全部失败形态（spec §3：失�
     expect(extractAssetGps({ GPSLatitude: [39, 54, 15], GPSLongitude: 116.4 })).toBeNull();
     expect(extractAssetGps({ GPSLatitude: 'abc', GPSLongitude: 116.4 })).toBeNull();
     expect(extractAssetGps({ GPSLatitude: '', GPSLongitude: 116.4 })).toBeNull();
+  });
+});
+
+describe('extractAssetDateTime / firstAssetDateTime', () => {
+  it('扁平 DateTimeOriginal 冒号日期 → 墙钟', () => {
+    expect(extractAssetDateTime({ DateTimeOriginal: '2026:05:17 11:51:10' })).toBe('2026-05-17T11:51');
+  });
+
+  it('嵌套 {Exif} DateTimeOriginal', () => {
+    expect(extractAssetDateTime({ '{Exif}': { DateTimeOriginal: '2026:05:17 11:51:10' } })).toBe(
+      '2026-05-17T11:51',
+    );
+  });
+
+  it('无时间 / 畸形 → null', () => {
+    expect(extractAssetDateTime({ Make: 'Apple' })).toBeNull();
+    expect(extractAssetDateTime({ DateTimeOriginal: 'not-a-date' })).toBeNull();
+    expect(parseExifDateToWallClock('2026:13:01 00:00:00')).toBeNull();
+  });
+
+  it('多图取第一张含拍摄时间的', () => {
+    expect(
+      firstAssetDateTime([{ exif: null }, { exif: { DateTimeOriginal: '2026:05:17 11:51:10' } }]),
+    ).toBe('2026-05-17T11:51');
+  });
+
+  it('wallClockToLocalDate 按本地字段构造', () => {
+    const d = wallClockToLocalDate('2026-05-17T11:51');
+    expect(d).not.toBeNull();
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(4);
+    expect(d!.getDate()).toBe(17);
+    expect(d!.getHours()).toBe(11);
+    expect(d!.getMinutes()).toBe(51);
   });
 });
 

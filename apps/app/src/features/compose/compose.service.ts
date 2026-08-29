@@ -6,7 +6,7 @@ import { client } from '../../lib/api';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { compressImage, pickImages, pickVideo, uriToBlob, validateVideo, type PickedVideo, type ReadyImage } from '../../lib/media';
 import { summarizePayload } from '../../lib/template';
-import { firstAssetGps } from '../../lib/exif-gps';
+import { firstAssetDateTime, firstAssetGps, wallClockToLocalDate } from '../../lib/exif-gps';
 import { ChainListService } from '../../services/chain-list.service';
 
 /** 总尝试次数 = 初始 1 次 + ≤2 次重试；网络类（status 0）/5xx 才重试。
@@ -58,6 +58,8 @@ export class ComposeService extends Service {
   /** 语音草稿（spec voice-moment §6）：type=voice 时必有；与图片可共存（≤8 附图） */
   voice: VoiceDraft | null = null;
   happenedAt = new Date();
+  /** 用户改过发生时间后，选图不再用 EXIF 拍摄时间覆盖。 */
+  happenedAtTouched = false;
   isBackfill = false;
   tagIds: string[] = [];
   progressLabel: string | null = null;
@@ -134,6 +136,9 @@ export class ComposeService extends Service {
     this.placeCoords = null;
     this.placeTouched = false;
     this.exifDismissed = false;
+    this.happenedAt = new Date();
+    this.happenedAtTouched = false;
+    this.isBackfill = false;
     // manifest 锚点用 activeChainId 而非原始路由参数（评审 B2）：含「回退第一条可编辑链」
     // 后的值——feed 首页 /compose 无 chainId、单链用户（无链 chips 可点）也要触发加载。
     // 此刻 ChainListService 可能未就绪（activeChainId undefined）→ 跳过，由组件 effect 重试（Step 3）
@@ -169,6 +174,7 @@ export class ComposeService extends Service {
       m.place?.lat != null && m.place?.lng != null ? { lat: m.place.lat, lng: m.place.lng } : null;
     this.placeTouched = false;
     this.exifDismissed = false;
+    this.happenedAtTouched = false;
     this.personQuery = '';
     // 时区换算（spec 公式，禁止走 Date 本地字段捷径）：
     // wallMs 是记录时区的墙钟毫秒；picker 按设备本地字段渲染 Date，
@@ -480,6 +486,7 @@ export class ComposeService extends Service {
   /** picker 变更入口：编辑态按「记录时区还原的真实毫秒」重算补发标记（对齐 web：abs > 5min，未来也算补发）；
    *  新建态沿用原有本地毫秒口径。 */
   onHappenedAtChange(d: Date): void {
+    this.happenedAtTouched = true;
     this.happenedAt = d;
     if (this.edit) {
       const newMs = d.getTime() - this.editDeviceOffset * 60_000 + this.edit.happenedTzOffset * 60_000;
@@ -489,12 +496,32 @@ export class ComposeService extends Service {
     }
   }
 
-  /** EXIF 自动回填守卫（spec §3，P5 偏差 2 同款）：已移除 chip / 已有坐标 / 已手动输入
-   *  地点名任一命中即短路。多图取第一张含 GPS 的（firstAssetGps）。 */
+  /** EXIF：拍摄时间写入发生时间（仅新建且用户未改过）；GPS 写坐标并预览逆地理地名。 */
   private ingestExif(assets: { exif?: Record<string, unknown> | null }[]): void {
+    void this.ingestExifAsync(assets);
+  }
+
+  private async ingestExifAsync(assets: { exif?: Record<string, unknown> | null }[]): Promise<void> {
+    if (!this.edit && !this.happenedAtTouched) {
+      const wall = firstAssetDateTime(assets);
+      const d = wall ? wallClockToLocalDate(wall) : null;
+      if (d) {
+        this.happenedAt = d;
+        this.isBackfill = d.getTime() < Date.now() - 10 * 60_000;
+      }
+    }
     if (this.exifDismissed || this.placeCoords || this.placeName.trim() !== '') return;
     const coords = firstAssetGps(assets);
-    if (coords) this.placeCoords = coords;
+    if (!coords) return;
+    this.placeCoords = coords;
+    try {
+      const res = await client.reverseGeocode(coords);
+      if (res.name && !this.exifDismissed && this.placeName.trim() === '') {
+        this.placeName = res.name;
+      }
+    } catch {
+      // 地名预览失败不挡选图
+    }
   }
 
   /** place 提交形态（spec §6 赋值表在 server 判 source，客户端只交 name/坐标）：

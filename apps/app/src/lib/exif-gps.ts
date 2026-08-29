@@ -76,6 +76,53 @@ export function extractAssetGps(exif: ExifDict | null | undefined): GpsCoords | 
   return raw;
 }
 
+/** EXIF 拍摄墙钟 → YYYY-MM-DDTHH:mm（与 web datetime-local 同形）。 */
+export function parseExifDateToWallClock(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const m = raw.trim().match(/^(\d{4})[:\-](\d{2})[:\-](\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return null;
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const h = Number(m[4]);
+  const mi = Number(m[5]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59) return null;
+  return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`;
+}
+
+/** 墙钟字符串 → 设备本地 Date（不走 Date.parse 的无时区歧义）。 */
+export function wallClockToLocalDate(wall: string): Date | null {
+  const m = wall.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), 0, 0);
+}
+
+function pickExifDict(exif: ExifDict): ExifDict | null {
+  const nested = exif.Exif ?? exif['{Exif}'];
+  return nested && typeof nested === 'object' && !Array.isArray(nested) ? (nested as ExifDict) : null;
+}
+
+function readDateTimeRaw(view: ExifDict | null | undefined): string | null {
+  if (!view) return null;
+  const raw = view.DateTimeOriginal ?? view.DateTimeDigitized ?? view.DateTime;
+  return typeof raw === 'string' && raw.trim() !== '' ? raw : null;
+}
+
+/** 从 picker asset 的 exif 对象提取拍摄墙钟；无/畸形 → null（静默）。 */
+export function extractAssetDateTime(exif: ExifDict | null | undefined): string | null {
+  if (!exif || typeof exif !== 'object') return null;
+  const raw = readDateTimeRaw(exif) ?? readDateTimeRaw(pickExifDict(exif));
+  return parseExifDateToWallClock(raw);
+}
+
+/** 多图取第一张含拍摄时间的照片。 */
+export function firstAssetDateTime(assets: readonly { exif?: ExifDict | null }[]): string | null {
+  for (const asset of assets) {
+    const wall = extractAssetDateTime(asset.exif);
+    if (wall) return wall;
+  }
+  return null;
+}
+
 /** 多图取第一张含 GPS 的照片，其余忽略（spec §3：v1 不做多坐标合并）。 */
 export function firstAssetGps(assets: readonly { exif?: ExifDict | null }[]): GpsCoords | null {
   for (const asset of assets) {

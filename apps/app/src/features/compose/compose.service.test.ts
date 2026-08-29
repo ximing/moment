@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   listMembers: vi.fn(),
   listChains: vi.fn(),
   me: vi.fn(),
+  reverseGeocode: vi.fn(),
 }));
 
 const mediaLib = vi.hoisted(() => ({
@@ -93,6 +94,7 @@ beforeEach(() => {
   api.me.mockResolvedValue({ id: 'u-1', nickname: '妈妈' });
   api.updateMoment.mockResolvedValue(moment());
   api.uploadMedia.mockResolvedValue({ mediaId: 'up-1', status: 'ready', mime: 'image/jpeg', size: 1 });
+  api.reverseGeocode.mockResolvedValue({ name: null });
   mediaLib.compressImage.mockImplementation(async (x: { uri: string }) => ({
     ...x, blob: new Blob(['x']), size: 1, mime: 'image/jpeg',
   }));
