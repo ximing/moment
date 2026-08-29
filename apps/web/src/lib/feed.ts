@@ -9,6 +9,8 @@ export function feedQuery(filter: RailFilter, cursor?: string, limit = 50): Feed
     tagId: filter.tagId,
     order: filter.order,
     before: filter.before,
+    personId: filter.personId,
+    place: filter.place,
     cursor,
     limit,
   };

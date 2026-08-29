@@ -68,7 +68,9 @@ export class ChainHomeService extends Service {
   }
 
   get filtered(): boolean {
-    return Boolean(this.filter.tagId || this.filter.order === 'created_at' || this.filter.before);
+    return Boolean(
+      this.filter.tagId || this.filter.order === 'created_at' || this.filter.before || this.filter.personId || this.filter.place,
+    );
   }
 
   setFilter(next: RailFilter): void {
@@ -83,6 +85,21 @@ export class ChainHomeService extends Service {
 
   clearFilters(): void {
     this.setFilter({ order: 'happened_at' });
+  }
+
+  togglePersonFilter(person: { id: string; name: string }): void {
+    if (this.filter.personId === person.id) {
+      this.setFilter({ ...this.filter, personId: undefined, personName: undefined });
+      return;
+    }
+    this.setFilter({ ...this.filter, personId: person.id, personName: person.name });
+  }
+
+  togglePlaceFilter(place: string): void {
+    this.setFilter({
+      ...this.filter,
+      place: this.filter.place === place ? undefined : place,
+    });
   }
 
   async loadChain(): Promise<void> {

@@ -45,7 +45,12 @@ export class FeedHomeService extends Service {
   /** 空态分流（web-product §4 空态表）：任一筛选生效即走「没有符合条件的时刻」 */
   get filtered(): boolean {
     return Boolean(
-      this.filter.tagId || this.filter.chainIds?.length || this.filter.order === 'created_at' || this.filter.before,
+      this.filter.tagId ||
+        this.filter.chainIds?.length ||
+        this.filter.order === 'created_at' ||
+        this.filter.before ||
+        this.filter.personId ||
+        this.filter.place,
     );
   }
 
@@ -61,6 +66,21 @@ export class FeedHomeService extends Service {
 
   clearFilters(): void {
     this.setFilter({ order: 'happened_at' });
+  }
+
+  togglePersonFilter(person: { id: string; name: string }): void {
+    if (this.filter.personId === person.id) {
+      this.setFilter({ ...this.filter, personId: undefined, personName: undefined });
+      return;
+    }
+    this.setFilter({ ...this.filter, personId: person.id, personName: person.name });
+  }
+
+  togglePlaceFilter(place: string): void {
+    this.setFilter({
+      ...this.filter,
+      place: this.filter.place === place ? undefined : place,
+    });
   }
 
   async loadFirst(): Promise<void> {

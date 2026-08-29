@@ -10,6 +10,10 @@ export type RailFilter = {
   tagId?: string;
   order: 'happened_at' | 'created_at';
   before?: string;
+  personId?: string;
+  /** 清除 chip 展示用，不进 FeedQuery */
+  personName?: string;
+  place?: string;
 };
 
 /**
