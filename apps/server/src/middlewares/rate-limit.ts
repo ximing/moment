@@ -56,6 +56,23 @@ export const inviteAcceptRateLimiter = rateLimit({
   message,
 });
 
+export const SEARCH_RATE_WINDOW_MS = 60_000;
+export const SEARCH_RATE_LIMIT = 20;
+
+export function searchKeyGenerator(req: Request): string {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id ?? 'anonymous';
+  return `${ipKey(req)}:${userId}`;
+}
+
+export const searchRateLimiter = rateLimit({
+  windowMs: SEARCH_RATE_WINDOW_MS,
+  limit: isTest ? 1000 : SEARCH_RATE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: searchKeyGenerator,
+  message,
+});
+
 /** 匿名公开端点：IP 维度 60s/60 次（公开页一次浏览 = 1 次 API + N 次 media 302，媒体不走本 limiter）。 */
 export const publicShareRateLimiter = rateLimit({
   windowMs: 60_000,
