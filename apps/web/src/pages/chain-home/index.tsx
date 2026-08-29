@@ -11,7 +11,9 @@ import { RecapEntry } from '@/chain/recap-entry';
 import { babyAgeLabel } from '@/lib/template';
 import { canCompose } from '@/lib/roles';
 import { humanError } from '@/lib/errors';
+import { formatSearchParsed } from '@/lib/search-summary';
 import { FilterChips } from '@/timeline/filter-chips';
+import { TimelineSearchField } from '@/timeline/search-field';
 import { Timeline } from '@/timeline/timeline';
 import { TimelineRail } from '@/timeline/timeline-rail';
 import { IconButton } from '@/ui/button/index';
@@ -123,6 +125,15 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
         );
       })()}
 
+      {service.activeView === 'timeline' ? (
+        <TimelineSearchField
+          onSubmit={(q) => void service.submitSearch(q)}
+          onClear={() => {
+            if (service.searching) void service.exitSearch();
+          }}
+        />
+      ) : null}
+
       <TimelineRail
         fixedChainId={chain.id}
         index={service.monthIndex}
@@ -134,6 +145,13 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
 
       {service.activeView === 'timeline' ? (
         <>
+          {service.searchError ? (
+            <Banner tone="error">{humanError(service.searchError)}</Banner>
+          ) : service.searching && service.searchParsed ? (
+            <Banner tone="info" action={{ label: '关闭', onPress: () => void service.exitSearch() }}>
+              {formatSearchParsed(service.searchParsed)}
+            </Banner>
+          ) : null}
         <FilterChips
           filter={service.filter}
           onClearPerson={() =>
@@ -160,7 +178,15 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           onPersonFilter={(p) => service.togglePersonFilter(p)}
           onPlaceFilter={(place) => service.togglePlaceFilter(place)}
           empty={
-            service.filtered ? (
+            service.searching ? (
+              <EmptyState
+                variant="timeline"
+                scope="section"
+                title="没有找到相关时刻"
+                description="换个说法，或关掉搜索回到时间线。"
+                action={{ label: '退出搜索', emphasis: 'quiet', onPress: () => void service.exitSearch() }}
+              />
+            ) : service.filtered ? (
               <EmptyState
                 variant="timeline"
                 scope="section"

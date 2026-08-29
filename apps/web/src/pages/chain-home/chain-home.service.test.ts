@@ -23,11 +23,20 @@ beforeEach(() => {
   api.getMonthIndex.mockReset().mockResolvedValue({ months: [] });
   api.listTags.mockReset().mockResolvedValue({ tags: [] });
   api.getChain.mockReset().mockResolvedValue({ id: 'c-1', myRole: 'owner', templateManifest: { version: 1 } });
+  api.searchMoments.mockReset().mockResolvedValue({
+    moments: [],
+    nextCursor: null,
+    parsed: { personNames: [], place: null, time: null, text: '' },
+  });
   const s = resolve(ChainHomeService);
   s.chainId = 'c-1';
   s.filter = { order: 'happened_at', chainIds: ['c-1'] };
   s.moments = [];
   s.nextCursor = null;
+  s.searching = false;
+  s.searchQ = '';
+  s.searchParsed = null;
+  s.searchError = null;
 });
 
 describe('ChainHomeService chip 过滤', () => {
@@ -47,4 +56,20 @@ describe('ChainHomeService chip 过滤', () => {
     s.clearFilters();
     expect(s.filter).toEqual({ order: 'happened_at', chainIds: ['c-1'] });
   });
+
+  it('链页搜索 chainIds 恒为 [chainId]，忽略轨上其它链', async () => {
+    const s = resolve(ChainHomeService);
+    api.searchMoments.mockResolvedValueOnce({
+      moments: [],
+      nextCursor: null,
+      parsed: { personNames: [], place: null, time: null, text: '外婆' },
+    });
+    await s.submitSearch('外婆');
+    expect(api.searchMoments.mock.calls[0]![0]).toEqual(
+      expect.objectContaining({ q: '外婆', chainIds: ['c-1'] }),
+    );
+    const body = api.searchMoments.mock.calls[0]![0] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('before');
+  });
 });
+

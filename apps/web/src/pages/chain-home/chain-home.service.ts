@@ -1,5 +1,13 @@
 import { Service } from '@rabjs/react';
-import type { AggregateResponse, ChainDetailDto, MonthIndexEntry, MomentResponse, TagResponse } from '@moment/dto';
+import {
+  SEARCH_MAX_LIMIT,
+  type AggregateResponse,
+  type ChainDetailDto,
+  type MonthIndexEntry,
+  type MomentResponse,
+  type SearchParsed,
+  type TagResponse,
+} from '@moment/dto';
 import { client } from '@/api/client';
 import { currentTzOffset } from '@/lib/time';
 import { feedQuery } from '@/lib/feed';
@@ -16,6 +24,10 @@ export class ChainHomeService extends Service {
   monthIndex: MonthIndexEntry[] = [];
   indexPending = false;
   tags: TagResponse[] = [];
+  searching = false;
+  searchQ = '';
+  searchParsed: SearchParsed | null = null;
+  searchError: unknown = null;
   /** 当前聚合视图（'timeline' = 主时间线；其余为 manifest.views 声明的 type） */
   activeView = 'timeline';
   /** 当前视图的投影数据（timeline/trips 不用端点，为 null） */
@@ -102,6 +114,24 @@ export class ChainHomeService extends Service {
     });
   }
 
+  async submitSearch(q: string): Promise<void> {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    this.searchQ = trimmed;
+    this.searching = true;
+    this.searchParsed = null;
+    this.searchError = null;
+    await this.loadFirst();
+  }
+
+  async exitSearch(): Promise<void> {
+    this.searching = false;
+    this.searchQ = '';
+    this.searchParsed = null;
+    this.searchError = null;
+    await this.loadFirst();
+  }
+
   async loadChain(): Promise<void> {
     this.chain = await client.getChain(this.chainId);
   }
@@ -109,10 +139,33 @@ export class ChainHomeService extends Service {
   async loadFirst(): Promise<void> {
     if (!this.chainId) return;
     const gen = ++this.gen;
-    const page = await client.getFeed(feedQuery(this.filter, undefined, 50));
-    if (gen !== this.gen) return;
-    this.moments = page.moments;
-    this.nextCursor = page.nextCursor ?? null;
+    try {
+      if (this.searching) {
+        const page = await client.searchMoments({
+          q: this.searchQ,
+          chainIds: [this.chainId],
+          tzOffset: currentTzOffset(),
+          limit: SEARCH_MAX_LIMIT,
+          personId: this.filter.personId,
+          tagId: this.filter.tagId,
+          place: this.filter.place,
+        });
+        if (gen !== this.gen) return;
+        this.moments = page.moments;
+        this.nextCursor = page.nextCursor ?? null;
+        this.searchParsed = page.parsed;
+        this.searchError = null;
+        return;
+      }
+      const page = await client.getFeed(feedQuery(this.filter, undefined, 50));
+      if (gen !== this.gen) return;
+      this.moments = page.moments;
+      this.nextCursor = page.nextCursor ?? null;
+    } catch (err) {
+      if (gen !== this.gen) return;
+      if (this.searching) this.searchError = err;
+      else throw err;
+    }
   }
 
   async loadMore(): Promise<void> {
@@ -120,7 +173,18 @@ export class ChainHomeService extends Service {
     this.loadingMore = true;
     const gen = this.gen;
     try {
-      const page = await client.getFeed(feedQuery(this.filter, this.nextCursor, 50));
+      const page = this.searching
+        ? await client.searchMoments({
+            q: this.searchQ,
+            chainIds: [this.chainId],
+            tzOffset: currentTzOffset(),
+            cursor: this.nextCursor ?? undefined,
+            limit: SEARCH_MAX_LIMIT,
+            personId: this.filter.personId,
+            tagId: this.filter.tagId,
+            place: this.filter.place,
+          })
+        : await client.getFeed(feedQuery(this.filter, this.nextCursor, 50));
       if (gen !== this.gen) return;
       this.moments = [...this.moments, ...page.moments];
       this.nextCursor = page.nextCursor ?? null;
