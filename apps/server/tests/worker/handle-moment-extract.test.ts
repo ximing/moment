@@ -7,6 +7,7 @@ import type { ASRProvider } from '../../src/llm/asr/base.provider.js';
 import { setASRProvider } from '../../src/llm/asr/factory.js';
 import { RetryableLLMError, type LLMChatResponse, type LLMProvider } from '../../src/llm/base.provider.js';
 import { setLLMProvider } from '../../src/llm/factory.js';
+import { setEmbeddingProvider } from '../../src/embedding/factory.js';
 import { computeAiExtractHash } from '../../src/moments/ai-extract-hash.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
 import { setStorageAdapter } from '../../src/storage/factory.js';
@@ -23,12 +24,14 @@ const realFetch = globalThis.fetch;
 beforeEach(async () => {
   await resetDb();
   installMockStorage();
+  setEmbeddingProvider(null);
 });
 afterEach(() => {
   globalThis.fetch = realFetch;
   setLLMProvider(undefined);
   setASRProvider(undefined);
   setStorageAdapter(null);
+  setEmbeddingProvider(undefined);
 });
 afterAll(closeDb);
 
@@ -430,7 +433,8 @@ describe('runOutboxBatch × moment.extract（注册表分发 + 既有退避终�
 
     // 常驻 worker 消费该行 → 从 transcript 抽取落库
     const result = await runOutboxBatch({ push: mockPush });
-    expect(result.done).toBe(1);
+    expect(result.done).toBe(2); // extract + transcribe 同事务补发的 embed（null provider → handler 跳过仍 done）
+    expect(result.failed).toBe(0);
 
     const links = await linkRows(momentId);
     expect(links).toHaveLength(2);

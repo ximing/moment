@@ -5,6 +5,7 @@ import { BadRequestError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
 import { db } from '../db/index.js';
 import { chainMembers, momentPersons, persons, type Person } from '../db/schema.js';
+import { maybeEmitMomentEmbed } from '../moments/embed-outbox.js';
 
 /** 名归一化（spec §2）：trim + 去内部连续空白（折叠为单空格）；应用层实现，不写 DB 函数。 */
 export function normalizePersonName(name: string): string {
@@ -86,13 +87,21 @@ export class PersonService {
       .limit(1);
     if (dup && dup.id !== personId) throw new HttpError(409, 'PERSON_NAME_CONFLICT');
 
-    try {
-      await db.update(persons).set({ name }).where(eq(persons.id, personId));
-    } catch (err) {
-      // 并发兜底：rename 与 create 同时撞 uk
-      if ((err as { code?: string }).code === 'ER_DUP_ENTRY') throw new HttpError(409, 'PERSON_NAME_CONFLICT');
-      throw err;
-    }
+    await db.transaction(async (tx) => {
+      try {
+        await tx.update(persons).set({ name }).where(eq(persons.id, personId));
+      } catch (err) {
+        if ((err as { code?: string }).code === 'ER_DUP_ENTRY') throw new HttpError(409, 'PERSON_NAME_CONFLICT');
+        throw err;
+      }
+      const links = await tx
+        .select({ momentId: momentPersons.momentId })
+        .from(momentPersons)
+        .where(eq(momentPersons.personId, personId));
+      for (const row of links) {
+        await maybeEmitMomentEmbed(tx, row.momentId);
+      }
+    });
     return { id: person.id, name, userId: person.userId };
   }
 
@@ -106,8 +115,15 @@ export class PersonService {
     if (!person) throw new NotFoundError('PERSON_NOT_FOUND');
 
     await db.transaction(async (tx) => {
+      const links = await tx
+        .select({ momentId: momentPersons.momentId })
+        .from(momentPersons)
+        .where(eq(momentPersons.personId, personId));
       await tx.delete(momentPersons).where(eq(momentPersons.personId, personId));
       await tx.delete(persons).where(eq(persons.id, personId));
+      for (const row of links) {
+        await maybeEmitMomentEmbed(tx, row.momentId);
+      }
     });
   }
 }

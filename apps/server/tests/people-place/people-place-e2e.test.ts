@@ -7,6 +7,7 @@ import type { GeocodeProvider } from '../../src/geocode/base.provider.js';
 import { setGeocodeProvider } from '../../src/geocode/factory.js';
 import type { LLMProvider } from '../../src/llm/base.provider.js';
 import { setLLMProvider } from '../../src/llm/factory.js';
+import { setEmbeddingProvider } from '../../src/embedding/factory.js';
 import { runOutboxBatch } from '../../src/worker/processor.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { app, createChain, registerUser } from '../helpers/fixtures.js';
@@ -14,10 +15,14 @@ import type { PushService } from '../../src/push/push-service.js';
 
 const mockPush = { send: jest.fn() } as unknown as PushService;
 
-beforeEach(resetDb);
+beforeEach(async () => {
+  await resetDb();
+  setEmbeddingProvider(null);
+});
 afterEach(() => {
   setGeocodeProvider(undefined);
   setLLMProvider(undefined);
+  setEmbeddingProvider(undefined);
 });
 afterAll(closeDb);
 
@@ -98,9 +103,15 @@ describe('people-place 全链路 e2e（spec §1 数据流 / §9 e2e 条目）', 
     setGeocodeProvider(geocodeReturning(MOCK_PLACE_NAME, geocodeSeen));
     setLLMProvider(llmReturning(['朵朵'], []));
 
-    const batch = await runOutboxBatch({ push: mockPush });
-    expect(batch.done).toBeGreaterThanOrEqual(3); // moment.created + moment.geocode + moment.extract
+    setEmbeddingProvider(null);
+    let batch = await runOutboxBatch({ push: mockPush });
+    expect(batch.done).toBeGreaterThanOrEqual(3); // moment.created + moment.geocode + moment.extract（+ create 的 embed）
     expect(batch.failed).toBe(0);
+    // geocode/extract 同事务新插的 moment.embed 不在本批 claim 里
+    do {
+      batch = await runOutboxBatch({ push: mockPush });
+      expect(batch.failed).toBe(0);
+    } while (batch.claimed > 0);
     expect(geocodeSeen).toEqual([{ lat: 39.9042, lng: 116.4074 }]); // WGS-84 行坐标直达 provider
 
     // 详情回读：geocode 名回填（source 仍 exif，不被 AI 触碰——place 非空不覆盖）；AI 人物仅补缺（外婆 manual 不降级、朵朵 ai 新增）

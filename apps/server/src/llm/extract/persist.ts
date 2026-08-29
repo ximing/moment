@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 import { momentPersons, moments, persons } from '../../db/schema.js';
 import type { DbTx } from '../../outbox/outbox.js';
+import { maybeEmitMomentEmbed } from '../../moments/embed-outbox.js';
 import { normalizePersonName } from '../../persons/person.service.js';
 import type { ExtractResult } from './extract.js';
 
@@ -102,4 +103,5 @@ export async function persistExtraction(
   }
 
   await tx.update(moments).set({ aiExtractHash: extractHash }).where(eq(moments.id, moment.id));
+  await maybeEmitMomentEmbed(tx, moment.id);
 }
