@@ -11,6 +11,10 @@ export const MAX_VIDEO_DURATION_SECONDS = 300;
 export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 export const MAX_AUDIO_DURATION_SECONDS = 300;
 
+/** GET /api/media/:id?variant=（spec fused-retrieval §6.5）。缺省由 server 当 original。 */
+export const mediaVariantSchema = z.enum(['original', 'derived']);
+export type MediaVariant = z.infer<typeof mediaVariantSchema>;
+
 /**
  * mime 白名单（而非 `kind + '/*'` 前缀检查）：SVG 可内嵌 `<script>`，
  * 放行即构成存储型 XSS（预签名 GET 以原始 Content-Type 下发）——与 Task 2 `getContentType`

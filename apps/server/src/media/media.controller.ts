@@ -8,6 +8,7 @@ import {
   mediaCompleteInputSchema,
   mediaPartsInputSchema,
   mediaPresignInputSchema,
+  mediaVariantSchema,
 } from '@moment/dto';
 import {
   Authorized,
@@ -79,10 +80,12 @@ export class MediaController {
   async access(
     @Param('id') id: string,
     @QueryParam('st', { required: false, type: String }) st: string | undefined,
+    @QueryParam('variant', { required: false, type: String }) variantRaw: string | undefined,
     @CurrentUser() user: UserProfile | null,
     @Res() res: Response
   ): Promise<Response> {
-    const url = await this.mediaService.resolveAccessUrl(user, id, st);
+    const variant = variantRaw == null ? 'original' : mediaVariantSchema.parse(variantRaw);
+    const url = await this.mediaService.resolveAccessUrl(user, id, st, variant);
     res.setHeader('Cache-Control', 'private, max-age=300');
     res.redirect(302, url);
     return res;

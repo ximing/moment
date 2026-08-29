@@ -9,6 +9,7 @@ import {
   mediaCompleteInputSchema,
   mediaPartsInputSchema,
   mediaPresignInputSchema,
+  mediaVariantSchema,
 } from './media.js';
 
 test('媒体大小常量符合 spec §5.5', () => {
@@ -98,4 +99,12 @@ test('mediaPresignInputSchema：image 分支既有校验不回归（禁传 durat
   assert.ok(
     !mediaPresignInputSchema.safeParse({ mime: 'image/jpeg', size: 1000, kind: 'image', durationSeconds: 60 }).success,
   );
+});
+
+test('mediaVariantSchema：original | derived；其它值拒绝', () => {
+  assert.equal(mediaVariantSchema.parse('original'), 'original');
+  assert.equal(mediaVariantSchema.parse('derived'), 'derived');
+  assert.ok(!mediaVariantSchema.safeParse('thumb').success);
+  assert.ok(!mediaVariantSchema.safeParse('').success);
+  assert.ok(!mediaVariantSchema.safeParse('DERIVED').success);
 });
