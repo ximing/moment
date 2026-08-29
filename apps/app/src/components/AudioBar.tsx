@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import type { MomentMedia } from '@moment/dto';
+import { isHttpUrl, originalDisplayUrl } from '../lib/media-src';
 import { useMediaUri } from '../lib/use-media-uri';
 import type { Theme } from '../theme/theme';
 import { useTheme } from '../theme/use-theme';
 
 // 语音播放条（spec voice-moment §6）：播放/暂停 + 进度/时长；v1 无波形（spec §0 搁置）。
-// 必须经 useMediaUri 拿本地缓存 uri 再播——原生播放器不带鉴权头，且 headers 会跟过 302 被 S3 拒绝
-// （use-media-uri.ts 头注释，与 video-poster §4 同约束）。
+// 优先接口签发的 https 预签名 GET；相对路径才经 useMediaUri 拉本地缓存（原生播放器不带鉴权头）。
 
 function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
@@ -81,7 +81,9 @@ function Player({ media, uri }: { media: MomentMedia; uri: string }) {
 export function AudioBar({ media }: { media: MomentMedia }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
-  const uri = useMediaUri(media.id);
+  const signed = originalDisplayUrl(media);
+  const fetched = useMediaUri(isHttpUrl(signed) ? undefined : media.id);
+  const uri = isHttpUrl(signed) ? signed : fetched;
   if (!uri) return <View style={styles.bar} />;
   return <Player media={media} uri={uri} />;
 }

@@ -9,6 +9,7 @@ import { formatMomentTime, formatRelative } from '../../lib/format';
 import { AudioBar } from '../../components/AudioBar';
 import { Loading } from '../../components/Loading';
 import { Button } from '../../components/Button';
+import { isHttpUrl, originalDisplayUrl } from '../../lib/media-src';
 import { useMediaUri } from '../../lib/use-media-uri';
 import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
@@ -17,7 +18,9 @@ import { MomentPageService } from './moment.service';
 
 function MomentImage({ media }: { media: MomentMedia }) {
   // Lightbox 同构（spec §7.3）：详情大图/视频永远 original，即使行上 derivedUrl 非空
-  const uri = useMediaUri(media.id);
+  const signed = originalDisplayUrl(media);
+  const fetched = useMediaUri(isHttpUrl(signed) ? undefined : media.id);
+  const uri = isHttpUrl(signed) ? signed : fetched;
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   if (!uri) return <View style={styles.image} />;
@@ -35,7 +38,9 @@ function ReadyVideo({ uri }: { uri: string }) {
 
 function VideoBlock({ media }: { media: MomentMedia }) {
   // Lightbox 同构（spec §7.3）：详情大图/视频永远 original，即使行上 derivedUrl 非空
-  const uri = useMediaUri(media.id);
+  const signed = originalDisplayUrl(media);
+  const fetched = useMediaUri(isHttpUrl(signed) ? undefined : media.id);
+  const uri = isHttpUrl(signed) ? signed : fetched;
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   if (!uri) return <View style={styles.video} />;
