@@ -319,14 +319,14 @@ describe('大家的日子 feed', () => {
     expect(source.textContent).toContain('周末小家');
   });
 
-  it('feed 项链标识渲染链头像：认证 blob 通道 + 焦点 object-position', async () => {
+  it('feed 项链标识渲染链头像：接口 URL 直出 + 焦点 object-position', async () => {
     await seedFeed([TEXT_MOMENT]);
     renderFeed();
 
     const source = within(screen.getByRole('article')).getByRole('link', { name: /周末小家/ });
     const mark = source.querySelector('img');
     expect(mark).not.toBeNull();
-    expect(mark).toHaveAttribute('src', 'blob:mock-m-avatar-1');
+    expect(mark).toHaveAttribute('src', '/api/media/m-avatar-1');
     expect(mark).toHaveStyle({ objectPosition: '25% 75%' });
   });
 

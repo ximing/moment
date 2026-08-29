@@ -65,6 +65,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
       {showCover && (
         <ChainCover
           mediaId={chain.coverMediaId!}
+          src={chain.coverUrl}
           focus={chain.coverFocus}
           onError={() => setFailedCoverId(chain.coverMediaId)}
           className="mb-4"

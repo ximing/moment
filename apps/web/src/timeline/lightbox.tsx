@@ -1,16 +1,14 @@
 import { useEffect } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { client } from '@/api/client';
-import { useMediaObjectUrl } from '@/media/useMediaObjectUrl';
+import { originalDisplayUrl } from '@/lib/media-src';
 import { MediaSkeletonStyles, mediaSkeletonClass } from '@/media/MediaBlock';
 import { IconButton } from '@/ui/button/index';
 
 // 灯箱（Task 11）：受控 index，上一张/下一张按钮与 ArrowLeft/ArrowRight 都环绕；
 // Escape、点媒体外空白（遮罩本身）、具名「关闭」IconButton 都走 onClose；
 // 单张隐藏前后箭头。层级与焦点走 Task 4 规则：z-lightbox token、IconButton 自带
-// ring-focus。URL 分流与 MediaBlock 同一契约：认证模式 useMediaObjectUrl(media.id)
-// 的 blob；分享模式绝不请求 blob，用稳定相对 URL + ?st=encodeURIComponent(token)。
+// ring-focus。详情用接口签发的原图 url（非 derived）。
 
 export function Lightbox({
   items,
@@ -73,8 +71,7 @@ export function Lightbox({
 }
 
 function LightboxMedia({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
-  const blobUrl = useMediaObjectUrl(shareToken ? null : media.id);
-  const url = shareToken ? client.mediaUrl(media.id, { st: shareToken }) : blobUrl;
+  const url = originalDisplayUrl(media, shareToken);
   if (!url) {
     // 加载占位与 MediaBlock 同一呼吸动效（reduced-motion 静态化），保持骨架语言一致
     return (

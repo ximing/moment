@@ -45,6 +45,7 @@ type GhostState = {
   color: ChainDto['color'];
   icon: ChainDto['icon'];
   avatarMediaId: ChainDto['avatarMediaId'];
+  avatarUrl: ChainDto['avatarUrl'];
   avatarFocus: ChainDto['avatarFocus'];
   width: number;
   height: number;
@@ -131,6 +132,7 @@ export const ChainNavList = observer(function ChainNavList({
             color: item.color,
             icon: item.icon,
             avatarMediaId: item.avatarMediaId,
+            avatarUrl: item.avatarUrl,
             avatarFocus: item.avatarFocus,
             width: drag.width,
             height: drag.height,
@@ -367,6 +369,7 @@ export const ChainNavList = observer(function ChainNavList({
               color={c.color}
               icon={c.icon}
               avatarMediaId={c.avatarMediaId}
+              avatarSrc={c.avatarUrl}
               avatarFocus={c.avatarFocus}
               size={16}
             />
@@ -393,6 +396,7 @@ export const ChainNavList = observer(function ChainNavList({
               color={ghost.color}
               icon={ghost.icon}
               avatarMediaId={ghost.avatarMediaId}
+              avatarSrc={ghost.avatarUrl}
               avatarFocus={ghost.avatarFocus}
               size={16}
             />

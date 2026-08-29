@@ -10,13 +10,15 @@ export interface ChainLook {
   color: ChainAppearanceColor | null;
   icon: ChainIcon | null;
   avatarMediaId: string | null;
+  /** 接口签发的头像 GET；有则 ChainMark 直出，不再走 blob。 */
+  avatarUrl?: string | null;
   avatarFocus: ChainImageFocus | null;
 }
 
 /** 链标记渲染优先级（spec §7.5）：image > emoji > color > id 哈希色。
- *  登录图经 useMediaObjectUrl 认证 blob；公开分享直接给 tokenized avatarSrc（此时
- *  hook 收 null id，绝不发 blob 请求）。emoji 背景固定 var(--surface)；图片加载失败
- *  当次回退（记住失败的 src），不无限重试。 */
+ *  avatarSrc（已签发 https 或分享相对路径）直出；无 src 时登录图经 useMediaObjectUrl
+ *  认证 blob。emoji 背景固定 var(--surface)；图片加载失败当次回退（记住失败的 src），
+ *  不无限重试。 */
 export function ChainMark({
   chainId,
   color,

@@ -9,10 +9,11 @@ import { AggregateView } from '@/chain/aggregate-views';
 import { MapView } from '@/chain/map-view';
 import { MarkdownText } from '@/pages/recap/markdown-text';
 import { EmptyState, TimelineSkeleton } from '@/ui/feedback/index';
+import { isHttpUrl } from '@/lib/media-src';
 import { ShareAlbumService } from './share-album.service';
 
-// 公开分享相册（plan Task 11）：无 Shell、全程只读，媒体经 ?st= token 通道，
-// 过期 / 吊销 / 不存在语义不变（404 / SHARE_NOT_FOUND → 已关闭空态）。
+// 公开分享相册（plan Task 11）：无 Shell、全程只读；媒体/头像/封面优先接口签发的
+// https，相对路径才拼 ?st=。过期 / 吊销 / 不存在语义不变（404 / SHARE_NOT_FOUND → 已关闭空态）。
 // 视觉与认证时间线同一套日子线语法；链名是动态文案，用系统字（spec §2.2）。
 
 // 具名导出是测试 seam：bindServices 的私有容器实例在渲染前无法播种，
@@ -76,7 +77,11 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
                 color={chain.color}
                 icon={chain.icon}
                 avatarSrc={
-                  chain.avatarUrl ? `${chain.avatarUrl}?st=${encodeURIComponent(token)}` : null
+                  chain.avatarUrl
+                    ? isHttpUrl(chain.avatarUrl)
+                      ? chain.avatarUrl
+                      : `${chain.avatarUrl}?st=${encodeURIComponent(token)}`
+                    : null
                 }
                 avatarFocus={chain.avatarFocus}
                 size={24}

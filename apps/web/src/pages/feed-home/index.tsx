@@ -34,6 +34,7 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
         color: c.color,
         icon: c.icon,
         avatarMediaId: c.avatarMediaId,
+        avatarUrl: c.avatarUrl,
         avatarFocus: c.avatarFocus,
       },
     ]),

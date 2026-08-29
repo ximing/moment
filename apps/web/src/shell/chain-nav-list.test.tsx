@@ -164,7 +164,7 @@ describe('ChainNavList 拖拽 ghost 与提交', () => {
     expect(api.reorderChains).not.toHaveBeenCalled();
   });
 
-  it('导航项只渲染链头像（blob 通道 + 焦点），不渲染封面', () => {
+  it('导航项只渲染链头像（接口 URL 直出 + 焦点），不渲染封面', () => {
     const withAvatar: ChainDto = {
       ...makeChain('c1', '链一'),
       avatarMediaId: 'm-avatar-1',
@@ -187,7 +187,7 @@ describe('ChainNavList 拖拽 ghost 与提交', () => {
     const link = screen.getByRole('link', { name: /链一/ });
     const img = link.querySelector('img');
     expect(img).not.toBeNull();
-    expect(img).toHaveAttribute('src', 'blob:mock-m-avatar-1');
+    expect(img).toHaveAttribute('src', '/api/media/m-avatar-1');
     expect(img).toHaveStyle({ objectPosition: '25% 75%' });
     // 封面不进导航：整个导航只有头像这一张图
     expect(container.querySelectorAll('img')).toHaveLength(1);

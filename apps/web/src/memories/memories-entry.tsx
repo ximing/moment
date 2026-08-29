@@ -54,6 +54,7 @@ export const MemoriesEntryContent = observer(function MemoriesEntryContent({
                     chainColor={chainLookById?.get(m.chainId)?.color}
                     chainIcon={chainLookById?.get(m.chainId)?.icon}
                     chainAvatarMediaId={chainLookById?.get(m.chainId)?.avatarMediaId}
+                    chainAvatarUrl={chainLookById?.get(m.chainId)?.avatarUrl}
                     chainAvatarFocus={chainLookById?.get(m.chainId)?.avatarFocus}
                   />
                 ))}

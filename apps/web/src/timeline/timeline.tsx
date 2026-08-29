@@ -67,6 +67,7 @@ export const Timeline = observer(function Timeline({
         chainColor={chainLookById?.get(m.chainId)?.color}
         chainIcon={chainLookById?.get(m.chainId)?.icon}
         chainAvatarMediaId={chainLookById?.get(m.chainId)?.avatarMediaId}
+        chainAvatarUrl={chainLookById?.get(m.chainId)?.avatarUrl}
         chainAvatarFocus={chainLookById?.get(m.chainId)?.avatarFocus}
         shareToken={shareToken}
         readOnly={readOnly}
@@ -85,10 +86,11 @@ export const Timeline = observer(function Timeline({
     </>
   );
 
-  if (isPending) {
+  // 已有列表时不换成骨架/错误整页：点赞评论刷新或筛选重拉会丢掉滚动位置。
+  if (isPending && moments.length === 0) {
     return <TimelineSkeleton />;
   }
-  if (isError) {
+  if (isError && moments.length === 0) {
     return (
       <Banner tone="error" action={onRetry ? { label: '重试', onPress: onRetry } : undefined}>
         没法刷新，点重试

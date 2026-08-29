@@ -1,37 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MomentMedia } from '@moment/dto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MediaBlock } from './MediaBlock';
-import { useMediaObjectUrl } from './useMediaObjectUrl';
 
-// MediaBlock 契约（plan Task 11）：
+// MediaBlock 契约：
 // - 0 媒体：不渲染任何媒体 DOM；
 // - 1 图：按声明宽高比（64×48 fixture 经 width/height 属性给出固有比例），点击回报 onOpen(0)；
 // - 2 图：两列方形格；9 图：完整 3×3 格，每格回调回报 0–8；
 // - 视频：先 16:9 播放面，点击后才出现原生 controls 的 <video>；
-// - URL 语义不变：认证模式用 useMediaObjectUrl(media.id) 的 blob object URL；
-//   分享模式绝不请求 blob（hook 只收到 null），用稳定相对 URL + ?st=encodeURIComponent(token)。
-//
-// useMediaObjectUrl 模块桩：认证 id 同步回 blob:mock-<id>，null 回 null；
-// 调用参数即「是否请求过 blob」的直接证据。
-
-vi.mock('@/api/client', () => ({
-  client: {
-    mediaUrl(id: string, opts?: { variant?: 'original' | 'derived'; st?: string }) {
-      let url = `/api/media/${id}`;
-      if (opts?.variant === 'derived') url += '?variant=derived';
-      if (opts?.st) url += `${url.includes('?') ? '&' : '?'}st=${encodeURIComponent(opts.st)}`;
-      return url;
-    },
-  },
-}));
-
-vi.mock('./useMediaObjectUrl', () => ({
-  useMediaObjectUrl: vi.fn((mediaId: string | null) => (mediaId ? `blob:mock-${mediaId}` : null)),
-}));
-
-const mockUseMediaObjectUrl = vi.mocked(useMediaObjectUrl);
+// - URL：直出接口字段。https 预签名不拼 ?st=；相对 `/api/media` 分享态才拼 ?st=。
 
 function image(
   id: string,
@@ -74,10 +52,6 @@ function video(
   };
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
 describe('媒体数量分支', () => {
   it('0 个媒体不渲染任何 DOM', () => {
     const { container } = render(<MediaBlock media={[]} />);
@@ -93,7 +67,10 @@ describe('媒体数量分支', () => {
     // 声明宽高经 width/height 属性给出固有比例（现代浏览器由此推导 aspect-ratio）
     expect(img).toHaveAttribute('width', '64');
     expect(img).toHaveAttribute('height', '48');
-    expect(img).toHaveAttribute('src', 'blob:mock-media-1');
+    expect(img).toHaveAttribute('src', '/api/media/media-1');
+    // 窄于内容列时用固有宽，最大不超过列宽（不要 w-full 拉满）
+    expect(img.className.split(/\s+/)).toEqual(expect.arrayContaining(['max-w-full', 'h-auto']));
+    expect(img.className.split(/\s+/)).not.toContain('w-full');
 
     await user.click(screen.getByRole('button'));
     expect(onOpen).toHaveBeenCalledWith(0);
@@ -147,92 +124,61 @@ describe('视频分支', () => {
     const player = container.querySelector('video');
     expect(player).not.toBeNull();
     expect(player!.controls).toBe(true);
-    expect(player).toHaveAttribute('src', 'blob:mock-media-v1');
+    expect(player).toHaveAttribute('src', '/api/media/media-v1');
   });
 });
 
 describe('URL 语义', () => {
-  it('认证模式：图片与视频都经 useMediaObjectUrl(media.id) 取 blob object URL', async () => {
-    const user = userEvent.setup();
+  it('直出 url；有 derivedUrl 时卡片用 derivedUrl', () => {
     const first = render(<MediaBlock media={[image('media-1')]} />);
-    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-1', {
-      variant: 'original',
-      fallbackToOriginal: false,
-    });
-    expect(first.container.querySelector('img')).toHaveAttribute('src', 'blob:mock-media-1');
+    expect(first.container.querySelector('img')).toHaveAttribute('src', '/api/media/media-1');
     first.unmount();
 
-    mockUseMediaObjectUrl.mockClear();
-    const { container } = render(<MediaBlock media={[video('media-v1')]} />);
-    expect(mockUseMediaObjectUrl.mock.calls.some((c) => c[0] === null)).toBe(true);
-    await user.click(screen.getByRole('button', { name: '播放视频' }));
-    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-v1', {
-      variant: 'original',
-      fallbackToOriginal: false,
-    });
-    expect(container.querySelector('video')).toHaveAttribute('src', 'blob:mock-media-v1');
+    const { container } = render(
+      <MediaBlock media={[image('media-1', 64, 48, 0, '/api/media/media-1?variant=derived')]} />,
+    );
+    expect(container.querySelector('img')).toHaveAttribute('src', '/api/media/media-1?variant=derived');
+    expect(container.textContent).not.toMatch(/优化中/);
   });
 
-  it('分享模式：绝不请求 blob（hook 只收 null），用稳定相对 URL + ?st=encodeURIComponent(token)', () => {
+  it('https 预签名直出，分享态不拼 ?st=', () => {
+    const signed: MomentMedia = {
+      ...image('media-1'),
+      url: 'https://s3.example/orig?X-Amz-Signature=abc',
+      derivedUrl: 'https://s3.example/derived?X-Amz-Signature=def',
+    };
+    const { container } = render(<MediaBlock media={[signed]} shareToken="tok en" />);
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://s3.example/derived?X-Amz-Signature=def',
+    );
+  });
+
+  it('分享模式：相对 URL 拼 ?st=；已有 query 用 &st=', () => {
     const token = 'tok en';
     const { container, unmount } = render(<MediaBlock media={[image('media-1')]} shareToken={token} />);
     expect(container.querySelector('img')).toHaveAttribute('src', '/api/media/media-1?st=tok%20en');
-    expect(mockUseMediaObjectUrl).not.toHaveBeenCalledWith('media-1');
-    for (const call of mockUseMediaObjectUrl.mock.calls) expect(call[0]).toBeNull();
     unmount();
 
-    mockUseMediaObjectUrl.mockClear();
     const shareVideo = render(<MediaBlock media={[video('media-v1')]} shareToken={token} />);
-    // 分享模式视频直接给出原生 controls，不经播放面、不请求 blob
     const player = shareVideo.container.querySelector('video');
     expect(player).not.toBeNull();
     expect(player!.controls).toBe(true);
     expect(player).toHaveAttribute('src', '/api/media/media-v1?st=tok%20en');
-    for (const call of mockUseMediaObjectUrl.mock.calls) expect(call[0]).toBeNull();
-  });
 
-  it('认证模式：有 derivedUrl 时 useMediaObjectUrl(id, { variant: derived, fallbackToOriginal })', () => {
-    render(
-      <MediaBlock
-        media={[image('media-1', 64, 48, 0, '/api/media/media-1?variant=derived')]}
-      />,
-    );
-    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-1', {
-      variant: 'derived',
-      fallbackToOriginal: true,
-    });
-  });
-
-  it('认证模式：无 derivedUrl 不传 derived，无优化中角标', () => {
-    const { container } = render(<MediaBlock media={[image('media-1')]} />);
-    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-1', {
-      variant: 'original',
-      fallbackToOriginal: false,
-    });
-    expect(container.textContent).not.toMatch(/优化中/);
-  });
-
-  it('分享模式：derivedUrl 走 mediaUrl variant=derived + &st=，禁止第二段 ?st=', () => {
-    const token = 'tok en';
-    const { container } = render(
+    const derived = render(
       <MediaBlock
         media={[image('media-1', 64, 48, 0, '/api/media/media-1?variant=derived')]}
         shareToken={token}
       />,
     );
-    const src = container.querySelector('img')!.getAttribute('src');
+    const src = derived.container.querySelector('img')!.getAttribute('src');
     expect(src).toBe('/api/media/media-1?variant=derived&st=tok%20en');
     expect(src).not.toContain('?variant=derived?st=');
-    for (const call of mockUseMediaObjectUrl.mock.calls) expect(call[0]).toBeNull();
   });
 
-  it('分享模式：无 derivedUrl 仍是 ?st=（现网稳定入口）', () => {
-    const { container } = render(<MediaBlock media={[image('media-1')]} shareToken={'tok en'} />);
-    expect(container.querySelector('img')).toHaveAttribute('src', '/api/media/media-1?st=tok%20en');
-  });
-
-  it('认证视频封面优先 posterDerivedUrl', () => {
-    render(
+  it('视频封面优先 posterDerivedUrl；分享相对路径拼 &st=', () => {
+    const { container } = render(
       <MediaBlock
         media={[
           video('media-v1', {
@@ -243,14 +189,9 @@ describe('URL 语义', () => {
         ]}
       />,
     );
-    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('poster-1', {
-      variant: 'derived',
-      fallbackToOriginal: true,
-    });
-  });
+    expect(container.querySelector('img')).toHaveAttribute('src', '/api/media/poster-1?variant=derived');
 
-  it('分享模式：posterDerivedUrl 走 mediaUrl variant=derived + &st=', () => {
-    const { container } = render(
+    const share = render(
       <MediaBlock
         media={[
           video('media-v1', {
@@ -262,7 +203,7 @@ describe('URL 语义', () => {
         shareToken={'tok en'}
       />,
     );
-    const player = container.querySelector('video')!;
+    const player = share.container.querySelector('video')!;
     expect(player.getAttribute('poster')).toBe('/api/media/poster-1?variant=derived&st=tok%20en');
     expect(player.getAttribute('poster')).not.toContain('?variant=derived?st=');
   });

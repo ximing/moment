@@ -1,13 +1,11 @@
 import { useRef, useState } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { Pause, Play } from 'lucide-react';
-import { client } from '@/api/client';
+import { originalDisplayUrl } from '@/lib/media-src';
 import { Icon } from '@/ui/Icon';
-import { useMediaObjectUrl } from './useMediaObjectUrl';
 
 // 语音播放条（spec voice-moment §5）：播放/暂停 + 进度条 + 时长；v1 不渲染波形（spec §0 搁置决策）。
-// URL 语义与 MediaBlock 一致：登录态经 useMediaObjectUrl 取 blob object URL；
-// 分享态绝不请求 blob，用稳定相对 URL + ?st=encodeURIComponent(token)。
+// 直出接口签发的预签名 GET。
 // 视觉只消费 token：rounded-surface-md / bg-surface / bg-action / text-action-fg / text-meta / text-muted。
 
 function formatDuration(seconds: number): string {
@@ -18,8 +16,7 @@ function formatDuration(seconds: number): string {
 }
 
 export function AudioBar({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
-  const blobUrl = useMediaObjectUrl(shareToken ? null : media.id);
-  const url = shareToken ? client.mediaUrl(media.id, { st: shareToken }) : blobUrl;
+  const url = originalDisplayUrl(media, shareToken);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);

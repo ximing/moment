@@ -47,6 +47,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   chainColor,
   chainIcon,
   chainAvatarMediaId,
+  chainAvatarUrl,
   chainAvatarFocus,
   shareToken,
   readOnly,
@@ -60,6 +61,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   chainColor?: ChainAppearanceColor | null;
   chainIcon?: ChainIcon | null;
   chainAvatarMediaId?: string | null;
+  chainAvatarUrl?: string | null;
   chainAvatarFocus?: ChainImageFocus | null;
   shareToken?: string;
   readOnly?: boolean;
@@ -163,6 +165,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
                   color={chainColor}
                   icon={chainIcon}
                   avatarMediaId={chainAvatarMediaId}
+                  avatarSrc={chainAvatarUrl}
                   avatarFocus={chainAvatarFocus}
                   size={14}
                 />

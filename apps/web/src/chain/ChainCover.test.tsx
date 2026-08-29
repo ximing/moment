@@ -22,6 +22,15 @@ beforeEach(() => {
 });
 
 describe('ChainCover（登录版）', () => {
+  it('已签发 https src 直出，不走 blob', () => {
+    const { container } = render(
+      <ChainCover mediaId="cover-1" src="https://s3.example/cover?X-Amz-Signature=abc" focus={{ x: 0.25, y: 0.75 }} />,
+    );
+    expect(hook).toHaveBeenCalledWith(null);
+    expect(container.querySelector('img')).toHaveAttribute('src', 'https://s3.example/cover?X-Amz-Signature=abc');
+    expect(container.querySelector('img')).toHaveStyle({ objectPosition: '25% 75%' });
+  });
+
   it('经 blob 通道渲染宽幅封面，焦点换算为 object-position', () => {
     const onError = vi.fn();
     const { container } = render(<ChainCover mediaId="cover-1" focus={{ x: 0.25, y: 0.75 }} onError={onError} />);
@@ -66,6 +75,14 @@ describe('ChainCover（登录版）', () => {
 });
 
 describe('PublicChainCover（公开分享版）', () => {
+  it('https 预签名直出，不拼 ?st=，不走 blob', () => {
+    const { container } = render(
+      <PublicChainCover src="https://s3.example/cover?X-Amz-Signature=abc" shareToken="tok en" focus={null} />,
+    );
+    expect(container.querySelector('img')).toHaveAttribute('src', 'https://s3.example/cover?X-Amz-Signature=abc');
+    expect(hook).not.toHaveBeenCalled();
+  });
+
   it('稳定 URL 追加 ?st=encodeURIComponent(token)，不走 blob 通道', () => {
     const onError = vi.fn();
     const { container } = render(

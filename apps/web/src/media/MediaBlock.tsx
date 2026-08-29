@@ -1,31 +1,14 @@
 import { useState } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { Play } from 'lucide-react';
-import { client } from '@/api/client';
 import { Icon } from '@/ui/Icon';
-import { useMediaObjectUrl } from './useMediaObjectUrl';
+import { cardDisplayUrl, originalDisplayUrl, posterDisplayUrl } from '@/lib/media-src';
 
 // 时刻媒体块（C 端总规范 §6.1 / §10）：0/1/2–9/视频都是一等分支。
-// 0 → 无媒体 DOM；1 图按声明宽高渲染（width/height 属性给出固有比例，现代浏览器
-// 由此推导 aspect-ratio）；2 图两列、3–9 图三列方形格，点击回报被点 index；
-// 视频先 16:9 播放面、点后出原生 controls。认证卡片优先 derived；分享走
-// `client.mediaUrl`（已有 `?` 则 `&st=`）。视觉只消费 token：rounded-surface-lg
-// 媒体圆角、bg-feedback-skeleton 加载占位、bg-ink 播放面底色、ring-focus 焦点环。
-
-function cardVariant(media: Pick<MomentMedia, 'derivedUrl'>): 'original' | 'derived' {
-  return media.derivedUrl ? 'derived' : 'original';
-}
-
-function posterVariant(media: Pick<MomentMedia, 'posterDerivedUrl'>): 'original' | 'derived' {
-  return media.posterDerivedUrl ? 'derived' : 'original';
-}
-
-function shareSrc(mediaId: string, shareToken: string, variant?: 'original' | 'derived'): string {
-  return client.mediaUrl(mediaId, {
-    variant: variant === 'derived' ? 'derived' : undefined,
-    st: shareToken,
-  });
-}
+// 0 → 无媒体 DOM；1 图按固有像素宽显示，最大不超过内容列（max-w-full）；
+// 2 图两列、3–9 图三列方形格，点击回报被点 index；
+// 视频先 16:9 播放面、点后出原生 controls。卡片优先 derivedUrl，灯箱/播放用 url；
+// 均为接口签发的预签名 GET，<img>/<video> 直出，不再 fetch blob。
 
 /* ---------------------------------------------------------------------------
  * 媒体加载占位动效：与 Feedback Skeleton 同构的低对比呼吸（--skeleton-cycle）。
@@ -67,7 +50,7 @@ export function MediaBlock({
   }
   if (media.length === 1) {
     return (
-      <div className="overflow-hidden rounded-surface-lg">
+      <div className="w-fit max-w-full overflow-hidden rounded-surface-lg">
         <ImageOne media={media[0]!} shareToken={shareToken} single onClick={() => onOpen?.(0)} />
       </div>
     );
@@ -94,12 +77,7 @@ function ImageOne({
   single?: boolean;
   onClick?: () => void;
 }) {
-  const variant = cardVariant(media);
-  const blobUrl = useMediaObjectUrl(shareToken ? null : media.id, {
-    variant,
-    fallbackToOriginal: variant === 'derived',
-  });
-  const url = shareToken ? shareSrc(media.id, shareToken, variant) : blobUrl;
+  const url = cardDisplayUrl(media, shareToken);
   if (!url) {
     // 加载占位只消费 --feedback-skeleton；单图按声明宽高占位，多图按方形格
     return (
@@ -108,8 +86,8 @@ function ImageOne({
         {single && media.width && media.height ? (
           <div
             aria-hidden
-            className={`w-full bg-feedback-skeleton ${mediaSkeletonClass}`}
-            style={{ aspectRatio: `${media.width} / ${media.height}` }}
+            className={`w-full max-w-full bg-feedback-skeleton ${mediaSkeletonClass}`}
+            style={{ aspectRatio: `${media.width} / ${media.height}`, maxWidth: media.width }}
           />
         ) : (
           <div
@@ -124,16 +102,16 @@ function ImageOne({
     <button
       type="button"
       onClick={onClick}
-      className="block w-full overflow-hidden focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset"
+      className={`block overflow-hidden focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset ${single ? 'max-w-full' : 'w-full'}`}
     >
       {single ? (
-        // 声明宽高比：width/height 属性即固有比例，w-full h-auto 让浏览器保比缩放
+        // 固有像素宽（width/height 属性）；比内容列窄则原尺寸，否则压到列宽
         <img
           src={url}
           alt=""
           width={media.width ?? undefined}
           height={media.height ?? undefined}
-          className="block h-auto w-full"
+          className="block h-auto max-w-full"
         />
       ) : (
         <img src={url} alt="" className="block aspect-square w-full object-cover" />
@@ -144,16 +122,8 @@ function ImageOne({
 
 function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
   const [on, setOn] = useState(Boolean(shareToken));
-  const blobUrl = useMediaObjectUrl(!shareToken && on ? media.id : null, {
-    variant: 'original',
-    fallbackToOriginal: false,
-  });
-  const pVariant = posterVariant(media);
-  const posterBlobUrl = useMediaObjectUrl(!shareToken && !on ? media.posterMediaId : null, {
-    variant: pVariant,
-    fallbackToOriginal: pVariant === 'derived',
-  });
-  const url = shareToken ? shareSrc(media.id, shareToken) : blobUrl;
+  const posterUrl = posterDisplayUrl(media, shareToken);
+  const url = originalDisplayUrl(media, shareToken);
   if (!on) {
     return (
       <button
@@ -162,8 +132,8 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
         onClick={() => setOn(true)}
         className="relative aspect-video w-full overflow-hidden rounded-surface-lg bg-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-offset-focus focus-visible:ring-offset-bg"
       >
-        {posterBlobUrl && (
-          <img src={posterBlobUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        {posterUrl && (
+          <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
         )}
         <span className="absolute inset-0 grid place-items-center">
           <span className="grid h-12 w-12 place-items-center rounded-full bg-action text-action-fg">
@@ -188,11 +158,7 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
     <video
       controls
       src={url}
-      poster={
-        shareToken && media.posterMediaId
-          ? shareSrc(media.posterMediaId, shareToken, pVariant)
-          : undefined
-      }
+      poster={posterUrl ?? undefined}
       className="aspect-video w-full rounded-surface-lg bg-ink"
     />
   );
