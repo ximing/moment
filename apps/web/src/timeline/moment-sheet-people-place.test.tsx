@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { RSRoot, register } from '@rabjs/react';
 import type { PublicShareMoment } from '@moment/dto';
 import { describe, expect, it, vi } from 'vitest';
@@ -104,4 +105,34 @@ describe('moment-sheet 人物/地点展示（spec people-place §7）', () => {
     expect(screen.queryByLabelText('和谁在一起')).toBeNull();
     expect(screen.queryByText(/📍/)).toBeNull();
   });
+
+  it('传入 onPersonFilter/onPlaceFilter：chip 是 button，再点回调；AI 角标仍在', async () => {
+    const user = userEvent.setup();
+    const onPersonFilter = vi.fn();
+    const onPlaceFilter = vi.fn();
+    render(
+      <RSRoot>
+        <MomentSheetContent
+          readOnly
+          moment={moment({
+            persons: [
+              { id: 'p-1', name: '爸爸', userId: 'u-1', source: 'manual' },
+              { id: 'p-2', name: '外婆', userId: null, source: 'ai' },
+            ],
+            place: { lat: 39.9, lng: 116.4, name: '外婆家', source: 'manual' },
+          })}
+          onPersonFilter={onPersonFilter}
+          onPlaceFilter={onPlaceFilter}
+        />
+      </RSRoot>,
+    );
+    const group = screen.getByLabelText('和谁在一起');
+    expect(within(group).getByRole('button', { name: '筛选 外婆' })).toBeInTheDocument();
+    expect(within(group).getByText('AI')).toBeInTheDocument();
+    await user.click(within(group).getByRole('button', { name: '筛选 外婆' }));
+    expect(onPersonFilter).toHaveBeenCalledWith({ id: 'p-2', name: '外婆' });
+    await user.click(screen.getByRole('button', { name: '筛选地点 外婆家' }));
+    expect(onPlaceFilter).toHaveBeenCalledWith('外婆家');
+  });
 });
+

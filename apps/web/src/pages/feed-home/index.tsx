@@ -1,10 +1,10 @@
 import { bindServices, observer, useService } from '@rabjs/react';
-import { ArrowLeft } from 'lucide-react';
 import { ComposerEntry } from '@/compose/composer-entry';
 import { canCompose } from '@/lib/roles';
 import { MemoriesEntry } from '@/memories/memories-entry';
 import { ChainListService } from '@/services/chain-list.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
+import { FilterChips } from '@/timeline/filter-chips';
 import { Timeline } from '@/timeline/timeline';
 import { TimelineRail } from '@/timeline/timeline-rail';
 import { Button } from '@/ui/button/index';
@@ -72,14 +72,14 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
         value={service.filter}
         onChange={(next) => service.setFilter(next)}
       />
-      {/* 锚定态「回到今天」：与链主页同一锚定 chips 语义，清 before 回第一页 */}
-      {service.filter.before && (
-        <div className="sticky top-2 z-10 mb-4">
-          <Button variant="secondary" leadingIcon={ArrowLeft} onClick={() => service.clearBefore()}>
-            回到今天
-          </Button>
-        </div>
-      )}
+      <FilterChips
+        filter={service.filter}
+        onClearPerson={() =>
+          service.setFilter({ ...service.filter, personId: undefined, personName: undefined })
+        }
+        onClearPlace={() => service.setFilter({ ...service.filter, place: undefined })}
+        onClearBefore={() => service.clearBefore()}
+      />
       <Timeline
         moments={service.moments}
         chainLookById={looks}
@@ -91,6 +91,8 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
         isFetchingNextPage={service.$model.loadMore.loading}
         fetchNextPage={() => void service.loadMore()}
         entry={entry}
+        onPersonFilter={(p) => service.togglePersonFilter(p)}
+        onPlaceFilter={(place) => service.togglePlaceFilter(place)}
         empty={
           noChains ? (
             <EmptyState

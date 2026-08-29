@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { ArrowLeft, MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { ComposerEntry } from '@/compose/composer-entry';
 import { ChainCover } from '@/chain/ChainCover';
 import { ComposeSessionService } from '@/services/compose-session.service';
@@ -11,9 +11,10 @@ import { RecapEntry } from '@/chain/recap-entry';
 import { babyAgeLabel } from '@/lib/template';
 import { canCompose } from '@/lib/roles';
 import { humanError } from '@/lib/errors';
+import { FilterChips } from '@/timeline/filter-chips';
 import { Timeline } from '@/timeline/timeline';
 import { TimelineRail } from '@/timeline/timeline-rail';
-import { Button, IconButton } from '@/ui/button/index';
+import { IconButton } from '@/ui/button/index';
 import { Banner, EmptyState, TimelineSkeleton } from '@/ui/feedback/index';
 import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
 import { ChainAudience } from './chain-audience';
@@ -131,16 +132,16 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
         onChange={(next) => service.setFilter(next)}
       />
 
-      {/* 锚定态「回到今天」：时间线顶部固定一枚（spec §4.3），清 before 回第一页 */}
-      {service.filter.before && (
-        <div className="sticky top-2 z-10 mb-4">
-          <Button variant="secondary" leadingIcon={ArrowLeft} onClick={() => service.clearBefore()}>
-            回到今天
-          </Button>
-        </div>
-      )}
-
       {service.activeView === 'timeline' ? (
+        <>
+        <FilterChips
+          filter={service.filter}
+          onClearPerson={() =>
+            service.setFilter({ ...service.filter, personId: undefined, personName: undefined })
+          }
+          onClearPlace={() => service.setFilter({ ...service.filter, place: undefined })}
+          onClearBefore={() => service.clearBefore()}
+        />
         <Timeline
           moments={service.moments}
           hideSignature={service.filter.order === 'created_at'}
@@ -156,6 +157,8 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
             return typeof birthdate === 'string' ? babyAgeLabel(birthdate, m.happenedAt, m.happenedTzOffset) : '';
           }}
           entry={canCompose(chain) ? <ComposerEntry chainId={chain.id} /> : undefined}
+          onPersonFilter={(p) => service.togglePersonFilter(p)}
+          onPlaceFilter={(place) => service.togglePlaceFilter(place)}
           empty={
             service.filtered ? (
               <EmptyState
@@ -180,6 +183,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
             )
           }
         />
+        </>
       ) : (
         <AggregateView
           view={service.activeView}

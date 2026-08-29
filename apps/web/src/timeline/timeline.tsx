@@ -34,6 +34,8 @@ export const Timeline = observer(function Timeline({
   entry,
   templateManifest,
   ageLabelOf,
+  onPersonFilter,
+  onPlaceFilter,
 }: {
   moments: PublicShareMoment[];
   chainLookById?: Map<string, ChainLook>;
@@ -51,6 +53,8 @@ export const Timeline = observer(function Timeline({
   templateManifest?: TemplateManifest | null;
   /** 年龄标注函数（chain-home 按链 payload.birthdate 提供；feed/分享页不传则不显示） */
   ageLabelOf?: (m: PublicShareMoment) => string;
+  onPersonFilter?: (person: { id: string; name: string }) => void;
+  onPlaceFilter?: (place: string) => void;
 }) {
   const sentinelRef = useLoadMoreSentinel(!isPending && !isError, hasNextPage, isFetchingNextPage, fetchNextPage);
   const composeSession = useService(ComposeSessionService);
@@ -68,6 +72,8 @@ export const Timeline = observer(function Timeline({
         readOnly={readOnly}
         templateManifest={templateManifest}
         ageLabel={ageLabelOf?.(m)}
+        onPersonFilter={readOnly ? undefined : onPersonFilter}
+        onPlaceFilter={readOnly ? undefined : onPlaceFilter}
       />
     </div>
   );
