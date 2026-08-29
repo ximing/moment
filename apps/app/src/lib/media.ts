@@ -35,13 +35,13 @@ export async function uriToBlob(uri: string): Promise<Blob> {
   return await res.blob();
 }
 
-export async function pickImages(): Promise<PickedImage[]> {
+export async function pickImages(opts?: { selectionLimit?: number }): Promise<PickedImage[]> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) return [];
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsMultipleSelection: true,
-    selectionLimit: 9,
+    selectionLimit: opts?.selectionLimit ?? 9,
     quality: 1,
     exif: true, // spec people-place §3：读压缩前原始 asset 的 EXIF（GPS 用于地点草稿回填）
   });

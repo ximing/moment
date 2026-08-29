@@ -34,6 +34,8 @@ const COPY: Record<string, string> = {
   EMPTY_PATCH: '没有要保存的修改',
   CONTENT_REQUIRED: '先写一句此刻吧',
   MEDIA_COUNT_INVALID: '图片或视频数量不对',
+  MEDIA_INVALID: '这些图片不能用，请重新选择',
+  MEDIA_NOT_ALLOWED: '这种时刻不能改媒体',
 };
 
 const FALLBACK = '出了点问题，请重试';

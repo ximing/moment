@@ -1,5 +1,5 @@
 import { Service } from '@rabjs/react';
-import { MAX_IMAGE_BYTES, type ChainMemberDto, type MediaCompleteResponse, type MomentResponse, type MomentType, type PatchMomentInput, type PersonBrief, type PersonResponse, type TemplateManifest } from '@moment/dto';
+import { MAX_IMAGE_BYTES, type ChainMemberDto, type MediaCompleteResponse, type MomentMedia, type MomentResponse, type MomentType, type PatchMomentInput, type PersonBrief, type PersonResponse, type TemplateManifest } from '@moment/dto';
 import { ApiError } from '@moment/api-client';
 import * as Location from 'expo-location';
 import { client } from '../../lib/api';
@@ -35,6 +35,14 @@ export interface VoiceDraft {
   mime: string;
   size: number;
   durationSeconds: number;
+}
+
+export function editImageCap(edit: { type: MomentType }): 8 | 9 {
+  return edit.type === 'voice' ? 8 : 9;
+}
+
+export function editOccupied(keptMedia: MomentMedia[], images: ReadyImage[]): number {
+  return keptMedia.length + images.length;
 }
 
 /** 发布页（spec §6）：草稿进 Service，提交是显式动作，无 effect 链式 setState。 */
@@ -92,6 +100,13 @@ export class ComposeService extends Service {
   private editWallMs = 0;
   /** 设备时区偏移（getTimezoneOffset 分钟），loadForEdit 采样一次、提交复用同一值（防 DST 期间偏移漂移）。 */
   private editDeviceOffset = 0;
+  /** 编辑态留下的已发布内容格（image/*；media 存量 video/* 也占格）。audio 永不进入。 */
+  keptMedia: MomentMedia[] = [];
+  /** 仅 voice 编辑：原 audio 行。loadForEdit 会把 this.voice 清掉，cap 禁止再读 this.voice。 */
+  keptAudio: MomentMedia | null = null;
+  /** 动作级 dirty：叉/加过媒体才把 mediaIds 放进 PATCH */
+  mediaTouched = false;
+  baselineMediaIds: string[] = [];
 
   get isEdit(): boolean {
     return this.edit !== null;
@@ -132,6 +147,10 @@ export class ComposeService extends Service {
    *  链固定为 edit.chainId（见 activeChainId），不回退可编辑链，防标签载错链 → TAG_NOT_IN_CHAIN。 */
   async loadForEdit(momentId: string): Promise<void> {
     const m = await client.getMoment(momentId);
+    this.images = [];
+    this.clearVideo();
+    this.voice = null;
+    this.mediaTouched = false;
     this.edit = m;
     this.chainId = m.chainId;
     this.type = m.type;
@@ -157,6 +176,21 @@ export class ComposeService extends Service {
     this.editDeviceOffset = new Date().getTimezoneOffset();
     this.editWallMs = Date.parse(m.happenedAt) - m.happenedTzOffset * 60_000;
     this.happenedAt = new Date(this.editWallMs + this.editDeviceOffset * 60_000);
+    if (m.type === 'media') {
+      this.keptMedia = [...m.media];
+      this.keptAudio = null;
+      this.baselineMediaIds = this.keptMedia.map((row) => row.id);
+    } else if (m.type === 'voice') {
+      this.keptAudio = m.media.find((row) => row.mime.startsWith('audio/')) ?? null;
+      this.keptMedia = m.media.filter((row) => row.mime.startsWith('image/'));
+      this.baselineMediaIds = this.keptAudio
+        ? [this.keptAudio.id, ...this.keptMedia.map((row) => row.id)]
+        : [];
+    } else {
+      this.keptMedia = [];
+      this.keptAudio = null;
+      this.baselineMediaIds = [];
+    }
     await this.loadTags();
     void this.loadManifest(m.chainId).catch(() => undefined);
     void this.loadPersons().catch(() => undefined);
@@ -261,12 +295,14 @@ export class ComposeService extends Service {
   /** 选图 + 压缩；返回 rejected 数（仅统计压缩后仍超 MAX_IMAGE_BYTES 被跳过的，名额截断不算）。
    *  满 9 张抛 Error（中文 message，组件 Alert）；压缩中途抛错也复位进度。 */
   async pickMoreImages(): Promise<number> {
-    const picked = await pickImages();
+    const cap = this.edit ? editImageCap(this.edit) : this.type === 'voice' ? 8 : 9;
+    const occupied = this.edit ? editOccupied(this.keptMedia, this.images) : this.images.length;
+    const remain = cap - occupied;
+    const voiceCap = this.edit ? this.edit.type === 'voice' : this.type === 'voice';
+    if (remain <= 0) throw new Error(voiceCap ? '语音时刻最多 8 张附图' : '图片最多 9 张');
+    const picked = this.edit ? await pickImages({ selectionLimit: remain }) : await pickImages();
     if (picked.length === 0) return 0;
-    const cap = this.type === 'voice' ? 8 : 9; // voice 附图 ≤8（1 audio + ≤8 图 ≤ 9 mediaIds，spec §2.2）
-    const remain = cap - this.images.length;
-    if (remain <= 0) throw new Error(this.type === 'voice' ? '语音时刻最多 8 张附图' : '图片最多 9 张');
-    const kept = picked.slice(0, remain);
+    const kept = this.edit ? picked : picked.slice(0, remain);
     // EXIF 自动回填（spec §3）：读的是压缩前原始 asset（pickImages exif:true）；
     // 仅地点草稿完全为空时写入（P5 偏差 2）；非用户动作，不置 placeTouched
     this.ingestExif(kept);
@@ -285,12 +321,14 @@ export class ComposeService extends Service {
     } finally {
       this.progressLabel = null;
     }
-    this.images = [...this.images, ...ready].slice(0, cap);
+    this.images = this.edit ? [...this.images, ...ready] : [...this.images, ...ready].slice(0, cap);
+    if (this.edit) this.mediaTouched = true;
     return rejected;
   }
 
   /** 选视频 + 校验；返回问题文案（null = 成功）。覆盖选择即丢弃上一支视频的封面草稿并重新截帧。 */
   async chooseVideo(): Promise<string | null> {
+    if (this.edit) return null;
     const picked = await pickVideo();
     if (!picked) return null;
     const problem = validateVideo(picked);
@@ -325,7 +363,23 @@ export class ComposeService extends Service {
 
   /** 录音组件回调；draft 为 null = 移除重录 */
   setVoice(draft: VoiceDraft | null): void {
+    if (this.edit) return;
     this.voice = draft;
+  }
+
+  removeKeptMedia(id: string): void {
+    this.keptMedia = this.keptMedia.filter((m) => m.id !== id);
+    this.mediaTouched = true;
+  }
+
+  removeImage(index: number): void {
+    this.images = this.images.filter((_, i) => i !== index);
+    if (this.edit) this.mediaTouched = true;
+  }
+
+  clearImages(): void {
+    this.images = [];
+    if (this.edit) this.mediaTouched = true;
   }
 
   /** 组件侧清空语音（类型切换 SegmentBar 统一入口，与 clearVideo 同范式） */
@@ -546,12 +600,20 @@ export class ComposeService extends Service {
     }
   }
 
-  /** 编辑提交（spec §2）：patch 基础 { content, tagIds }；时间被改过才传 happenedAt
-   *  （按记录时区还原 ISO）并重算 isBackfill；媒体/类型/链不可改，不进 patch。 */
+  /** 编辑提交：patch 基础 { content, tagIds }；时间被改过才传 happenedAt
+   *  （按记录时区还原 ISO）并重算 isBackfill。仅 mediaTouched 时串行 upload 新图再带 mediaIds；不传 type / posterMediaId。 */
   private async submitEdit(): Promise<void> {
     const edit = this.edit;
     if (!edit) return;
-    if (edit.type === 'text' && this.content.trim().length === 0 && edit.kind === 'standard') throw new Error('文字类型需要内容');
+    const resultCount = this.keptMedia.length + this.images.length;
+    if (edit.type === 'text' && resultCount === 0 && edit.kind === 'standard' && this.content.trim().length === 0) {
+      throw new Error('文字类型需要内容');
+    }
+    if (edit.type === 'media' && resultCount === 0) throw new Error('至少留一张图');
+    if (this.mediaTouched && this.keptMedia.some((m) => m.mime.startsWith('video/'))) {
+      throw new Error('改图片前请先移除宫格里的视频');
+    }
+    if (edit.type === 'voice' && !this.keptAudio) throw new Error('录音不能换');
     if (this.content.length > 5000) throw new Error('正文最多 5000 字');
 
     const patch: PatchMomentInput = {
@@ -574,6 +636,21 @@ export class ComposeService extends Service {
     }
 
     try {
+      if (this.mediaTouched) {
+        const uploaded: string[] = [];
+        for (const img of this.images) {
+          this.progressLabel = '上传中…';
+          const res = await uploadWithRetry({
+            file: img.blob,
+            mime: img.mime,
+            size: img.size,
+            kind: 'image',
+          });
+          uploaded.push(res.mediaId);
+        }
+        const rest = [...this.keptMedia.map((m) => m.id), ...uploaded];
+        patch.mediaIds = edit.type === 'voice' && this.keptAudio ? [this.keptAudio.id, ...rest] : rest;
+      }
       this.progressLabel = '保存中…';
       await client.updateMoment(edit.id, patch);
       this.emit('moment:changed', { momentId: edit.id, chainId: edit.chainId, op: 'update' }, 'global');

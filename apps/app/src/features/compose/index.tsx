@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
@@ -10,10 +10,11 @@ import { SegmentBar } from '../../components/SegmentBar';
 import { RequireAuth } from '../../components/RequireAuth';
 import { Loading } from '../../components/Loading';
 import { MediaGrid } from '../../components/MediaGrid';
+import { AudioBar } from '../../components/AudioBar';
 import { Button } from '../../components/Button';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
-import { ComposeService } from './compose.service';
+import { ComposeService, editImageCap, editOccupied } from './compose.service';
 import { TemplateFields } from './template-fields';
 import { PersonPicker } from './person-picker';
 import { VoiceRecorder } from './voice-recorder';
@@ -128,7 +129,54 @@ const ComposeContent = observer(function ComposeContent() {
         multiline
       />
 
-      {service.isEdit && service.edit && service.edit.media.length > 0 ? <MediaGrid media={service.edit.media} /> : null}
+      {service.isEdit && service.edit?.type === 'voice' && service.keptAudio ? (
+        <AudioBar media={service.keptAudio} />
+      ) : null}
+
+      {service.isEdit && service.edit && service.edit.type !== 'video' ? (
+        <MediaGrid media={service.keptMedia} onRemove={(id) => service.removeKeptMedia(id)} />
+      ) : null}
+
+      {service.isEdit && service.edit?.type === 'video' ? (
+        <>
+          <MediaGrid media={service.edit.media} />
+          <Text style={styles.mediaHint}>视频发布后不能更换</Text>
+        </>
+      ) : null}
+
+      {service.isEdit && service.edit && service.edit.type !== 'video' && service.images.length > 0 ? (
+        <View style={styles.grid}>
+          {service.images.map((img, i) => (
+            <View key={`${img.uri}-${i}`} style={styles.cellWrap}>
+              <Image source={{ uri: img.uri }} style={styles.localCell} resizeMode="cover" />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="移除这张图片"
+                hitSlop={t.space3}
+                onPress={() => service.removeImage(i)}
+                style={styles.removeBtn}
+              >
+                <Text style={styles.removeBtnText}>×</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {service.isEdit && service.edit && service.edit.type !== 'video' ? (
+        <View style={styles.mediaBar}>
+          <Button
+            variant="secondary"
+            disabled={editOccupied(service.keptMedia, service.images) >= editImageCap(service.edit)}
+            onPress={() => void onPickImages()}
+          >
+            选图（{editOccupied(service.keptMedia, service.images)}/{editImageCap(service.edit)}）
+          </Button>
+          {service.images.length > 0 ? (
+            <Button variant="quiet" onPress={() => service.clearImages()}>清空</Button>
+          ) : null}
+        </View>
+      ) : null}
 
       {!service.isEdit && (service.type === 'media' || service.type === 'voice') ? (
         <View style={styles.mediaBar}>
@@ -136,7 +184,7 @@ const ComposeContent = observer(function ComposeContent() {
             选图（{service.images.length}/{service.type === 'voice' ? 8 : 9}）
           </Button>
           {service.images.length > 0 ? (
-            <Button variant="quiet" onPress={() => (service.images = [])}>清空</Button>
+            <Button variant="quiet" onPress={() => service.clearImages()}>清空</Button>
           ) : null}
         </View>
       ) : null}
@@ -227,6 +275,21 @@ const createStyles = (t: Theme) =>
     content: { minHeight: 100, borderWidth: 1, borderColor: t.line, borderRadius: 8, padding: t.space3, fontSize: t.fontBody, color: t.ink, textAlignVertical: 'top' },
     mediaBar: { flexDirection: 'row', gap: t.space3 },
     mediaHint: { color: t.muted, fontSize: t.fontCaption },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space1, marginTop: t.space2 },
+    cellWrap: { width: '32%', aspectRatio: 1 },
+    localCell: { width: '100%', height: '100%', borderRadius: t.radiusMd, backgroundColor: t.feedbackSkeleton },
+    removeBtn: {
+      position: 'absolute',
+      top: t.space1,
+      right: t.space1,
+      minWidth: t.space6,
+      minHeight: t.space6,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: t.ink,
+      borderRadius: t.radiusMd,
+    },
+    removeBtnText: { color: t.bg, fontSize: t.fontCaption },
     dateBtn: { padding: t.space3, borderRadius: 8, backgroundColor: t.fieldBg },
     dateText: { fontSize: t.fontLabel, color: t.ink },
     progress: { color: t.action, textAlign: 'center' },
