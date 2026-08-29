@@ -1,9 +1,10 @@
 import { MAX_IMAGE_BYTES } from '@moment/dto';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { media, moments } from '../db/schema.js';
 import { getStorage } from '../storage/factory.js';
 import { maybeEmitMomentEmbed } from '../moments/embed-outbox.js';
+import { logger } from '../utils/logger.js';
 import { DERIVED_MIME, NonRetryableCompressError, compressToDerivedWebp } from './compress.js';
 import { derivedObjectKey, isCompressibleMime } from './derived.js';
 
@@ -13,7 +14,7 @@ function str(v: unknown): string {
 
 async function markDerivedFailed(mediaId: string, momentId: string): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx
+    const [result] = await tx
       .update(media)
       .set({
         derivedStatus: 'failed',
@@ -23,7 +24,8 @@ async function markDerivedFailed(mediaId: string, momentId: string): Promise<voi
         derivedWidth: null,
         derivedHeight: null,
       })
-      .where(eq(media.id, mediaId));
+      .where(and(eq(media.id, mediaId), isNotNull(media.momentId)));
+    if (result.affectedRows === 0) return;
     await maybeEmitMomentEmbed(tx, momentId);
   });
 }
@@ -71,7 +73,7 @@ export async function handleMomentCompress(
 
   if (out.buffer.length >= row.size) {
     await db.transaction(async (tx) => {
-      await tx
+      const [result] = await tx
         .update(media)
         .set({
           derivedStatus: 'skipped',
@@ -81,7 +83,8 @@ export async function handleMomentCompress(
           derivedWidth: null,
           derivedHeight: null,
         })
-        .where(eq(media.id, row.id));
+        .where(and(eq(media.id, row.id), isNotNull(media.momentId)));
+      if (result.affectedRows === 0) return;
       await maybeEmitMomentEmbed(tx, m.id);
     });
     return;
@@ -89,8 +92,9 @@ export async function handleMomentCompress(
 
   const key = derivedObjectKey(m.chainId, m.id, row.id);
   await getStorage().uploadFile(key, out.buffer);
+  let wrote = false;
   await db.transaction(async (tx) => {
-    await tx
+    const [result] = await tx
       .update(media)
       .set({
         derivedS3Key: key,
@@ -100,7 +104,16 @@ export async function handleMomentCompress(
         derivedHeight: out.height,
         derivedStatus: 'ready',
       })
-      .where(eq(media.id, row.id));
+      .where(and(eq(media.id, row.id), isNotNull(media.momentId)));
+    if (result.affectedRows === 0) return;
+    wrote = true;
     await maybeEmitMomentEmbed(tx, m.id);
   });
+  if (!wrote) {
+    await getStorage()
+      .deleteFile(key, row.storageMeta)
+      .catch((err: unknown) => {
+        logger.warn('orphan compress derived cleanup failed', err);
+      });
+  }
 }

@@ -177,7 +177,7 @@ describe('create emit moment.compress（spec fused-retrieval §4.2）', () => {
     expect(await compressRows()).toHaveLength(0);
   });
 
-  it('PATCH 不 emit compress（不能改媒体）', async () => {
+  it('PATCH 只改正文 → compress 行数不变', async () => {
     const chainId = await createChainWithMembers(alice.id);
     const imageId = await readyImage(alice.token);
     const created = await postMoment(alice.token, chainId, {
@@ -195,5 +195,55 @@ describe('create emit moment.compress（spec fused-retrieval §4.2）', () => {
       .send({ content: '改了正文' });
     expect(patched.status).toBe(200);
     expect(await compressRows()).toHaveLength(1);
+  });
+
+  it('PATCH 追加 JPEG → 新 compress payload {momentId,chainId,mediaId} 且新行 derivedStatus=pending', async () => {
+    const chainId = await createChainWithMembers(alice.id);
+    const oldId = await readyImage(alice.token);
+    const created = await postMoment(alice.token, chainId, {
+      type: 'media',
+      content: '',
+      happenedAt: '2026-08-29T10:00:00+08:00',
+      happenedTzOffset: -480,
+      mediaIds: [oldId],
+    });
+    const newId = await readyImage(alice.token);
+    const patched = await request(app)
+      .patch(`/api/moments/${created.body.id}`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ mediaIds: [oldId, newId] });
+    expect(patched.status).toBe(200);
+    const jobs = await compressRows();
+    expect(jobs).toHaveLength(2);
+    const payloads = jobs.map((j) => j.payload as { momentId: string; chainId: string; mediaId: string });
+    expect(payloads).toEqual(
+      expect.arrayContaining([
+        { momentId: created.body.id, chainId, mediaId: oldId },
+        { momentId: created.body.id, chainId, mediaId: newId },
+      ]),
+    );
+    expect((await db.select().from(media).where(eq(media.id, newId)))[0].derivedStatus).toBe('pending');
+  });
+
+  it('PATCH keep 的旧 JPEG 不第二行 compress', async () => {
+    const chainId = await createChainWithMembers(alice.id);
+    const oldId = await readyImage(alice.token);
+    const created = await postMoment(alice.token, chainId, {
+      type: 'media',
+      content: '',
+      happenedAt: '2026-08-29T10:00:00+08:00',
+      happenedTzOffset: -480,
+      mediaIds: [oldId],
+    });
+    expect(await compressRows()).toHaveLength(1);
+    const patched = await request(app)
+      .patch(`/api/moments/${created.body.id}`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ mediaIds: [oldId] });
+    expect(patched.status).toBe(200);
+    expect(await compressRows()).toHaveLength(1);
+    const [row] = await db.select().from(media).where(eq(media.id, oldId));
+    expect(row.momentId).toBe(created.body.id);
+    expect(row.status).toBe('ready');
   });
 });

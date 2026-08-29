@@ -39,6 +39,19 @@ async function destroyMediaObject(row: Media, result: SweepResult): Promise<bool
       });
     }
   }
+  if (row.derivedS3Key) {
+    try {
+      await storage.deleteFile(row.derivedS3Key, row.storageMeta);
+      result.deletedObjects += 1;
+    } catch (err) {
+      logger.warn('sweeper delete derived object failed（保留行，下轮重试）', {
+        mediaId: row.id,
+        key: row.derivedS3Key,
+        err: String(err),
+      });
+      return false;
+    }
+  }
   try {
     await storage.deleteFile(row.s3Key, row.storageMeta);
     result.deletedObjects += 1;

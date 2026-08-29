@@ -333,4 +333,61 @@ describe('handleMomentCompress（spec fused-retrieval §4.2）', () => {
   it('handlers 登记 moment.compress', () => {
     expect(handlers['moment.compress']).toBe(handleMomentCompress);
   });
+
+  it('orphan 后再走完 ready：UPDATE 0 行、不发 embed、派生列不写到 orphan 行、deleteFile 收到 derivedObjectKey', async () => {
+    const jpeg = await jpegOf(2000, 1000);
+    const { mediaId, momentId, chainId } = await seed({ size: jpeg.length });
+    storage.getObject.mockImplementation(async () => {
+      await db.update(media).set({ momentId: null, status: 'orphaned', orphanedAt: new Date() }).where(eq(media.id, mediaId));
+      return jpeg;
+    });
+    const embedBefore = (await db.select().from(outbox).where(eq(outbox.type, 'moment.embed'))).length;
+    await handleMomentCompress({ momentId, chainId, mediaId }, { push: mockPush });
+    const cols = await derivedCols(mediaId);
+    expect(cols.derivedStatus).toBe('pending'); // seed 默认 pending，禁止写成 ready
+    expect(cols.derivedS3Key).toBeNull();
+    const [row] = await db.select().from(media).where(eq(media.id, mediaId));
+    expect(row.momentId).toBeNull();
+    expect(row.status).toBe('orphaned');
+    expect(storage.deleteFile).toHaveBeenCalledWith(derivedObjectKey(chainId, momentId, mediaId), TEST_META);
+    expect((await db.select().from(outbox).where(eq(outbox.type, 'moment.embed'))).length).toBe(embedBefore);
+  });
+
+  it('ready 路径 deleteFile 失败只 warn，handler 不抛', async () => {
+    const jpeg = await jpegOf(2000, 1000);
+    const { mediaId, momentId, chainId } = await seed({ size: jpeg.length });
+    storage.getObject.mockImplementation(async () => {
+      await db.update(media).set({ momentId: null, status: 'orphaned', orphanedAt: new Date() }).where(eq(media.id, mediaId));
+      return jpeg;
+    });
+    storage.deleteFile.mockRejectedValueOnce(new Error('S3 down'));
+    await expect(handleMomentCompress({ momentId, chainId, mediaId }, { push: mockPush })).resolves.toBeUndefined();
+  });
+
+  it('skipped 路径 0 行不调用这次 deleteFile（无 upload）', async () => {
+    const jpeg = await jpegOf(64, 48);
+    const { mediaId, momentId, chainId } = await seed({ size: 1 }); // 压缩后必 ≥ 1 → skipped
+    storage.getObject.mockImplementation(async () => {
+      await db.update(media).set({ momentId: null, status: 'orphaned', orphanedAt: new Date() }).where(eq(media.id, mediaId));
+      return jpeg;
+    });
+    storage.deleteFile.mockClear();
+    await handleMomentCompress({ momentId, chainId, mediaId }, { push: mockPush });
+    expect(storage.uploadFile).not.toHaveBeenCalled();
+    expect(storage.deleteFile).not.toHaveBeenCalled();
+    expect((await derivedCols(mediaId)).derivedStatus).toBe('pending');
+  });
+
+  it('failed 路径 0 行不把 derived_status 写成 failed', async () => {
+    const { mediaId, momentId, chainId, s3Key } = await seed();
+    storage.getObject.mockImplementation(async () => {
+      await db.update(media).set({ momentId: null, status: 'orphaned', orphanedAt: new Date() }).where(eq(media.id, mediaId));
+      throw new ObjectTooLargeError(s3Key, MAX_IMAGE_BYTES);
+    });
+    await expect(handleMomentCompress({ momentId, chainId, mediaId }, { push: mockPush })).rejects.toMatchObject({
+      name: 'NonRetryableCompressError',
+    });
+    expect((await derivedCols(mediaId)).derivedStatus).toBe('pending');
+    expect((await db.select().from(media).where(eq(media.id, mediaId)))[0].momentId).toBeNull();
+  });
 });

@@ -102,4 +102,28 @@ describe('create/update emit moment.embed（spec §4.2 / §4.4）', () => {
     expect(patched.status).toBe(200);
     expect(await embedJobs()).toHaveLength(2);
   });
+
+  it('两张已 skipped 的 media 时刻 PATCH 删一张 → 新 moment.embed', async () => {
+    const chainId = await createChainWithMembers(alice.id);
+    const a = await readyImage(alice.token);
+    const b = await readyImage(alice.token);
+    const created = await postMoment(alice.token, chainId, {
+      type: 'media',
+      content: '',
+      happenedAt: '2026-08-29T10:00:00+08:00',
+      happenedTzOffset: -480,
+      mediaIds: [a, b],
+    });
+    expect(created.status).toBe(201);
+    await db.update(media).set({ derivedStatus: 'skipped' }).where(eq(media.id, a));
+    await db.update(media).set({ derivedStatus: 'skipped' }).where(eq(media.id, b));
+    expect(await embedJobs()).toHaveLength(0); // create 时 pending 挡住
+    const patched = await request(app)
+      .patch(`/api/moments/${created.body.id}`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ mediaIds: [a] });
+    expect(patched.status).toBe(200);
+    expect(await embedJobs()).toHaveLength(1);
+    expect((await embedJobs())[0].payload).toEqual({ momentId: created.body.id, chainId });
+  });
 });

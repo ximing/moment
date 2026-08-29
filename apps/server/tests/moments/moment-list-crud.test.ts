@@ -198,7 +198,7 @@ describe('GET /api/moments/:id', () => {
 });
 
 describe('PATCH /api/moments/:id', () => {
-  it('作者可改 content/happenedAt/isBackfill，媒体不可改', async () => {
+  it('作者可改 content/happenedAt/isBackfill；非 uuid mediaIds → VALIDATION_ERROR', async () => {
     const id = randomUUID();
     await db.insert(moments).values({
       id,
@@ -223,7 +223,8 @@ describe('PATCH /api/moments/:id', () => {
       .patch(`/api/moments/${id}`)
       .set('Authorization', `Bearer ${bob.token}`)
       .send({ mediaIds: ['x'] });
-    expect(mediaPatch.status).toBe(400); // dto .strict() 将 mediaIds 作为未知键拒绝（VALIDATION_ERROR）
+    expect(mediaPatch.status).toBe(400);
+    expect(mediaPatch.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('非作者（含 owner）→ 403 NOT_MOMENT_AUTHOR', async () => {

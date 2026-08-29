@@ -255,7 +255,8 @@ export class MomentService {
     return (await serializeMoments([m], userId, { includePrivate: true }))[0];
   }
 
-  /** 仅作者本人可改；媒体不可改（dto 层 .strict() 已拒绝 mediaIds/type 等未知键）。鉴权先于软删判断（同 get）。
+  /** 仅作者本人可改。媒体全量替换见 spec 2026-08-29-moment-edit-media §4；originalType 取 FOR UPDATE 后的行。
+   * 鉴权先于软删判断（同 get）。
    * 取舍声明（spec 未定义）：原作者被移出链后成员资格失效，ChainPolicy.require 抛 404，
    * 作者本人也无法再 update 自己的 moment——成员资格优先于作者身份，与读取侧一致。 */
   async update(userId: string, momentId: string, input: PatchMomentInput): Promise<MomentResponse> {
@@ -284,7 +285,116 @@ export class MomentService {
     // place 整体覆盖（spec §6）：undefined = 不变；null = 清空三列 + source；对象 = 赋值表整体覆盖
     const placeSet = input.place !== undefined ? placeColumnsOf(input.place) : null;
 
+    if (input.posterMediaId !== undefined) {
+      throw new HttpError(400, 'MEDIA_NOT_ALLOWED');
+    }
+
+    const copiedTmp: { key: string; metadata: StorageMetadata }[] = [];
     const updatedRow = await db.transaction(async (tx) => {
+      if (input.mediaIds !== undefined) {
+        const [locked] = await tx.select().from(moments).where(eq(moments.id, momentId)).limit(1).for('update');
+        if (!locked) throw new NotFoundError('MOMENT_NOT_FOUND');
+        if (locked.deletedAt) throw new HttpError(410, 'MOMENT_DELETED');
+        const originalType = locked.type; // 从此禁止再用事务外 m.type
+        if (originalType === 'video') throw new HttpError(400, 'MEDIA_NOT_ALLOWED');
+
+        const allRows = await tx.select().from(media).where(eq(media.momentId, momentId));
+        const posterIds = new Set(allRows.map((r) => r.posterMediaId).filter((id): id is string => Boolean(id)));
+        const contentRows = allRows.filter((r) => !posterIds.has(r.id));
+        const existingContentIds = contentRows.map((r) => r.id);
+        const existingAudios = contentRows.filter((r) => r.mime.startsWith('audio/'));
+        if (originalType === 'voice' && existingAudios.length !== 1) {
+          throw new HttpError(400, 'MEDIA_INVALID');
+        }
+        const originalAudioId = existingAudios[0]?.id ?? null;
+
+        const lockIds = [...new Set([...existingContentIds, ...input.mediaIds])];
+        const lockedMedia =
+          lockIds.length === 0
+            ? []
+            : await tx.select().from(media).where(inArray(media.id, lockIds)).for('update');
+        const byId = new Map(lockedMedia.map((r) => [r.id, r]));
+
+        const keep: typeof lockedMedia = [];
+        const incoming: typeof lockedMedia = [];
+        for (const id of input.mediaIds) {
+          const row = byId.get(id);
+          if (!row) throw new HttpError(400, 'MEDIA_INVALID');
+          if (posterIds.has(id)) throw new HttpError(400, 'MEDIA_INVALID');
+          if (row.momentId === momentId) {
+            keep.push(row);
+            continue;
+          }
+          if (row.momentId === null && row.uploaderId === userId && row.status === 'ready') {
+            incoming.push(row);
+            continue;
+          }
+          throw new HttpError(400, 'MEDIA_INVALID');
+        }
+        const resultRows = input.mediaIds.map((id) => byId.get(id)!);
+
+        // 矩阵（spec §4.6），仍零写
+        if (originalType === 'text') {
+          if (input.mediaIds.length > 0 && !resultRows.every((r) => r.mime.startsWith('image/'))) {
+            throw new HttpError(400, 'MEDIA_INVALID');
+          }
+        } else if (originalType === 'media') {
+          if (input.mediaIds.length === 0) throw new HttpError(400, 'MEDIA_COUNT_INVALID');
+          if (!resultRows.every((r) => r.mime.startsWith('image/'))) {
+            throw new HttpError(400, 'MEDIA_INVALID');
+          }
+        } else if (originalType === 'voice') {
+          const audios = resultRows.filter((r) => r.mime.startsWith('audio/'));
+          const rest = resultRows.filter((r) => !r.mime.startsWith('audio/'));
+          if (audios.length !== 1 || audios[0]!.id !== originalAudioId || !rest.every((r) => r.mime.startsWith('image/'))) {
+            throw new HttpError(400, 'MEDIA_INVALID');
+          }
+        }
+
+        const keepIds = new Set(input.mediaIds);
+        for (const id of existingContentIds) {
+          if (keepIds.has(id)) continue;
+          await tx
+            .update(media)
+            .set({ momentId: null, status: 'orphaned', orphanedAt: new Date() })
+            .where(eq(media.id, id));
+        }
+
+        const storage = getStorage();
+        const compressIds: string[] = [];
+        const incomingIds = new Set(incoming.map((r) => r.id));
+        for (const id of input.mediaIds) {
+          const row = byId.get(id)!;
+          const sortOrder = input.mediaIds.indexOf(id);
+          if (!incomingIds.has(id)) {
+            await tx.update(media).set({ sortOrder }).where(eq(media.id, id));
+            continue;
+          }
+          const ext = mime.extension(row.mime) || 'bin';
+          const finalKey = `chains/${locked.chainId}/${momentId}/${row.id}.${ext}`;
+          await storage.copyObject(row.s3Key, finalKey, row.storageMeta);
+          copiedTmp.push({ key: row.s3Key, metadata: row.storageMeta });
+          await tx
+            .update(media)
+            .set({
+              s3Key: finalKey,
+              momentId,
+              sortOrder,
+              storageMeta: row.storageMeta,
+              ...(isCompressibleMime(row.mime) ? { derivedStatus: 'pending' as const } : {}),
+            })
+            .where(eq(media.id, row.id));
+          if (isCompressibleMime(row.mime)) compressIds.push(row.id);
+        }
+
+        if (originalType === 'text' && input.mediaIds.length >= 1) {
+          await tx.update(moments).set({ type: 'media' }).where(eq(moments.id, momentId));
+        }
+        for (const mediaId of compressIds) {
+          await emitOutbox(tx, OUTBOX_MOMENT_COMPRESS, { momentId, chainId: locked.chainId, mediaId });
+        }
+      }
+
       // happenedAt 或 happenedTzOffset 任一变更即按全量新值重算 wall_date（spec memories-today §1；
       // 单独改 tzOffset 不改时间点也会改墙钟归日，必须重算）
       const recomputeWallDate = input.happenedAt !== undefined || input.happenedTzOffset !== undefined;
@@ -330,6 +440,12 @@ export class MomentService {
       await maybeEmitMomentEmbed(tx, momentId);
       return row;
     });
+    const storage = getStorage();
+    for (const t of copiedTmp) {
+      await storage.deleteFile(t.key, t.metadata).catch((err: unknown) => {
+        logger.warn(`post-commit tmp cleanup failed (lifecycle will cover): ${t.key}`, err);
+      });
+    }
     return (await serializeMoments([updatedRow], userId, { includePrivate: true }))[0];
   }
 

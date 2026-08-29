@@ -71,6 +71,7 @@ async function insertUnboundMedia(opts: {
   status?: 'uploading' | 'ready' | 'orphaned';
   createdAt?: Date;
   orphanedAt?: Date | null;
+  derivedS3Key?: string | null;
 }): Promise<{ userId: string; mediaId: string }> {
   const userId = randomUUID();
   await db.insert(users).values({ id: userId, email: `${userId}@test.com`, passwordHash: 'x', nickname: 'u' });
@@ -87,6 +88,7 @@ async function insertUnboundMedia(opts: {
     uploadId: null,
     orphanedAt: opts.orphanedAt ?? null,
     createdAt: opts.createdAt ?? new Date(),
+    derivedS3Key: opts.derivedS3Key ?? null,
   });
   return { userId, mediaId };
 }
@@ -307,6 +309,31 @@ describe('sweepOrphanedMedia（design §6：orphanedAt 超 30 天 → 对象 + �
     expect(result.deletedRows).toBe(0);
     expect(storage.deleteFile).not.toHaveBeenCalled();
     expect(await db.select().from(media).where(eq(media.id, expired.mediaId))).toHaveLength(1);
+  });
+
+  it('夹具带 derivedS3Key：deletedObjects = 派生 + 原图 = 2；派生 deleteFile 失败不删行', async () => {
+    const now = new Date('2026-08-27T12:00:00Z');
+    const expired = await insertUnboundMedia({
+      status: 'orphaned',
+      orphanedAt: new Date(now.getTime() - 31 * 86_400_000),
+      derivedS3Key: 'chains/c/m/x.derived.webp',
+    });
+    const result = await sweepOrphanedMedia(now);
+    expect(result.deletedObjects).toBe(2);
+    expect(result.deletedRows).toBe(1);
+    expect(storage.deleteFile).toHaveBeenCalledWith('chains/c/m/x.derived.webp', TEST_META);
+    expect(storage.deleteFile).toHaveBeenCalledWith(expect.stringContaining(expired.mediaId), TEST_META);
+
+    const expired2 = await insertUnboundMedia({
+      status: 'orphaned',
+      orphanedAt: new Date(now.getTime() - 31 * 86_400_000),
+      derivedS3Key: 'chains/c/m/y.derived.webp',
+    });
+    storage.deleteFile.mockRejectedValueOnce(new Error('S3 down'));
+    const failed = await sweepOrphanedMedia(now);
+    expect(failed.deletedRows).toBe(0);
+    expect(failed.deletedObjects).toBe(0);
+    expect(await db.select().from(media).where(eq(media.id, expired2.mediaId))).toHaveLength(1);
   });
 });
 

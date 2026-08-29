@@ -191,15 +191,38 @@ describe('POST moments with posterMediaId（视频封面绑定）', () => {
     expect(asText.body.error.code).toBe('VALIDATION_ERROR');
   });
 
-  it('PATCH 传 posterMediaId → 400 VALIDATION_ERROR（封面发布后不可改）', async () => {
+  it('PATCH 传 posterMediaId → 400 MEDIA_NOT_ALLOWED；视频行 / poster 行 momentId 与 s3_key 未动', async () => {
     const { chainId, videoId, posterId } = await setup();
     const created = await postMoment(alice.token, chainId, videoBody(videoId, posterId));
+    const [beforeV] = await db.select().from(media).where(eq(media.id, videoId));
+    const [beforeP] = await db.select().from(media).where(eq(media.id, posterId));
     const res = await request(app)
       .patch(`/api/moments/${created.body.id}`)
       .set('Authorization', `Bearer ${alice.token}`)
       .send({ posterMediaId: posterId });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.code).toBe('MEDIA_NOT_ALLOWED');
+    const [afterV] = await db.select().from(media).where(eq(media.id, videoId));
+    const [afterP] = await db.select().from(media).where(eq(media.id, posterId));
+    expect(afterV.momentId).toBe(created.body.id);
+    expect(afterP.momentId).toBe(created.body.id);
+    expect(afterV.s3Key).toBe(beforeV.s3Key);
+    expect(afterP.s3Key).toBe(beforeP.s3Key);
+  });
+
+  it('PATCH posterMediaId: null → 400 MEDIA_NOT_ALLOWED；视频/poster 行未动', async () => {
+    const { chainId, videoId, posterId } = await setup();
+    const created = await postMoment(alice.token, chainId, videoBody(videoId, posterId));
+    const res = await request(app)
+      .patch(`/api/moments/${created.body.id}`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ posterMediaId: null });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('MEDIA_NOT_ALLOWED');
+    const [v] = await db.select().from(media).where(eq(media.id, videoId));
+    const [p] = await db.select().from(media).where(eq(media.id, posterId));
+    expect(v.momentId).toBe(created.body.id);
+    expect(p.momentId).toBe(created.body.id);
   });
 
   it('软删带 poster 的 video moment：handleMomentDeleted 后 poster 行随视频行同标 orphaned', async () => {
