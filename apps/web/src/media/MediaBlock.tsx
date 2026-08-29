@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { Play } from 'lucide-react';
 import { Icon } from '@/ui/Icon';
@@ -7,8 +7,9 @@ import { cardDisplayUrl, originalDisplayUrl, posterDisplayUrl } from '@/lib/medi
 // 时刻媒体块（C 端总规范 §6.1 / §10）：0/1/2–9/视频都是一等分支。
 // 0 → 无媒体 DOM；1 图按固有像素宽显示，最大不超过内容列（max-w-full）；
 // 2 图两列、3–9 图三列方形格，点击回报被点 index；
-// 视频先 16:9 播放面、点后出原生 controls。卡片优先 derivedUrl，灯箱/播放用 url；
-// 均为接口签发的预签名 GET，<img>/<video> 直出，不再 fetch blob。
+// 视频：封面 overlay 盖在 preload=none 的 <video> 上，同一次点击里 play()，
+// playing 后再露原生 controls（避免点两次、封面先卸成黑场）。
+// 卡片优先 derivedUrl，灯箱/播放用 url；均为接口签发的预签名 GET，直出。
 
 /* ---------------------------------------------------------------------------
  * 媒体加载占位动效：与 Feedback Skeleton 同构的低对比呼吸（--skeleton-cycle）。
@@ -121,28 +122,10 @@ function ImageOne({
 }
 
 function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
-  const [on, setOn] = useState(Boolean(shareToken));
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [started, setStarted] = useState(false);
   const posterUrl = posterDisplayUrl(media, shareToken);
   const url = originalDisplayUrl(media, shareToken);
-  if (!on) {
-    return (
-      <button
-        type="button"
-        aria-label="播放视频"
-        onClick={() => setOn(true)}
-        className="relative aspect-video w-full overflow-hidden rounded-surface-lg bg-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-offset-focus focus-visible:ring-offset-bg"
-      >
-        {posterUrl && (
-          <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        )}
-        <span className="absolute inset-0 grid place-items-center">
-          <span className="grid h-12 w-12 place-items-center rounded-full bg-action text-action-fg">
-            <Icon icon={Play} size={20} className="ml-0.5 fill-current" />
-          </span>
-        </span>
-      </button>
-    );
-  }
   if (!url) {
     return (
       <>
@@ -154,12 +137,44 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
       </>
     );
   }
+
+  const start = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    // 必须在同一次用户手势里调 play()：setState 后再 effect 会被 Safari 拦未静音自动播放。
+    const playing = el.play();
+    if (playing !== undefined) void playing.catch(() => undefined);
+  };
+
   return (
-    <video
-      controls
-      src={url}
-      poster={posterUrl ?? undefined}
-      className="aspect-video w-full rounded-surface-lg bg-ink"
-    />
+    <div className="relative aspect-video w-full overflow-hidden rounded-surface-lg bg-ink">
+      <video
+        ref={videoRef}
+        src={url}
+        poster={posterUrl ?? undefined}
+        preload="none"
+        playsInline
+        controls={started}
+        className="h-full w-full bg-ink"
+        onPlaying={() => setStarted(true)}
+      />
+      {!started && (
+        <button
+          type="button"
+          aria-label="播放视频"
+          onClick={start}
+          className="absolute inset-0 focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset focus-visible:ring-offset-focus focus-visible:ring-offset-bg"
+        >
+          {posterUrl && (
+            <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          )}
+          <span className="absolute inset-0 grid place-items-center">
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-action text-action-fg">
+              <Icon icon={Play} size={20} className="ml-0.5 fill-current" />
+            </span>
+          </span>
+        </button>
+      )}
+    </div>
   );
 }

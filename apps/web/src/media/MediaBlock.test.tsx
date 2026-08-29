@@ -8,7 +8,7 @@ import { MediaBlock } from './MediaBlock';
 // - 0 媒体：不渲染任何媒体 DOM；
 // - 1 图：按声明宽高比（64×48 fixture 经 width/height 属性给出固有比例），点击回报 onOpen(0)；
 // - 2 图：两列方形格；9 图：完整 3×3 格，每格回调回报 0–8；
-// - 视频：先 16:9 播放面，点击后才出现原生 controls 的 <video>；
+// - 视频：封面 overlay 盖在 preload=none 的 <video> 上；点击调用 play()，playing 后才出 controls；
 // - URL：直出接口字段。https 预签名不拼 ?st=；相对 `/api/media` 分享态才拼 ?st=。
 
 function image(
@@ -112,19 +112,27 @@ describe('媒体数量分支', () => {
 });
 
 describe('视频分支', () => {
-  it('先渲染 16:9 播放面（无 video 元素），点击后出现原生 controls', async () => {
+  it('封面 overlay 盖在已挂载的 video 上；点击 play()，playing 后出 controls', async () => {
     const user = userEvent.setup();
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('playing'));
+      return Promise.resolve();
+    });
     const { container } = render(<MediaBlock media={[video('media-v1')]} />);
 
     const playSurface = screen.getByRole('button', { name: '播放视频' });
-    expect(playSurface.className).toContain('aspect-video');
-    expect(container.querySelector('video')).toBeNull();
-
-    await user.click(playSurface);
     const player = container.querySelector('video');
     expect(player).not.toBeNull();
-    expect(player!.controls).toBe(true);
+    expect(player!.controls).toBe(false);
     expect(player).toHaveAttribute('src', '/api/media/media-v1');
+    expect(player).toHaveAttribute('preload', 'none');
+    expect(playSurface.className).toContain('absolute');
+
+    await user.click(playSurface);
+    expect(play).toHaveBeenCalledOnce();
+    expect(container.querySelector('video')!.controls).toBe(true);
+    expect(screen.queryByRole('button', { name: '播放视频' })).toBeNull();
+    play.mockRestore();
   });
 });
 
@@ -163,8 +171,9 @@ describe('URL 语义', () => {
     const shareVideo = render(<MediaBlock media={[video('media-v1')]} shareToken={token} />);
     const player = shareVideo.container.querySelector('video');
     expect(player).not.toBeNull();
-    expect(player!.controls).toBe(true);
+    expect(player!.controls).toBe(false);
     expect(player).toHaveAttribute('src', '/api/media/media-v1?st=tok%20en');
+    expect(shareVideo.getByRole('button', { name: '播放视频' })).toBeTruthy();
 
     const derived = render(
       <MediaBlock
