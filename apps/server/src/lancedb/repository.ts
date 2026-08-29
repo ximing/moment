@@ -42,7 +42,7 @@ function toRow(input: MomentVectorInput): MomentVectorRow {
 export async function upsertMomentVector(input: MomentVectorInput): Promise<void> {
   const row = toRow(input);
   const table = getLanceTable();
-  await table.mergeInsert('id').whenMatchedUpdateAll().whenNotMatchedInsertAll().execute([row]);
+  await table.mergeInsert('id').whenMatchedUpdateAll().whenNotMatchedInsertAll().execute([{ ...row }]);
 }
 
 export async function listVectorsByMomentId(momentId: string): Promise<MomentVectorRow[]> {
