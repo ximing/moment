@@ -119,7 +119,7 @@ async function derivedCols(mediaId: string) {
 }
 
 describe('handleMomentCompress（spec fused-retrieval §4.2）', () => {
-  it('JPEG fixture → ready，边 ≤512，mime webp，upload 派生 key，getObject 读原图 s3Key', async () => {
+  it('JPEG fixture → ready，边 ≤1280，mime webp，upload 派生 key，getObject 读原图 s3Key', async () => {
     const jpeg = await jpegOf(2000, 1000);
     const { mediaId, momentId, chainId, s3Key } = await seed({ size: jpeg.length });
     storage.getObject.mockResolvedValue(jpeg);
@@ -137,8 +137,8 @@ describe('handleMomentCompress（spec fused-retrieval §4.2）', () => {
     expect(row.derivedS3Key).toBe(key);
     expect(row.derivedMime).toBe('image/webp');
     expect(row.derivedSize).toBe(uploaded.length);
-    expect(row.derivedWidth).toBe(512);
-    expect(row.derivedHeight).toBe(256);
+    expect(row.derivedWidth).toBe(1280);
+    expect(row.derivedHeight).toBe(640);
   });
 
   it('派生 key 用重读的 moments.chainId，不消费 payload.chainId', async () => {

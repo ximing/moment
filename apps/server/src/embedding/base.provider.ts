@@ -4,7 +4,7 @@ export type EmbeddingModality = 'text' | 'image' | 'vl';
 
 export interface EmbeddingRequest {
   text?: string;
-  /** 派生 WebP 的 data URI。禁止原图、禁止公网 URL。 */
+  /** 内存压的 embedding WebP data URI（1024 / q80）。禁止原图、禁止公网 URL、禁止入库。 */
   imageDataUri?: string;
 }
 

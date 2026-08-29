@@ -12,13 +12,13 @@
 - **标量在 MySQL，向量在 LanceDB。** 不把向量字节写入 MySQL。LanceDB 是可丢的派生索引：volume 丢失只能回填重打 embedding API。
 - **LanceDB 只挂 HTTP server 进程。** worker **不得** `import '@lancedb/lancedb'`、不 `connect`。worker 经 BA HTTP 把向量写入 server（对齐 aimo `Authorization: Bearer <BA_AUTH_TOKEN>`）。Docker 只给 server 挂 `LANCEDB_PATH` volume。
 - **Embedding** 独立三态 `getEmbeddingProvider()`，对齐 aimo `MultimodalEmbeddingService` 与其 `.env` 变量名/默认值（不抄真实 key）：DashScope `qwen3-vl-embedding`、2560 维、`dense`。不复用 `LLM_*`。空 key 或 `MULTIMODAL_EMBEDDING_ENABLED=false` 跳过向量路，标量过滤不停。**写入期** embed 在 worker；**查询期** embed（搜索 `text`）在 server 请求线程——两进程都读同一组 `DASHSCOPE_*` / `MULTIMODAL_*`。
-- **嵌什么**：正文 + 转写 + **人名 + 地名** + 派生图（A+B）。人名地名与派生图像素会出域到 DashScope，写进 §8。
-- **一条时刻的向量**：主向量 = 正文（含人名地名）+ **第一张**派生图走 `vl`（`enable_fusion=true`，返回一条融合向量）；其余每张派生图各一条 `image` 向量，行上带 `momentId`，召回后按时刻去重取 **最小 `_distance`**（Lance 默认 L2，距离越小越相似）。`qwen3-vl-embedding` 不支持 `multi_images` 模态键；本 spec 也不把多图塞进一次 fusion。
-- **派生图不是裁切缩略图**：整幅保留、等比缩小、最长边 **512**、**WebP 质量 75**。时间线卡片用派生图；Lightbox 用现有高清档（上传时最长边 2048 JPEG 0.85）。异步、不挡发布。`image/gif`、`image/heic`、`image/heif` **不压**（`derived_status` 保持 NULL，不读像素、不引入 libheif；卡片继续用原图）。
-- **图给模型的方式 = 派生 WebP 的 base64 data URI**，不是预签名 URL。对象存储是私有桶（`ATTACHMENT_S3_IS_PUBLIC` 恒 false），DashScope 拉不到 MinIO/S3 预签名。worker 对 **`derived_s3_key`** 有界 `getObject`（非原图）。
+- **嵌什么**：正文 + 转写 + **人名 + 地名** + 图（A+B）。人名地名与图像素会出域到 DashScope，写进 §8。
+- **一条时刻的向量**：主向量 = 正文（含人名地名）+ **第一张**图走 `vl`（`enable_fusion=true`，返回一条融合向量）；其余每张图各一条 `image` 向量，行上带 `momentId`，召回后按时刻去重取 **最小 `_distance`**（Lance 默认 L2，距离越小越相似）。`qwen3-vl-embedding` 不支持 `multi_images` 模态键；本 spec 也不把多图塞进一次 fusion。
+- **派生图不是裁切缩略图**：整幅保留、等比缩小、最长边 **1280**、**WebP 质量 85**。时间线卡片用派生图；Lightbox 用现有高清档（上传时最长边 2048 JPEG 0.85）。异步、不挡发布。`image/gif`、`image/heic`、`image/heif` **不压**（`derived_status` 保持 NULL，不读像素、不引入 libheif；卡片继续用原图）。
+- **图给模型的方式 = 内存压的 embedding WebP（最长边 1024、质量 80）base64 data URI**，不是预签名 URL、**不入库**。对象存储是私有桶（`ATTACHMENT_S3_IS_PUBLIC` 恒 false），DashScope 拉不到 MinIO/S3 预签名。worker 对 **原图 `s3_key`** 有界 `getObject`，sharp 压完只放进请求体。
 - **M1 例外（显式）**：
-  1. 仅 worker `moment.compress` 允许有界读取**原图**对象字节（`getObject`，上限 `MAX_IMAGE_BYTES`）。
-  2. 仅 worker `moment.embed` 允许有界读取 **derived** 字节（同一上限），用于组 DashScope data URI。
+  1. 仅 worker `moment.compress` 允许有界读取**原图**对象字节（`getObject`，上限 `MAX_IMAGE_BYTES`），写出展示派生 1280 WebP 85 并入库。
+  2. 仅 worker `moment.embed` 允许有界读取**原图**对象字节（同一上限），内存压 1024 WebP 80 组 DashScope data URI；**禁止** `uploadFile` 该 buffer，**禁止**读 `derived_s3_key`。
   请求线程仍零读像素。不得把例外扩到 extract / search / controller / 其它 handler。
 - **任务可见性**：链设置「处理中」分区，仅 **owner**。只投影 `moment.compress` / `moment.embed`。转写/逆地理/抽取不进此页。v1 无重试端点。
 - **意图理解**：搜索框走 LLM，结构化 `{ personNames, place, time, text }`。空 `LLM_API_KEY` 整句当 `text`。那年今日入口不动。意图**不抽 tag**；tag 只来自轨上/请求体 `tagId`。
@@ -34,13 +34,13 @@
 手动/EXIF/AI 写路径：仍完全走 M1（persons/place/source 赋值表/outbox geocode+extract）。本 spec 不改 create/update 请求体。
 
 压缩：moments create 提交后，对该时刻所有静态可压图（含视频 poster 行；排除 GIF/HEIC/HEIF）同事务 emit moment.compress
-  → worker getObject 有界读原图 → sharp 等比 512 WebP 75 → uploadFile 派生 key
+  → worker getObject 有界读原图 → sharp 等比 1280 WebP 85 → uploadFile 派生 key
   → 回写 media.derived_* ；该时刻全部可压图终态（ready/skipped/failed，无 pending）且 hash 变后 emit moment.embed
 
 无待压图时刻：create/update 若 embed_hash 变，同事务直接 emit moment.embed
 （PATCH 不能改 mediaIds，故 update 不再发 compress，只可能发 embed）
 
-向量：worker 调 DashScope（vl / text / image，图为 derived data URI）→ POST /api/internal/embeddings（BA）
+向量：worker 读原图、内存压 1024 WebP 80（不入库）→ DashScope（vl / text / image，图为 data URI）→ POST /api/internal/embeddings（BA）
   → server upsert LanceDB；全部 upsert 成功后 worker 写 moments.embed_hash
 
 chip 过滤：GET /api/feed | GET /api/chains/:chainId/moments 加 person_id/place/happened_from/to
@@ -379,10 +379,10 @@ HTTP：`POST {DASHSCOPE_BASE_URL}/services/embeddings/multimodal-embedding/multi
 1. 重读 media：不存在 / 无 moment / 时刻已软删 → 跳过（outbox done，不写 failed）。
 2. mime 非静态可压图（含 GIF/HEIC/HEIF）→ 跳过，**不改** `derived_*`（保持 NULL；create 本不应 emit）。
 3. `getObject(s3Key, storageMeta, MAX_IMAGE_BYTES)`。超限 → 置 `failed`，throw `NonRetryableCompressError`。
-4. `sharp(buf).rotate().resize({ width:512, height:512, fit:'inside', withoutEnlargement:true }).webp({ quality:75 })`。解码失败 → 置 `failed`，throw `NonRetryableCompressError`。
+4. `sharp(buf).rotate().resize({ width:1280, height:1280, fit:'inside', withoutEnlargement:true }).webp({ quality:85 })`。解码失败 → 置 `failed`，throw `NonRetryableCompressError`。
 5. 若输出 length ≥ 原 `size` → `skipped`，不 upload。
 6. 否则 `uploadFile(derivedKey, webpBuf)`（现网签名无 meta，写入当前桶；MVP 单桶，与原图同一 `storage_meta` 快照），写 derived 列 `ready`（key / mime=`image/webp` / size / width / height / status）。
-7. 若该 `momentId` 下所有静态可压图均已终态（`derived_status ∈ {ready,skipped,failed}`，无 `pending`）且 `computeEmbedHash` ≠ `embed_hash` → 同事务 `emitOutbox(moment.embed)`。**failed 图不阻塞 embed**（组装时只纳入 ready 图；failed 重压成功会改 fingerprint 再嵌）。
+7. 若该 `momentId` 下所有静态可压图均已终态（`derived_status ∈ {ready,skipped,failed}`，无 `pending`）且 `computeEmbedHash` ≠ `embed_hash` → 同事务 `emitOutbox(moment.embed)`。**failed 图不阻塞 embed**（组装时只纳入 ready 图；failed 重压成功会改 fingerprint 再嵌）。embed 读的是原图，不消费刚写入的 derived 对象。
 
 create：对每张静态可压图 emit compress（置 pending）。GIF/HEIC/HEIF **不** emit、`derived_status` 保持 NULL。无待压图且 hash 变 → 直接 embed。已 `ready` 且 hash 未变不重发（create 新媒体行派生列 NULL，故首次必压）。
 
@@ -396,7 +396,7 @@ PATCH 不能改媒体，故 update 不发 compress。
 2. `getEmbeddingProvider()===null` → 跳过（不写 hash，恢复 key 后回填/下次变化再嵌）。
 3. `computeEmbedHash === embed_hash` → 跳过。
 4. 组装文本：`content`、`transcript`、人名排序、`place_name`，用换行拼接，去首尾空。空则无文本。
-5. 图：`derived_status=ready` 的静态可压图（**含 poster 行**），按 `sortOrder,id`。第一张 = 下标 0。对每张 `getObject(derived_s3_key, storageMeta, MAX_IMAGE_BYTES)` 做成 `data:image/webp;base64,...`。
+5. 图：`derived_status=ready` 的静态可压图（**含 poster 行**），按 `sortOrder,id`。第一张 = 下标 0。对每张 `getObject(s3_key, storageMeta, MAX_IMAGE_BYTES)`（原图）再 `compressToEmbedWebp`（最长边 1024、质量 80）做成 `data:image/webp;base64,...`。该 buffer **禁止** `uploadFile`。解码失败 → `NonRetryableEmbeddingError`。
 6. 先 HTTP `DELETE {INTERNAL_API_BASE_URL}/api/internal/embeddings/:momentId` 清该 moment 旧向量（handler 在 worker，必须 HTTP，禁止直连 Lance）。
 7. 调用（每次 BA POST 一条）：
    - 有文本且有第一张：`vl` { text, imageDataUri } → upsert `kind=moment` `id=moment:{momentId}`

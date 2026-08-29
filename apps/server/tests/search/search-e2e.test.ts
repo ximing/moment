@@ -219,8 +219,8 @@ describe('融合检索 e2e（spec §9：建时刻人+地点+图 → compress moc
     expect(mediaRow.derivedStatus).toBe('ready');
     expect(mediaRow.derivedMime).toBe('image/webp');
     expect(mediaRow.derivedS3Key).toBe(derivedObjectKey(chainId, momentId, mediaId));
-    expect(mediaRow.derivedWidth).toBe(512);
-    expect(mediaRow.derivedHeight).toBe(256);
+    expect(mediaRow.derivedWidth).toBe(1280);
+    expect(mediaRow.derivedHeight).toBe(640);
     expect(objects.has(mediaRow.derivedS3Key as string)).toBe(true);
 
     const [momentRow] = await db.select().from(moments).where(eq(moments.id, momentId));

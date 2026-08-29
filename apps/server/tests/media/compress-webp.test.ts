@@ -3,8 +3,11 @@ import {
   DERIVED_MAX_EDGE,
   DERIVED_MIME,
   DERIVED_WEBP_QUALITY,
+  EMBED_MAX_EDGE,
+  EMBED_WEBP_QUALITY,
   NonRetryableCompressError,
   compressToDerivedWebp,
+  compressToEmbedWebp,
 } from '../../src/media/compress.js';
 
 async function jpegOf(width: number, height: number): Promise<Buffer> {
@@ -24,21 +27,31 @@ describe('NonRetryableCompressError', () => {
   });
 });
 
-describe('compressToDerivedWebp（spec §0 / §4.2：最长边 512、WebP 75、不放大）', () => {
+describe('compressToDerivedWebp（展示：最长边 1280、WebP 85、不放大）', () => {
   it('常量锁定', () => {
-    expect(DERIVED_MAX_EDGE).toBe(512);
-    expect(DERIVED_WEBP_QUALITY).toBe(75);
+    expect(DERIVED_MAX_EDGE).toBe(1280);
+    expect(DERIVED_WEBP_QUALITY).toBe(85);
+    expect(EMBED_MAX_EDGE).toBe(1024);
+    expect(EMBED_WEBP_QUALITY).toBe(80);
     expect(DERIVED_MIME).toBe('image/webp');
   });
 
-  it('2000×1000 JPEG → webp，最长边 512（512×256），不读原图像素出域以外的副作用', async () => {
+  it('2000×1000 JPEG → 展示 webp 最长边 1280（1280×640）', async () => {
     const out = await compressToDerivedWebp(await jpegOf(2000, 1000));
-    expect(out.width).toBe(512);
-    expect(out.height).toBe(256);
+    expect(out.width).toBe(1280);
+    expect(out.height).toBe(640);
     const meta = await sharp(out.buffer).metadata();
     expect(meta.format).toBe('webp');
-    expect(meta.width).toBe(512);
-    expect(meta.height).toBe(256);
+    expect(meta.width).toBe(1280);
+    expect(meta.height).toBe(640);
+  });
+
+  it('2000×1000 JPEG → embedding webp 最长边 1024（1024×512），不入库由调用方保证', async () => {
+    const out = await compressToEmbedWebp(await jpegOf(2000, 1000));
+    expect(out.width).toBe(1024);
+    expect(out.height).toBe(512);
+    const meta = await sharp(out.buffer).metadata();
+    expect(meta.format).toBe('webp');
   });
 
   it('withoutEnlargement：64×48 不放大', async () => {

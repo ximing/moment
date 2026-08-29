@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { media, momentPersons, moments, persons } from '../db/schema.js';
+import { compressToEmbedWebp, NonRetryableCompressError } from '../media/compress.js';
 import { isCompressibleMime } from '../media/derived.js';
 import { assembleEmbedText, computeEmbedHash, derivedFingerprintOf } from '../moments/embed-hash.js';
 import { getStorage } from '../storage/factory.js';
@@ -20,7 +21,7 @@ function dataUri(buf: Buffer): string {
 
 /**
  * moment.embed（spec fused-retrieval §4.3）。
- * 禁止改 outbox.status；禁止 import lancedb。
+ * 读原图、内存压 1024 WebP 80 发模型；禁止 upload 该 buffer、禁止改 outbox.status、禁止 import lancedb。
  */
 export async function handleMomentEmbed(
   payload: Record<string, unknown>,
@@ -63,11 +64,15 @@ export async function handleMomentEmbed(
   const images: Array<{ mediaId: string; uri: string }> = [];
   for (const row of ready) {
     try {
-      const buf = await getStorage().getObject(row.derivedS3Key as string, row.storageMeta, MAX_IMAGE_BYTES);
-      images.push({ mediaId: row.id, uri: dataUri(buf) });
+      const orig = await getStorage().getObject(row.s3Key, row.storageMeta, MAX_IMAGE_BYTES);
+      const out = await compressToEmbedWebp(orig);
+      images.push({ mediaId: row.id, uri: dataUri(out.buffer) });
     } catch (err) {
       if (err instanceof Error && err.name === 'ObjectTooLargeError') {
         throw new NonRetryableEmbeddingError('OBJECT_TOO_LARGE', err);
+      }
+      if (err instanceof NonRetryableCompressError) {
+        throw new NonRetryableEmbeddingError(err.message, err);
       }
       throw err;
     }

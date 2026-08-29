@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import { randomUUID } from 'node:crypto';
 import nock from 'nock';
+import sharp from 'sharp';
 import { eq } from 'drizzle-orm';
 import { MAX_IMAGE_BYTES } from '@moment/dto';
 import { config } from '../../src/config.js';
@@ -24,8 +25,14 @@ import type { PushService } from '../../src/push/push-service.js';
 
 const mockPush = { send: jest.fn() } as unknown as PushService;
 const origin = new URL(config.INTERNAL_API_BASE_URL);
-const WEBP = Buffer.from('RIFF....WEBP', 'utf8');
-const DATA_URI = `data:image/webp;base64,${WEBP.toString('base64')}`;
+
+async function jpegOf(width: number, height: number): Promise<Buffer> {
+  return sharp({
+    create: { width, height, channels: 3, background: { r: 200, g: 20, b: 20 } },
+  })
+    .jpeg({ quality: 90 })
+    .toBuffer();
+}
 
 let storage: MockStorage;
 const embedCalls: Array<{ text?: string; imageDataUri?: string }> = [];
@@ -85,14 +92,15 @@ async function addReadyImage(opts: {
   ownerId: string;
   sortOrder: number;
   mediaId?: string;
-}): Promise<{ mediaId: string; derivedKey: string }> {
+}): Promise<{ mediaId: string; s3Key: string; derivedKey: string }> {
   const mediaId = opts.mediaId ?? randomUUID();
+  const s3Key = `chains/${opts.chainId}/${opts.momentId}/${mediaId}.jpg`;
   const derivedKey = derivedObjectKey(opts.chainId, opts.momentId, mediaId);
   await db.insert(media).values({
     id: mediaId,
     momentId: opts.momentId,
     uploaderId: opts.ownerId,
-    s3Key: `chains/${opts.chainId}/${opts.momentId}/${mediaId}.jpg`,
+    s3Key,
     mime: 'image/jpeg',
     size: 2048,
     sortOrder: opts.sortOrder,
@@ -101,17 +109,17 @@ async function addReadyImage(opts: {
     derivedS3Key: derivedKey,
     derivedMime: 'image/webp',
     derivedSize: 100,
-    derivedWidth: 512,
-    derivedHeight: 256,
+    derivedWidth: 1280,
+    derivedHeight: 640,
     derivedStatus: 'ready',
   });
-  return { mediaId, derivedKey };
+  return { mediaId, s3Key, derivedKey };
 }
 
 beforeEach(async () => {
   await resetDb();
   storage = installMockStorage();
-  storage.getObject.mockResolvedValue(WEBP);
+  storage.getObject.mockResolvedValue(await jpegOf(2000, 1000));
   setEmbeddingProvider(mockProvider());
   embedCalls.length = 0;
   nock.cleanAll();
@@ -129,7 +137,7 @@ afterEach(() => {
 afterAll(closeDb);
 
 describe('handleMomentEmbed（spec fused-retrieval §4.3）', () => {
-  it('vl + 附图：先 DELETE 再两条 POST；读 derived key 不是原图；写 embed_hash；data URI', async () => {
+  it('vl + 附图：先 DELETE 再两条 POST；读原图 key 内存压 1024 WebP，不 upload；写 embed_hash', async () => {
     const { momentId, chainId, ownerId } = await seedMoment({ content: '正文', placeName: '公园' });
     const first = await addReadyImage({ momentId, chainId, ownerId, sortOrder: 0, mediaId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
     const extra = await addReadyImage({ momentId, chainId, ownerId, sortOrder: 1, mediaId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' });
@@ -148,11 +156,18 @@ describe('handleMomentEmbed（spec fused-retrieval §4.3）', () => {
 
     await handleMomentEmbed({ momentId, chainId }, { push: mockPush });
 
-    expect(storage.getObject).toHaveBeenCalledWith(first.derivedKey, {}, MAX_IMAGE_BYTES);
-    expect(storage.getObject).toHaveBeenCalledWith(extra.derivedKey, {}, MAX_IMAGE_BYTES);
-    expect(storage.getObject.mock.calls.every((c) => String(c[0]).includes('.derived.webp'))).toBe(true);
-    expect(embedCalls[0]).toEqual({ text: expect.stringContaining('正文'), imageDataUri: DATA_URI });
-    expect(embedCalls[1]).toEqual({ imageDataUri: DATA_URI });
+    expect(storage.getObject).toHaveBeenCalledWith(first.s3Key, {}, MAX_IMAGE_BYTES);
+    expect(storage.getObject).toHaveBeenCalledWith(extra.s3Key, {}, MAX_IMAGE_BYTES);
+    expect(storage.getObject.mock.calls.every((c) => String(c[0]).endsWith('.jpg'))).toBe(true);
+    expect(storage.uploadFile).not.toHaveBeenCalled();
+    expect(embedCalls[0]!.text).toEqual(expect.stringContaining('正文'));
+    expect(embedCalls[0]!.imageDataUri).toMatch(/^data:image\/webp;base64,/);
+    expect(embedCalls[1]).toEqual({ imageDataUri: embedCalls[0]!.imageDataUri });
+    const embedBuf = Buffer.from(embedCalls[0]!.imageDataUri!.split(',')[1]!, 'base64');
+    const embedMeta = await sharp(embedBuf).metadata();
+    expect(embedMeta.format).toBe('webp');
+    expect(embedMeta.width).toBe(1024);
+    expect(embedMeta.height).toBe(512);
     expect(posts).toHaveLength(2);
     expect(posts[0]).toMatchObject({ momentId, chainId, kind: 'moment', modelHash: HEX64_A });
     expect((posts[0] as { mediaId?: string }).mediaId).toBeUndefined();
@@ -240,14 +255,14 @@ describe('handleMomentEmbed（spec fused-retrieval §4.3）', () => {
     });
     baNock({ deletes: 1, posts: 2 });
     await handleMomentEmbed({ momentId, chainId }, { push: mockPush });
-    expect(embedCalls[0]!.imageDataUri).toBe(DATA_URI);
-    expect(storage.getObject.mock.calls[0]![0]).toBe(poster.derivedKey);
+    expect(embedCalls[0]!.imageDataUri).toMatch(/^data:image\/webp;base64,/);
+    expect(storage.getObject.mock.calls[0]![0]).toBe(poster.s3Key);
   });
 
-  it('ObjectTooLargeError on derived → NonRetryableEmbeddingError；不改 outbox.status', async () => {
+  it('ObjectTooLargeError on original → NonRetryableEmbeddingError；不改 outbox.status', async () => {
     const { momentId, chainId, ownerId } = await seedMoment();
     const img = await addReadyImage({ momentId, chainId, ownerId, sortOrder: 0 });
-    storage.getObject.mockRejectedValue(new ObjectTooLargeError(img.derivedKey, MAX_IMAGE_BYTES));
+    storage.getObject.mockRejectedValue(new ObjectTooLargeError(img.s3Key, MAX_IMAGE_BYTES));
     const obId = randomUUID();
     await db.insert(outbox).values({
       id: obId,
@@ -266,7 +281,7 @@ describe('handleMomentEmbed（spec fused-retrieval §4.3）', () => {
   it('processor：NonRetryableEmbeddingError 立即 failed + last_error', async () => {
     const { momentId, chainId, ownerId } = await seedMoment();
     const img = await addReadyImage({ momentId, chainId, ownerId, sortOrder: 0 });
-    storage.getObject.mockRejectedValue(new ObjectTooLargeError(img.derivedKey, MAX_IMAGE_BYTES));
+    storage.getObject.mockRejectedValue(new ObjectTooLargeError(img.s3Key, MAX_IMAGE_BYTES));
     await db.insert(outbox).values({
       id: randomUUID(),
       type: 'moment.embed',
