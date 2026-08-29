@@ -2,6 +2,7 @@ import { Service } from '@rabjs/react';
 import type { MomentResponse, SearchParsed, TagResponse } from '@moment/dto';
 import { client } from '../../lib/api';
 import { TIMELINE_PAGE_SIZE, buildFeedQuery, buildSearchInput } from '../../lib/timeline-query';
+import type { CommentChangedPayload, MomentChangedPayload } from '../../lib/events';
 import { ChainListService } from '../../services/chain-list.service';
 
 /** 时间线（spec §4）：筛选 + feed 分页 + 单链标签；链 chip 读全局 ChainListService。 */
@@ -29,15 +30,19 @@ export class FeedService extends Service {
     void this.loadTags().catch(() => undefined);
     this.on(
       'moment:changed',
-      () => {
+      (p: MomentChangedPayload) => {
+        if (p.op === 'react') {
+          void this.refreshListedMoment(p.momentId);
+          return;
+        }
         void this.loadFirst().catch(() => undefined);
       },
       'global',
     );
     this.on(
       'comment:changed',
-      () => {
-        void this.loadFirst().catch(() => undefined); // 评论数在 moment 上
+      (p: CommentChangedPayload) => {
+        void this.refreshListedMoment(p.momentId);
       },
       'global',
     );
@@ -122,6 +127,22 @@ export class FeedService extends Service {
 
   get chainList(): { id: string; name: string }[] {
     return this.resolve(ChainListService).chains.map((c) => ({ id: c.id, name: c.name }));
+  }
+
+  async refreshListedMoment(momentId: string): Promise<void> {
+    if (!momentId) return;
+    const idx = this.moments.findIndex((m) => m?.id === momentId);
+    if (idx === -1) return;
+    try {
+      const updated = await client.getMoment(momentId);
+      if (!updated?.id) return;
+      const next = this.moments.slice();
+      if (next[idx]?.id !== momentId) return;
+      next[idx] = updated;
+      this.moments = next;
+    } catch {
+      // 单条失败不打整页
+    }
   }
 
   async loadFirst(): Promise<void> {

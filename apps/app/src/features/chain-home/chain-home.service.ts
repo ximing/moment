@@ -3,7 +3,7 @@ import type { AggregateResponse, ChainDetailDto, MomentResponse, SearchParsed, T
 import { client } from '../../lib/api';
 import { TIMELINE_PAGE_SIZE, buildChainMomentsQuery, buildSearchInput } from '../../lib/timeline-query';
 import { ChainListService } from '../../services/chain-list.service';
-import type { ChainChangedPayload } from '../../lib/events';
+import type { ChainChangedPayload, CommentChangedPayload, MomentChangedPayload } from '../../lib/events';
 
 /** 链首页段：'timeline' 主时间线 / 'tags' 标签 / 'trips' 行程分章 / 其余为 manifest.views 声明的视图 type */
 export type ChainSegment = string;
@@ -34,7 +34,11 @@ export class ChainHomeService extends Service {
     super();
     this.on(
       'moment:changed',
-      () => {
+      (p: MomentChangedPayload) => {
+        if (p.op === 'react') {
+          void this.refreshListedMoment(p.momentId);
+          return;
+        }
         void this.loadFirst().catch(() => undefined);
         if (this.activeView !== 'timeline' && this.activeView !== 'tags' && this.activeView !== 'trips') {
           void this.loadAggregate().catch(() => undefined);
@@ -44,8 +48,8 @@ export class ChainHomeService extends Service {
     );
     this.on(
       'comment:changed',
-      () => {
-        void this.loadFirst().catch(() => undefined);
+      (p: CommentChangedPayload) => {
+        void this.refreshListedMoment(p.momentId);
       },
       'global',
     );
@@ -95,6 +99,22 @@ export class ChainHomeService extends Service {
     if (!this.sectionsLoaded) {
       this.sectionsLoaded = true;
       void this.loadTags().catch(() => undefined);
+    }
+  }
+
+  async refreshListedMoment(momentId: string): Promise<void> {
+    if (!momentId) return;
+    const idx = this.moments.findIndex((m) => m?.id === momentId);
+    if (idx === -1) return;
+    try {
+      const updated = await client.getMoment(momentId);
+      if (!updated?.id) return;
+      const next = this.moments.slice();
+      if (next[idx]?.id !== momentId) return;
+      next[idx] = updated;
+      this.moments = next;
+    } catch {
+      // 单条失败不打整页
     }
   }
 
