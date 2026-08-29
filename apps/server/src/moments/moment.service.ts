@@ -3,7 +3,7 @@ import mime from 'mime-types';
 import { eq, inArray } from 'drizzle-orm';
 import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
-import type { CreateMomentInput, MomentListResponse, MomentResponse, PatchMomentInput } from '@moment/dto';
+import type { CreateMomentInput, ListMomentsQuery, MomentListResponse, MomentResponse, PatchMomentInput } from '@moment/dto';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
 import { chains, media, moments, type Media } from '../db/schema.js';
@@ -200,11 +200,7 @@ export class MomentService {
   }
 
   /** 链内时间线：与 feed 共用 queryMomentPage（order 固定 happened_at，游标同格式）。 */
-  async list(
-    userId: string,
-    chainId: string,
-    query: { cursor?: string; limit?: string; before?: string }
-  ): Promise<MomentListResponse> {
+  async list(userId: string, chainId: string, query: ListMomentsQuery): Promise<MomentListResponse> {
     await this.policy.require(userId, chainId, 'viewer');
 
     let limit = 20;
@@ -221,6 +217,10 @@ export class MomentService {
       limit,
       cursor: query.cursor,
       before: query.before,
+      personId: query.person_id,
+      place: query.place,
+      happenedFrom: query.happened_from,
+      happenedTo: query.happened_to,
     });
     return { items: await serializeMoments(page.rows, userId, { includePrivate: true }), nextCursor: page.nextCursor };
   }
