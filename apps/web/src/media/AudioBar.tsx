@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { Pause, Play } from 'lucide-react';
+import { client } from '@/api/client';
 import { Icon } from '@/ui/Icon';
 import { useMediaObjectUrl } from './useMediaObjectUrl';
 
@@ -18,7 +19,7 @@ function formatDuration(seconds: number): string {
 
 export function AudioBar({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
   const blobUrl = useMediaObjectUrl(shareToken ? null : media.id);
-  const url = shareToken ? `${media.url}?st=${encodeURIComponent(shareToken)}` : blobUrl;
+  const url = shareToken ? client.mediaUrl(media.id, { st: shareToken }) : blobUrl;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);

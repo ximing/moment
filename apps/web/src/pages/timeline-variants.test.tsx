@@ -45,6 +45,12 @@ const api = vi.hoisted(() => ({
   createComment: vi.fn(),
   deleteComment: vi.fn(),
   getPublicShare: vi.fn(),
+  mediaUrl(id: string, opts?: { variant?: 'original' | 'derived'; st?: string }) {
+    let url = `/api/media/${id}`;
+    if (opts?.variant === 'derived') url += '?variant=derived';
+    if (opts?.st) url += `${url.includes('?') ? '&' : '?'}st=${encodeURIComponent(opts.st)}`;
+    return url;
+  },
 }));
 
 vi.mock('@/api/client', () => ({

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { client } from '@/api/client';
 import { useMediaObjectUrl } from '@/media/useMediaObjectUrl';
 import { MediaSkeletonStyles, mediaSkeletonClass } from '@/media/MediaBlock';
 import { IconButton } from '@/ui/button/index';
@@ -73,7 +74,7 @@ export function Lightbox({
 
 function LightboxMedia({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
   const blobUrl = useMediaObjectUrl(shareToken ? null : media.id);
-  const url = shareToken ? `${media.url}?st=${encodeURIComponent(shareToken)}` : blobUrl;
+  const url = shareToken ? client.mediaUrl(media.id, { st: shareToken }) : blobUrl;
   if (!url) {
     // 加载占位与 MediaBlock 同一呼吸动效（reduced-motion 静态化），保持骨架语言一致
     return (
