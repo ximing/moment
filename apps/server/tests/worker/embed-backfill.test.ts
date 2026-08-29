@@ -238,6 +238,8 @@ describe('runEmbedBackfillSweep（spec fused-retrieval §11 P10）', () => {
     });
     const first = await runEmbedBackfillSweep();
     expect(first).toEqual({ compressDispatched: 0, embedDispatched: 1 });
+    const [textRow] = await rowsOf(OUTBOX_MOMENT_EMBED);
+    expect(textRow.payload).toEqual({ momentId: textId, chainId });
     const second = await runEmbedBackfillSweep();
     expect(second).toEqual({ compressDispatched: 0, embedDispatched: 0 });
     expect(await rowsOf(OUTBOX_MOMENT_EMBED)).toHaveLength(1);
