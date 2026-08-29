@@ -70,4 +70,16 @@ d('S3 真实桶 smoke（RUN_S3_IT=1）', () => {
     await storage.abortMultipart(key, uploadId);
     expect(await storage.fileExists(key)).toBe(false);
   });
+
+  it('getObject 有界读取：小对象返回原字节；超 maxBytes 抛 ObjectTooLargeError', async () => {
+    const key = `tmp/getobj-${randomUUID()}.bin`;
+    const body = Buffer.from('hello-get-object');
+    await storage.uploadFile(key, body);
+    const meta = currentStorageMeta();
+    const got = await storage.getObject(key, meta, 1024);
+    expect(Buffer.compare(got, body)).toBe(0);
+    await expect(storage.getObject(key, meta, 4)).rejects.toMatchObject({ name: 'ObjectTooLargeError' });
+    await storage.deleteFile(key, meta);
+  });
 });
+

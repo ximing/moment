@@ -15,6 +15,7 @@ function fakeAdapter(): UnifiedStorageAdapter {
     presignPart: async () => 'https://fake/part',
     completeMultipart: async () => undefined,
     abortMultipart: async () => undefined,
+    getObject: async () => Buffer.alloc(0),
   };
 }
 

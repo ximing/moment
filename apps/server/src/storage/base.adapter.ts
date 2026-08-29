@@ -43,6 +43,12 @@ export interface UnifiedStorageAdapter {
   presignPart(key: string, uploadId: string, partNumber: number, expiresIn: number): Promise<string>;
   completeMultipart(key: string, uploadId: string, parts: CompletedPart[]): Promise<void>;
   abortMultipart(key: string, uploadId: string): Promise<void>;
+  /**
+   * 有界读对象字节（spec fused-retrieval §2.4）。
+   * 按行上 metadata 选桶/prefix（与 generateAccessUrl 同）。超 maxBytes 抛 ObjectTooLargeError。
+   * 仅 worker compress（原图）与 embed（derived）可调用；请求线程零读像素。
+   */
+  getObject(key: string, metadata: StorageMetadata, maxBytes: number): Promise<Buffer>;
 }
 
 /** 抽象基类：key 均为相对 key（不含 prefix），子类负责拼前缀 */
@@ -68,6 +74,7 @@ export abstract class BaseUnifiedStorageAdapter implements UnifiedStorageAdapter
   ): Promise<string>;
   abstract completeMultipart(key: string, uploadId: string, parts: CompletedPart[]): Promise<void>;
   abstract abortMultipart(key: string, uploadId: string): Promise<void>;
+  abstract getObject(key: string, metadata: StorageMetadata, maxBytes: number): Promise<Buffer>;
 
   /**
    * Content-Type 安全过滤（沿用 aimo）：危险类型一律 octet-stream，
