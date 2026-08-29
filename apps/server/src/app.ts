@@ -26,6 +26,7 @@ import { ShareLinkItemController, ShareLinksController } from './share/share-lin
 import { RecapController } from './recaps/recap.controller.js';
 import { TemplatesController } from './templates/template.controller.js';
 import { AggregateController } from './templates/aggregate.controller.js';
+import { InternalEmbeddingsController } from './embeddings/internal.controller.js';
 
 export function createApp(): express.Express {
   useContainer(Container);
@@ -51,7 +52,7 @@ export function createApp(): express.Express {
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, PersonController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, PersonController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController, InternalEmbeddingsController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,
