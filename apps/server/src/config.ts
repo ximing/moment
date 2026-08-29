@@ -107,6 +107,17 @@ export const envSchema = z.object({
       message: 'MULTIMODAL_EMBEDDING_DIMENSION must be one of 2560,2048,1536,1024,768,512,256',
     })
     .default(2560),
+  // ---------- fused retrieval DashScope embedding（spec §4.1 / §11 P5）----------
+  // 禁止 z.coerce.boolean()：字符串 'false' 会被判 true。
+  MULTIMODAL_EMBEDDING_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  MULTIMODAL_EMBEDDING_MODEL: z.string().min(1).default('qwen3-vl-embedding'),
+  // 空串 = 停用向量路。不回退 ASR_API_KEY（运维可填同一值，但 config 层不自动借用）。
+  DASHSCOPE_API_KEY: z.string().default(''),
+  DASHSCOPE_BASE_URL: z.string().url().default('https://dashscope.aliyuncs.com/api/v1'),
+  MULTIMODAL_EMBEDDING_OUTPUT_TYPE: z.string().min(1).default('dense'),
 });
 
 export const config = envSchema.parse(process.env);
