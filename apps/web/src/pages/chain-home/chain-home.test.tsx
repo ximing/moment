@@ -369,6 +369,7 @@ describe('链首页封面', () => {
     expect(img).not.toBeNull();
     expect(img).toHaveAttribute('src', 'blob:mock-cover-1');
     expect(img).toHaveStyle({ objectPosition: '25% 75%' });
+    expect(img?.parentElement?.className.split(/\s+/)).not.toContain('rounded-surface-lg');
     // 普通页眉仍在（封面上方/前方附加，不替换既有结构）
     expect(screen.getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
   });

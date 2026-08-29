@@ -55,34 +55,45 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
   }
 
   const chain = service.chain;
+  const showCover = Boolean(chain?.coverMediaId && chain.coverUrl && !coverFailed);
+  const avatarSrc = chain?.avatarUrl
+    ? isHttpUrl(chain.avatarUrl)
+      ? chain.avatarUrl
+      : `${chain.avatarUrl}?st=${encodeURIComponent(token)}`
+    : null;
 
   return (
     <div className="min-h-screen bg-bg">
-      <header className="border-b border-line">
-        <div className="mx-auto max-w-content px-6 py-8">
-          {chain?.coverMediaId && chain.coverUrl && !coverFailed && (
-            <PublicChainCover
-              src={chain.coverUrl}
-              shareToken={token}
-              focus={chain.coverFocus}
-              onError={() => setCoverFailed(true)}
-              className="mb-6"
-            />
-          )}
+      {showCover && (
+        <PublicChainCover
+          src={chain!.coverUrl!}
+          shareToken={token}
+          focus={chain!.coverFocus}
+          onError={() => setCoverFailed(true)}
+        />
+      )}
+      <header className={showCover ? '-mt-8' : 'border-b border-line'}>
+        <div className={`mx-auto max-w-content px-6 ${showCover ? 'pb-8' : 'py-8'}`}>
+          {showCover && chain ? (
+            <div className="mb-3">
+              <ChainMark
+                chainId={token}
+                color={chain.color}
+                icon={chain.icon}
+                avatarSrc={avatarSrc}
+                avatarFocus={chain.avatarFocus}
+                size={32}
+              />
+            </div>
+          ) : null}
           <div className="flex min-w-0 items-center gap-3">
-            {chain && (
+            {chain && !showCover && (
               <ChainMark
                 // PublicShareChainInfo 不带链 id：哈希色回退用 share token 作稳定种子（仅三模式全空时才用到）
                 chainId={token}
                 color={chain.color}
                 icon={chain.icon}
-                avatarSrc={
-                  chain.avatarUrl
-                    ? isHttpUrl(chain.avatarUrl)
-                      ? chain.avatarUrl
-                      : `${chain.avatarUrl}?st=${encodeURIComponent(token)}`
-                    : null
-                }
+                avatarSrc={avatarSrc}
                 avatarFocus={chain.avatarFocus}
                 size={24}
               />

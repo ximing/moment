@@ -4,6 +4,7 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import { MoreHorizontal } from 'lucide-react';
 import { ComposerEntry } from '@/compose/composer-entry';
 import { ChainCover } from '@/chain/ChainCover';
+import { ChainMark } from '@/chain/ChainMark';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { AggregateView } from '@/chain/aggregate-views';
 import { MapView } from '@/chain/map-view';
@@ -68,10 +69,22 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           src={chain.coverUrl}
           focus={chain.coverFocus}
           onError={() => setFailedCoverId(chain.coverMediaId)}
-          className="mb-4"
         />
       )}
-      <header className="mb-6">
+      <header className={showCover ? '-mt-8 mb-6' : 'mb-6'}>
+        {showCover ? (
+          <div className="mb-3">
+            <ChainMark
+              chainId={chain.id}
+              color={chain.color}
+              icon={chain.icon}
+              avatarMediaId={chain.avatarMediaId}
+              avatarSrc={chain.avatarUrl}
+              avatarFocus={chain.avatarFocus}
+              size={32}
+            />
+          </div>
+        ) : null}
         <div className="flex items-center gap-3">
           <h1 className="min-w-0 truncate text-page-title font-semibold text-ink">{chain.name}</h1>
           <ChainAudience chain={chain} />
