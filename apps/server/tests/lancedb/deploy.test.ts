@@ -45,6 +45,12 @@ describe('Dockerfile bookworm-slim（spec §0 / §11 P4）', () => {
     const df = readFileSync(path.join(REPO_ROOT, 'apps/web/Dockerfile'), 'utf8');
     expect(df).toMatch(/FROM node:22-alpine AS base/);
   });
+
+  it('web pnpm install filters to @moment/web so alpine 不装 @lancedb/lancedb native', () => {
+    const df = readFileSync(path.join(REPO_ROOT, 'apps/web/Dockerfile'), 'utf8');
+    expect(df).toMatch(/pnpm install --frozen-lockfile --filter=@moment\/web\.\.\./);
+    expect(df).not.toMatch(/^RUN pnpm install --frozen-lockfile\s*$/m);
+  });
 });
 
 describe('compose Lance volume 只挂 server（spec §1）', () => {
