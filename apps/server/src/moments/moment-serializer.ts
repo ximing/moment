@@ -39,6 +39,9 @@ export interface MediaLike {
   sortOrder: number;
   /** 视频封面媒体行 id（db 行自带该列，类型对齐即可）；无封面为 null */
   posterMediaId: string | null;
+  derivedStatus?: 'pending' | 'ready' | 'skipped' | 'failed' | null;
+  /** 视频封面行的 derived_status；图片行 null */
+  posterDerivedStatus?: 'pending' | 'ready' | 'skipped' | 'failed' | null;
 }
 
 /** 互动计数（spec §5.1：批量 GROUP BY 产出，禁止 N+1） */
@@ -89,6 +92,11 @@ export function momentSerializer(m: MomentLike, extras: SerializerExtras): Publi
         sortOrder: x.sortOrder,
         posterMediaId: x.posterMediaId,
         posterUrl: x.posterMediaId ? `/api/media/${x.posterMediaId}` : null,
+        derivedUrl: x.derivedStatus === 'ready' ? `/api/media/${x.id}?variant=derived` : null,
+        posterDerivedUrl:
+          x.posterMediaId && x.posterDerivedStatus === 'ready'
+            ? `/api/media/${x.posterMediaId}?variant=derived`
+            : null,
       })),
     tags: extras.tags ?? [],
     commentCount: extras.counts?.commentCount ?? 0,
@@ -188,12 +196,25 @@ export async function serializeMoments(
   const posterIds = new Set(
     mediaRows.map((r) => r.posterMediaId).filter((id): id is string => id !== null)
   );
+  const rowById = new Map(mediaRows.map((r) => [r.id, r]));
   const mediaBy = new Map<string, MediaLike[]>();
   for (const m of mediaRows) {
     if (!m.momentId) continue;
     if (posterIds.has(m.id)) continue;
     const list = mediaBy.get(m.momentId) ?? [];
-    list.push(m);
+    list.push({
+      id: m.id,
+      mime: m.mime,
+      width: m.width,
+      height: m.height,
+      duration: m.duration,
+      sortOrder: m.sortOrder,
+      posterMediaId: m.posterMediaId,
+      derivedStatus: m.derivedStatus,
+      posterDerivedStatus: m.posterMediaId
+        ? (rowById.get(m.posterMediaId)?.derivedStatus ?? null)
+        : null,
+    });
     mediaBy.set(m.momentId, list);
   }
   const avatarBy = await avatarUrlsByUserIds(authorRows.map((a) => a.id));

@@ -109,15 +109,15 @@ export interface MomentMedia {
   /** 视频封面稳定入口相对路径 /api/media/:posterId（不内嵌预签名 URL，CONVENTIONS §3.4）；分享态拼 ?st= 用；仅视频行非空，无封面为 null */
   posterUrl: string | null;
   /**
-   * 派生图稳定入口 `/api/media/:id?variant=derived`；仅 derived_status=ready 非空（spec §2.1）。
-   * P1 可选：serializer 在 P3 才产出（见计划偏差 1）。不内嵌预签名（CONVENTIONS §3.4）。
+   * 派生图稳定入口 `/api/media/:id?variant=derived`；仅 derived_status=ready 非空。
+   * 不内嵌预签名（CONVENTIONS §3.4）。
    */
-  derivedUrl?: string | null;
+  derivedUrl: string | null;
   /**
-   * 视频封面派生入口 `/api/media/:posterId?variant=derived`；仅视频行且封面 ready 非空，否则 null。
-   * 图片行恒 null。P1 可选（偏差 1），P3 必填化。
+   * 视频封面派生入口 `/api/media/:posterId?variant=derived`；仅视频行且封面 derived_status=ready 非空，否则 null。
+   * 图片行恒 null。
    */
-  posterDerivedUrl?: string | null;
+  posterDerivedUrl: string | null;
 }
 
 export interface AuthorSummary {

@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { MAX_IMAGE_BYTES } from '@moment/dto';
 import { db } from '../../src/db/index.js';
-import { media, moments, outbox } from '../../src/db/schema.js';
+import { media, outbox } from '../../src/db/schema.js';
 import { handleMomentCompress } from '../../src/media/handle-moment-compress.js';
 import { derivedObjectKey } from '../../src/media/derived.js';
 import { ObjectTooLargeError } from '../../src/storage/bounded-read.js';

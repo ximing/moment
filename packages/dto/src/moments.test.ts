@@ -320,7 +320,7 @@ test('listMomentsQuerySchema：from>to → VALIDATION_ERROR；无 RANGE_REQUIRES
   }
 });
 
-test('MomentMedia：derivedUrl / posterDerivedUrl 可赋值；P1 可省略（偏差 1）', () => {
+test('MomentMedia：derivedUrl / posterDerivedUrl 必填（P1 偏差 1 由 P3 收口）', () => {
   const ready: import('./moments.js').MomentMedia = {
     id: UUID_A,
     url: `/api/media/${UUID_A}`,
@@ -335,6 +335,7 @@ test('MomentMedia：derivedUrl / posterDerivedUrl 可赋值；P1 可省略（偏
     posterDerivedUrl: null,
   };
   assert.equal(ready.derivedUrl, `/api/media/${UUID_A}?variant=derived`);
+  assert.equal(ready.posterDerivedUrl, null);
 
   const video: import('./moments.js').MomentMedia = {
     id: UUID_A,
@@ -350,20 +351,5 @@ test('MomentMedia：derivedUrl / posterDerivedUrl 可赋值；P1 可省略（偏
     posterDerivedUrl: `/api/media/${UUID_B}?variant=derived`,
   };
   assert.equal(video.posterDerivedUrl, `/api/media/${UUID_B}?variant=derived`);
-
-  // P1 可选：既有字面量不带这两键必须仍是合法 MomentMedia。
-  // dto `tsconfig.json` exclude `*.test.ts`，tsx 也不做类型检查——可选性由实现 `?:` 与本 Task Step 6 的 server typecheck 把关（serializer 媒体字面量缺这两键）。
-  const legacy: import('./moments.js').MomentMedia = {
-    id: UUID_A,
-    url: `/api/media/${UUID_A}`,
-    mime: 'image/jpeg',
-    width: 64,
-    height: 48,
-    duration: null,
-    sortOrder: 0,
-    posterMediaId: null,
-    posterUrl: null,
-  };
-  assert.equal(legacy.derivedUrl, undefined);
 });
 
