@@ -120,6 +120,15 @@ test('moments/feed/tags 路径与查询参数', async () => {
   assert.deepEqual(calls[7]!.body, { name: '周岁' });
 });
 
+test('updateMoment PATCH JSON 体能带 mediaIds', async () => {
+  const { client, calls } = harness();
+  const mediaId = '123e4567-e89b-12d3-a456-426614174000';
+  await client.updateMoment('m1', { mediaIds: [mediaId] });
+  assert.equal(calls[0]!.method, 'PATCH');
+  assert.equal(calls[0]!.url, 'http://x/api/moments/m1');
+  assert.deepEqual(calls[0]!.body, { mediaIds: [mediaId] });
+});
+
 test('media/comments/reactions/notifications/devices 路径', async () => {
   const { client, calls } = harness();
   await client.presignMedia({ mime: 'image/jpeg', size: 1024, kind: 'image', sortOrder: 0 });

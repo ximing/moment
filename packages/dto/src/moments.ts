@@ -88,8 +88,28 @@ export const patchMomentInputSchema = z
     place: placeInputSchema.nullable().optional(),
     kind: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64).optional(),
     payload: z.record(z.unknown()).nullable().optional(),
+    /**
+     * PATCH 全量替换内容媒体（与 tagIds / personIds 对齐）：
+     * undefined = 不变；提交数组 = 新集合（可 []）。数量/mime 构成在 server 按原 type 判。
+     * 元素必须是 uuid（比 create 的 z.string().min(1) 更严；create 不改）。
+     */
+    mediaIds: z.array(z.string().uuid()).optional(),
+    /**
+     * 封面。dto 放行（含 null）以便 server 抛 MEDIA_NOT_ALLOWED；
+     * 本字段任意有值（uuid 或 null）都不改 poster 行。
+     */
+    posterMediaId: z.string().uuid().nullable().optional(),
   })
-  .strict() // 未知键（含 mediaIds/type）直接 VALIDATION_ERROR，而非静默剥离
+  .strict() // 未知键（含 type）直接 VALIDATION_ERROR，而非静默剥离
+  .superRefine((val, ctx) => {
+    if (val.mediaIds === undefined) return;
+    if (new Set(val.mediaIds).size !== val.mediaIds.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'MEDIA_COUNT_INVALID', path: ['mediaIds'] });
+    }
+    if (val.mediaIds.length > 9) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'MEDIA_COUNT_INVALID', path: ['mediaIds'] });
+    }
+  })
   .refine((val) => Object.values(val).some((v) => v !== undefined), { message: 'EMPTY_PATCH' });
 export type PatchMomentInput = z.infer<typeof patchMomentInputSchema>;
 export const updateMomentInputSchema = patchMomentInputSchema;

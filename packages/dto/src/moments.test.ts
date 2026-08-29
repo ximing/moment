@@ -79,11 +79,13 @@ test('createMomentInputSchema：happenedAt 必须可解析、tzOffset 范围 ±1
   assert.ok(!createMomentInputSchema.safeParse({ ...base, happenedTzOffset: 900 }).success);
 });
 
-test('patchMomentInputSchema：仅四个字段、全 optional、.strict() 拒绝未知键（mediaIds/type）；空对象拒绝', () => {
+test('patchMomentInputSchema：.strict() 仍拒绝 type 与未知键；空对象 EMPTY_PATCH；mediaIds 非 uuid 失败', () => {
   assert.ok(patchMomentInputSchema.safeParse({ content: 'new' }).success);
-  assert.ok(!patchMomentInputSchema.safeParse({}).success); // 空补丁 → EMPTY_PATCH
-  assert.ok(!patchMomentInputSchema.safeParse({ mediaIds: ['m-1'] }).success);
+  assert.ok(!patchMomentInputSchema.safeParse({}).success);
   assert.ok(!patchMomentInputSchema.safeParse({ type: 'text' }).success);
+  assert.ok(!patchMomentInputSchema.safeParse({ type: 'media' }).success);
+  assert.ok(!patchMomentInputSchema.safeParse({ hacker: 1 }).success);
+  assert.ok(!patchMomentInputSchema.safeParse({ mediaIds: ['m-1'] }).success); // 非 uuid，不是未知键
 });
 
 test('listMomentsQuerySchema：cursor 空串/超长拒绝，缺省与合法串通过', () => {
@@ -159,8 +161,10 @@ test('createMomentInputSchema：posterMediaId 空串拒绝（min(1)）', () => {
   );
 });
 
-test('patchMomentInputSchema：.strict() 拒绝 posterMediaId（封面发布后不可改）', () => {
-  assert.ok(!patchMomentInputSchema.safeParse({ posterMediaId: 'poster-1' }).success);
+test('patchMomentInputSchema：posterMediaId uuid / null 通过 parse（server 再抛 MEDIA_NOT_ALLOWED）', () => {
+  assert.ok(patchMomentInputSchema.safeParse({ posterMediaId: UUID_A }).success);
+  assert.ok(patchMomentInputSchema.safeParse({ posterMediaId: null }).success);
+  assert.ok(!patchMomentInputSchema.safeParse({ posterMediaId: 'poster-1' }).success); // 非 uuid
 });
 
 test('createMomentInputSchema：type=voice mediaIds 1~9（0/10 拒绝，MEDIA_COUNT_INVALID）', () => {
@@ -207,6 +211,35 @@ test('patchMomentInputSchema：.strict() 拒绝 transcript / transcriptionStatus
 
 const UUID_A = '123e4567-e89b-12d3-a456-426614174000';
 const UUID_B = '123e4567-e89b-12d3-a456-426614174001';
+
+const UUIDS10 = Array.from(
+  { length: 10 },
+  (_, i) => `123e4567-e89b-12d3-a456-4266141740${String(i).padStart(2, '0')}`,
+);
+
+test('patchMomentInputSchema：mediaIds 单 uuid / 空数组通过；仅 mediaIds 不是 EMPTY_PATCH', () => {
+  assert.ok(patchMomentInputSchema.safeParse({ mediaIds: [UUID_A] }).success);
+  assert.ok(patchMomentInputSchema.safeParse({ mediaIds: [] }).success);
+  const emptyArr = patchMomentInputSchema.parse({ mediaIds: [] });
+  assert.deepEqual(emptyArr.mediaIds, []);
+});
+
+test('patchMomentInputSchema：mediaIds 10 条 / 重复 id → 失败且 issue MEDIA_COUNT_INVALID', () => {
+  const tooLong = patchMomentInputSchema.safeParse({ mediaIds: UUIDS10 });
+  assert.ok(!tooLong.success);
+  if (!tooLong.success) {
+    assert.ok(tooLong.error.issues.some((i) => i.message === 'MEDIA_COUNT_INVALID' && i.path[0] === 'mediaIds'));
+  }
+  const dup = patchMomentInputSchema.safeParse({ mediaIds: [UUID_A, UUID_A] });
+  assert.ok(!dup.success);
+  if (!dup.success) {
+    assert.ok(dup.error.issues.some((i) => i.message === 'MEDIA_COUNT_INVALID' && i.path[0] === 'mediaIds'));
+  }
+});
+
+test('createMomentInputSchema：mediaIds 仍接受 m-1（create 不改）', () => {
+  assert.ok(createMomentInputSchema.safeParse({ ...base, type: 'media', content: '', mediaIds: ['m-1'] }).success);
+});
 
 test('createMomentInputSchema：接受 personIds 与 place（spec §6）', () => {
   const r = createMomentInputSchema.safeParse({
