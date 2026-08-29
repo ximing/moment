@@ -328,3 +328,93 @@ test('moments create/update 携带 personIds/place（P1 dto 增量经 ZodInput/P
   assert.deepEqual(createBody.place, { lat: 39.9042, lng: 116.4074 });
   assert.deepEqual(calls[1]!.body, { personIds: [], place: null });
 });
+
+test('getFeed / listChainMoments 序列化 personId/place/happenedFrom/happenedTo 为 snake_case', async () => {
+  const { client, calls } = harness();
+  await client.getFeed({
+    personId: '123e4567-e89b-12d3-a456-426614174000',
+    place: '朝阳公园',
+    happenedFrom: '2026-08-01T00:00:00.000Z',
+    happenedTo: '2026-08-31T23:59:59.999Z',
+    limit: 50,
+  });
+  await client.listChainMoments('c1', {
+    personId: '123e4567-e89b-12d3-a456-426614174000',
+    place: '朝阳公园',
+    happenedFrom: '2026-08-01T00:00:00.000Z',
+    happenedTo: '2026-08-31T23:59:59.999Z',
+  });
+  assert.equal(
+    calls[0]!.url,
+    'http://x/api/feed?limit=50&person_id=123e4567-e89b-12d3-a456-426614174000&place=%E6%9C%9D%E9%98%B3%E5%85%AC%E5%9B%AD&happened_from=2026-08-01T00%3A00%3A00.000Z&happened_to=2026-08-31T23%3A59%3A59.999Z',
+  );
+  assert.equal(
+    calls[1]!.url,
+    'http://x/api/chains/c1/moments?person_id=123e4567-e89b-12d3-a456-426614174000&place=%E6%9C%9D%E9%98%B3%E5%85%AC%E5%9B%AD&happened_from=2026-08-01T00%3A00%3A00.000Z&happened_to=2026-08-31T23%3A59%3A59.999Z',
+  );
+});
+
+test('searchMoments：POST /api/search JSON body（不走 query string；不带 before/order/source）', async () => {
+  const { client, calls } = harness();
+  await client.searchMoments({
+    q: '去年今天和外婆',
+    tzOffset: -480,
+    chainIds: ['123e4567-e89b-12d3-a456-426614174000'],
+    personId: '123e4567-e89b-12d3-a456-426614174001',
+    tagId: '123e4567-e89b-12d3-a456-426614174002',
+    place: '朝阳公园',
+    limit: 50,
+    cursor: 'cur',
+  });
+  assert.equal(calls[0]!.method, 'POST');
+  assert.equal(calls[0]!.url, 'http://x/api/search');
+  assert.deepEqual(calls[0]!.body, {
+    q: '去年今天和外婆',
+    tzOffset: -480,
+    chainIds: ['123e4567-e89b-12d3-a456-426614174000'],
+    personId: '123e4567-e89b-12d3-a456-426614174001',
+    tagId: '123e4567-e89b-12d3-a456-426614174002',
+    place: '朝阳公园',
+    limit: 50,
+    cursor: 'cur',
+  });
+  assert.equal('before' in (calls[0]!.body as object), false);
+  assert.equal('order' in (calls[0]!.body as object), false);
+  assert.equal('source' in (calls[0]!.body as object), false);
+});
+
+test('listChainJobs：GET /api/chains/:chainId/jobs；query 可选 status/limit', async () => {
+  const { client, calls } = harness();
+  await client.listChainJobs('c1');
+  await client.listChainJobs('c1', { status: 'pending,failed', limit: 50 });
+  assert.deepEqual(
+    calls.map((c) => `${c.method} ${c.url}`),
+    [
+      'GET http://x/api/chains/c1/jobs',
+      'GET http://x/api/chains/c1/jobs?status=pending%2Cfailed&limit=50',
+    ],
+  );
+});
+
+test('mediaUrl / fetchMediaBlob：variant + st 拼接（已有 ? 则 &st=）', async () => {
+  const { client, calls } = harness();
+  assert.equal(client.mediaUrl('md1'), 'http://x/api/media/md1');
+  assert.equal(client.mediaUrl('md1', { variant: 'original' }), 'http://x/api/media/md1');
+  assert.equal(client.mediaUrl('md1', { variant: 'derived' }), 'http://x/api/media/md1?variant=derived');
+  assert.equal(client.mediaUrl('md1', { st: 'tok en' }), 'http://x/api/media/md1?st=tok%20en');
+  assert.equal(
+    client.mediaUrl('md1', { variant: 'derived', st: 'tok en' }),
+    'http://x/api/media/md1?variant=derived&st=tok%20en',
+  );
+  await client.fetchMediaBlob('md1');
+  await client.fetchMediaBlob('md1', { variant: 'original' });
+  await client.fetchMediaBlob('md1', { variant: 'derived' });
+  assert.deepEqual(
+    calls.map((c) => `${c.method} ${c.url}`),
+    [
+      'GET http://x/api/media/md1',
+      'GET http://x/api/media/md1',
+      'GET http://x/api/media/md1?variant=derived',
+    ],
+  );
+});

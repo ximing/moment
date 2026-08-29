@@ -276,3 +276,49 @@ test('refresh 成功后重放收到 403 → 不 clear，直接抛 ApiError（非
   assert.equal(store.cleared, false); // 业务 403 不误清登录态
   assert.equal(store.tokens?.accessToken, 'new'); // refresh 写入的新 token 仍在
 });
+
+test('requestBlob 把 query 拼进 URL（P8 fetchMediaBlob variant=derived）', async () => {
+  const store = memoryStore({ accessToken: 'a1', refreshToken: 'r1', expiresIn: 900 });
+  let url = '';
+  const http = new Http({
+    baseUrl: 'http://x',
+    tokenStore: store,
+    fetchImpl: async (u) => {
+      url = String(u);
+      return new Response(new Blob(['img']), { status: 200 });
+    },
+  });
+  const blob = await http.requestBlob('/api/media/md1', { query: { variant: 'derived' } });
+  assert.equal(url, 'http://x/api/media/md1?variant=derived');
+  assert.equal(await blob.text(), 'img');
+});
+
+test('requestBlob 401 重放带上同一 query（偏差 5）', async () => {
+  const store = memoryStore({ accessToken: 'expired', refreshToken: 'r1', expiresIn: 900 });
+  const urls: string[] = [];
+  const http = new Http({
+    baseUrl: 'http://x',
+    tokenStore: store,
+    fetchImpl: async (u, init) => {
+      const url = String(u);
+      if (url.includes('/api/auth/refresh')) {
+        return jsonResponse(200, {
+          user: { id: 'u1', email: 'a@b.c', nickname: 'a', createdAt: '2026-01-01T00:00:00Z' },
+          tokens: { accessToken: 'new', refreshToken: 'r2', expiresIn: 900 },
+        });
+      }
+      urls.push(url);
+      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization ?? '';
+      if (auth === 'Bearer expired') {
+        return jsonResponse(401, { error: { code: 'INVALID_TOKEN', message: 'x' } });
+      }
+      return new Response(new Blob(['img']), { status: 200 });
+    },
+  });
+  const blob = await http.requestBlob('/api/media/md1', { query: { variant: 'derived' } });
+  assert.deepEqual(urls, [
+    'http://x/api/media/md1?variant=derived',
+    'http://x/api/media/md1?variant=derived',
+  ]);
+  assert.equal(await blob.text(), 'img');
+});

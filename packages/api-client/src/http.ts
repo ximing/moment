@@ -83,13 +83,13 @@ export class Http {
 
   /** 拉取二进制（如 GET /api/media/:id：302 → 预签名对象，fetch 默认 follow 重定向，res.blob() 直接拿内容）。
    *  与 request 同一套 Bearer 附带 + 401 单飞 refresh + 重放一次语义，仅响应处理换成 blob()。 */
-  async requestBlob(path: string): Promise<Blob> {
-    const first = await this.doFetch(path, {});
+  async requestBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+    const first = await this.doFetch(path, options);
     if (first.status === 401) {
       const refreshToken = await this.tokenStore.getRefreshToken();
       if (!refreshToken) throw await toApiError(first);
       const accessToken = await this.refresh();
-      const second = await this.doFetch(path, {}, accessToken);
+      const second = await this.doFetch(path, options, accessToken);
       if (!second.ok) {
         if (second.status === 401) await Promise.resolve(this.tokenStore.clear()).catch(() => undefined);
         throw await toApiError(second);
