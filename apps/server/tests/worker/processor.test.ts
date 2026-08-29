@@ -30,6 +30,7 @@ describe('runOutboxBatch', () => {
     expect(row.status).toBe('done');
     expect(row.processedAt).not.toBeNull();
     expect(row.attempts).toBe(0);
+    expect(row.lastError).toBeNull();
   });
 
   it('失败重试：attempts+1、next_retry_at = now + 1min（首档退避）', async () => {
@@ -47,6 +48,7 @@ describe('runOutboxBatch', () => {
     expect(row.attempts).toBe(1);
     expect(row.nextRetryAt!.getTime() - before).toBeGreaterThanOrEqual(RETRY_DELAYS_MS[0] - 1000);
     expect(row.nextRetryAt!.getTime() - before).toBeLessThanOrEqual(RETRY_DELAYS_MS[0] + 5000);
+    expect(row.lastError).toBe('EXPO_DOWN');
   });
 
   it('退避按 attempts 递增档位；attempts=5 仍按 4h 档重试，attempts>5 → failed', async () => {
@@ -69,6 +71,7 @@ describe('runOutboxBatch', () => {
     expect(row.status).toBe('failed');
     expect(row.attempts).toBe(6);
     expect(row.nextRetryAt).toBeNull();
+    expect(row.lastError).toBe('STILL_DOWN');
   });
 
   it('未到期的行不 claim（租约生效）：claim 后立即再跑不重复处理', async () => {
@@ -99,6 +102,7 @@ describe('runOutboxBatch', () => {
     expect(result.failed).toBe(1);
     const [row] = await db.select().from(outbox).where(eq(outbox.id, 'ob-6'));
     expect(row.status).toBe('failed');
+    expect(row.lastError).toBe('NO_HANDLER');
   });
 
   it('claim 时先把选中行 next_retry_at 推到 now+60s（崩溃保护租约），再执行 handler', async () => {
@@ -117,4 +121,73 @@ describe('runOutboxBatch', () => {
     expect(seenNextRetryAt).not.toBeNull();
     expect(seenNextRetryAt!).toBeGreaterThanOrEqual(before + CLAIM_LEASE_MS - 1000);
   });
+
+  it('成功路径把上次 last_error 清掉', async () => {
+    await emitRow('ob-clear', { lastError: 'OLD' });
+    const handler = jest.fn<OutboxHandler>().mockResolvedValue(undefined);
+    await runOutboxBatch({ push: okPush, handlers: { 'comment.created': handler } });
+    const [row] = await db.select().from(outbox).where(eq(outbox.id, 'ob-clear'));
+    expect(row.status).toBe('done');
+    expect(row.lastError).toBeNull();
+  });
+
+  it('last_error 截断到 512', async () => {
+    await emitRow('ob-long');
+    const failing: OutboxHandler = async () => {
+      throw new Error('E'.repeat(600));
+    };
+    await runOutboxBatch({ push: okPush, handlers: { 'comment.created': failing } });
+    const [row] = await db.select().from(outbox).where(eq(outbox.id, 'ob-long'));
+    expect(row.status).toBe('pending');
+    expect(row.lastError).toHaveLength(512);
+    expect(row.lastError).toBe('E'.repeat(512));
+  });
+
+  it('error.name=NonRetryableCompressError → 立即 failed，不占 5 档退避', async () => {
+    await emitRow('ob-nrc');
+    const failing: OutboxHandler = async () => {
+      const err = new Error('bad jpeg');
+      err.name = 'NonRetryableCompressError';
+      throw err;
+    };
+    const result = await runOutboxBatch({ push: okPush, handlers: { 'comment.created': failing } });
+    expect(result).toEqual({ claimed: 1, done: 0, retried: 0, failed: 1 });
+    const [row] = await db.select().from(outbox).where(eq(outbox.id, 'ob-nrc'));
+    expect(row.status).toBe('failed');
+    expect(row.attempts).toBe(1);
+    expect(row.nextRetryAt).toBeNull();
+    expect(row.processedAt).not.toBeNull();
+    expect(row.lastError).toBe('bad jpeg');
+  });
+
+  it('error.name=NonRetryableEmbeddingError → 立即 failed', async () => {
+    await emitRow('ob-nre');
+    const failing: OutboxHandler = async () => {
+      const err = new Error('dim mismatch');
+      err.name = 'NonRetryableEmbeddingError';
+      throw err;
+    };
+    const result = await runOutboxBatch({ push: okPush, handlers: { 'comment.created': failing } });
+    expect(result.failed).toBe(1);
+    const [row] = await db.select().from(outbox).where(eq(outbox.id, 'ob-nre'));
+    expect(row.status).toBe('failed');
+    expect(row.lastError).toBe('dim mismatch');
+  });
+
+  it('NonRetryableLLMError 仍走 5 档退避（不扩立即失败）', async () => {
+    await emitRow('ob-llm');
+    const failing: OutboxHandler = async () => {
+      const err = new Error('LLM 4xx');
+      err.name = 'NonRetryableLLMError';
+      throw err;
+    };
+    const result = await runOutboxBatch({ push: okPush, handlers: { 'comment.created': failing } });
+    expect(result).toEqual({ claimed: 1, done: 0, retried: 1, failed: 0 });
+    const [row] = await db.select().from(outbox).where(eq(outbox.id, 'ob-llm'));
+    expect(row.status).toBe('pending');
+    expect(row.attempts).toBe(1);
+    expect(row.lastError).toBe('LLM 4xx');
+    expect(row.nextRetryAt).not.toBeNull();
+  });
 });
+

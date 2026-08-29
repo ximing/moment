@@ -11,3 +11,6 @@ export * from './memories.js';
 export * from './templates.js';
 export * from './recaps.js';
 export * from './persons.js';
+export * from './search.js';
+export * from './jobs.js';
+

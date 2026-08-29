@@ -91,6 +91,33 @@ export const envSchema = z.object({
   // 高德 Web 服务 key；空串 = geocode 停用（坐标照存、place_name 留空、outbox 消费即跳过，spec §4/§8）。
   // 隐私：配置后 worker 会把时刻坐标（GCJ-02 换算后）发送到高德（spec §8）。
   AMAP_WEB_KEY: z.string().default(''),
+  // ---------- fused retrieval Lance / BA（spec §4.1 / §11 P4）----------
+  // server 独占目录；worker 禁止 connect。默认相对 cwd（jest 在 apps/server 下即 apps/server/lancedb_data）。
+  LANCEDB_PATH: z.string().min(1).default('./lancedb_data'),
+  // 空串 = 内部口一律 401 BA_NOT_CONFIGURED（不区分有没有 Authorization，防探测）。
+  BA_AUTH_TOKEN: z.string().default(''),
+  // 写入 config（两进程同 schema）；仅 worker embed handler 读它（P5）。server 忽略。
+  INTERNAL_API_BASE_URL: z.string().url().default('http://127.0.0.1:3000'),
+  // ensure 时按此维建 FixedSizeList；BA vector.length 必须相等。换维必须换目录或删表。
+  // 须 ∈ {2560,2048,1536,1024,768,512,256}，否则进程启动 zod 失败。
+  MULTIMODAL_EMBEDDING_DIMENSION: z.coerce
+    .number()
+    .int()
+    .refine((n) => [2560, 2048, 1536, 1024, 768, 512, 256].includes(n), {
+      message: 'MULTIMODAL_EMBEDDING_DIMENSION must be one of 2560,2048,1536,1024,768,512,256',
+    })
+    .default(2560),
+  // ---------- fused retrieval DashScope embedding（spec §4.1 / §11 P5）----------
+  // 禁止 z.coerce.boolean()：字符串 'false' 会被判 true。
+  MULTIMODAL_EMBEDDING_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  MULTIMODAL_EMBEDDING_MODEL: z.string().min(1).default('qwen3-vl-embedding'),
+  // 空串 = 停用向量路。不回退 ASR_API_KEY（运维可填同一值，但 config 层不自动借用）。
+  DASHSCOPE_API_KEY: z.string().default(''),
+  DASHSCOPE_BASE_URL: z.string().url().default('https://dashscope.aliyuncs.com/api/v1'),
+  MULTIMODAL_EMBEDDING_OUTPUT_TYPE: z.string().min(1).default('dense'),
 });
 
 export const config = envSchema.parse(process.env);

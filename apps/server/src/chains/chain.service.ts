@@ -23,6 +23,8 @@ import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { chainInvites, chainMembers, chains, comments, media, momentPersons, momentTags, moments, persons, reactions, shareLinks, tags, users, type Chain, type ChainInvite } from '../db/schema.js';
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
+import { deleteVectorsByChainId } from '../lancedb/repository.js';
+import { logger } from '../utils/logger.js';
 import type { DbTx } from '../outbox/outbox.js';
 import { TemplateService } from '../templates/template.service.js';
 import { validateChainPayload } from '../templates/payload-validator.js';
@@ -189,6 +191,11 @@ export class ChainService {
       await tx.delete(chainMembers).where(eq(chainMembers.chainId, chainId));
       await tx.delete(chains).where(eq(chains.id, chainId));
     });
+    try {
+      await deleteVectorsByChainId(chainId);
+    } catch (err) {
+      logger.warn('lancedb delete after chain delete failed', err);
+    }
   }
 
   /** 成员列表（viewer+），joinedAt 升序（owner 通常在最前）。 */

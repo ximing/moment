@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ReactionSummary } from './comments.js';
 import type { TagBrief } from './tags.js';
+import { isoDatetime, uuidLoose } from './feed.js';
 import { momentPersonIdsSchema, placeInputSchema, type MomentPlace, type PersonBrief } from './persons.js';
 
 export const momentTypeSchema = z.enum(['text', 'media', 'video', 'voice']);
@@ -107,6 +108,16 @@ export interface MomentMedia {
   posterMediaId: string | null;
   /** 视频封面稳定入口相对路径 /api/media/:posterId（不内嵌预签名 URL，CONVENTIONS §3.4）；分享态拼 ?st= 用；仅视频行非空，无封面为 null */
   posterUrl: string | null;
+  /**
+   * 派生图稳定入口 `/api/media/:id?variant=derived`；仅 derived_status=ready 非空。
+   * 不内嵌预签名（CONVENTIONS §3.4）。
+   */
+  derivedUrl: string | null;
+  /**
+   * 视频封面派生入口 `/api/media/:posterId?variant=derived`；仅视频行且封面 derived_status=ready 非空，否则 null。
+   * 图片行恒 null。
+   */
+  posterDerivedUrl: string | null;
 }
 
 export interface AuthorSummary {
@@ -159,10 +170,25 @@ export interface MomentListResponse {
 }
 
 /** 链内列表 query：cursor 空串/超长走 VALIDATION_ERROR；limit 仍由 service 解析为 INVALID_LIMIT。 */
-export const listMomentsQuerySchema = z.object({
-  cursor: z.string().min(1).max(1024).optional(),
-  limit: z.string().optional(),
-  /** 日期锚定（spec §4.2）：happened_at < before；链内列表恒 happened_at 语义，天然可用 */
-  before: isoTimestampSchema.optional(),
-});
+export const listMomentsQuerySchema = z
+  .object({
+    cursor: z.string().min(1).max(1024).optional(),
+    limit: z.string().optional(),
+    /** 日期锚定（spec §4.2）：happened_at < before；链内列表恒 happened_at 语义，天然可用 */
+    before: isoTimestampSchema.optional(),
+    person_id: z.string().regex(uuidLoose).optional(),
+    place: z.string().trim().min(1).max(255).optional(),
+    happened_from: isoDatetime.optional(),
+    happened_to: isoDatetime.optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (
+      val.happened_from !== undefined &&
+      val.happened_to !== undefined &&
+      Date.parse(val.happened_from) > Date.parse(val.happened_to)
+    ) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'VALIDATION_ERROR', path: ['happened_to'] });
+    }
+  });
 export type ListMomentsQuery = z.infer<typeof listMomentsQuerySchema>;
+

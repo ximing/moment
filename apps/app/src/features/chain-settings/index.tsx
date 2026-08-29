@@ -13,6 +13,7 @@ import { Button } from '../../components/Button';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { ChainSettingsService } from './chain-settings.service';
+import { JobsSection } from './jobs-section';
 
 const ROLE_LABEL: Record<string, string> = { owner: '主理人', editor: '编辑', viewer: '只读' };
 
@@ -254,6 +255,8 @@ const Content = observer(function Content() {
               )}
             </View>
           ))}
+
+          <JobsSection />
 
           <Text style={styles.sectionTitle}>危险区</Text>
           <Button variant="danger" loading={service.$model.deleteChain.loading} onPress={onDeleteChain}>

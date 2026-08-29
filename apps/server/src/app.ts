@@ -14,7 +14,7 @@ import { ReactionsController } from './reactions/reactions.controller.js';
 import { MediaController } from './media/media.controller.js';
 import { ErrorHandlerMiddleware } from './middlewares/error-handler.js';
 import { MomentController, MomentItemController } from './moments/moment.controller.js';
-import { authRateLimiter, inviteAcceptRateLimiter, loginRateLimiter, publicShareRateLimiter } from './middlewares/rate-limit.js';
+import { authRateLimiter, inviteAcceptRateLimiter, loginRateLimiter, publicShareRateLimiter, searchRateLimiter } from './middlewares/rate-limit.js';
 import { PersonController } from './persons/person.controller.js';
 import { TagController } from './tags/tag.controller.js';
 import { FeedController } from './feed/feed.controller.js';
@@ -26,6 +26,9 @@ import { ShareLinkItemController, ShareLinksController } from './share/share-lin
 import { RecapController } from './recaps/recap.controller.js';
 import { TemplatesController } from './templates/template.controller.js';
 import { AggregateController } from './templates/aggregate.controller.js';
+import { InternalEmbeddingsController } from './embeddings/internal.controller.js';
+import { SearchController } from './search/search.controller.js';
+import { JobsController } from './jobs/jobs.controller.js';
 
 export function createApp(): express.Express {
   useContainer(Container);
@@ -48,10 +51,11 @@ export function createApp(): express.Express {
   // 邀请接受限流（spec §4/§6：IP + 账号维度）——挂在 populateUser 之后，keyGenerator 可读 req.user。
   // 命中后 next() 落入 routing-controllers 的同名 POST 路由，不影响其注册。
   app.post('/api/invites/:token/accept', inviteAcceptRateLimiter);
+  app.post('/api/search', searchRateLimiter);
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, PersonController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, PersonController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController, InternalEmbeddingsController, SearchController, JobsController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,

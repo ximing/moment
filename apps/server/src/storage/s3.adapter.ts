@@ -19,6 +19,7 @@ import {
   type PutMeta,
   type StorageMetadata,
 } from './base.adapter.js';
+import { ObjectTooLargeError, abortS3Body, readBodyWithLimit } from './bounded-read.js';
 
 export interface S3UnifiedStorageAdapterConfig {
   bucket: string;
@@ -146,6 +147,27 @@ export class S3UnifiedStorageAdapter extends BaseUnifiedStorageAdapter {
         Key: this.fullFor(destKey, metadata),
       })
     );
+  }
+
+  /**
+   * 有界 GetObject（spec §2.4）。桶/prefix 来自行上 metadata，client/endpoint 与 generateAccessUrl 同（MVP 单桶）。
+   * ContentLength 已知且超限时不把 body 读入内存。
+   */
+  async getObject(key: string, metadata: StorageMetadata, maxBytes: number): Promise<Buffer> {
+    const res = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucketFrom(metadata),
+        Key: this.fullFor(key, metadata),
+      }),
+    );
+    if (typeof res.ContentLength === 'number' && res.ContentLength > maxBytes) {
+      abortS3Body(res.Body);
+      throw new ObjectTooLargeError(key, maxBytes);
+    }
+    if (!res.Body) {
+      throw new Error('S3 GetObject returned empty Body');
+    }
+    return readBodyWithLimit(res.Body as AsyncIterable<Uint8Array>, maxBytes, key);
   }
 
   async generateAccessUrl(

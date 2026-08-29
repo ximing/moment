@@ -14,6 +14,7 @@ import {
   type MediaPartsResponse,
   type MediaPresignInput,
   type MediaPresignResponse,
+  type MediaVariant,
   type UserProfile,
 } from '@moment/dto';
 import { ChainPolicy } from '../chains/chain-policy.js';
@@ -266,7 +267,12 @@ export class MediaService {
    *   被链 avatar/cover 引用 → 该校验链 viewer（chain-appearance 设计 §4.4）；
    *   未被任何业务资源引用 → 仅 uploader 本人临时预览。
    */
-  async resolveAccessUrl(user: UserProfile | null, mediaId: string, st?: string): Promise<string> {
+  async resolveAccessUrl(
+    user: UserProfile | null,
+    mediaId: string,
+    st?: string,
+    variant: MediaVariant = 'original',
+  ): Promise<string> {
     const [row] = await db.select().from(media).where(eq(media.id, mediaId)).limit(1);
     if (!row || row.status !== 'ready') throw new NotFoundError('MEDIA_NOT_FOUND');
 
@@ -297,6 +303,12 @@ export class MediaService {
     }
 
     const { signingDate, expiresIn } = alignedGetPresign();
+    if (variant === 'derived') {
+      if (row.derivedStatus !== 'ready' || !row.derivedS3Key) {
+        throw new NotFoundError('DERIVED_NOT_READY');
+      }
+      return getStorage().generateAccessUrl(row.derivedS3Key, row.storageMeta, expiresIn, signingDate);
+    }
     return getStorage().generateAccessUrl(row.s3Key, row.storageMeta, expiresIn, signingDate);
   }
 

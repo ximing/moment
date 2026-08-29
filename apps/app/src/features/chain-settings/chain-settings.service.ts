@@ -1,5 +1,5 @@
 import { Service } from '@rabjs/react';
-import type { ChainAppearanceColor, ChainDto, ChainIcon, ShareLinkDto } from '@moment/dto';
+import type { ChainAppearanceColor, ChainDto, ChainIcon, ChainJobDto, ShareLinkDto } from '@moment/dto';
 import { client } from '../../lib/api';
 import type { ChainChangedPayload } from '../../lib/events';
 
@@ -11,6 +11,7 @@ export class ChainSettingsService extends Service {
   members: Awaited<ReturnType<typeof client.listMembers>> = [];
   invites: Awaited<ReturnType<typeof client.listInvites>> = [];
   shareLinks: ShareLinkDto[] = [];
+  jobs: ChainJobDto[] = [];
 
   // 资料表单（name/description/color/icon；RN 不加图片/封面编辑——spec §1 非目标）
   formName = '';
@@ -42,6 +43,7 @@ export class ChainSettingsService extends Service {
   hydrate(chainId: string): void {
     if (this.chainId === chainId) return;
     this.chainId = chainId;
+    this.jobs = [];
     void this.loadChain().catch(() => undefined);
   }
 
@@ -81,6 +83,12 @@ export class ChainSettingsService extends Service {
   async loadShareLinks(): Promise<void> {
     if (this.chain?.myRole !== 'owner') return;
     this.shareLinks = (await client.listShareLinks(this.chainId)).items;
+  }
+
+  async loadJobs(): Promise<void> {
+    if (!this.chainId) return;
+    const res = await client.listChainJobs(this.chainId);
+    this.jobs = res.jobs;
   }
 
   /** 选颜色：同时清 Emoji——新协议三模式互斥，显式表达「纯色」而不是把决定权推给服务端归一化。 */

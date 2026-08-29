@@ -45,6 +45,12 @@ const api = vi.hoisted(() => ({
   createComment: vi.fn(),
   deleteComment: vi.fn(),
   getPublicShare: vi.fn(),
+  mediaUrl(id: string, opts?: { variant?: 'original' | 'derived'; st?: string }) {
+    let url = `/api/media/${id}`;
+    if (opts?.variant === 'derived') url += '?variant=derived';
+    if (opts?.st) url += `${url.includes('?') ? '&' : '?'}st=${encodeURIComponent(opts.st)}`;
+    return url;
+  },
 }));
 
 vi.mock('@/api/client', () => ({
@@ -168,7 +174,7 @@ const TEXT_MOMENT: MomentResponse = {
 };
 
 function image(id: string, width = 64, height = 48, sortOrder = 0): MomentMedia {
-  return { id, url: `/api/media/${id}`, mime: 'image/jpeg', width, height, duration: null, sortOrder, posterMediaId: null, posterUrl: null };
+  return { id, url: `/api/media/${id}`, mime: 'image/jpeg', width, height, duration: null, sortOrder, posterMediaId: null, posterUrl: null, derivedUrl: null, posterDerivedUrl: null };
 }
 
 const TWO_IMAGE_MOMENT: MomentResponse = {

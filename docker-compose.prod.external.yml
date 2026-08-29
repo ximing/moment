@@ -48,8 +48,12 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      LANCEDB_PATH: /data/lancedb
+    volumes:
+      - moment-lancedb:/data/lancedb
     ports:
-      # 给同机 nginx 反代；远程 nginx 再把 MOMENT_API_BIND 改成 0.0.0.0
       - '${MOMENT_API_BIND:-127.0.0.1}:${MOMENT_API_PORT:-3000}:3000'
     healthcheck:
       test:
@@ -68,9 +72,14 @@ services:
     <<: *app
     image: ghcr.io/ximing/moment-server:${MOMENT_IMAGE_TAG:-stable}
     command: ['node', 'dist/worker/index.js']
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_BASE_URL: http://server:3000
     depends_on:
       migrate:
         condition: service_completed_successfully
+      server:
+        condition: service_healthy
 
   backup:
     <<: *app
@@ -78,3 +87,6 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+volumes:
+  moment-lancedb: {}

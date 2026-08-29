@@ -3,7 +3,7 @@ import mime from 'mime-types';
 import { eq, inArray } from 'drizzle-orm';
 import { BadRequestError, ForbiddenError, HttpError, NotFoundError } from 'routing-controllers';
 import { Service } from 'typedi';
-import type { CreateMomentInput, MomentListResponse, MomentResponse, PatchMomentInput } from '@moment/dto';
+import type { CreateMomentInput, ListMomentsQuery, MomentListResponse, MomentResponse, PatchMomentInput } from '@moment/dto';
 import { ChainPolicy } from '../chains/chain-policy.js';
 import { db } from '../db/index.js';
 import { chains, media, moments, type Media } from '../db/schema.js';
@@ -11,7 +11,11 @@ import { TemplateService } from '../templates/template.service.js';
 import { validateMomentPayload } from '../templates/payload-validator.js';
 import { queryMomentPage } from '../feed/moment-query.js';
 import { emitOutbox } from '../outbox/outbox.js';
+import { isCompressibleMime } from '../media/derived.js';
+import { maybeEmitMomentEmbed } from './embed-outbox.js';
+import { deleteVectorsByMomentId } from '../lancedb/repository.js';
 import {
+  OUTBOX_MOMENT_COMPRESS,
   OUTBOX_MOMENT_CREATED,
   OUTBOX_MOMENT_DELETED,
   OUTBOX_MOMENT_EXTRACT,
@@ -57,6 +61,7 @@ export class MomentService {
     const copiedTmp: { key: string; metadata: StorageMetadata }[] = [];
 
     const created = await db.transaction(async (tx) => {
+      const compressIds: string[] = [];
       let mediaRows: Media[] = [];
       let posterRow: Media | null = null;
       // poster 与媒体行走同一事务行锁（并发语义一致），但 poster 行单独持有——
@@ -140,8 +145,10 @@ export class MomentService {
             sortOrder,
             storageMeta: row.storageMeta,
             ...(input.posterMediaId ? { posterMediaId: input.posterMediaId } : {}),
+            ...(isCompressibleMime(row.mime) ? { derivedStatus: 'pending' as const } : {}),
           })
           .where(eq(media.id, row.id));
+        if (isCompressibleMime(row.mime)) compressIds.push(row.id);
       }
 
       // poster 绑定（copy 复用媒体循环的 copyObject 范式，update 分开——不写 sortOrder / storageMeta）：
@@ -152,7 +159,15 @@ export class MomentService {
         const finalKey = `chains/${chainId}/${momentId}/${posterRow.id}.${ext}`;
         await storage.copyObject(posterRow.s3Key, finalKey, posterRow.storageMeta);
         copiedTmp.push({ key: posterRow.s3Key, metadata: posterRow.storageMeta });
-        await tx.update(media).set({ s3Key: finalKey, momentId }).where(eq(media.id, posterRow.id));
+        await tx
+          .update(media)
+          .set({
+            s3Key: finalKey,
+            momentId,
+            ...(isCompressibleMime(posterRow.mime) ? { derivedStatus: 'pending' as const } : {}),
+          })
+          .where(eq(media.id, posterRow.id));
+        if (isCompressibleMime(posterRow.mime)) compressIds.push(posterRow.id);
       }
 
       const [inserted] = await tx.select().from(moments).where(eq(moments.id, momentId)).limit(1);
@@ -161,6 +176,10 @@ export class MomentService {
       await replaceMomentTags(tx, inserted.id, chainId, input.tagIds ?? []);
 
       await replaceMomentPersons(tx, inserted.id, chainId, input.personIds ?? []);
+
+      for (const mediaId of compressIds) {
+        await emitOutbox(tx, OUTBOX_MOMENT_COMPRESS, { momentId, chainId, mediaId });
+      }
 
       // 仅坐标且 place_name 空（exif 形态）→ 同事务写 geocode outbox（spec §4；worker 属 P3）
       if (isGeocodePending(placeCols)) {
@@ -186,6 +205,7 @@ export class MomentService {
       //（判据字面）。空素材（content 与 transcript 均空，如无正文 media/voice 时刻）的行由
       // handler 判空跳过、不写 hash；voice 时刻转写回填后由 transcribe 路径再次发射，转写文本必进管线。
       await emitOutbox(tx, OUTBOX_MOMENT_EXTRACT, { momentId });
+      await maybeEmitMomentEmbed(tx, momentId);
 
       return inserted;
     });
@@ -200,11 +220,7 @@ export class MomentService {
   }
 
   /** 链内时间线：与 feed 共用 queryMomentPage（order 固定 happened_at，游标同格式）。 */
-  async list(
-    userId: string,
-    chainId: string,
-    query: { cursor?: string; limit?: string; before?: string }
-  ): Promise<MomentListResponse> {
+  async list(userId: string, chainId: string, query: ListMomentsQuery): Promise<MomentListResponse> {
     await this.policy.require(userId, chainId, 'viewer');
 
     let limit = 20;
@@ -221,6 +237,10 @@ export class MomentService {
       limit,
       cursor: query.cursor,
       before: query.before,
+      personId: query.person_id,
+      place: query.place,
+      happenedFrom: query.happened_from,
+      happenedTo: query.happened_to,
     });
     return { items: await serializeMoments(page.rows, userId, { includePrivate: true }), nextCursor: page.nextCursor };
   }
@@ -307,6 +327,7 @@ export class MomentService {
       if (computeAiExtractHash(row.content, row.transcript) !== row.aiExtractHash) {
         await emitOutbox(tx, OUTBOX_MOMENT_EXTRACT, { momentId });
       }
+      await maybeEmitMomentEmbed(tx, momentId);
       return row;
     });
     return (await serializeMoments([updatedRow], userId, { includePrivate: true }))[0];
@@ -329,5 +350,10 @@ export class MomentService {
         { momentId, chainId: m.chainId, authorId: m.authorId }
       );
     });
+    try {
+      await deleteVectorsByMomentId(momentId);
+    } catch (err) {
+      logger.warn('lancedb delete after moment soft-delete failed', err);
+    }
   }
 }

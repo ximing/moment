@@ -26,6 +26,10 @@ export class FeedController {
       order: query.order,
       limit: query.limit,
       before: query.before,
+      personId: query.person_id,
+      place: query.place,
+      happenedFrom: query.happened_from,
+      happenedTo: query.happened_to,
     });
   }
 

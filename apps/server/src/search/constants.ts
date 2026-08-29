@@ -1,0 +1,5 @@
+export const INTENT_TIMEOUT_MS = 8000;
+export const VECTOR_CANDIDATE_LIMIT = 200;
+export const HARD_FILTER_PREFILTER_MAX = 200;
+export const INTENT_CHAT_TEMPERATURE = 0;
+export const INTENT_CHAT_MAX_TOKENS = 512;

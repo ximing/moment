@@ -1,20 +1,30 @@
 import { useState } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { Play } from 'lucide-react';
+import { client } from '@/api/client';
 import { Icon } from '@/ui/Icon';
 import { useMediaObjectUrl } from './useMediaObjectUrl';
 
 // 时刻媒体块（C 端总规范 §6.1 / §10）：0/1/2–9/视频都是一等分支。
 // 0 → 无媒体 DOM；1 图按声明宽高渲染（width/height 属性给出固有比例，现代浏览器
 // 由此推导 aspect-ratio）；2 图两列、3–9 图三列方形格，点击回报被点 index；
-// 视频先 16:9 播放面、点后出原生 controls。URL 语义不变：认证模式经
-// useMediaObjectUrl(media.id) 取 blob object URL；分享模式绝不请求 blob，用稳定
-// 相对 URL + ?st=encodeURIComponent(token)。视觉只消费 token：rounded-surface-lg
+// 视频先 16:9 播放面、点后出原生 controls。认证卡片优先 derived；分享走
+// `client.mediaUrl`（已有 `?` 则 `&st=`）。视觉只消费 token：rounded-surface-lg
 // 媒体圆角、bg-feedback-skeleton 加载占位、bg-ink 播放面底色、ring-focus 焦点环。
 
-/** 分享页稳定入口：相对路径 + 分享 token，不走认证 blob 通道。 */
-function shareSrc(m: MomentMedia, shareToken: string): string {
-  return `${m.url}?st=${encodeURIComponent(shareToken)}`;
+function cardVariant(media: Pick<MomentMedia, 'derivedUrl'>): 'original' | 'derived' {
+  return media.derivedUrl ? 'derived' : 'original';
+}
+
+function posterVariant(media: Pick<MomentMedia, 'posterDerivedUrl'>): 'original' | 'derived' {
+  return media.posterDerivedUrl ? 'derived' : 'original';
+}
+
+function shareSrc(mediaId: string, shareToken: string, variant?: 'original' | 'derived'): string {
+  return client.mediaUrl(mediaId, {
+    variant: variant === 'derived' ? 'derived' : undefined,
+    st: shareToken,
+  });
 }
 
 /* ---------------------------------------------------------------------------
@@ -84,8 +94,12 @@ function ImageOne({
   single?: boolean;
   onClick?: () => void;
 }) {
-  const blobUrl = useMediaObjectUrl(shareToken ? null : media.id);
-  const url = shareToken ? shareSrc(media, shareToken) : blobUrl;
+  const variant = cardVariant(media);
+  const blobUrl = useMediaObjectUrl(shareToken ? null : media.id, {
+    variant,
+    fallbackToOriginal: variant === 'derived',
+  });
+  const url = shareToken ? shareSrc(media.id, shareToken, variant) : blobUrl;
   if (!url) {
     // 加载占位只消费 --feedback-skeleton；单图按声明宽高占位，多图按方形格
     return (
@@ -130,9 +144,16 @@ function ImageOne({
 
 function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
   const [on, setOn] = useState(Boolean(shareToken));
-  const blobUrl = useMediaObjectUrl(!shareToken && on ? media.id : null);
-  const posterBlobUrl = useMediaObjectUrl(!shareToken && !on ? media.posterMediaId : null);
-  const url = shareToken ? shareSrc(media, shareToken) : blobUrl;
+  const blobUrl = useMediaObjectUrl(!shareToken && on ? media.id : null, {
+    variant: 'original',
+    fallbackToOriginal: false,
+  });
+  const pVariant = posterVariant(media);
+  const posterBlobUrl = useMediaObjectUrl(!shareToken && !on ? media.posterMediaId : null, {
+    variant: pVariant,
+    fallbackToOriginal: pVariant === 'derived',
+  });
+  const url = shareToken ? shareSrc(media.id, shareToken) : blobUrl;
   if (!on) {
     return (
       <button
@@ -168,8 +189,8 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
       controls
       src={url}
       poster={
-        shareToken && media.posterUrl
-          ? `${media.posterUrl}?st=${encodeURIComponent(shareToken)}`
+        shareToken && media.posterMediaId
+          ? shareSrc(media.posterMediaId, shareToken, pVariant)
           : undefined
       }
       className="aspect-video w-full rounded-surface-lg bg-ink"

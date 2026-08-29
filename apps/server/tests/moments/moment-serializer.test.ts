@@ -82,3 +82,91 @@ describe('momentSerializer 公开基形（spec §8：persons/place 不在基函�
     expect(Object.keys(res)).not.toContain('place');
   });
 });
+
+describe('momentSerializer derivedUrl / posterDerivedUrl（spec fused-retrieval §2.1）', () => {
+  it('仅 derivedStatus=ready 出 derivedUrl；pending/skipped/failed/缺省为 null；不内嵌预签名', () => {
+    const ready = momentSerializer(moment, {
+      media: [
+        {
+          id: 'md-1',
+          mime: 'image/jpeg',
+          width: 512,
+          height: 256,
+          duration: null,
+          sortOrder: 0,
+          posterMediaId: null,
+          derivedStatus: 'ready',
+          posterDerivedStatus: null,
+        },
+      ],
+      author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
+    });
+    expect(ready.media[0].derivedUrl).toBe('/api/media/md-1?variant=derived');
+    expect(ready.media[0].posterDerivedUrl).toBeNull();
+    expect(ready.media[0].url).toBe('/api/media/md-1');
+    expect(JSON.stringify(ready)).not.toContain('https://');
+
+    for (const derivedStatus of ['pending', 'skipped', 'failed', null] as const) {
+      const res = momentSerializer(moment, {
+        media: [
+          {
+            id: 'md-1',
+            mime: 'image/jpeg',
+            width: 10,
+            height: 10,
+            duration: null,
+            sortOrder: 0,
+            posterMediaId: null,
+            derivedStatus,
+            posterDerivedStatus: null,
+          },
+        ],
+        author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
+      });
+      expect(res.media[0].derivedUrl).toBeNull();
+    }
+  });
+
+  it('视频行：封面 ready → posterDerivedUrl；图片行恒 null', () => {
+    const video = momentSerializer(
+      { ...moment, type: 'video' },
+      {
+        media: [
+          {
+            id: 'vid-1',
+            mime: 'video/mp4',
+            width: 1280,
+            height: 720,
+            duration: 12,
+            sortOrder: 0,
+            posterMediaId: 'poster-1',
+            derivedStatus: null,
+            posterDerivedStatus: 'ready',
+          },
+        ],
+        author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
+      },
+    );
+    expect(video.media[0].derivedUrl).toBeNull();
+    expect(video.media[0].posterUrl).toBe('/api/media/poster-1');
+    expect(video.media[0].posterDerivedUrl).toBe('/api/media/poster-1?variant=derived');
+
+    const image = momentSerializer(moment, {
+      media: [
+        {
+          id: 'md-1',
+          mime: 'image/jpeg',
+          width: 10,
+          height: 10,
+          duration: null,
+          sortOrder: 0,
+          posterMediaId: null,
+          derivedStatus: 'ready',
+          posterDerivedStatus: 'ready',
+        },
+      ],
+      author: { id: 'u-1', nickname: 'Alice', avatarUrl: null },
+    });
+    expect(image.media[0].posterDerivedUrl).toBeNull();
+  });
+});

@@ -7,6 +7,7 @@ import type { ASRProvider } from '../../src/llm/asr/base.provider.js';
 import { setASRProvider } from '../../src/llm/asr/factory.js';
 import type { LLMProvider } from '../../src/llm/base.provider.js';
 import { setLLMProvider } from '../../src/llm/factory.js';
+import { setEmbeddingProvider } from '../../src/embedding/factory.js';
 import { computeAiExtractHash } from '../../src/moments/ai-extract-hash.js';
 import { runExtractBackfillSweep } from '../../src/worker/extract-backfill.js';
 import { runOutboxBatch } from '../../src/worker/processor.js';
@@ -28,12 +29,14 @@ beforeEach(async () => {
   await resetDb();
   storage = installMockStorage();
   owner = await createUser(app, 'alice');
+  setEmbeddingProvider(null);
 });
 afterEach(() => {
   globalThis.fetch = realFetch;
   setLLMProvider(undefined);
   setASRProvider(undefined);
   setStorageAdapter(null);
+  setEmbeddingProvider(undefined);
 });
 afterAll(closeDb);
 

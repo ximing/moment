@@ -76,3 +76,88 @@ test('monthIndexQuerySchema chain_ids/tag_id 规则与 feedQuerySchema 一致', 
   assert.throws(() => monthIndexQuerySchema.parse({ tz_offset: '0', chain_ids: 'not-uuid' }));
   assert.throws(() => monthIndexQuerySchema.parse({ tz_offset: '0', tag_id: 'nope' }));
 });
+
+const UUID_A = '00000000-0000-4000-8000-000000000001';
+
+test('feedQuerySchema：person_id 与 tag_id 同一 uuidLoose（非更严 z.uuid）', () => {
+  assert.equal(feedQuerySchema.parse({ person_id: UUID_A }).person_id, UUID_A);
+  assert.throws(() => feedQuerySchema.parse({ person_id: 'nope' }));
+  // 全默认仍无新字段
+  const q = feedQuerySchema.parse({});
+  assert.equal(q.person_id, undefined);
+  assert.equal(q.place, undefined);
+  assert.equal(q.happened_from, undefined);
+  assert.equal(q.happened_to, undefined);
+});
+
+test('feedQuerySchema：place trim 1..255', () => {
+  assert.equal(feedQuerySchema.parse({ place: '  朝阳公园  ' }).place, '朝阳公园');
+  assert.throws(() => feedQuerySchema.parse({ place: '' }));
+  assert.throws(() => feedQuerySchema.parse({ place: 'x'.repeat(256) }));
+});
+
+test('feedQuerySchema：happened_from/to 用 isoDatetime，拒绝 2026/08/01', () => {
+  const q = feedQuerySchema.parse({
+    happened_from: '2026-08-01T00:00:00.000Z',
+    happened_to: '2026-08-31T23:59:59.999Z',
+  });
+  assert.equal(q.happened_from, '2026-08-01T00:00:00.000Z');
+  assert.throws(() => feedQuerySchema.parse({ happened_from: '2026/08/01' }));
+});
+
+test('feedQuerySchema：happened_from > happened_to 用 Date.parse，带偏移不靠字典序', () => {
+  // 字典序 from > to，瞬时 from < to → 合法
+  const ok = feedQuerySchema.safeParse({
+    happened_from: '2026-08-01T00:00:00+08:00',
+    happened_to: '2026-07-31T23:00:00Z',
+  });
+  assert.ok(ok.success);
+
+  const bad = feedQuerySchema.safeParse({
+    happened_from: '2026-08-02T00:00:00.000Z',
+    happened_to: '2026-08-01T00:00:00.000Z',
+  });
+  assert.ok(!bad.success);
+  if (!bad.success) {
+    assert.ok(bad.error.issues.some((i) => i.message === 'VALIDATION_ERROR' && i.path[0] === 'happened_to'));
+  }
+});
+
+test('feedQuerySchema：区间 + order=created_at → RANGE_REQUIRES_HAPPENED_AT；before 仍 BEFORE_REQUIRES_HAPPENED_AT', () => {
+  const range = feedQuerySchema.safeParse({
+    happened_from: '2026-08-01T00:00:00.000Z',
+    order: 'created_at',
+  });
+  assert.ok(!range.success);
+  if (!range.success) {
+    assert.ok(range.error.issues.some((i) => i.message === 'RANGE_REQUIRES_HAPPENED_AT'));
+  }
+  const onlyTo = feedQuerySchema.safeParse({
+    happened_to: '2026-08-01T00:00:00.000Z',
+    order: 'created_at',
+  });
+  assert.ok(!onlyTo.success);
+
+  const before = feedQuerySchema.safeParse({
+    before: '2026-08-01T00:00:00.000Z',
+    order: 'created_at',
+  });
+  assert.ok(!before.success);
+  if (!before.success) {
+    assert.ok(before.error.issues.some((i) => i.message === 'BEFORE_REQUIRES_HAPPENED_AT'));
+    assert.ok(!before.error.issues.some((i) => i.message === 'RANGE_REQUIRES_HAPPENED_AT'));
+  }
+});
+
+test('monthIndexQuerySchema 不加 person_id/place/happened_*（spec §6.1）', () => {
+  const q = monthIndexQuerySchema.parse({
+    tz_offset: '0',
+    person_id: UUID_A,
+    place: '朝阳公园',
+    happened_from: '2026-08-01T00:00:00.000Z',
+  });
+  assert.equal((q as { person_id?: string }).person_id, undefined);
+  assert.equal((q as { place?: string }).place, undefined);
+  assert.equal((q as { happened_from?: string }).happened_from, undefined);
+});
+

@@ -34,6 +34,22 @@ function Consumer({ mediaId }: { mediaId: string | null }) {
   return <output data-testid="media-url">{useMediaObjectUrl(mediaId) ?? ''}</output>;
 }
 
+function ConsumerWithOpts({
+  mediaId,
+  variant,
+  fallbackToOriginal,
+}: {
+  mediaId: string | null;
+  variant?: 'original' | 'derived';
+  fallbackToOriginal?: boolean;
+}) {
+  return (
+    <output data-testid="media-url">
+      {useMediaObjectUrl(mediaId, { variant, fallbackToOriginal }) ?? ''}
+    </output>
+  );
+}
+
 const renderedUrls = () => screen.getAllByTestId('media-url').map((el) => el.textContent);
 
 beforeAll(() => {
@@ -162,6 +178,43 @@ describe('useMediaObjectUrl 共享与回收', () => {
     const view = render(<Consumer mediaId={null} />);
     expect(api.fetchMediaBlob).not.toHaveBeenCalled();
     expect(renderedUrls()).toEqual(['']);
+    view.unmount();
+  });
+});
+
+describe('variant 缓存键与 derived 回退（spec fused-retrieval §6.5 / §7.3）', () => {
+  it('同一 mediaId 的 original 与 derived 各 fetch 一次，object URL 不共享', async () => {
+    const dOrig = deferred<Blob>();
+    const dDer = deferred<Blob>();
+    api.fetchMediaBlob.mockImplementation((_id: string, opts?: { variant?: string }) =>
+      opts?.variant === 'derived' ? dDer.promise : dOrig.promise,
+    );
+    const orig = render(<ConsumerWithOpts mediaId="m-1" variant="original" />);
+    const der = render(<ConsumerWithOpts mediaId="m-1" variant="derived" />);
+    expect(api.fetchMediaBlob).toHaveBeenCalledTimes(2);
+    expect(api.fetchMediaBlob).toHaveBeenCalledWith('m-1');
+    expect(api.fetchMediaBlob).toHaveBeenCalledWith('m-1', { variant: 'derived' });
+
+    await act(async () => dOrig.resolve(new Blob(['o'])));
+    await act(async () => dDer.resolve(new Blob(['d'])));
+    expect(renderedUrls().sort()).toEqual(['blob:obj-1', 'blob:obj-2']);
+    orig.unmount();
+    der.unmount();
+  });
+
+  it('derived 失败且 fallbackToOriginal：改打 original，不把死链留给用户', async () => {
+    const dDer = deferred<Blob>();
+    const dOrig = deferred<Blob>();
+    api.fetchMediaBlob.mockImplementation((_id: string, opts?: { variant?: string }) =>
+      opts?.variant === 'derived' ? dDer.promise : dOrig.promise,
+    );
+    const view = render(<ConsumerWithOpts mediaId="m-1" variant="derived" fallbackToOriginal />);
+    expect(api.fetchMediaBlob).toHaveBeenCalledWith('m-1', { variant: 'derived' });
+
+    await act(async () => dDer.reject(new Error('DERIVED_NOT_READY')));
+    expect(api.fetchMediaBlob).toHaveBeenCalledWith('m-1');
+    await act(async () => dOrig.resolve(new Blob(['o'])));
+    expect(renderedUrls()).toEqual(['blob:obj-1']);
     view.unmount();
   });
 });

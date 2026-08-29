@@ -1,14 +1,17 @@
 import { bindServices, observer, useService } from '@rabjs/react';
-import { ArrowLeft } from 'lucide-react';
 import { ComposerEntry } from '@/compose/composer-entry';
+import { humanError } from '@/lib/errors';
 import { canCompose } from '@/lib/roles';
+import { formatSearchParsed } from '@/lib/search-summary';
 import { MemoriesEntry } from '@/memories/memories-entry';
 import { ChainListService } from '@/services/chain-list.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
+import { FilterChips } from '@/timeline/filter-chips';
+import { TimelineSearchField } from '@/timeline/search-field';
 import { Timeline } from '@/timeline/timeline';
 import { TimelineRail } from '@/timeline/timeline-rail';
 import { Button } from '@/ui/button/index';
-import { EmptyState } from '@/ui/feedback/index';
+import { Banner, EmptyState } from '@/ui/feedback/index';
 import { FeedHomeService } from './feed-home.service';
 
 // 「大家的日子」汇总页（C 端总规范 §4.1 / §6.3）：页眉 = 多链标 + 大家的日子 +
@@ -65,6 +68,13 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
       {/* 那年今日入口条（spec memories-today §4）：有周年内容才渲染，点击展开同页内嵌面板 */}
       <MemoriesEntry chainLookById={looks} />
 
+      <TimelineSearchField
+        onSubmit={(q) => void service.submitSearch(q)}
+        onClear={() => {
+          if (service.searching) void service.exitSearch();
+        }}
+      />
+
       <TimelineRail
         index={service.monthIndex}
         indexPending={service.indexPending}
@@ -72,14 +82,22 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
         value={service.filter}
         onChange={(next) => service.setFilter(next)}
       />
-      {/* 锚定态「回到今天」：与链主页同一锚定 chips 语义，清 before 回第一页 */}
-      {service.filter.before && (
-        <div className="sticky top-2 z-10 mb-4">
-          <Button variant="secondary" leadingIcon={ArrowLeft} onClick={() => service.clearBefore()}>
-            回到今天
-          </Button>
-        </div>
-      )}
+      {service.searchError ? (
+        <Banner tone="error">{humanError(service.searchError)}</Banner>
+      ) : service.searching && service.searchParsed ? (
+        <Banner tone="info" action={{ label: '关闭', onPress: () => void service.exitSearch() }}>
+          {formatSearchParsed(service.searchParsed)}
+        </Banner>
+      ) : null}
+
+      <FilterChips
+        filter={service.filter}
+        onClearPerson={() =>
+          service.setFilter({ ...service.filter, personId: undefined, personName: undefined })
+        }
+        onClearPlace={() => service.setFilter({ ...service.filter, place: undefined })}
+        onClearBefore={() => service.clearBefore()}
+      />
       <Timeline
         moments={service.moments}
         chainLookById={looks}
@@ -91,6 +109,8 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
         isFetchingNextPage={service.$model.loadMore.loading}
         fetchNextPage={() => void service.loadMore()}
         entry={entry}
+        onPersonFilter={(p) => service.togglePersonFilter(p)}
+        onPlaceFilter={(place) => service.togglePlaceFilter(place)}
         empty={
           noChains ? (
             <EmptyState
@@ -98,6 +118,14 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
               scope="section"
               title="建第一条时光链，比如「宝宝成长」"
               description="点「开一条新的链」就可以。"
+            />
+          ) : service.searching ? (
+            <EmptyState
+              variant="timeline"
+              scope="section"
+              title="没有找到相关时刻"
+              description="换个说法，或关掉搜索回到时间线。"
+              action={{ label: '退出搜索', emphasis: 'quiet', onPress: () => void service.exitSearch() }}
             />
           ) : service.filtered ? (
             // 筛选/锚定筛空（web-product §4 空态表第三行）

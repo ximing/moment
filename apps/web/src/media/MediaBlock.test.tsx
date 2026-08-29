@@ -16,18 +16,62 @@ import { useMediaObjectUrl } from './useMediaObjectUrl';
 // useMediaObjectUrl 模块桩：认证 id 同步回 blob:mock-<id>，null 回 null；
 // 调用参数即「是否请求过 blob」的直接证据。
 
+vi.mock('@/api/client', () => ({
+  client: {
+    mediaUrl(id: string, opts?: { variant?: 'original' | 'derived'; st?: string }) {
+      let url = `/api/media/${id}`;
+      if (opts?.variant === 'derived') url += '?variant=derived';
+      if (opts?.st) url += `${url.includes('?') ? '&' : '?'}st=${encodeURIComponent(opts.st)}`;
+      return url;
+    },
+  },
+}));
+
 vi.mock('./useMediaObjectUrl', () => ({
   useMediaObjectUrl: vi.fn((mediaId: string | null) => (mediaId ? `blob:mock-${mediaId}` : null)),
 }));
 
 const mockUseMediaObjectUrl = vi.mocked(useMediaObjectUrl);
 
-function image(id: string, width = 64, height = 48, sortOrder = 0): MomentMedia {
-  return { id, url: `/api/media/${id}`, mime: 'image/jpeg', width, height, duration: null, sortOrder, posterMediaId: null, posterUrl: null };
+function image(
+  id: string,
+  width = 64,
+  height = 48,
+  sortOrder = 0,
+  derivedUrl: string | null = null,
+): MomentMedia {
+  return {
+    id,
+    url: `/api/media/${id}`,
+    mime: 'image/jpeg',
+    width,
+    height,
+    duration: null,
+    sortOrder,
+    posterMediaId: null,
+    posterUrl: null,
+    derivedUrl,
+    posterDerivedUrl: null,
+  };
 }
 
-function video(id: string): MomentMedia {
-  return { id, url: `/api/media/${id}`, mime: 'video/mp4', width: 1280, height: 720, duration: 12, sortOrder: 0, posterMediaId: null, posterUrl: null };
+function video(
+  id: string,
+  poster?: { posterMediaId: string; posterUrl: string; posterDerivedUrl: string | null },
+): MomentMedia {
+  return {
+    id,
+    url: `/api/media/${id}`,
+    mime: 'video/mp4',
+    width: 1280,
+    height: 720,
+    duration: 12,
+    sortOrder: 0,
+    posterMediaId: poster?.posterMediaId ?? null,
+    posterUrl: poster?.posterUrl ?? null,
+    derivedUrl: null,
+    posterDerivedUrl: poster?.posterDerivedUrl ?? null,
+  };
 }
 
 beforeEach(() => {
@@ -111,16 +155,21 @@ describe('URL 语义', () => {
   it('认证模式：图片与视频都经 useMediaObjectUrl(media.id) 取 blob object URL', async () => {
     const user = userEvent.setup();
     const first = render(<MediaBlock media={[image('media-1')]} />);
-    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-1');
+    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-1', {
+      variant: 'original',
+      fallbackToOriginal: false,
+    });
     expect(first.container.querySelector('img')).toHaveAttribute('src', 'blob:mock-media-1');
     first.unmount();
 
     mockUseMediaObjectUrl.mockClear();
     const { container } = render(<MediaBlock media={[video('media-v1')]} />);
-    // 播放面阶段不请求 blob；点击后才按 id 请求
-    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith(null);
+    expect(mockUseMediaObjectUrl.mock.calls.some((c) => c[0] === null)).toBe(true);
     await user.click(screen.getByRole('button', { name: '播放视频' }));
-    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-v1');
+    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-v1', {
+      variant: 'original',
+      fallbackToOriginal: false,
+    });
     expect(container.querySelector('video')).toHaveAttribute('src', 'blob:mock-media-v1');
   });
 
@@ -140,5 +189,81 @@ describe('URL 语义', () => {
     expect(player!.controls).toBe(true);
     expect(player).toHaveAttribute('src', '/api/media/media-v1?st=tok%20en');
     for (const call of mockUseMediaObjectUrl.mock.calls) expect(call[0]).toBeNull();
+  });
+
+  it('认证模式：有 derivedUrl 时 useMediaObjectUrl(id, { variant: derived, fallbackToOriginal })', () => {
+    render(
+      <MediaBlock
+        media={[image('media-1', 64, 48, 0, '/api/media/media-1?variant=derived')]}
+      />,
+    );
+    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-1', {
+      variant: 'derived',
+      fallbackToOriginal: true,
+    });
+  });
+
+  it('认证模式：无 derivedUrl 不传 derived，无优化中角标', () => {
+    const { container } = render(<MediaBlock media={[image('media-1')]} />);
+    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-1', {
+      variant: 'original',
+      fallbackToOriginal: false,
+    });
+    expect(container.textContent).not.toMatch(/优化中/);
+  });
+
+  it('分享模式：derivedUrl 走 mediaUrl variant=derived + &st=，禁止第二段 ?st=', () => {
+    const token = 'tok en';
+    const { container } = render(
+      <MediaBlock
+        media={[image('media-1', 64, 48, 0, '/api/media/media-1?variant=derived')]}
+        shareToken={token}
+      />,
+    );
+    const src = container.querySelector('img')!.getAttribute('src');
+    expect(src).toBe('/api/media/media-1?variant=derived&st=tok%20en');
+    expect(src).not.toContain('?variant=derived?st=');
+    for (const call of mockUseMediaObjectUrl.mock.calls) expect(call[0]).toBeNull();
+  });
+
+  it('分享模式：无 derivedUrl 仍是 ?st=（现网稳定入口）', () => {
+    const { container } = render(<MediaBlock media={[image('media-1')]} shareToken={'tok en'} />);
+    expect(container.querySelector('img')).toHaveAttribute('src', '/api/media/media-1?st=tok%20en');
+  });
+
+  it('认证视频封面优先 posterDerivedUrl', () => {
+    render(
+      <MediaBlock
+        media={[
+          video('media-v1', {
+            posterMediaId: 'poster-1',
+            posterUrl: '/api/media/poster-1',
+            posterDerivedUrl: '/api/media/poster-1?variant=derived',
+          }),
+        ]}
+      />,
+    );
+    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('poster-1', {
+      variant: 'derived',
+      fallbackToOriginal: true,
+    });
+  });
+
+  it('分享模式：posterDerivedUrl 走 mediaUrl variant=derived + &st=', () => {
+    const { container } = render(
+      <MediaBlock
+        media={[
+          video('media-v1', {
+            posterMediaId: 'poster-1',
+            posterUrl: '/api/media/poster-1',
+            posterDerivedUrl: '/api/media/poster-1?variant=derived',
+          }),
+        ]}
+        shareToken={'tok en'}
+      />,
+    );
+    const player = container.querySelector('video')!;
+    expect(player.getAttribute('poster')).toBe('/api/media/poster-1?variant=derived&st=tok%20en');
+    expect(player.getAttribute('poster')).not.toContain('?variant=derived?st=');
   });
 });

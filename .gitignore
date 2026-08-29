@@ -18,3 +18,7 @@ coverage/
 
 # Web 设计系统 E2E 运行时产物；baselines 与 manifest 是受控基线，保持入库
 apps/web/e2e/artifacts/**
+
+# LanceDB 本地目录（spec fused-retrieval §2.6）；默认相对 cwd
+apps/server/lancedb_data/
+lancedb_data/

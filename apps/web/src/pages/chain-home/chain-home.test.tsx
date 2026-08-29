@@ -189,7 +189,7 @@ const IMAGE_MOMENT: MomentResponse = {
   isBackfill: false,
   createdAt: '2026-08-16T14:01:00.000Z',
   media: [
-    { id: 'media-1', url: '/api/media/media-1', mime: 'image/jpeg', width: 64, height: 48, duration: null, sortOrder: 0, posterMediaId: null, posterUrl: null },
+    { id: 'media-1', url: '/api/media/media-1', mime: 'image/jpeg', width: 64, height: 48, duration: null, sortOrder: 0, posterMediaId: null, posterUrl: null, derivedUrl: null, posterDerivedUrl: null },
   ],
   tags: [],
   persons: [],

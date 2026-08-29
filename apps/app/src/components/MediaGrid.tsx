@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import type { MomentMedia } from '@moment/dto';
+import { cardImageVariant, posterCardVariant } from '../lib/media-variant';
 import { useMediaUri } from '../lib/use-media-uri';
 import type { Theme } from '../theme/theme';
 import { useTheme } from '../theme/use-theme';
@@ -12,15 +13,22 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${s < 10 ? `0${s}` : `${s}`}`;
 }
 
-function MediaImage({ mediaId, cellStyle }: { mediaId: string; cellStyle: object }) {
-  const uri = useMediaUri(mediaId);
+function MediaImage({ media, cellStyle }: { media: MomentMedia; cellStyle: object }) {
+  const variant = cardImageVariant(media.derivedUrl);
+  const uri = useMediaUri(media.id, {
+    variant,
+    fallbackToOriginal: variant === 'derived',
+  });
   if (!uri) return <View style={cellStyle} />;
   return <Image source={{ uri }} style={cellStyle} resizeMode="cover" />;
 }
 
 function VideoCell({ m, cellStyle, styles }: { m: MomentMedia; cellStyle: object; styles: ReturnType<typeof createStyles> }) {
-  // useMediaUri 签名是 string | undefined（use-media-uri.ts:6）：posterMediaId 为 null 时归一为 undefined，不发请求
-  const uri = useMediaUri(m.posterMediaId ?? undefined);
+  const pVariant = posterCardVariant(m.posterDerivedUrl);
+  const uri = useMediaUri(m.posterMediaId ?? undefined, {
+    variant: pVariant,
+    fallbackToOriginal: pVariant === 'derived',
+  });
   return (
     <View style={[cellStyle, styles.videoCell]}>
       {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
@@ -41,7 +49,7 @@ export function MediaGrid({ media }: { media: MomentMedia[] }) {
         m.mime.startsWith('video/') ? (
           <VideoCell key={m.id} m={m} cellStyle={styles.cell} styles={styles} />
         ) : m.mime.startsWith('image/') ? (
-          <MediaImage key={m.id} mediaId={m.id} cellStyle={styles.cell} />
+          <MediaImage key={m.id} media={m} cellStyle={styles.cell} />
         ) : null
       )}
     </View>

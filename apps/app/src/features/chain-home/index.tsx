@@ -6,10 +6,14 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { babyAgeLabel } from '../../lib/template';
+import { ErrorText } from '../../components/ErrorText';
+import { FilterChips } from '../../components/FilterChips';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { SegmentBar } from '../../components/SegmentBar';
 import { Button } from '../../components/Button';
+import { TimelineSearchField } from '../../components/TimelineSearchField';
+import { formatSearchParsed } from '../../lib/search-summary';
 import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -67,34 +71,80 @@ const Content = observer(function Content() {
       />
 
       {segment === 'timeline' ? (
-        <FlashList
-          data={service.moments}
-          keyExtractor={(m) => m.id}
-          contentContainerStyle={styles.list}
-          onEndReachedThreshold={0.4}
-          onEndReached={() => void service.loadMore().catch(() => undefined)}
-          renderItem={({ item }: { item: MomentResponse }) => (
-            <MomentCard
-              moment={item}
-              onPress={() => router.push(`/moments/${item.id}`)}
-              onLongPress={
-                // spec §4.2：长按编辑/删除仅作者本人的卡片生效
-                myId === item.author.id
-                  ? () =>
-                      showMomentActions(item, () =>
-                        router.push({ pathname: '/compose', params: { momentId: item.id } }),
-                      )
-                  : undefined
-              }
-              templateManifest={service.chain?.templateManifest ?? null}
-              ageLabel={(() => {
-                const birthdate = service.chain?.payload?.birthdate;
-                return typeof birthdate === 'string' ? babyAgeLabel(birthdate, item.happenedAt, item.happenedTzOffset) : undefined;
-              })()}
-            />
-          )}
-          ListEmptyComponent={<Text style={styles.empty}>还没有时刻</Text>}
-        />
+        <View style={styles.timelinePane}>
+          <TimelineSearchField
+            onSubmit={(q) => void service.submitSearch(q)}
+            onClear={() => {
+              if (service.searching) void service.exitSearch();
+            }}
+          />
+          {service.searchError ? (
+            <View style={styles.searchBanner}>
+              <ErrorText message={humanError(service.searchError)} />
+            </View>
+          ) : null}
+          {service.searching && service.searchParsed && !service.searchError ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryText}>{formatSearchParsed(service.searchParsed)}</Text>
+              <Button variant="quiet" onPress={() => void service.exitSearch()}>
+                关闭
+              </Button>
+            </View>
+          ) : null}
+          <FilterChips
+            personId={service.personId}
+            personName={service.personName}
+            place={service.place}
+            onClearPerson={() => service.clearPersonFilter()}
+            onClearPlace={() => service.clearPlaceFilter()}
+          />
+          <FlashList
+            data={service.moments}
+            keyExtractor={(m) => m.id}
+            style={styles.timelineList}
+            contentContainerStyle={styles.list}
+            onEndReachedThreshold={0.4}
+            onEndReached={() => void service.loadMore().catch(() => undefined)}
+            renderItem={({ item }: { item: MomentResponse }) => (
+              <MomentCard
+                moment={item}
+                onPress={() => router.push(`/moments/${item.id}`)}
+                onLongPress={
+                  // spec §4.2：长按编辑/删除仅作者本人的卡片生效
+                  myId === item.author.id
+                    ? () =>
+                        showMomentActions(item, () =>
+                          router.push({ pathname: '/compose', params: { momentId: item.id } }),
+                        )
+                    : undefined
+                }
+                templateManifest={service.chain?.templateManifest ?? null}
+                ageLabel={(() => {
+                  const birthdate = service.chain?.payload?.birthdate;
+                  return typeof birthdate === 'string' ? babyAgeLabel(birthdate, item.happenedAt, item.happenedTzOffset) : undefined;
+                })()}
+                onPersonFilter={(p) => service.togglePersonFilter(p)}
+                onPlaceFilter={(place) => service.togglePlaceFilter(place)}
+              />
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Text style={styles.empty}>
+                  {service.searching
+                    ? '没有找到相关时刻'
+                    : service.personId || service.place
+                      ? '没有符合条件的时刻'
+                      : '还没有时刻'}
+                </Text>
+                {service.searching ? (
+                  <Button variant="quiet" onPress={() => void service.exitSearch()}>
+                    退出搜索
+                  </Button>
+                ) : null}
+              </View>
+            }
+          />
+        </View>
       ) : null}
 
       {segment === 'tags' ? <TagsSection service={service} /> : null}
@@ -181,7 +231,19 @@ const createStyles = (t: Theme) =>
     desc: { color: t.muted, fontSize: t.fontLabel },
     headActions: { flexDirection: 'row', alignItems: 'center', gap: t.space3 },
     list: { paddingBottom: t.space4 },
-    empty: { color: t.muted, textAlign: 'center', padding: t.space8 },
+    timelinePane: { flex: 1 },
+    timelineList: { flex: 1 },
+    searchBanner: { paddingHorizontal: t.space3, paddingVertical: t.space2 },
+    summaryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space2,
+      paddingHorizontal: t.space3,
+      paddingVertical: t.space2,
+    },
+    summaryText: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
+    emptyWrap: { padding: t.space8, alignItems: 'center', gap: t.space2 },
+    empty: { color: t.muted, textAlign: 'center' },
     section: { padding: t.space4, gap: 10 },
     row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: t.surface, borderRadius: 8, padding: 14 },
     rowMain: { flex: 1, fontSize: t.fontBody, color: t.ink },

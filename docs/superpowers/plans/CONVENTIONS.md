@@ -64,10 +64,10 @@ export function requireChainRole(minRole: ChainRole): RequestHandler;
 export type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** 在业务事务内调用，同事务落 outbox 行（status='pending'）。 */
 export async function emitOutbox(tx: DbTx, type: OutboxType, payload: object): Promise<void>;
-// src/outbox/types.ts — 所有 type 常量集中在此（如 'moment.created'、'comment.created'、'invite.created'）
+// src/outbox/types.ts — 所有 type 常量集中在此（如 'moment.created'、'comment.created'、'invite.created'、'moment.compress'、'moment.embed'）
 ```
 
-outbox 表列：`id char(36) pk, type varchar(64), payload json, status enum('pending','done','failed') default 'pending', attempts int default 0, next_retry_at timestamp null, created_at, processed_at null`。索引 `(status, next_retry_at)`。
+outbox 表列：`id char(36) pk, type varchar(64), payload json, status enum('pending','done','failed') default 'pending', attempts int default 0, next_retry_at timestamp null, last_error varchar(512) null, created_at, processed_at null`。索引 `(status, next_retry_at)`。
 
 ### 3.3 存储（Phase 3 建立，沿用 aimo unified-storage-adapter）
 
@@ -77,7 +77,9 @@ src/storage/s3.adapter.ts     → S3 实现（含 multipart）
 src/storage/factory.ts        → getStorage(): UnifiedStorageAdapter（按 config 创建的单例）
 ```
 
-接口方法（实现者可拆分文件，但方法名不得改）：`uploadFile / deleteFile / fileExists / headObject / copyObject / generateAccessUrl(key, meta, expiresIn) / presignPut(key, meta, expiresIn) / initMultipart(key, meta) / presignPart(key, uploadId, partNumber, expiresIn) / completeMultipart(key, uploadId, parts) / abortMultipart(key, uploadId)`。
+接口方法（实现者可拆分文件，但方法名不得改）：`uploadFile / deleteFile / fileExists / headObject / copyObject / generateAccessUrl(key, meta, expiresIn) / presignPut(key, meta, expiresIn) / initMultipart(key, meta) / presignPart(key, uploadId, partNumber, expiresIn) / completeMultipart(key, uploadId, parts) / abortMultipart(key, uploadId) / getObject(key, metadata, maxBytes)`。
+
+`getObject(key, metadata, maxBytes)` 是追加方法（融合检索）：超 `maxBytes` 抛错；按行上 `storageMeta` 选桶/endpoint（与 `generateAccessUrl` 同）；内部走 SDK GetObject / 有界流式读取。测试 mock 点仍 `installMockStorage` / `setStorageAdapter`。
 
 - key 布局：`{ATTACHMENT_S3_PREFIX}/tmp/{mediaId}.{ext}` → complete 时服务端 copy 到 `{prefix}/chains/{chainId}/{momentId}/{mediaId}.{ext}` 并删 tmp。
 - media 行 `storage_meta`（json）记录写入时存储配置；读取一律按行上 meta 签名，不用全局配置。
@@ -105,6 +107,7 @@ src/storage/factory.ts        → getStorage(): UnifiedStorageAdapter（按 conf
 | Phase 5 | `/api/moments/:id/comments*`、`/api/comments/:id`、`/api/moments/:id/reaction`、`/api/notifications*`、`/api/devices/push-token` |
 | Phase 8 | `/api/chains/:chainId/share-links*`、`/api/share-links/:id`、`/api/public/share/:token` |
 | 模板系统（2026-08-20-templates） | `/api/templates*` |
+| 融合检索（2026-08-29-fused-retrieval） | `POST /api/search`、`GET /api/chains/:chainId/jobs`、`POST /api/internal/embeddings`、`DELETE /api/internal/embeddings/:momentId`；既有 `GET /api/feed` / `GET /api/chains/:chainId/moments` 追加 query `person_id`/`place`/`happened_from`/`happened_to`；既有 `GET /api/media/:id` 追加 query `variant=original|derived`（缺省 original，不改稳定入口） |
 
 ## 4. 各端测试策略
 

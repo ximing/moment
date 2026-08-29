@@ -4,6 +4,7 @@ import type {
   AggregateResponse,
   AuthResponse,
   ChainDetailDto,
+  ChainJobListResponse,
   ChainDto,
   ChainMemberDto,
   ChangePasswordInput,
@@ -40,6 +41,8 @@ import type {
   UpdateMeInput,
   ShareLinkDto,
   ShareLinkListResponse,
+  SearchInput,
+  SearchResponse,
   TagListResponse,
   TagResponse,
   UpdateChainInput,
@@ -60,6 +63,10 @@ export interface FeedQuery {
   limit?: number;
   /** 日期锚定（spec §4.2）：ISO datetime，服务端按 happened_at < before 严格小于过滤 */
   before?: string;
+  personId?: string;
+  place?: string;
+  happenedFrom?: string;
+  happenedTo?: string;
 }
 
 /** moment 创建入参：z.input 形态（isBackfill/mediaIds/tagIds 可省略，dto schema 补默认值） */
@@ -97,11 +104,21 @@ export interface MomentClient {
 
   createMoment(chainId: string, input: CreateMomentInput): Promise<MomentResponse>;
   /** Phase 5 后 service 返回 {moments, nextCursor}，但 dto 的 MomentListResponse 仍是 Phase 3 的 items 键——统一用 Pick<FeedResponse>（见依赖契约段） */
-  listChainMoments(chainId: string, query?: { cursor?: string; limit?: number; before?: string }): Promise<Pick<FeedResponse, 'moments' | 'nextCursor'>>;
+  listChainMoments(chainId: string, query?: {
+    cursor?: string;
+    limit?: number;
+    before?: string;
+    personId?: string;
+    place?: string;
+    happenedFrom?: string;
+    happenedTo?: string;
+  }): Promise<Pick<FeedResponse, 'moments' | 'nextCursor'>>;
   getMoment(momentId: string): Promise<MomentResponse>;
   updateMoment(momentId: string, input: PatchMomentInput): Promise<MomentResponse>;
   deleteMoment(momentId: string): Promise<void>;
   getFeed(query?: FeedQuery): Promise<FeedResponse>;
+  /** POST /api/search（spec fused-retrieval §6.2）；JSON body，不走 query string */
+  searchMoments(input: SearchInput): Promise<SearchResponse>;
   getMonthIndex(query: { chainIds?: string[]; tagId?: string; tzOffset: number }): Promise<MonthIndexResponse>;
   /** 那年今日：date = 查看者本地日期 YYYY-MM-DD（两套时钟语义见 dto memories schema 注释） */
   getMemoriesToday(date: string): Promise<MemoriesTodayResponse>;
@@ -123,9 +140,9 @@ export interface MomentClient {
   abortMedia(mediaId: string): Promise<void>;
   /** 204；回收 presign 后未完成/未引用的孤儿媒体（上传失败或用户放弃时由调用方触发） */
   discardMedia(mediaId: string): Promise<void>;
-  mediaUrl(mediaId: string): string;
-  /** Web `<img>/<video>` 渲染的唯一来源：Blob → URL.createObjectURL（见 Global Constraints 媒体条目） */
-  fetchMediaBlob(mediaId: string): Promise<Blob>;
+  mediaUrl(mediaId: string, opts?: { variant?: 'original' | 'derived'; st?: string }): string;
+  /** Web `<img>/<video>` 渲染的唯一来源：Blob → URL.createObjectURL。variant 缺省 original（无 query） */
+  fetchMediaBlob(mediaId: string, opts?: { variant?: 'original' | 'derived' }): Promise<Blob>;
 
   // share links & public
   createShareLink(chainId: string, input: CreateShareLinkInput): Promise<ShareLinkDto>;
@@ -138,6 +155,8 @@ export interface MomentClient {
   listRecaps(chainId: string): Promise<RecapListResponse>;
   /** 单条回顾详情（spec §6） */
   getRecap(chainId: string, period: string): Promise<RecapDto>;
+  /** GET /api/chains/:chainId/jobs（spec §6.4，仅 owner；query 省略则服务端默认 pending,failed） */
+  listChainJobs(chainId: string, query?: { status?: string; limit?: number }): Promise<ChainJobListResponse>;
 
   listComments(momentId: string, query?: { cursor?: string; limit?: number }): Promise<CommentListResponse>;
   createComment(momentId: string, content: string): Promise<CommentDto>;
@@ -201,7 +220,17 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
         items?: import('@moment/dto').MomentResponse[];
         moments?: import('@moment/dto').MomentResponse[];
         nextCursor: string | null;
-      }>(`/api/chains/${chainId}/moments`, { query: { cursor: query?.cursor, limit: query?.limit, before: query?.before } });
+      }>(`/api/chains/${chainId}/moments`, {
+        query: {
+          cursor: query?.cursor,
+          limit: query?.limit,
+          before: query?.before,
+          person_id: query?.personId,
+          place: query?.place,
+          happened_from: query?.happenedFrom,
+          happened_to: query?.happenedTo,
+        },
+      });
       return { moments: res.moments ?? res.items ?? [], nextCursor: res.nextCursor ?? null };
     },
     getMoment: (momentId) => http.request(`/api/moments/${momentId}`),
@@ -216,8 +245,13 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
           order: query?.order,
           limit: query?.limit,
           before: query?.before,
+          person_id: query?.personId,
+          place: query?.place,
+          happened_from: query?.happenedFrom,
+          happened_to: query?.happenedTo,
         },
       }),
+    searchMoments: (input) => http.request('/api/search', { method: 'POST', body: input }),
     getMonthIndex: (query) =>
       http.request('/api/feed/month-index', {
         query: {
@@ -248,8 +282,17 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
       http.request(`/api/media/${mediaId}/complete`, { method: 'POST', body: { parts } }),
     abortMedia: (mediaId) => http.request(`/api/media/${mediaId}/abort`, { method: 'POST' }),
     discardMedia: (mediaId) => http.request(`/api/media/${mediaId}`, { method: 'DELETE' }),
-    mediaUrl: (mediaId) => `${baseUrl}/api/media/${mediaId}`,
-    fetchMediaBlob: (mediaId) => http.requestBlob(`/api/media/${mediaId}`),
+    mediaUrl: (mediaId, opts) => {
+      let url = `${baseUrl}/api/media/${mediaId}`;
+      if (opts?.variant === 'derived') url += '?variant=derived';
+      if (opts?.st) url += `${url.includes('?') ? '&' : '?'}st=${encodeURIComponent(opts.st)}`;
+      return url;
+    },
+    fetchMediaBlob: (mediaId, opts) =>
+      http.requestBlob(
+        `/api/media/${mediaId}`,
+        opts?.variant === 'derived' ? { query: { variant: 'derived' } } : {},
+      ),
 
     listComments: (momentId, query) =>
       http.request(`/api/moments/${momentId}/comments`, { query: { cursor: query?.cursor, limit: query?.limit } }),
@@ -284,5 +327,9 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
 
     listRecaps: (chainId) => http.request(`/api/chains/${chainId}/recaps`),
     getRecap: (chainId, period) => http.request(`/api/chains/${chainId}/recaps/${period}`),
+    listChainJobs: (chainId, query) =>
+      http.request(`/api/chains/${chainId}/jobs`, {
+        query: { status: query?.status, limit: query?.limit },
+      }),
   };
 }

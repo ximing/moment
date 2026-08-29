@@ -32,6 +32,7 @@ export function installMockStorage(): MockStorage {
       .mockResolvedValue('https://fake.local/presigned-part'),
     completeMultipart: jest.fn<UnifiedStorageAdapter['completeMultipart']>().mockResolvedValue(undefined),
     abortMultipart: jest.fn<UnifiedStorageAdapter['abortMultipart']>().mockResolvedValue(undefined),
+    getObject: jest.fn<UnifiedStorageAdapter['getObject']>().mockResolvedValue(Buffer.alloc(0)),
   };
   setStorageAdapter(mock);
   return mock;

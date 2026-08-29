@@ -4,8 +4,14 @@ import { FlashList } from '@shopify/flash-list';
 import { Link, router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
+import { Button } from '../../components/Button';
+import { ErrorText } from '../../components/ErrorText';
+import { FilterChips } from '../../components/FilterChips';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
+import { TimelineSearchField } from '../../components/TimelineSearchField';
+import { humanError } from '../../lib/errors';
+import { formatSearchParsed } from '../../lib/search-summary';
 import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -26,6 +32,12 @@ const FeedContent = observer(function FeedContent() {
     <View style={styles.flex}>
       {/* 那年今日入口条（spec memories-today §5）：筛选条之上，有内容才渲染 */}
       <MemoriesEntryBar />
+      <TimelineSearchField
+        onSubmit={(q) => void service.submitSearch(q)}
+        onClear={() => {
+          if (service.searching) void service.exitSearch();
+        }}
+      />
       <View style={styles.filters}>
         <Chip label="全部链" active={service.chainId == null} onPress={() => service.setChainFilter(undefined)} />
         {service.chainList.map((c) => (
@@ -43,6 +55,26 @@ const FeedContent = observer(function FeedContent() {
           {service.tags.map((t) => (
             <Chip key={t.id} label={`#${t.name}`} active={service.tagId === t.id} onPress={() => service.setTagFilter(t.id)} />
           ))}
+        </View>
+      ) : null}
+      <FilterChips
+        personId={service.personId}
+        personName={service.personName}
+        place={service.place}
+        onClearPerson={() => service.clearPersonFilter()}
+        onClearPlace={() => service.clearPlaceFilter()}
+      />
+      {service.searchError ? (
+        <View style={styles.searchBanner}>
+          <ErrorText message={humanError(service.searchError)} />
+        </View>
+      ) : null}
+      {service.searching && service.searchParsed && !service.searchError ? (
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryText}>{formatSearchParsed(service.searchParsed)}</Text>
+          <Button variant="quiet" onPress={() => void service.exitSearch()}>
+            关闭
+          </Button>
         </View>
       ) : null}
       {service.$model.loadFirst.error ? <Text style={styles.errorBanner}>加载失败，下拉重试</Text> : null}
@@ -68,11 +100,24 @@ const FeedContent = observer(function FeedContent() {
                     )
                 : undefined
             }
+            onPersonFilter={(p) => service.togglePersonFilter(p)}
+            onPlaceFilter={(place) => service.togglePlaceFilter(place)}
           />
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>还没有时刻，发布第一条吧</Text>
+            <Text style={styles.emptyText}>
+              {service.searching
+                ? '没有找到相关时刻'
+                : service.personId || service.place || service.tagId
+                  ? '没有符合条件的时刻'
+                  : '还没有时刻，发布第一条吧'}
+            </Text>
+            {service.searching ? (
+              <Button variant="quiet" onPress={() => void service.exitSearch()}>
+                退出搜索
+              </Button>
+            ) : null}
           </View>
         }
         ListFooterComponent={service.$model.loadMore.loading ? <Text style={styles.loadingMore}>加载中…</Text> : null}
@@ -110,7 +155,16 @@ const createStyles = (t: Theme) =>
     chipText: { fontSize: t.fontSupport, color: t.ink },
     chipTextActive: { color: t.bg },
     list: { paddingBottom: t.space4 },
-    empty: { padding: 48, alignItems: 'center' },
+    searchBanner: { paddingHorizontal: t.space3, paddingVertical: t.space2 },
+    summaryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space2,
+      paddingHorizontal: t.space3,
+      paddingVertical: t.space2,
+    },
+    summaryText: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
+    empty: { padding: 48, alignItems: 'center', gap: t.space2 },
     emptyText: { color: t.muted },
     loadingMore: { textAlign: 'center', color: t.muted, padding: t.space3 },
     fab: {

@@ -14,6 +14,17 @@ import { useMediaObjectUrl } from '@/media/useMediaObjectUrl';
 //
 // useMediaObjectUrl 模块桩与 MediaBlock.test.tsx 同一约定。
 
+vi.mock('@/api/client', () => ({
+  client: {
+    mediaUrl(id: string, opts?: { variant?: 'original' | 'derived'; st?: string }) {
+      let url = `/api/media/${id}`;
+      if (opts?.variant === 'derived') url += '?variant=derived';
+      if (opts?.st) url += `${url.includes('?') ? '&' : '?'}st=${encodeURIComponent(opts.st)}`;
+      return url;
+    },
+  },
+}));
+
 vi.mock('@/media/useMediaObjectUrl', () => ({
   useMediaObjectUrl: vi.fn((mediaId: string | null) => (mediaId ? `blob:mock-${mediaId}` : null)),
 }));
@@ -21,11 +32,11 @@ vi.mock('@/media/useMediaObjectUrl', () => ({
 const mockUseMediaObjectUrl = vi.mocked(useMediaObjectUrl);
 
 function image(id: string): MomentMedia {
-  return { id, url: `/api/media/${id}`, mime: 'image/jpeg', width: 64, height: 48, duration: null, sortOrder: 0, posterMediaId: null, posterUrl: null };
+  return { id, url: `/api/media/${id}`, mime: 'image/jpeg', width: 64, height: 48, duration: null, sortOrder: 0, posterMediaId: null, posterUrl: null, derivedUrl: `/api/media/${id}?variant=derived`, posterDerivedUrl: null };
 }
 
 function video(id: string): MomentMedia {
-  return { id, url: `/api/media/${id}`, mime: 'video/mp4', width: 1280, height: 720, duration: 12, sortOrder: 0, posterMediaId: null, posterUrl: null };
+  return { id, url: `/api/media/${id}`, mime: 'video/mp4', width: 1280, height: 720, duration: 12, sortOrder: 0, posterMediaId: null, posterUrl: null, derivedUrl: `/api/media/${id}?variant=derived`, posterDerivedUrl: null };
 }
 
 const ITEMS = [image('media-1'), image('media-2'), video('media-3')];
@@ -123,5 +134,14 @@ describe('媒体渲染与 URL 语义', () => {
     expect(container.querySelector('video')).toHaveAttribute('src', '/api/media/media-3?st=tok%20en');
 
     for (const call of mockUseMediaObjectUrl.mock.calls) expect(call[0]).toBeNull();
+  });
+
+  it('认证模式：即使 derivedUrl 非空也只请求 original（Lightbox 高清档）', () => {
+    render(<Lightbox items={ITEMS} index={1} onClose={() => undefined} onIndex={() => undefined} />);
+    expect(mockUseMediaObjectUrl).toHaveBeenCalledWith('media-2');
+    const derivedCalls = mockUseMediaObjectUrl.mock.calls.filter(
+      (c) => c[1] && (c[1] as { variant?: string }).variant === 'derived',
+    );
+    expect(derivedCalls).toHaveLength(0);
   });
 });

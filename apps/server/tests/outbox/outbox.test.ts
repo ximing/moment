@@ -6,6 +6,7 @@ import {
   OUTBOX_MOMENT_DELETED,
   emitOutbox,
 } from '../../src/outbox/outbox.js';
+import { OUTBOX_MOMENT_COMPRESS, OUTBOX_MOMENT_EMBED } from '../../src/outbox/types.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 
 beforeEach(resetDb);
@@ -57,3 +58,27 @@ describe('emitOutbox', () => {
     expect(row?.payload).toEqual({ momentId: 'm-3', chainId: 'c-1' });
   });
 });
+
+describe('outbox 类型常量（fused-retrieval spec §2.3）', () => {
+  it('COMPRESS / EMBED 字符串与 payload 形状锁定', async () => {
+    expect(OUTBOX_MOMENT_COMPRESS).toBe('moment.compress');
+    expect(OUTBOX_MOMENT_EMBED).toBe('moment.embed');
+
+    await db.transaction(async (tx) => {
+      await emitOutbox(tx, OUTBOX_MOMENT_COMPRESS, {
+        momentId: 'm-1',
+        chainId: 'c-1',
+        mediaId: 'media-1',
+      });
+      await emitOutbox(tx, OUTBOX_MOMENT_EMBED, { momentId: 'm-1', chainId: 'c-1' });
+    });
+    const rows = await db.select().from(outbox);
+    const types = rows.map((r) => r.type).sort();
+    expect(types).toEqual(['moment.compress', 'moment.embed']);
+    const compress = rows.find((r) => r.type === 'moment.compress');
+    expect(compress?.payload).toEqual({ momentId: 'm-1', chainId: 'c-1', mediaId: 'media-1' });
+    const embed = rows.find((r) => r.type === 'moment.embed');
+    expect(embed?.payload).toEqual({ momentId: 'm-1', chainId: 'c-1' });
+  });
+});
+

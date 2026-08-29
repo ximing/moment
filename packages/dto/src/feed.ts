@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import type { MomentResponse } from './moments.js';
 
-const uuidLoose = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** GET query 与 tag_id 同一宽松 uuid（spec §6.1：不要用更严的 z.string().uuid()） */
+export const uuidLoose = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** ISO 8601 datetime 字符串：先正则限定 ISO 形态（防 `2026/08/01` 这类 Date.parse 宽松解析漏网），再校验可解析 */
-const isoDatetime = z
+export const isoDatetime = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/, 'INVALID_TIMESTAMP')
   .refine((v) => !Number.isNaN(Date.parse(v)), { message: 'INVALID_TIMESTAMP' });
@@ -28,11 +29,33 @@ export const feedQuerySchema = z
     limit: z.coerce.number().int().min(1).max(50).default(20),
     /** 日期锚定（spec §4.2）：happened_at < before，严格小于；与 cursor 同传取更严上界 */
     before: isoDatetime.optional(),
+    /**
+     * HTTP query snake_case（spec §6.1）。api-client FeedQuery（P8）camelCase 映射：
+     * personId ← person_id；place ← place；happenedFrom ← happened_from；happenedTo ← happened_to。
+     * 过滤进 queryMomentPage 属 P2；本 schema 只做校验。
+     */
+    person_id: z.string().regex(uuidLoose).optional(),
+    place: z.string().trim().min(1).max(255).optional(),
+    happened_from: isoDatetime.optional(),
+    happened_to: isoDatetime.optional(),
   })
   .superRefine((val, ctx) => {
     if (val.before !== undefined && val.order === 'created_at') {
-      // before 仅 happened_at 语义；created_at 下 happened_at 非单调，锚定无意义（spec §4.2）
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'BEFORE_REQUIRES_HAPPENED_AT', path: ['before'] });
+    }
+    if ((val.happened_from !== undefined || val.happened_to !== undefined) && val.order === 'created_at') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'RANGE_REQUIRES_HAPPENED_AT',
+        path: ['happened_from'],
+      });
+    }
+    if (
+      val.happened_from !== undefined &&
+      val.happened_to !== undefined &&
+      Date.parse(val.happened_from) > Date.parse(val.happened_to)
+    ) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'VALIDATION_ERROR', path: ['happened_to'] });
     }
   });
 export type FeedQueryInput = z.infer<typeof feedQuerySchema>;

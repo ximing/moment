@@ -1,5 +1,5 @@
 import { Service } from '@rabjs/react';
-import type { MonthIndexEntry, MomentResponse, TagResponse } from '@moment/dto';
+import { SEARCH_MAX_LIMIT, type MonthIndexEntry, type MomentResponse, type SearchParsed, type TagResponse } from '@moment/dto';
 import { client } from '@/api/client';
 import { currentTzOffset } from '@/lib/time';
 import { feedQuery } from '@/lib/feed';
@@ -13,6 +13,10 @@ export class FeedHomeService extends Service {
   monthIndex: MonthIndexEntry[] = [];
   indexPending = false;
   tags: TagResponse[] = [];
+  searching = false;
+  searchQ = '';
+  searchParsed: SearchParsed | null = null;
+  searchError: unknown = null;
   private gen = 0;
   private loadingMore = false;
 
@@ -45,7 +49,12 @@ export class FeedHomeService extends Service {
   /** 空态分流（web-product §4 空态表）：任一筛选生效即走「没有符合条件的时刻」 */
   get filtered(): boolean {
     return Boolean(
-      this.filter.tagId || this.filter.chainIds?.length || this.filter.order === 'created_at' || this.filter.before,
+      this.filter.tagId ||
+        this.filter.chainIds?.length ||
+        this.filter.order === 'created_at' ||
+        this.filter.before ||
+        this.filter.personId ||
+        this.filter.place,
     );
   }
 
@@ -63,12 +72,68 @@ export class FeedHomeService extends Service {
     this.setFilter({ order: 'happened_at' });
   }
 
+  togglePersonFilter(person: { id: string; name: string }): void {
+    if (this.filter.personId === person.id) {
+      this.setFilter({ ...this.filter, personId: undefined, personName: undefined });
+      return;
+    }
+    this.setFilter({ ...this.filter, personId: person.id, personName: person.name });
+  }
+
+  togglePlaceFilter(place: string): void {
+    this.setFilter({
+      ...this.filter,
+      place: this.filter.place === place ? undefined : place,
+    });
+  }
+
+  async submitSearch(q: string): Promise<void> {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    this.searchQ = trimmed;
+    this.searching = true;
+    this.searchParsed = null;
+    this.searchError = null;
+    await this.loadFirst();
+  }
+
+  async exitSearch(): Promise<void> {
+    this.searching = false;
+    this.searchQ = '';
+    this.searchParsed = null;
+    this.searchError = null;
+    await this.loadFirst();
+  }
+
   async loadFirst(): Promise<void> {
     const gen = ++this.gen;
-    const page = await client.getFeed(feedQuery(this.filter, undefined, 50));
-    if (gen !== this.gen) return; // 改筛选/跳月只走 loadFirst，cursor 清掉（spec §4.1）
-    this.moments = page.moments;
-    this.nextCursor = page.nextCursor ?? null;
+    try {
+      if (this.searching) {
+        const page = await client.searchMoments({
+          q: this.searchQ,
+          chainIds: this.filter.chainIds,
+          tzOffset: currentTzOffset(),
+          limit: SEARCH_MAX_LIMIT,
+          personId: this.filter.personId,
+          tagId: this.filter.tagId,
+          place: this.filter.place,
+        });
+        if (gen !== this.gen) return;
+        this.moments = page.moments;
+        this.nextCursor = page.nextCursor ?? null;
+        this.searchParsed = page.parsed;
+        this.searchError = null;
+        return;
+      }
+      const page = await client.getFeed(feedQuery(this.filter, undefined, 50));
+      if (gen !== this.gen) return; // 改筛选/跳月只走 loadFirst，cursor 清掉（spec §4.1）
+      this.moments = page.moments;
+      this.nextCursor = page.nextCursor ?? null;
+    } catch (err) {
+      if (gen !== this.gen) return;
+      if (this.searching) this.searchError = err;
+      else throw err;
+    }
   }
 
   async loadMore(): Promise<void> {
@@ -76,7 +141,18 @@ export class FeedHomeService extends Service {
     this.loadingMore = true;
     const gen = this.gen;
     try {
-      const page = await client.getFeed(feedQuery(this.filter, this.nextCursor, 50));
+      const page = this.searching
+        ? await client.searchMoments({
+            q: this.searchQ,
+            chainIds: this.filter.chainIds,
+            tzOffset: currentTzOffset(),
+            cursor: this.nextCursor ?? undefined,
+            limit: SEARCH_MAX_LIMIT,
+            personId: this.filter.personId,
+            tagId: this.filter.tagId,
+            place: this.filter.place,
+          })
+        : await client.getFeed(feedQuery(this.filter, this.nextCursor, 50));
       if (gen !== this.gen) return;
       this.moments = [...this.moments, ...page.moments];
       this.nextCursor = page.nextCursor ?? null;

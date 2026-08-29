@@ -11,6 +11,7 @@ import { extractPersonsPlaces } from '../llm/extract/extract.js';
 import { persistExtraction } from '../llm/extract/persist.js';
 import { generateRecap } from '../llm/recap/generate.js';
 import { computeAiExtractHash } from '../moments/ai-extract-hash.js';
+import { maybeEmitMomentEmbed } from '../moments/embed-outbox.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import {
   NOTIFICATION_COMMENT_CREATED,
@@ -21,6 +22,8 @@ import {
 import { emitOutbox } from '../outbox/outbox.js';
 import { OUTBOX_MOMENT_EXTRACT } from '../outbox/types.js';
 import type { PushService } from '../push/push-service.js';
+import { handleMomentCompress } from '../media/handle-moment-compress.js';
+import { handleMomentEmbed } from '../embedding/handle-moment-embed.js';
 import { getStorage } from '../storage/factory.js';
 
 export type OutboxHandler = (payload: Record<string, unknown>, deps: { push: PushService }) => Promise<void>;
@@ -309,6 +312,7 @@ export const handleMomentTranscribe: OutboxHandler = async (payload) => {
       if (cur && computeAiExtractHash(cur.content, cur.transcript) !== cur.aiExtractHash) {
         await emitOutbox(tx, OUTBOX_MOMENT_EXTRACT, { momentId });
       }
+      await maybeEmitMomentEmbed(tx, momentId);
     });
   } catch (err) {
     // NonRetryable：自落终态、不占 processor 退避额度（对齐 recap 范式）；Retryable 及其他抛出 → 传播退避
@@ -357,17 +361,21 @@ export const handleMomentGeocode: OutboxHandler = async (payload) => {
 
   // 步骤 5：截断 + 条件回填（IO 后再校验 exif + 空名 + 未软删，防迟到结果覆盖并发手动编辑）
   const name = raw.slice(0, PLACE_NAME_MAX_CHARS);
-  await db
-    .update(moments)
-    .set({ placeName: name })
-    .where(
-      and(
-        eq(moments.id, momentId),
-        isNull(moments.deletedAt),
-        eq(moments.placeSource, 'exif'),
-        isNull(moments.placeName),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    const [result] = await tx
+      .update(moments)
+      .set({ placeName: name })
+      .where(
+        and(
+          eq(moments.id, momentId),
+          isNull(moments.deletedAt),
+          eq(moments.placeSource, 'exif'),
+          isNull(moments.placeName),
+        ),
+      );
+    if (result.affectedRows === 0) return;
+    await maybeEmitMomentEmbed(tx, momentId);
+  });
 };
 
 /**
@@ -502,4 +510,6 @@ export const handlers: Record<string, OutboxHandler> = {
   'moment.transcribe': handleMomentTranscribe,
   'moment.geocode': handleMomentGeocode,
   'moment.extract': handleMomentExtract,
+  'moment.compress': handleMomentCompress,
+  'moment.embed': handleMomentEmbed,
 };

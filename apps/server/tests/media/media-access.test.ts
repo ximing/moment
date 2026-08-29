@@ -83,6 +83,7 @@ describe('GET /api/media/:id', () => {
     const ttlArg = storage.generateAccessUrl.mock.calls[0]![2] as number;
     expect(ttlArg).toBeGreaterThan(3600);
     expect(ttlArg).toBeLessThanOrEqual(7200);
+    expect(storage.getObject).not.toHaveBeenCalled();
   });
 
   it('绑定 moment：非链成员 → 404（ChainPolicy CHAIN_NOT_FOUND）', async () => {

@@ -52,6 +52,8 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   readOnly,
   templateManifest,
   ageLabel,
+  onPersonFilter,
+  onPlaceFilter,
 }: {
   moment: MomentSheetMoment;
   chainName?: string;
@@ -64,6 +66,8 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   templateManifest?: TemplateManifest | null;
   /** baby 年龄标注（「1 岁 2 个月」）；由调用方按链 payload.birthdate 计算 */
   ageLabel?: string;
+  onPersonFilter?: (person: { id: string; name: string }) => void;
+  onPlaceFilter?: (place: string) => void;
 }) {
   const service = useService(MomentSheetService);
   const auth = useService(AuthService);
@@ -222,21 +226,50 @@ export const MomentSheetContent = observer(function MomentSheetContent({
           const geo = moment.payload?.geo as { place_name?: string } | undefined;
           return geo?.place_name ? <p className="mt-1 text-meta text-muted">📍 {geo.place_name}</p> : null;
         })()}
-        {/* 人物与地点（spec people-place §7）：只读展示，不可点击（按人物/地点过滤属 M2）。
-            chip 复用词表 chip 形状（rounded-full + text-caption + border-line，非交互 span），
-            不新增 token；AI 行角标 text-muted；place 行镜像既有 geo payload 行样式。
-            公开分享路径两键不存在（PublicShareMoment），两行自然不渲染（spec §8 红线）。 */}
+        {/* 人物与地点：链内时间线传入 onPersonFilter/onPlaceFilter 则为可点 button；
+            分享/详情不传回调则保持 span。chip 形状与现网一致，button 另加 focus-visible。 */}
         {moment.persons && moment.persons.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-2" aria-label="和谁在一起">
-            {moment.persons.map((p) => (
-              <span key={p.id} className="rounded-full border border-line px-3 py-1 text-caption text-ink">
-                {p.name}
-                {p.source === 'ai' && <span className="ml-1 text-muted">AI</span>}
-              </span>
-            ))}
+            {moment.persons.map((p) => {
+              const inner = (
+                <>
+                  {p.name}
+                  {p.source === 'ai' && <span className="ml-1 text-muted">AI</span>}
+                </>
+              );
+              const className =
+                'rounded-full border border-line px-3 py-1 text-caption text-ink focus-visible:outline-none focus-visible:ring-focus';
+              return onPersonFilter ? (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-label={`筛选 ${p.name}`}
+                  className={className}
+                  onClick={() => onPersonFilter({ id: p.id, name: p.name })}
+                >
+                  {inner}
+                </button>
+              ) : (
+                <span key={p.id} className={className}>
+                  {inner}
+                </span>
+              );
+            })}
           </div>
         )}
-        {moment.place?.name && <p className="mt-1 text-meta text-muted">📍 {moment.place.name}</p>}
+        {moment.place?.name &&
+          (onPlaceFilter ? (
+            <button
+              type="button"
+              aria-label={`筛选地点 ${moment.place.name}`}
+              onClick={() => onPlaceFilter(moment.place!.name!)}
+              className="mt-1 text-left text-meta text-muted focus-visible:outline-none focus-visible:ring-focus"
+            >
+              📍 {moment.place.name}
+            </button>
+          ) : (
+            <p className="mt-1 text-meta text-muted">📍 {moment.place.name}</p>
+          ))}
         {acts}
         {service.showComments && !readOnly && (
           <div className="mt-3 flex flex-col gap-2">

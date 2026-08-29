@@ -27,6 +27,16 @@ export const media = mysqlTable(
     status: mysqlEnum('status', ['uploading', 'ready', 'orphaned']).notNull(),
     /** 写入时存储配置快照（按行签名，spec §5.3） */
     storageMeta: json('storage_meta').$type<StorageMetadata>().notNull(),
+    /**
+     * 派生 WebP（spec fused-retrieval §2.1）：相对 key chains/{chainId}/{momentId}/{mediaId}.derived.webp。
+     * 非静态可压图（GIF/HEIC/HEIF/音视频）六列恒 NULL。本计划只加列，compress 属 P3。
+     */
+    derivedS3Key: varchar('derived_s3_key', { length: 512 }),
+    derivedMime: varchar('derived_mime', { length: 100 }),
+    derivedSize: bigint('derived_size', { mode: 'number' }),
+    derivedWidth: int('derived_width'),
+    derivedHeight: int('derived_height'),
+    derivedStatus: mysqlEnum('derived_status', ['pending', 'ready', 'skipped', 'failed']),
     /** S3 multipart uploadId；图片单 PUT 为 null */
     uploadId: varchar('upload_id', { length: 128 }),
     orphanedAt: timestamp('orphaned_at', { mode: 'date' }),

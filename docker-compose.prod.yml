@@ -70,6 +70,9 @@ services:
     env_file: .env
     environment:
       <<: *server-env
+      LANCEDB_PATH: /data/lancedb
+    volumes:
+      - moment-lancedb:/data/lancedb
     depends_on:
       mysql:
         condition: service_healthy
@@ -97,11 +100,14 @@ services:
     env_file: .env
     environment:
       <<: *server-env
+      INTERNAL_API_BASE_URL: http://server:3000
     depends_on:
       mysql:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      server:
+        condition: service_healthy
     logging: *logging
 
   backup:
@@ -138,3 +144,4 @@ services:
 
 volumes:
   moment-mysql: {}
+  moment-lancedb: {}

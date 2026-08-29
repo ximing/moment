@@ -1,35 +1,45 @@
 import { useEffect, useState } from 'react';
 import { client } from '@/api/client';
 
-// 模块级 object URL 去重缓存（chain-appearance §7.5）：
-// - 同一 mediaId 的所有消费者共享一次 fetchMediaBlob 与一个 object URL（汇总时间线
-//   50 条同链时刻只下载一次链头像）；
+// 模块级 object URL 去重缓存（chain-appearance §7.5 + fused-retrieval §6.5）：
+// - 缓存键 `${mediaId}:${variant}`（variant 缺省 original），禁止 derived 与 original 共用；
+// - 同一键的所有消费者共享一次 fetchMediaBlob 与一个 object URL；
 // - 引用计数：最后一个消费者卸载才 revoke URL 并移除 entry；
-// - fetch 失败通知 null 并移除 entry，后续渲染自然重试；
-// - 分享页请用稳定入口 + ?st=，不要走这里的认证 blob 通道。
+// - original 失败：移出 entry，后续挂载可重试；
+// - derived + fallbackToOriginal：失败后改打 original；
+// - 分享页请用 client.mediaUrl(..., { st })，不要走这里的认证 blob 通道。
+
+type MediaVariant = 'original' | 'derived';
 
 interface MediaUrlEntry {
   promise: Promise<Blob>;
   url: string | null;
   refs: number;
-  listeners: Set<(url: string | null) => void>;
+  listeners: Set<(url: string | null, failed?: boolean) => void>;
 }
 
 const entries = new Map<string, MediaUrlEntry>();
 
-function acquire(mediaId: string): MediaUrlEntry {
-  let entry = entries.get(mediaId);
+function cacheKey(mediaId: string, variant: MediaVariant): string {
+  return `${mediaId}:${variant}`;
+}
+
+function acquire(mediaId: string, variant: MediaVariant): MediaUrlEntry {
+  const key = cacheKey(mediaId, variant);
+  let entry = entries.get(key);
   if (entry) return entry;
 
-  const promise = client.fetchMediaBlob(mediaId);
+  const promise =
+    variant === 'derived'
+      ? client.fetchMediaBlob(mediaId, { variant: 'derived' })
+      : client.fetchMediaBlob(mediaId);
   entry = { promise, url: null, refs: 0, listeners: new Set() };
-  entries.set(mediaId, entry);
+  entries.set(key, entry);
 
   promise
     .then((blob) => {
       const objectUrl = URL.createObjectURL(blob);
-      // 落地时已无人消费（全部卸载、entry 被回收）：创建即 revoke，不泄漏 object URL
-      if (entries.get(mediaId) !== entry || entry.refs <= 0) {
+      if (entries.get(key) !== entry || entry.refs <= 0) {
         URL.revokeObjectURL(objectUrl);
         return;
       }
@@ -37,43 +47,58 @@ function acquire(mediaId: string): MediaUrlEntry {
       for (const listener of entry.listeners) listener(objectUrl);
     })
     .catch(() => {
-      // 失败：移出缓存让后续渲染重试；仍在听的消费者收到 null（组件自行兜底）
-      if (entries.get(mediaId) === entry) entries.delete(mediaId);
-      for (const listener of entry.listeners) listener(null);
+      if (entries.get(key) === entry) entries.delete(key);
+      for (const listener of entry.listeners) listener(null, true);
     });
 
   return entry;
 }
 
-function release(mediaId: string, entry: MediaUrlEntry): void {
+function release(mediaId: string, variant: MediaVariant, entry: MediaUrlEntry): void {
+  const key = cacheKey(mediaId, variant);
   entry.refs -= 1;
   if (entry.refs > 0) return;
   entry.refs = 0;
-  if (entries.get(mediaId) === entry) entries.delete(mediaId);
+  if (entries.get(key) === entry) entries.delete(key);
   if (entry.url !== null) {
     URL.revokeObjectURL(entry.url);
     entry.url = null;
   }
 }
 
-/** 登录态：blob + object URL（同 id 共享一次 fetch）。分享页请用稳定入口 + ?st=，不要走这里。 */
-export function useMediaObjectUrl(mediaId: string | null): string | null {
-  const [url, setUrl] = useState<string | null>(() => (mediaId ? (entries.get(mediaId)?.url ?? null) : null));
-  // mediaId 变更时渲染期重置（derived-state 模式），避免旧 URL 残留到下一个 effect
-  const [prevId, setPrevId] = useState(mediaId);
-  if (prevId !== mediaId) {
-    setPrevId(mediaId);
-    setUrl(mediaId ? (entries.get(mediaId)?.url ?? null) : null);
+export function useMediaObjectUrl(
+  mediaId: string | null,
+  opts?: { variant?: MediaVariant; fallbackToOriginal?: boolean },
+): string | null {
+  const requested: MediaVariant = opts?.variant ?? 'original';
+  const fallback = Boolean(opts?.fallbackToOriginal && requested === 'derived');
+  const requestKey = `${mediaId ?? ''}:${requested}`;
+
+  const [effective, setEffective] = useState<MediaVariant>(requested);
+  const [prevKey, setPrevKey] = useState(requestKey);
+  const [url, setUrl] = useState<string | null>(() =>
+    mediaId ? (entries.get(cacheKey(mediaId, requested))?.url ?? null) : null,
+  );
+
+  if (prevKey !== requestKey) {
+    setPrevKey(requestKey);
+    setEffective(requested);
+    setUrl(mediaId ? (entries.get(cacheKey(mediaId, requested))?.url ?? null) : null);
   }
 
   useEffect(() => {
     if (!mediaId) return;
-    const entry = acquire(mediaId);
+    const variant = effective;
+    const entry = acquire(mediaId, variant);
     entry.refs += 1;
-    const listener = (next: string | null) => setUrl(next);
+    const listener = (next: string | null, failed?: boolean) => {
+      if (failed && fallback && variant === 'derived') {
+        setEffective('original');
+        return;
+      }
+      setUrl(next);
+    };
     entry.listeners.add(listener);
-    // 竞态兜底：共享 entry 在渲染与 effect 之间恰好就绪时补发一次（promise 微任务可抢在
-    // passive effect 前落地）；卸载后 listeners 已摘，has 守卫防写幽灵组件
     const ready = entry.url;
     if (ready !== null) {
       queueMicrotask(() => {
@@ -82,9 +107,9 @@ export function useMediaObjectUrl(mediaId: string | null): string | null {
     }
     return () => {
       entry.listeners.delete(listener);
-      release(mediaId, entry);
+      release(mediaId, variant, entry);
     };
-  }, [mediaId]);
+  }, [mediaId, effective, fallback]);
 
   return url;
 }

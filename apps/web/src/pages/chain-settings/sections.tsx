@@ -14,6 +14,7 @@ import { Field, Input, Select, SelectField, Textarea } from '@/ui/field/index';
 import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
 import { AlertDialog, Dialog } from '@/ui/modal/index';
 import { ChainSettingsService } from './chain-settings.service';
+import { JobsSection } from './jobs-section';
 
 // 链设置分区（plan Task 12）：service 调用、server 错误映射与 owner/editor/viewer
 // 角色门控原样保留；分区导航、输入、按钮与确认弹层全部改走设计系统基元
@@ -21,7 +22,7 @@ import { ChainSettingsService } from './chain-settings.service';
 // 确认态（吊销链接 / 转让 / 删除）是纯 UI 确认态，留在组件本地 state，不进 service
 // （同 MomentPageContent 先例）；危险操作结果由 Banner / 列表变化表达，不重复弹 Toast。
 
-type Section = 'share' | 'members' | 'profile';
+type Section = 'share' | 'members' | 'profile' | 'jobs';
 
 export const ChainSettingsSections = observer(function ChainSettingsSections() {
   const service = useService(ChainSettingsService);
@@ -37,6 +38,7 @@ export const ChainSettingsSections = observer(function ChainSettingsSections() {
     { key: 'share', label: '分享', show: owner },
     { key: 'members', label: '成员', show: true },
     { key: 'profile', label: '资料', show: owner },
+    { key: 'jobs', label: '处理中', show: owner },
   ];
 
   return (
@@ -63,6 +65,7 @@ export const ChainSettingsSections = observer(function ChainSettingsSections() {
         {section === 'share' && owner && <ShareSection />}
         {section === 'members' && <MembersSection />}
         {section === 'profile' && owner && <ProfileSection />}
+        {section === 'jobs' && owner && <JobsSection />}
       </div>
     </div>
   );
