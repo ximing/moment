@@ -6,6 +6,12 @@ export function lanceEqUuid(column: string, value: string): string | null {
   return `${column} = '${value}'`;
 }
 
+export function lanceInUuids(column: string, ids: string[]): string | null {
+  const clean = ids.filter((id) => LANCE_UUID_RE.test(id));
+  if (clean.length === 0) return null;
+  return `${column} IN (${clean.map((id) => `'${id}'`).join(', ')})`;
+}
+
 export function vectorRowId(kind: 'moment' | 'image', momentId: string, mediaId?: string): string {
   return kind === 'image' ? `media:${mediaId ?? ''}` : `moment:${momentId}`;
 }
