@@ -14,6 +14,10 @@ export interface FeedQueryParsed {
   order: MomentOrder;
   limit: number;
   before?: string;
+  personId?: string;
+  place?: string;
+  happenedFrom?: string;
+  happenedTo?: string;
 }
 
 @Service()
@@ -34,6 +38,10 @@ export class FeedService {
       cursor: query.cursor,
       tagId: query.tagId,
       before: query.before,
+      personId: query.personId,
+      place: query.place,
+      happenedFrom: query.happenedFrom,
+      happenedTo: query.happenedTo,
     });
     return { moments: await serializeMoments(page.rows, userId, { includePrivate: true }), nextCursor: page.nextCursor };
   }

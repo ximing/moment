@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { closeDb, resetDb } from '../helpers/db.js';
-import { addMember, app, attachTag, createChain, insertMoment, registerUser } from '../helpers/fixtures.js';
+import { addMember, app, attachPerson, attachTag, createChain, insertMoment, insertPerson, registerUser } from '../helpers/fixtures.js';
 
 beforeEach(resetDb);
 afterAll(closeDb);
@@ -114,5 +114,35 @@ describe('GET /api/feed/month-index', () => {
 
     const anon = await request(app).get('/api/feed/month-index?tz_offset=0');
     expect(anon.status).toBe(401);
+  });
+
+  it('person_id/place/happened_* 不加进月份索引（spec §6.1；未知键 strip，计数不变）', async () => {
+    const owner = await registerUser();
+    const chainId = await createChain(owner.id);
+    const personId = await insertPerson({ chainId, name: '外婆' });
+    const tagged = await insertMoment({
+      chainId,
+      authorId: owner.id,
+      happenedAt: new Date('2026-08-01T00:00:00Z'),
+    });
+    await insertMoment({
+      chainId,
+      authorId: owner.id,
+      happenedAt: new Date('2026-08-02T00:00:00Z'),
+    });
+    await attachPerson(tagged, personId);
+
+    const baseline = await request(app).get('/api/feed/month-index?tz_offset=0').set(auth(owner.token));
+    expect(baseline.status).toBe(200);
+    expect(baseline.body).toEqual({ months: [{ month: '2026-08', count: 2 }] });
+
+    // 9 月闭区间 / 他 person / 无此地名：任一谓词若误进 queryMonthIndex，8 月 count 都会变
+    const withChip = await request(app)
+      .get(
+        `/api/feed/month-index?tz_offset=0&person_id=${personId}&place=${encodeURIComponent('朝阳公园')}&happened_from=${encodeURIComponent('2026-09-01T00:00:00.000Z')}&happened_to=${encodeURIComponent('2026-09-30T23:59:59.999Z')}`,
+      )
+      .set(auth(owner.token));
+    expect(withChip.status).toBe(200);
+    expect(withChip.body).toEqual({ months: [{ month: '2026-08', count: 2 }] });
   });
 });
