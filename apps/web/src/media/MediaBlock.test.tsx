@@ -28,10 +28,7 @@ vi.mock('@/api/client', () => ({
 }));
 
 vi.mock('./useMediaObjectUrl', () => ({
-  useMediaObjectUrl: vi.fn(
-    (mediaId: string | null, _opts?: { variant?: string; fallbackToOriginal?: boolean }) =>
-      mediaId ? `blob:mock-${mediaId}` : null,
-  ),
+  useMediaObjectUrl: vi.fn((mediaId: string | null) => (mediaId ? `blob:mock-${mediaId}` : null)),
 }));
 
 const mockUseMediaObjectUrl = vi.mocked(useMediaObjectUrl);

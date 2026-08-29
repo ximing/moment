@@ -1,6 +1,6 @@
 import { Service } from '@rabjs/react';
 import { ApiError } from '@moment/api-client';
-import type { ChainDto, ChainImageFocus, ShareLinkDto } from '@moment/dto';
+import type { ChainDto, ChainImageFocus, ChainJobDto, ShareLinkDto } from '@moment/dto';
 import { client } from '@/api/client';
 import type {
   ChainAppearanceDraft,
@@ -93,6 +93,7 @@ export class ChainSettingsService extends Service {
     cover: null,
   };
   tags: Awaited<ReturnType<typeof client.listTags>>['tags'] = [];
+  jobs: ChainJobDto[] = [];
   newTagName = '';
 
   // 成员操作
@@ -138,6 +139,11 @@ export class ChainSettingsService extends Service {
       this.formDescription = this.chain.description ?? '';
       this.appearance = hydratedAppearance(this.chain);
     }
+  }
+
+  async loadJobs(): Promise<void> {
+    const res = await client.listChainJobs(this.chainId);
+    this.jobs = res.jobs;
   }
 
   /** 保存闸：name 非空 + appearanceSaveable（上传中/未就绪不可提交半成品 mediaId） */

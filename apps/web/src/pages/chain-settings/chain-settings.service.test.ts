@@ -23,6 +23,7 @@ const api = vi.hoisted(() => ({
   listTags: vi.fn(),
   uploadMedia: vi.fn(),
   discardMedia: vi.fn(),
+  listChainJobs: vi.fn(),
 }));
 
 vi.mock('@/api/client', () => ({ client: api }));
@@ -95,6 +96,7 @@ function resetService(): ChainSettingsService {
   service.formDescription = '';
   service.formHydrated = false;
   service.tags = [];
+  service.jobs = [];
   // 私有级联闸：本测试文件的用例各自独占首载路径
   (service as unknown as { sectionsLoaded: boolean }).sectionsLoaded = false;
   return service;
@@ -126,6 +128,7 @@ beforeEach(() => {
   api.listShareLinks.mockResolvedValue({ items: [] });
   api.listTags.mockResolvedValue({ tags: [] });
   api.discardMedia.mockResolvedValue(undefined);
+  api.listChainJobs.mockReset().mockResolvedValue({ jobs: [] });
 });
 
 describe('外观草稿水合', () => {
@@ -306,3 +309,32 @@ describe('卸载回收', () => {
     expect(api.discardMedia).not.toHaveBeenCalledWith('m-a');
   });
 });
+
+describe('loadJobs（spec fused-retrieval §7.4）', () => {
+  it('GET listChainJobs(chainId) 无 query；写入 jobs', async () => {
+    const row = {
+      id: 'j-1',
+      type: 'moment.compress' as const,
+      status: 'failed' as const,
+      momentId: '12345678-aaaa-bbbb-cccc-dddddddddddd',
+      mediaId: 'm-1',
+      attempts: 1,
+      lastError: 'OBJECT_TOO_LARGE',
+      createdAt: '2026-08-29T00:00:00.000Z',
+      processedAt: null,
+    };
+    api.listChainJobs.mockResolvedValueOnce({ jobs: [row] });
+    const s = resolve(ChainSettingsService);
+    s.chainId = 'chain-1';
+    await s.loadJobs();
+    expect(api.listChainJobs).toHaveBeenCalledWith('chain-1');
+    expect(s.jobs).toEqual([row]);
+  });
+
+  it('loadChain 不级联 listChainJobs（spec：进入分区才 load）', async () => {
+    const s = await seedChain(makeChain());
+    expect(api.listChainJobs).not.toHaveBeenCalled();
+    expect(s.jobs).toEqual([]);
+  });
+});
+
