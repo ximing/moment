@@ -4,6 +4,7 @@ import { FlashList } from '@shopify/flash-list';
 import { Link, router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
+import { FilterChips } from '../../components/FilterChips';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { AuthService } from '../../services/auth.service';
@@ -45,6 +46,13 @@ const FeedContent = observer(function FeedContent() {
           ))}
         </View>
       ) : null}
+      <FilterChips
+        personId={service.personId}
+        personName={service.personName}
+        place={service.place}
+        onClearPerson={() => service.clearPersonFilter()}
+        onClearPlace={() => service.clearPlaceFilter()}
+      />
       {service.$model.loadFirst.error ? <Text style={styles.errorBanner}>加载失败，下拉重试</Text> : null}
       <FlashList
         data={service.moments}
@@ -68,11 +76,17 @@ const FeedContent = observer(function FeedContent() {
                     )
                 : undefined
             }
+            onPersonFilter={(p) => service.togglePersonFilter(p)}
+            onPlaceFilter={(place) => service.togglePlaceFilter(place)}
           />
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>还没有时刻，发布第一条吧</Text>
+            <Text style={styles.emptyText}>
+              {service.personId || service.place || service.tagId
+                ? '没有符合条件的时刻'
+                : '还没有时刻，发布第一条吧'}
+            </Text>
           </View>
         }
         ListFooterComponent={service.$model.loadMore.loading ? <Text style={styles.loadingMore}>加载中…</Text> : null}

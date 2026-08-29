@@ -15,6 +15,8 @@ export function MomentCard({
   onLongPress,
   templateManifest,
   ageLabel,
+  onPersonFilter,
+  onPlaceFilter,
 }: {
   moment: MomentResponse;
   onPress: () => void;
@@ -23,6 +25,8 @@ export function MomentCard({
   templateManifest?: TemplateManifest | null;
   /** baby 年龄标注（「1 岁 2 个月」）；调用方按链 payload.birthdate 计算 */
   ageLabel?: string;
+  onPersonFilter?: (person: { id: string; name: string }) => void;
+  onPlaceFilter?: (place: string) => void;
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
@@ -63,23 +67,50 @@ export function MomentCard({
         const geo = moment.payload?.geo as { place_name?: string } | undefined;
         return geo?.place_name ? <Text style={styles.tplLine}>📍 {geo.place_name}</Text> : null;
       })()}
-      {/* 人物与地点（spec people-place §7）：只读展示，不可点击（按人物/地点过滤属 M2）。
-          chip 为非交互 View/Text（hoverSoft 色面，镜像既有 chip 底色范式）；AI 行「AI」轻标识；
-          地点行镜像既有 geo payload 行样式（tplLine）；place.name 为 null（exif 坐标待
-          geocode 回填）不显示地点行——裸坐标对家庭用户无意义（P5 偏差 9 镜像）。 */}
+      {/* 人物与地点（spec fused-retrieval §7.1）：时间线传入回调则内层 Pressable 可点过滤；
+          往年今日/不传回调保持 P6 只读 View。AI 角标保留。name 为 null 的地点仍不渲染。 */}
       {moment.persons.length > 0 ? (
         <View style={styles.personRow} accessibilityLabel="和谁在一起">
-          {moment.persons.map((p) => (
-            <View key={p.id} style={styles.personChip}>
+          {moment.persons.map((p) => {
+            const label = p.name;
+            const inner = (
               <Text style={styles.personChipText}>
                 {p.name}
                 {p.source === 'ai' ? <Text style={styles.personAi}> AI</Text> : null}
               </Text>
-            </View>
-          ))}
+            );
+            return onPersonFilter ? (
+              <Pressable
+                key={p.id}
+                accessibilityRole="button"
+                accessibilityLabel={`筛选 ${label}`}
+                onPress={() => onPersonFilter({ id: p.id, name: p.name })}
+                style={styles.personChipPressable}
+              >
+                {inner}
+              </Pressable>
+            ) : (
+              <View key={p.id} style={styles.personChip}>
+                {inner}
+              </View>
+            );
+          })}
         </View>
       ) : null}
-      {moment.place?.name ? <Text style={styles.tplLine}>📍 {moment.place.name}</Text> : null}
+      {moment.place?.name ? (
+        onPlaceFilter ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`筛选地点 ${moment.place.name}`}
+            onPress={() => onPlaceFilter(moment.place!.name!)}
+            style={styles.placePressable}
+          >
+            <Text style={styles.tplLine}>📍 {moment.place.name}</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.tplLine}>📍 {moment.place.name}</Text>
+        )
+      ) : null}
       <View style={styles.footer}>
         {moment.tags.map((tag) => (
           <Text key={tag.id} style={styles.tag}>
@@ -106,6 +137,18 @@ const createStyles = (t: Theme) =>
     tplLine: { color: t.muted, fontSize: t.fontSupport, marginTop: t.space1 },
     personRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2, marginTop: t.space1 },
     personChip: { paddingHorizontal: t.space3, paddingVertical: t.space1, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
+    personChipPressable: {
+      paddingHorizontal: t.space3,
+      paddingVertical: t.space1,
+      borderRadius: t.radiusMd,
+      backgroundColor: t.hoverSoft,
+      minHeight: t.touchMin,
+      justifyContent: 'center',
+    },
+    placePressable: {
+      minHeight: t.touchMin,
+      justifyContent: 'center',
+    },
     personChipText: { fontSize: t.fontSupport, color: t.ink },
     personAi: { color: t.muted, fontSize: t.fontCaption },
     tag: { color: t.tag, fontSize: t.fontSupport },

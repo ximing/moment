@@ -6,6 +6,7 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { babyAgeLabel } from '../../lib/template';
+import { FilterChips } from '../../components/FilterChips';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { SegmentBar } from '../../components/SegmentBar';
@@ -67,34 +68,50 @@ const Content = observer(function Content() {
       />
 
       {segment === 'timeline' ? (
-        <FlashList
-          data={service.moments}
-          keyExtractor={(m) => m.id}
-          contentContainerStyle={styles.list}
-          onEndReachedThreshold={0.4}
-          onEndReached={() => void service.loadMore().catch(() => undefined)}
-          renderItem={({ item }: { item: MomentResponse }) => (
-            <MomentCard
-              moment={item}
-              onPress={() => router.push(`/moments/${item.id}`)}
-              onLongPress={
-                // spec §4.2：长按编辑/删除仅作者本人的卡片生效
-                myId === item.author.id
-                  ? () =>
-                      showMomentActions(item, () =>
-                        router.push({ pathname: '/compose', params: { momentId: item.id } }),
-                      )
-                  : undefined
-              }
-              templateManifest={service.chain?.templateManifest ?? null}
-              ageLabel={(() => {
-                const birthdate = service.chain?.payload?.birthdate;
-                return typeof birthdate === 'string' ? babyAgeLabel(birthdate, item.happenedAt, item.happenedTzOffset) : undefined;
-              })()}
-            />
-          )}
-          ListEmptyComponent={<Text style={styles.empty}>还没有时刻</Text>}
-        />
+        <View style={styles.timelinePane}>
+          <FilterChips
+            personId={service.personId}
+            personName={service.personName}
+            place={service.place}
+            onClearPerson={() => service.clearPersonFilter()}
+            onClearPlace={() => service.clearPlaceFilter()}
+          />
+          <FlashList
+            data={service.moments}
+            keyExtractor={(m) => m.id}
+            style={styles.timelineList}
+            contentContainerStyle={styles.list}
+            onEndReachedThreshold={0.4}
+            onEndReached={() => void service.loadMore().catch(() => undefined)}
+            renderItem={({ item }: { item: MomentResponse }) => (
+              <MomentCard
+                moment={item}
+                onPress={() => router.push(`/moments/${item.id}`)}
+                onLongPress={
+                  // spec §4.2：长按编辑/删除仅作者本人的卡片生效
+                  myId === item.author.id
+                    ? () =>
+                        showMomentActions(item, () =>
+                          router.push({ pathname: '/compose', params: { momentId: item.id } }),
+                        )
+                    : undefined
+                }
+                templateManifest={service.chain?.templateManifest ?? null}
+                ageLabel={(() => {
+                  const birthdate = service.chain?.payload?.birthdate;
+                  return typeof birthdate === 'string' ? babyAgeLabel(birthdate, item.happenedAt, item.happenedTzOffset) : undefined;
+                })()}
+                onPersonFilter={(p) => service.togglePersonFilter(p)}
+                onPlaceFilter={(place) => service.togglePlaceFilter(place)}
+              />
+            )}
+            ListEmptyComponent={
+              <Text style={styles.empty}>
+                {service.personId || service.place ? '没有符合条件的时刻' : '还没有时刻'}
+              </Text>
+            }
+          />
+        </View>
       ) : null}
 
       {segment === 'tags' ? <TagsSection service={service} /> : null}
@@ -181,6 +198,8 @@ const createStyles = (t: Theme) =>
     desc: { color: t.muted, fontSize: t.fontLabel },
     headActions: { flexDirection: 'row', alignItems: 'center', gap: t.space3 },
     list: { paddingBottom: t.space4 },
+    timelinePane: { flex: 1 },
+    timelineList: { flex: 1 },
     empty: { color: t.muted, textAlign: 'center', padding: t.space8 },
     section: { padding: t.space4, gap: 10 },
     row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: t.surface, borderRadius: 8, padding: 14 },
