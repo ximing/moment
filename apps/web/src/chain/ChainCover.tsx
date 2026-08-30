@@ -7,7 +7,8 @@ import { useMediaObjectUrl } from '@/media/useMediaObjectUrl';
 // 链封面（spec §7.5）：只出现在链首页与公开分享页，侧栏/时间线/那年今日不渲染。
 // 登录版优先接口签发的 https coverUrl；无 http src 时才走认证 blob。
 // 公开版：已签发 https 直出，相对路径才拼 ?st=。加载失败当次隐藏并回调页面回普通页眉。
-// 视觉对齐 Notion：通栏宽幅、无圆角色面卡片，底部溶进页面底，页眉叠上来。
+// 视觉对齐 Notion：铺满链首页主栏，高度约 30vh（全宽 3:1 会过高），
+// 无圆角色面、无底部渐变；页眉在封面下方，不叠进图里。
 
 /** 无状态封面图：登录/公开两版共用，object-fit:cover + 保存的焦点。 */
 function CoverImage({
@@ -31,18 +32,8 @@ function CoverImage({
 }
 
 function frameClassName(className?: string): string {
-  // 与页底连成一块：无圆角卡片、无 surface 色面。底部溶进 --bg（Notion 封面）。
-  const base = 'relative aspect-[3/1] w-full overflow-hidden bg-bg';
+  const base = 'relative h-[30vh] w-full overflow-hidden bg-bg';
   return className ? `${base} ${className}` : base;
-}
-
-function CoverFade() {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-bg to-transparent"
-    />
-  );
 }
 
 /** 当次回退守卫（与 ChainMark brokenSrc 同语义）：记失败的 URL；URL 变化自然重置，
@@ -82,7 +73,6 @@ export function ChainCover({
           }}
         />
       )}
-      <CoverFade />
     </div>
   );
 }
@@ -114,7 +104,6 @@ export function PublicChainCover({
           onError?.();
         }}
       />
-      <CoverFade />
     </div>
   );
 }

@@ -370,8 +370,15 @@ describe('链首页封面', () => {
     expect(img).toHaveAttribute('src', 'blob:mock-cover-1');
     expect(img).toHaveStyle({ objectPosition: '25% 75%' });
     expect(img?.parentElement?.className.split(/\s+/)).not.toContain('rounded-surface-lg');
-    // 普通页眉仍在（封面上方/前方附加，不替换既有结构）
-    expect(screen.getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
+    // 封面在内容列之外（通栏）；标题仍在 max-w-content 里
+    const cover = img!.closest('[aria-hidden]');
+    const column = cover?.parentElement?.querySelector('.max-w-content');
+    expect(column).not.toBeNull();
+    expect(column!.contains(cover)).toBe(false);
+    expect(within(column as HTMLElement).getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
+    const rail = container.querySelector('aside.w-rail');
+    expect(rail?.className.split(/\s+/)).toContain('top-[30vh]');
+    expect(rail?.className.split(/\s+/)).not.toContain('inset-y-0');
   });
 
   it('封面加载失败当次隐藏，页面回普通页眉', () => {
@@ -381,6 +388,14 @@ describe('链首页封面', () => {
     fireEvent.error(container.querySelector('img')!);
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
+  });
+
+  it('无封面时时间索引仍从视口顶固定', () => {
+    seedChainHome([TEXT_MOMENT]);
+    const { container } = renderChainHome();
+    const rail = container.querySelector('aside.w-rail');
+    expect(rail?.className.split(/\s+/)).toContain('inset-y-0');
+    expect(rail?.className.split(/\s+/)).not.toContain('top-[30vh]');
   });
 
   it('无封面的链不渲染封面容器之外的任何页眉图片', () => {

@@ -31,6 +31,7 @@ export function TimelineRail({
   tags,
   value,
   onChange,
+  pinBelowCover = false,
 }: {
   /** 链页传入：链 chips 整块隐藏，索引/标签范围固定为该链 */
   fixedChainId?: string;
@@ -39,6 +40,8 @@ export function TimelineRail({
   tags: TagResponse[];
   value: RailFilter;
   onChange: (next: RailFilter) => void;
+  /** 链首页有封面时从封面下沿（30vh）起固定，避免叠在图上 */
+  pinBelowCover?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -61,7 +64,13 @@ export function TimelineRail({
         />
       </Sheet>
       {/* ≥1400px：右侧栏 */}
-      <aside className="fixed inset-y-0 right-0 z-10 hidden w-rail overflow-y-auto px-4 pt-8 min-[1400px]:block">
+      <aside
+        className={
+          pinBelowCover
+            ? 'fixed top-[30vh] bottom-0 right-0 z-10 hidden w-rail overflow-y-auto px-4 pt-6 min-[1400px]:block'
+            : 'fixed inset-y-0 right-0 z-10 hidden w-rail overflow-y-auto px-4 pt-8 min-[1400px]:block'
+        }
+      >
         <h2 className="mb-3 px-1 text-caption text-muted">时间索引</h2>
         <RailContent
           fixedChainId={fixedChainId}

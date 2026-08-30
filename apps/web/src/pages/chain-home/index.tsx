@@ -71,7 +71,8 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           onError={() => setFailedCoverId(chain.coverMediaId)}
         />
       )}
-      <header className={showCover ? '-mt-8 mb-6' : 'mb-6'}>
+      <div className="mx-auto w-full max-w-content px-5 pt-6 min-[900px]:px-8">
+      <header className="mb-6">
         {showCover ? (
           <div className="mb-3">
             <ChainMark
@@ -155,6 +156,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
         tags={service.tags}
         value={service.filter}
         onChange={(next) => service.setFilter(next)}
+        pinBelowCover={showCover}
       />
 
       {service.activeView === 'timeline' ? (
@@ -237,6 +239,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           map={(props) => <MapView {...props} />}
         />
       )}
+      </div>
     </div>
   );
 });

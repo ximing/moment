@@ -29,7 +29,11 @@ describe('ChainCover（登录版）', () => {
     expect(hook).toHaveBeenCalledWith(null);
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://s3.example/cover?X-Amz-Signature=abc');
     expect(container.querySelector('img')).toHaveStyle({ objectPosition: '25% 75%' });
-    expect(container.firstElementChild?.className.split(/\s+/)).not.toContain('rounded-surface-lg');
+    const frame = container.firstElementChild as HTMLElement;
+    expect(frame.className.split(/\s+/)).not.toContain('rounded-surface-lg');
+    expect(frame.className.split(/\s+/)).toContain('h-[30vh]');
+    expect(frame.className.split(/\s+/)).not.toContain('aspect-[3/1]');
+    expect(container.querySelector('.bg-gradient-to-t')).toBeNull();
   });
 
   it('经 blob 通道渲染宽幅封面，焦点换算为 object-position', () => {

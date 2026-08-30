@@ -72,7 +72,7 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
           onError={() => setCoverFailed(true)}
         />
       )}
-      <header className={showCover ? '-mt-8' : 'border-b border-line'}>
+      <header className={showCover ? '' : 'border-b border-line'}>
         <div className={`mx-auto max-w-content px-6 ${showCover ? 'pb-8' : 'py-8'}`}>
           {showCover && chain ? (
             <div className="mb-3">

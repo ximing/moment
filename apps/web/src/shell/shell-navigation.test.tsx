@@ -183,6 +183,19 @@ describe('Shell 认证导航', () => {
     );
   });
 
+  it('链首页 main 放开内容列且不预留 rail 右垫，设置页仍是内容列', () => {
+    const home = renderShell('/chains/chain-1');
+    const homeMain = home.container.querySelector('main')!;
+    expect(homeMain.className.split(/\s+/)).not.toContain('max-w-content');
+    expect(homeMain.parentElement!.className).not.toContain('pr-[var(--rail)]');
+    home.unmount();
+
+    const settings = renderShell('/chains/chain-1/settings');
+    const settingsMain = settings.container.querySelector('main')!;
+    expect(settingsMain.className.split(/\s+/)).toContain('max-w-content');
+    expect(settingsMain.parentElement!.className).toContain('pr-[var(--rail)]');
+  });
+
   it('链导航右键提供「链设置」命令并跳转到链设置页', async () => {
     const user = userEvent.setup();
     renderShell('/');

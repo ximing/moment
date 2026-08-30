@@ -21,6 +21,8 @@ export const Shell = observer(function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
   const chainId = useMatch('/chains/:chainId')?.params.chainId;
+  // 链首页封面要铺满侧栏与时间索引之间的主栏（Notion 通栏）；其它页仍走内容列。
+  const chainHome = Boolean(chainId);
   const [creating, setCreating] = useState(false);
 
   const chainList = useService(ChainListService);
@@ -63,7 +65,13 @@ export const Shell = observer(function Shell() {
         </div>
       </aside>
 
-      <div className="min-[1400px]:pl-[var(--sidebar)] min-[1400px]:pr-[var(--rail)]">
+      <div
+        className={
+          chainHome
+            ? 'min-[1400px]:pl-[var(--sidebar)]'
+            : 'min-[1400px]:pl-[var(--sidebar)] min-[1400px]:pr-[var(--rail)]'
+        }
+      >
         <header className="sticky top-0 z-20 flex items-center gap-2 bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] px-4 py-3 backdrop-blur min-[1400px]:hidden">
           <Brand compact />
           <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -83,7 +91,13 @@ export const Shell = observer(function Shell() {
           </div>
           <UserMenu unread={unread} compact />
         </header>
-        <main className="mx-auto w-full max-w-content px-5 pb-32 pt-6 min-[900px]:px-8">
+        <main
+          className={
+            chainHome
+              ? 'w-full pb-32'
+              : 'mx-auto w-full max-w-content px-5 pb-32 pt-6 min-[900px]:px-8'
+          }
+        >
           <Outlet />
         </main>
       </div>
