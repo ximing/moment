@@ -149,6 +149,8 @@ beforeEach(() => {
   s.exifDismissed = false;
   s.happenedAtTouched = false;
   s.error = null;
+  s.progress = null;
+  s.progressValue = null;
   s.keptMedia = [];
   s.keptAudio = null;
   s.mediaTouched = false;
@@ -594,5 +596,66 @@ describe('编辑模式媒体 dirty / cap / submit（spec §6）', () => {
     s.baseline = null;
     expect(s.mediaTouched).toBe(true);
     expect(s.isDirty()).toBe(true);
+  });
+});
+
+describe('记下：图片 / 视频上传进度', () => {
+  it('新建视频：onProgress 写入确定进度；提交结束后清掉', async () => {
+    const s = svc();
+    s.hydrate({ chainId: 'chain-1' });
+    s.content = '此刻';
+    s.video = {
+      file: new File(['abcd'], 'a.mp4', { type: 'video/mp4' }),
+      previewUrl: 'blob:v',
+      durationSeconds: 2,
+    };
+    const seen: Array<{ progress: string | null; value: number | null }> = [];
+    api.uploadMedia.mockImplementation(async (input: { onProgress?: (l: number, t: number) => void }) => {
+      expect(input.onProgress).toEqual(expect.any(Function));
+      input.onProgress?.(40, 100);
+      seen.push({ progress: s.progress, value: s.progressValue });
+      input.onProgress?.(100, 100);
+      seen.push({ progress: s.progress, value: s.progressValue });
+      return { mediaId: 'vid-1', status: 'ready', mime: 'video/mp4', size: 4 };
+    });
+    await s.submit();
+    expect(seen).toEqual([
+      { progress: '上传视频 40%', value: 40 },
+      { progress: '上传视频 100%', value: 100 },
+    ]);
+    expect(s.progress).toBeNull();
+    expect(s.progressValue).toBeNull();
+  });
+
+  it('新建图片：压缩后 PUT 带 onProgress', async () => {
+    const s = svc();
+    s.hydrate({ chainId: 'chain-1' });
+    s.content = '此刻';
+    s.addImages([new File(['x'], 'a.jpg', { type: 'image/jpeg' })]);
+    const seen: number[] = [];
+    api.uploadMedia.mockImplementation(async (input: { onProgress?: (l: number, t: number) => void }) => {
+      input.onProgress?.(50, 100);
+      seen.push(s.progressValue ?? -1);
+      return { mediaId: 'img-1', status: 'ready', mime: 'image/jpeg', size: 1 };
+    });
+    await s.submit();
+    expect(seen).toEqual([50]);
+    expect(api.uploadMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'image', onProgress: expect.any(Function) }),
+    );
+  });
+
+  it('编辑加图：uploadMedia 同样带 onProgress', async () => {
+    const s = svc();
+    s.hydrate({ edit: editMoment({ type: 'text', media: [], content: '' }) });
+    s.addImages([new File(['x'], 'a.jpg', { type: 'image/jpeg' })]);
+    const seen: Array<{ progress: string | null; value: number | null }> = [];
+    api.uploadMedia.mockImplementation(async (input: { onProgress?: (l: number, t: number) => void }) => {
+      input.onProgress?.(25, 100);
+      seen.push({ progress: s.progress, value: s.progressValue });
+      return { mediaId: 'new-1', status: 'ready', mime: 'image/jpeg', size: 1 };
+    });
+    await s.submit();
+    expect(seen).toEqual([{ progress: '上传图片 1/1 25%', value: 25 }]);
   });
 });

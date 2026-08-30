@@ -133,14 +133,27 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
         busy={busy}
         onRequestClose={requestClose}
         footer={
-          <>
-            <Button variant="quiet" disabled={busy} onClick={requestClose}>
-              取消
-            </Button>
-            <Button loading={busy} onClick={() => void service.submit()}>
-              {edit ? '保存' : '记下'}
-            </Button>
-          </>
+          <div className="flex w-full min-w-0 flex-col gap-3">
+            {service.progress ? (
+              service.progressValue == null ? (
+                <InlineProgress variant="indeterminate" label={service.progress} />
+              ) : (
+                <InlineProgress
+                  variant="determinate"
+                  label={service.progress}
+                  value={service.progressValue}
+                />
+              )
+            ) : null}
+            <div className="flex justify-end gap-overlay-action">
+              <Button variant="quiet" disabled={busy} onClick={requestClose}>
+                取消
+              </Button>
+              <Button loading={busy} onClick={() => void service.submit()}>
+                {edit ? '保存' : '记下'}
+              </Button>
+            </div>
+          </div>
         }
       >
         <div className="flex flex-col gap-4" onPaste={handlePaste}>
@@ -389,7 +402,6 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
           {chainId && <PersonPicker service={service} />}
 
           {service.error && <Banner tone="error">{service.error}</Banner>}
-          {service.progress && <InlineProgress variant="indeterminate" label={service.progress} />}
         </div>
       </Sheet>
 

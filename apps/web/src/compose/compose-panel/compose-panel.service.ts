@@ -75,6 +75,8 @@ export class ComposePanelService extends Service {
   selectedTags: string[] = [];
   newTag = '';
   progress: string | null = null;
+  /** 媒体上传的 0–100；null = 不确定（压缩 / 记下）。 */
+  progressValue: number | null = null;
   error: string | null = null; // 本地校验 + humanError(API) 都落这里（面板内，spec §8）
   tagList: TagResponse[] = [];
   /** 当前链的模板 manifest（链详情内嵌，spec §3.2）；null = 未加载或无扩展 */
@@ -172,6 +174,7 @@ export class ComposePanelService extends Service {
     this.replaceConfirm = null;
     this.pendingFiles = [];
     this.mediaTouched = false;
+    this.setProgress(null);
     const edit = request.edit;
     if (edit?.type === 'media') {
       this.keptMedia = [...edit.media];
@@ -569,6 +572,17 @@ export class ComposePanelService extends Service {
     }
   }
 
+  private setProgress(label: string | null, value: number | null = null): void {
+    this.progress = label;
+    this.progressValue = value;
+  }
+
+  /** xhr 字节进度 → 文案 + 确定进度条（同一次手势里的 PUT）。 */
+  private onUploadBytes(label: string, loaded: number, total: number): void {
+    const pct = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+    this.setProgress(`${label} ${pct}%`, pct);
+  }
+
   /**
    * place 提交形态（spec §6 赋值表在 server 判 source，客户端只交 name/坐标）：
    * 名字（trim 后）与坐标皆空 → null（显式清除）；有坐标 ±名字 → 整体提交
@@ -644,13 +658,16 @@ export class ComposePanelService extends Service {
         if (this.mediaTouched) {
           const uploaded: string[] = [];
           for (let i = 0; i < this.images.length; i++) {
-            this.progress = `上传图片 ${i + 1}/${this.images.length}`;
+            const label = `上传图片 ${i + 1}/${this.images.length}`;
+            this.setProgress(`压缩图片 ${i + 1}/${this.images.length}`);
             const file = await compressImage(this.images[i]!.file);
+            this.setProgress(label, 0);
             const res = await client.uploadMedia({
               file,
               mime: file.type,
               size: file.size,
               kind: 'image',
+              onProgress: (l, t) => this.onUploadBytes(label, l, t),
             });
             uploaded.push(res.mediaId);
           }
@@ -674,59 +691,62 @@ export class ComposePanelService extends Service {
         const type = hasVoice ? 'voice' : hasVideo ? 'video' : hasImages ? 'media' : 'text';
         const mediaIds: string[] = [];
         if (this.voice) {
-          this.progress = '上传语音…';
+          this.setProgress('上传语音', 0);
           const res = await client.uploadMedia({
             file: this.voice.blob,
             mime: 'audio/wav',
             size: this.voice.blob.size,
             kind: 'audio',
             durationSeconds: this.voice.durationSeconds,
-            onProgress: (l, t) => (this.progress = `上传语音 ${Math.round((l / t) * 100)}%`),
+            onProgress: (l, t) => this.onUploadBytes('上传语音', l, t),
           });
           mediaIds.push(res.mediaId);
         }
         if (hasImages) {
           for (let i = 0; i < this.images.length; i++) {
-            this.progress = `上传图片 ${i + 1}/${this.images.length}`;
+            const label = `上传图片 ${i + 1}/${this.images.length}`;
+            this.setProgress(`压缩图片 ${i + 1}/${this.images.length}`);
             const file = await compressImage(this.images[i]!.file);
+            this.setProgress(label, 0);
             const res = await client.uploadMedia({
               file,
               mime: file.type,
               size: file.size,
               kind: 'image',
               sortOrder: i,
-              onProgress: (l, t) => (this.progress = `上传图片 ${i + 1}/${this.images.length} ${Math.round((l / t) * 100)}%`),
+              onProgress: (l, t) => this.onUploadBytes(label, l, t),
             });
             mediaIds.push(res.mediaId);
           }
         }
         if (this.video) {
-          this.progress = '上传视频…';
+          this.setProgress('上传视频', 0);
           const res = await client.uploadMedia({
             file: this.video.file,
             mime: this.video.file.type,
             size: this.video.file.size,
             kind: 'video',
             durationSeconds: this.video.durationSeconds,
-            onProgress: (l, t) => (this.progress = `上传视频 ${Math.round((l / t) * 100)}%`),
+            onProgress: (l, t) => this.onUploadBytes('上传视频', l, t),
           });
           mediaIds.push(res.mediaId);
         }
         if (this.video && this.posterBlob && !this.posterMediaId) {
           try {
-            this.progress = '上传封面…';
+            this.setProgress('上传封面', 0);
             const res = await client.uploadMedia({
               file: this.posterBlob,
               mime: 'image/jpeg',
               size: this.posterBlob.size,
               kind: 'image',
+              onProgress: (l, t) => this.onUploadBytes('上传封面', l, t),
             });
             this.posterMediaId = res.mediaId;
           } catch {
             this.posterMediaId = null; // 封面上传失败降级为无封面发布（spec §3）
           }
         }
-        this.progress = '记下…';
+        this.setProgress('记下…');
         const hasPayload = Object.keys(this.payloadDraft).length > 0;
         // kind moment 正文兜底（Global Constraints）：正文空时用结构摘要，满足 text 类型 content 必填。
         // 兜底填入的摘要与 Task 5 卡片摘要行逐字相同——卡片侧按 content===summary 判重跳过（评审 H1），不重复显示
@@ -734,7 +754,7 @@ export class ComposePanelService extends Service {
         if (this.kind !== 'standard' && this.content.trim().length === 0 && !summary && !hasImages && !hasVideo && !hasVoice) {
           // 摘要也为空时不发空 content 给 server 被 400（CONTENT_REQUIRED），前置人话提示（评审 S8）
           this.error = '选一项或写一句，再记下';
-          this.progress = null;
+          this.setProgress(null);
           return;
         }
         const content = this.content.trim().length === 0 && this.kind !== 'standard' ? summary : this.content;
@@ -761,7 +781,7 @@ export class ComposePanelService extends Service {
     } catch (e) {
       this.error = humanError(e);
     } finally {
-      this.progress = null;
+      this.setProgress(null);
     }
   }
 }
