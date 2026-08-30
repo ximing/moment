@@ -8,6 +8,8 @@ const api = vi.hoisted(() => ({
   listTags: vi.fn().mockResolvedValue({ tags: [] }),
   getChain: vi.fn().mockResolvedValue({ id: 'c-1', myRole: 'owner', templateManifest: { version: 1 } }),
   getMoment: vi.fn(),
+  updateChain: vi.fn(),
+  uploadMedia: vi.fn(),
   searchMoments: vi.fn().mockResolvedValue({
     moments: [],
     nextCursor: null,
@@ -25,6 +27,8 @@ beforeEach(() => {
   api.listTags.mockReset().mockResolvedValue({ tags: [] });
   api.getChain.mockReset().mockResolvedValue({ id: 'c-1', myRole: 'owner', templateManifest: { version: 1 } });
   api.getMoment.mockReset();
+  api.updateChain.mockReset().mockResolvedValue({});
+  api.uploadMedia.mockReset();
   api.searchMoments.mockReset().mockResolvedValue({
     moments: [],
     nextCursor: null,
@@ -39,6 +43,10 @@ beforeEach(() => {
   s.searchQ = '';
   s.searchParsed = null;
   s.searchError = null;
+  s.coverBusy = false;
+  s.coverError = null;
+  s.repositioning = false;
+  s.repositionFocus = null;
 });
 
 describe('ChainHomeService chip 过滤', () => {
@@ -72,6 +80,73 @@ describe('ChainHomeService chip 过滤', () => {
     );
     const body = api.searchMoments.mock.calls[0]![0] as Record<string, unknown>;
     expect(body).not.toHaveProperty('before');
+  });
+});
+
+describe('ChainHomeService 封面', () => {
+  it('replaceCover 上传后 PATCH coverMediaId + 居中焦点，并重拉链', async () => {
+    const s = resolve(ChainHomeService);
+    api.uploadMedia.mockResolvedValue({ mediaId: 'm-new', status: 'ready', mime: 'image/png', size: 1 });
+    api.getChain.mockResolvedValue({
+      id: 'c-1',
+      coverMediaId: 'm-new',
+      coverUrl: '/api/media/m-new',
+      coverFocus: { x: 0.5, y: 0.5 },
+    });
+    const file = new File(['x'], 'c.png', { type: 'image/png' });
+
+    await s.replaceCover(file);
+
+    expect(api.uploadMedia).toHaveBeenCalledWith(expect.objectContaining({ kind: 'image', mime: 'image/png' }));
+    expect(api.updateChain).toHaveBeenCalledWith('c-1', {
+      coverMediaId: 'm-new',
+      coverFocus: { x: 0.5, y: 0.5 },
+    });
+    expect(s.chain).toMatchObject({ coverMediaId: 'm-new' });
+    expect(s.coverBusy).toBe(false);
+    expect(s.coverError).toBeNull();
+    expect(s.repositioning).toBe(false);
+  });
+
+  it('removeCover 提交 coverMediaId:null', async () => {
+    const s = resolve(ChainHomeService);
+    api.getChain.mockResolvedValue({ id: 'c-1', coverMediaId: null, coverUrl: null, coverFocus: null });
+
+    await s.removeCover();
+
+    expect(api.updateChain).toHaveBeenCalledWith('c-1', { coverMediaId: null });
+    expect(s.chain).toMatchObject({ coverMediaId: null });
+    expect(s.coverBusy).toBe(false);
+  });
+
+  it('saveReposition 提交传入的 coverFocus', async () => {
+    const s = resolve(ChainHomeService);
+    s.chain = { id: 'c-1', coverUrl: '/api/media/c', coverFocus: { x: 0.2, y: 0.3 } } as never;
+    s.startReposition();
+    s.setRepositionFocus({ x: 0.1, y: 0.9 });
+    api.getChain.mockResolvedValue({
+      id: 'c-1',
+      coverUrl: '/api/media/c',
+      coverFocus: { x: 0.1, y: 0.9 },
+    });
+
+    await s.saveReposition({ x: 0.4, y: 0.6 });
+
+    expect(api.updateChain).toHaveBeenCalledWith('c-1', { coverFocus: { x: 0.4, y: 0.6 } });
+    expect(s.repositioning).toBe(false);
+    expect(s.repositionFocus).toBeNull();
+  });
+
+  it('replaceCover 失败写入 coverError，不抛出', async () => {
+    const s = resolve(ChainHomeService);
+    api.uploadMedia.mockRejectedValue(new Error('直传失败（500）'));
+    const file = new File(['x'], 'c.png', { type: 'image/png' });
+
+    await s.replaceCover(file);
+
+    expect(s.coverError).toBe('出了点问题，请重试');
+    expect(s.coverBusy).toBe(false);
+    expect(api.updateChain).not.toHaveBeenCalled();
   });
 });
 

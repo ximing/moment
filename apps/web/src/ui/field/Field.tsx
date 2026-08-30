@@ -20,6 +20,7 @@ import type {
 } from 'react';
 import {
   forwardRef,
+  useEffect,
   useId,
   useImperativeHandle,
   useLayoutEffect,
@@ -775,7 +776,7 @@ export type DateTimeFieldProps = {
  * 日期与时间复合输入（规范 §7.5）。value/onChange 是本地墙钟
  * YYYY-MM-DDTHH:mm：解析与格式化只做字符串与日历字段运算，绝不构造
  * Date、不做 UTC/浏览器时区换算（与 HappenedAtField 语义逐义一致）。
- * 浮层唯一来源是 Task 5 的公开 Popover。
+ * 时间列是 24 小时制，可直接输入也可点箭头。浮层唯一来源是 Task 5 的公开 Popover。
  */
 export function DateTimeField({ value, onChange, hint }: DateTimeFieldProps) {
   const labelId = useId();
@@ -896,7 +897,7 @@ export function DateTimeField({ value, onChange, hint }: DateTimeFieldProps) {
   );
 }
 
-/** 时间列（语义逐义搬移自 HappenedAtField 的 PopoverTime，状态改由 value/onChange 承载）。 */
+/** 时间列：24 小时墙钟，可输入也可点箭头。不构造 Date。 */
 function TimePanel({
   value: t,
   onApply,
@@ -904,83 +905,104 @@ function TimePanel({
   value: CalendarDateTime;
   onApply(next: CalendarDateTime): void;
 }) {
-  const pm = t.hour >= 12;
-  const hour12 = t.hour % 12 === 0 ? 12 : t.hour % 12;
-
   return (
     <div className="ml-4 flex shrink-0 flex-col justify-center">
       <p className="mb-2 text-xs text-muted">时间</p>
-      <div className="mb-3 flex rounded-full bg-bg p-0.5">
-        <button
-          type="button"
-          aria-pressed={!pm}
-          className={`flex-1 rounded-full px-2 py-1 text-xs ${pm ? 'text-muted' : 'bg-select text-select-fg'}`}
-          onClick={() => onApply(t.set({ hour: hour12 === 12 ? 0 : hour12 }))}
-        >
-          上午
-        </button>
-        <button
-          type="button"
-          aria-pressed={pm}
-          className={`flex-1 rounded-full px-2 py-1 text-xs ${pm ? 'bg-select text-select-fg' : 'text-muted'}`}
-          onClick={() =>
-            onApply(t.set({ hour: hour12 === 12 ? 12 : hour12 + 12 }))
-          }
-        >
-          下午
-        </button>
-      </div>
       <div className="flex items-center justify-center gap-1">
-        <TimeStep
+        <TimeDigit
           label="小时"
-          value={hour12}
-          onStep={(d) => {
-            const next12 = ((((hour12 - 1 + d) % 12) + 12) % 12) + 1;
-            const hour = (next12 % 12) + (pm ? 12 : 0);
-            onApply(t.set({ hour }));
-          }}
+          value={t.hour}
+          min={0}
+          max={23}
+          onCommit={(hour) => onApply(t.set({ hour }))}
         />
         <span className="pb-0.5 text-lg text-muted">:</span>
-        <TimeStep
+        <TimeDigit
           label="分钟"
           value={t.minute}
-          pad
-          onStep={(d) => onApply(t.cycle('minute', d))}
+          min={0}
+          max={59}
+          onCommit={(minute) => onApply(t.set({ minute }))}
         />
       </div>
     </div>
   );
 }
 
-function TimeStep({
+function TimeDigit({
   label,
   value,
-  onStep,
-  pad: doPad,
+  min,
+  max,
+  onCommit,
 }: {
   label: string;
   value: number;
-  onStep(delta: number): void;
-  pad?: boolean;
+  min: number;
+  max: number;
+  onCommit(next: number): void;
 }) {
+  const shown = pad(value);
+  const [text, setText] = useState(shown);
+  useEffect(() => {
+    setText(shown);
+  }, [shown]);
+
+  function commit(raw: string): void {
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isInteger(n) || n < min || n > max) {
+      setText(shown);
+      return;
+    }
+    onCommit(n);
+  }
+
+  function step(delta: number): void {
+    const span = max - min + 1;
+    onCommit(min + ((((value - min + delta) % span) + span) % span));
+  }
+
   return (
     <div className="flex flex-col items-center">
       <button
         type="button"
         aria-label={`${label}加一`}
-        className="flex h-6 w-9 items-center justify-center rounded-button text-muted hover:bg-floating-hover hover:text-ink"
-        onClick={() => onStep(1)}
+        className="flex h-6 w-10 items-center justify-center rounded-button text-muted hover:bg-floating-hover hover:text-ink"
+        onClick={() => step(1)}
       >
         <Icon icon={ChevronUp} size={14} />
       </button>
-      <span className="w-9 text-center text-sm tabular-nums text-ink">
-        {doPad ? pad(value) : value}
-      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        aria-label={label}
+        value={text}
+        maxLength={2}
+        onChange={(event) => {
+          const next = event.target.value.replace(/\D/g, '').slice(0, 2);
+          setText(next);
+          if (next.length === 2) commit(next);
+        }}
+        onBlur={(event) => commit(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            commit((event.target as HTMLInputElement).value);
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            step(1);
+          } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            step(-1);
+          }
+        }}
+        className="h-8 w-10 rounded-field bg-field-bg text-center text-sm tabular-nums text-ink outline-none transition-[background-color,box-shadow] duration-[var(--ease)] hover:bg-field-bg-hover focus-visible:ring-field focus-visible:ring-field-focus"
+      />
       <button
         type="button"
         aria-label={`${label}减一`}
-        className="flex h-6 w-9 items-center justify-center rounded-button text-muted hover:bg-floating-hover hover:text-ink"
-        onClick={() => onStep(-1)}
+        className="flex h-6 w-10 items-center justify-center rounded-button text-muted hover:bg-floating-hover hover:text-ink"
+        onClick={() => step(-1)}
       >
         <Icon icon={ChevronDown} size={14} />
       </button>

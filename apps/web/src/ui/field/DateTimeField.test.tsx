@@ -77,8 +77,6 @@ describe('DateTimeField', () => {
     await user.keyboard('{Enter}');
     await screen.findByRole('grid');
 
-    // 17:30 → 下午 5:30
-    expect(screen.getByRole('button', { name: '下午' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '分钟加一' }));
     expect(onChange).toHaveBeenLastCalledWith('2026-08-18T17:31');
     // 受控值已进到 17:31，小时步进在此基础上叠加
@@ -89,6 +87,26 @@ describe('DateTimeField', () => {
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('grid')).toBeNull());
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('小时和分钟可以直接输入，失焦后按墙钟回传', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    await user.click(screen.getByRole('button', { name: '发生在' }));
+    await screen.findByRole('grid');
+
+    const hour = screen.getByRole('textbox', { name: '小时' });
+    const minute = screen.getByRole('textbox', { name: '分钟' });
+    await user.clear(hour);
+    await user.type(hour, '9');
+    await user.click(minute);
+    expect(onChange).toHaveBeenLastCalledWith('2026-08-18T09:30');
+
+    await user.clear(minute);
+    await user.type(minute, '5');
+    await user.click(hour);
+    expect(onChange).toHaveBeenLastCalledWith('2026-08-18T09:05');
   });
 
   it('onChange 回传值受控 rerender 后墙钟显示一致', async () => {

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router';
 import { observer, useService } from '@rabjs/react';
+import { Plus } from 'lucide-react';
 import { ComposeFab } from '@/compose/compose-fab';
 import { ComposePanel } from '@/compose/compose-panel';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { ChainListService } from '@/services/chain-list.service';
 import { NotificationService } from '@/services/notification.service';
 import { canCompose } from '@/lib/roles';
+import { Icon } from '@/ui/Icon';
 import { ChainNavList } from './chain-nav-list';
 import { CreateChainDialog } from './create-chain-dialog';
 import { UserMenu } from './user-menu';
@@ -54,8 +56,11 @@ export const Shell = observer(function Shell() {
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="mt-2 rounded-menu-item px-2 py-1.5 text-left text-meta text-muted transition-colors duration-[var(--ease)] hover:bg-floating-hover hover:text-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset"
+            className="mt-1 flex w-full items-center gap-2 rounded-menu-item px-2 py-1.5 text-left text-meta text-muted transition-colors duration-[var(--ease)] hover:bg-floating-hover hover:text-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset"
           >
+            <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-dashed border-stroke">
+              <Icon icon={Plus} size={12} />
+            </span>
             开一条新的链
           </button>
         </nav>
@@ -84,9 +89,9 @@ export const Shell = observer(function Shell() {
               type="button"
               aria-label="开一条新的链"
               onClick={() => setCreating(true)}
-              className="shrink-0 rounded-full px-3 py-1 text-sm text-muted transition-colors duration-[var(--ease)] hover:bg-floating-hover hover:text-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors duration-[var(--ease)] hover:bg-floating-hover hover:text-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset"
             >
-              +
+              <Icon icon={Plus} />
             </button>
           </div>
           <UserMenu unread={unread} compact />

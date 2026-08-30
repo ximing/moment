@@ -21,6 +21,10 @@ const api = vi.hoisted(() => ({
   listInvites: vi.fn(),
   listShareLinks: vi.fn(),
   listTags: vi.fn(),
+  listPersons: vi.fn(),
+  createPerson: vi.fn(),
+  renamePerson: vi.fn(),
+  removePerson: vi.fn(),
   uploadMedia: vi.fn(),
   discardMedia: vi.fn(),
   listChainJobs: vi.fn(),
@@ -97,6 +101,8 @@ function resetService(): ChainSettingsService {
   service.formHydrated = false;
   service.tags = [];
   service.jobs = [];
+  service.persons = [];
+  service.newPersonName = '';
   // 私有级联闸：本测试文件的用例各自独占首载路径
   (service as unknown as { sectionsLoaded: boolean }).sectionsLoaded = false;
   return service;
@@ -127,6 +133,7 @@ beforeEach(() => {
   api.listInvites.mockResolvedValue([]);
   api.listShareLinks.mockResolvedValue({ items: [] });
   api.listTags.mockResolvedValue({ tags: [] });
+  api.listPersons.mockResolvedValue({ persons: [] });
   api.discardMedia.mockResolvedValue(undefined);
   api.listChainJobs.mockReset().mockResolvedValue({ jobs: [] });
 });
@@ -307,6 +314,69 @@ describe('卸载回收', () => {
     expect(api.discardMedia).toHaveBeenCalledTimes(1);
     expect(api.discardMedia).toHaveBeenCalledWith('m-c');
     expect(api.discardMedia).not.toHaveBeenCalledWith('m-a');
+  });
+});
+
+describe('人物词典', () => {
+  const grandma = { id: 'p-1', name: '外婆', userId: null };
+
+  it('loadChain 首载级联 listPersons', async () => {
+    api.listPersons.mockResolvedValue({ persons: [grandma] });
+    const service = await seedChain(makeChain());
+
+    expect(api.listPersons).toHaveBeenCalledWith('chain-1');
+    await vi.waitFor(() => expect(service.persons).toEqual([grandma]));
+  });
+
+  it('空白名字不发 createPerson', async () => {
+    const service = await seedChain(makeChain());
+    service.newPersonName = '   ';
+
+    await service.addPerson();
+
+    expect(api.createPerson).not.toHaveBeenCalled();
+  });
+
+  it('addPerson 提交 trim 后的名字，清空输入并重拉名单', async () => {
+    const service = await seedChain(makeChain());
+    service.newPersonName = ' 外婆 ';
+    api.createPerson.mockResolvedValue(grandma);
+    api.listPersons.mockResolvedValue({ persons: [grandma] });
+
+    await service.addPerson();
+
+    expect(api.createPerson).toHaveBeenCalledWith('chain-1', { name: '外婆' });
+    expect(service.newPersonName).toBe('');
+    expect(service.persons).toEqual([grandma]);
+  });
+
+  it('renamePerson 同名或空名不发请求；改名后重拉', async () => {
+    api.listPersons.mockResolvedValue({ persons: [grandma] });
+    const service = await seedChain(makeChain());
+    await vi.waitFor(() => expect(service.persons).toEqual([grandma]));
+
+    await service.renamePerson('p-1', ' 外婆 ');
+    await service.renamePerson('p-1', '  ');
+    expect(api.renamePerson).not.toHaveBeenCalled();
+
+    api.listPersons.mockResolvedValue({ persons: [{ ...grandma, name: '姥姥' }] });
+    await service.renamePerson('p-1', '姥姥');
+
+    expect(api.renamePerson).toHaveBeenCalledWith('chain-1', 'p-1', { name: '姥姥' });
+    expect(service.persons[0]?.name).toBe('姥姥');
+  });
+
+  it('removePerson 删除后重拉', async () => {
+    api.listPersons.mockResolvedValue({ persons: [grandma] });
+    const service = await seedChain(makeChain());
+    await vi.waitFor(() => expect(service.persons).toEqual([grandma]));
+    api.removePerson.mockResolvedValue(undefined);
+    api.listPersons.mockResolvedValue({ persons: [] });
+
+    await service.removePerson('p-1');
+
+    expect(api.removePerson).toHaveBeenCalledWith('chain-1', 'p-1');
+    expect(service.persons).toEqual([]);
   });
 });
 

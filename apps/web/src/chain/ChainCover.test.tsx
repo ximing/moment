@@ -44,6 +44,7 @@ describe('ChainCover（登录版）', () => {
     expect(img).not.toBeNull();
     expect(img).toHaveAttribute('src', 'blob:mock-cover-1');
     expect(img).toHaveAttribute('alt', '');
+    expect(img).toHaveAttribute('draggable', 'false');
     expect(img).toHaveStyle({ objectPosition: '25% 75%' });
   });
 

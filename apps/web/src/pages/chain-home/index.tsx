@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { MoreHorizontal } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { ComposerEntry } from '@/compose/composer-entry';
+import { AddCoverButton, EditableChainCover } from '@/chain/chain-cover-controls';
 import { ChainCover } from '@/chain/ChainCover';
 import { ChainMark } from '@/chain/ChainMark';
 import { ComposeSessionService } from '@/services/compose-session.service';
@@ -10,7 +11,7 @@ import { AggregateView } from '@/chain/aggregate-views';
 import { MapView } from '@/chain/map-view';
 import { RecapEntry } from '@/chain/recap-entry';
 import { babyAgeLabel } from '@/lib/template';
-import { canCompose } from '@/lib/roles';
+import { canCompose, isOwner } from '@/lib/roles';
 import { humanError } from '@/lib/errors';
 import { formatSearchParsed } from '@/lib/search-summary';
 import { FilterChips } from '@/timeline/filter-chips';
@@ -19,14 +20,13 @@ import { Timeline } from '@/timeline/timeline';
 import { TimelineRail } from '@/timeline/timeline-rail';
 import { IconButton } from '@/ui/button/index';
 import { Banner, EmptyState, TimelineSkeleton } from '@/ui/feedback/index';
-import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
+import { Tooltip } from '@/ui/tooltip/index';
 import { ChainAudience } from './chain-audience';
 import { ChainHomeService } from './chain-home.service';
 
-// 链主页（C 端总规范 §4.2 + chain-audience-header 规范 §3）：页眉 = 链名 + 成员
-// 头像簇与可见性（贴链名右侧）+ 最右 ···（ResponsiveMenu，进链设置）；简介在
-// 下一行、左缘与链名对齐。链名是动态文案，用系统字（spec §2.2）。kebab 沿用既有
-// 可见性规则（成员即可见，设置项不变）；角色条件与数据流保持原样。
+// 链主页（C 端总规范 §4.2 + chain-audience-header 规范 §3）：页眉 = 链色点与
+// 链名同一行 + 成员头像簇与可见性（贴链名右侧）+ 最右设置图标；简介在下一行、
+// 左缘与链名对齐。链名是动态文案，用系统字（spec §2.2）。设置入口成员即可见。
 
 // 具名导出是测试 seam：bindServices 的私有容器实例在渲染前无法播种，
 // 测试在全局容器注册同名 Service 后直接渲染本组件（chain-home.test.tsx）。
@@ -63,45 +63,50 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
 
   return (
     <div>
-      {showCover && (
-        <ChainCover
-          mediaId={chain.coverMediaId!}
-          src={chain.coverUrl}
-          focus={chain.coverFocus}
-          onError={() => setFailedCoverId(chain.coverMediaId)}
-        />
-      )}
+      {showCover &&
+        (isOwner(chain) ? (
+          <EditableChainCover
+            mediaId={chain.coverMediaId!}
+            src={chain.coverUrl}
+            focus={chain.coverFocus}
+            onError={() => setFailedCoverId(chain.coverMediaId)}
+          />
+        ) : (
+          <ChainCover
+            mediaId={chain.coverMediaId!}
+            src={chain.coverUrl}
+            focus={chain.coverFocus}
+            onError={() => setFailedCoverId(chain.coverMediaId)}
+          />
+        ))}
       <div className="mx-auto w-full max-w-content px-5 pt-6 min-[900px]:px-8">
+      {service.coverError ? (
+        <div className="mb-4">
+          <Banner tone="error">{service.coverError}</Banner>
+        </div>
+      ) : null}
       <header className="mb-6">
-        {showCover ? (
-          <div className="mb-3">
-            <ChainMark
-              chainId={chain.id}
-              color={chain.color}
-              icon={chain.icon}
-              avatarMediaId={chain.avatarMediaId}
-              avatarSrc={chain.avatarUrl}
-              avatarFocus={chain.avatarFocus}
-              size={32}
-            />
-          </div>
-        ) : null}
+        {!showCover && isOwner(chain) ? <AddCoverButton /> : null}
         <div className="flex items-center gap-3">
+          <ChainMark
+            chainId={chain.id}
+            color={chain.color}
+            icon={chain.icon}
+            avatarMediaId={chain.avatarMediaId}
+            avatarSrc={chain.avatarUrl}
+            avatarFocus={chain.avatarFocus}
+            size={32}
+          />
           <h1 className="min-w-0 truncate text-page-title font-semibold text-ink">{chain.name}</h1>
           <ChainAudience chain={chain} />
           <div className="ml-auto shrink-0">
-            <ResponsiveMenu
-              aria-label={`${chain.name} 的链操作`}
-              sheetTitle={chain.name}
-              trigger={<IconButton icon={MoreHorizontal} label="链操作" />}
-              onAction={(key) => {
-                if (key === 'settings') navigate(`/chains/${chain.id}/settings`);
-              }}
-            >
-              <MenuItem id="settings" textValue="设置">
-                设置
-              </MenuItem>
-            </ResponsiveMenu>
+            <Tooltip label="设置">
+              <IconButton
+                icon={Settings}
+                label="设置"
+                onClick={() => navigate(`/chains/${chain.id}/settings`)}
+              />
+            </Tooltip>
           </div>
         </div>
         {chain.description && <p className="mt-1 text-meta text-muted">{chain.description}</p>}

@@ -24,8 +24,10 @@ function CoverImage({
     <img
       alt=""
       src={src}
+      draggable={false}
+      onDragStart={(event) => event.preventDefault()}
       onError={onError}
-      className="h-full w-full object-cover"
+      className="pointer-events-none h-full w-full select-none object-cover"
       style={{ objectPosition: focusObjectPosition(focus ?? CENTER_FOCUS) }}
     />
   );

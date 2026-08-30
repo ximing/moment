@@ -3,12 +3,16 @@ import {
   SEARCH_MAX_LIMIT,
   type AggregateResponse,
   type ChainDetailDto,
+  type ChainImageFocus,
   type MonthIndexEntry,
   type MomentResponse,
   type SearchParsed,
   type TagResponse,
 } from '@moment/dto';
 import { client } from '@/api/client';
+import { CENTER_FOCUS } from '@/chain/appearance-model';
+import { uploadChainImage } from '@/chain/appearance-upload';
+import { humanError } from '@/lib/errors';
 import { currentTzOffset } from '@/lib/time';
 import { feedQuery } from '@/lib/feed';
 import type { RailFilter } from '@/timeline/timeline-rail';
@@ -32,6 +36,10 @@ export class ChainHomeService extends Service {
   activeView = 'timeline';
   /** 当前视图的投影数据（timeline/trips 不用端点，为 null） */
   aggregate: AggregateResponse | null = null;
+  coverBusy = false;
+  coverError: string | null = null;
+  repositioning = false;
+  repositionFocus: ChainImageFocus | null = null;
   private gen = 0;
   private loadingMore = false;
 
@@ -73,6 +81,10 @@ export class ChainHomeService extends Service {
     this.moments = [];
     this.activeView = 'timeline';
     this.aggregate = null;
+    this.coverBusy = false;
+    this.coverError = null;
+    this.repositioning = false;
+    this.repositionFocus = null;
     void this.loadChain();
     void this.loadFirst();
     void this.loadMeta();
@@ -154,6 +166,75 @@ export class ChainHomeService extends Service {
 
   async loadChain(): Promise<void> {
     this.chain = await client.getChain(this.chainId);
+  }
+
+  startReposition(): void {
+    if (!this.chain?.coverMediaId && !this.chain?.coverUrl) return;
+    this.repositionFocus = this.chain.coverFocus ?? CENTER_FOCUS;
+    this.repositioning = true;
+    this.coverError = null;
+  }
+
+  cancelReposition(): void {
+    this.repositioning = false;
+    this.repositionFocus = null;
+  }
+
+  setRepositionFocus(focus: ChainImageFocus): void {
+    this.repositionFocus = focus;
+  }
+
+  async saveReposition(nextFocus?: ChainImageFocus): Promise<void> {
+    const focus = nextFocus ?? this.repositionFocus;
+    if (!focus || !this.chainId) return;
+    this.coverBusy = true;
+    this.coverError = null;
+    try {
+      await client.updateChain(this.chainId, { coverFocus: focus });
+      this.repositioning = false;
+      this.repositionFocus = null;
+      this.emit('chain:changed', { chainId: this.chainId, op: 'update' }, 'global');
+      await this.loadChain();
+    } catch (err) {
+      this.coverError = humanError(err);
+    } finally {
+      this.coverBusy = false;
+    }
+  }
+
+  async replaceCover(file: File): Promise<void> {
+    if (!this.chainId) return;
+    this.coverBusy = true;
+    this.coverError = null;
+    try {
+      const { mediaId } = await uploadChainImage(client, file);
+      await client.updateChain(this.chainId, { coverMediaId: mediaId, coverFocus: CENTER_FOCUS });
+      this.repositioning = false;
+      this.repositionFocus = null;
+      this.emit('chain:changed', { chainId: this.chainId, op: 'update' }, 'global');
+      await this.loadChain();
+    } catch (err) {
+      this.coverError = humanError(err);
+    } finally {
+      this.coverBusy = false;
+    }
+  }
+
+  async removeCover(): Promise<void> {
+    if (!this.chainId) return;
+    this.coverBusy = true;
+    this.coverError = null;
+    try {
+      await client.updateChain(this.chainId, { coverMediaId: null });
+      this.repositioning = false;
+      this.repositionFocus = null;
+      this.emit('chain:changed', { chainId: this.chainId, op: 'update' }, 'global');
+      await this.loadChain();
+    } catch (err) {
+      this.coverError = humanError(err);
+    } finally {
+      this.coverBusy = false;
+    }
   }
 
   async loadFirst(): Promise<void> {

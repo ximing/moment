@@ -6,7 +6,8 @@ import type { ShareLinkDto } from '@moment/dto';
 import { AuthService } from '@/services/auth.service';
 import { ChainAppearanceEditor, type ChainAppearanceActions } from '@/chain/ChainAppearanceEditor';
 import { humanError } from '@/lib/errors';
-import { canInvite, isOwner, roleLabel } from '@/lib/roles';
+import { canCompose, canInvite, isOwner, roleLabel } from '@/lib/roles';
+import { PeopleSection } from './people-section';
 import { Avatar } from '@/ui/Avatar';
 import { Button, IconButton } from '@/ui/button/index';
 import { Banner, EmptyState, useToast } from '@/ui/feedback/index';
@@ -22,7 +23,7 @@ import { JobsSection } from './jobs-section';
 // 确认态（吊销链接 / 转让 / 删除）是纯 UI 确认态，留在组件本地 state，不进 service
 // （同 MomentPageContent 先例）；危险操作结果由 Banner / 列表变化表达，不重复弹 Toast。
 
-type Section = 'share' | 'members' | 'profile' | 'jobs';
+type Section = 'share' | 'members' | 'people' | 'tags' | 'profile' | 'jobs';
 
 export const ChainSettingsSections = observer(function ChainSettingsSections() {
   const service = useService(ChainSettingsService);
@@ -37,6 +38,8 @@ export const ChainSettingsSections = observer(function ChainSettingsSections() {
   const items: { key: Section; label: string; show: boolean }[] = [
     { key: 'share', label: '分享', show: owner },
     { key: 'members', label: '成员', show: true },
+    { key: 'people', label: '人物', show: canCompose(chain) },
+    { key: 'tags', label: '标签', show: canCompose(chain) },
     { key: 'profile', label: '资料', show: owner },
     { key: 'jobs', label: '处理中', show: owner },
   ];
@@ -64,6 +67,8 @@ export const ChainSettingsSections = observer(function ChainSettingsSections() {
       <div>
         {section === 'share' && owner && <ShareSection />}
         {section === 'members' && <MembersSection />}
+        {section === 'people' && canCompose(chain) && <PeopleSection />}
+        {section === 'tags' && canCompose(chain) && <TagsSection />}
         {section === 'profile' && owner && <ProfileSection />}
         {section === 'jobs' && owner && <JobsSection />}
       </div>
@@ -355,10 +360,62 @@ const MembersSection = observer(function MembersSection() {
   );
 });
 
+const TagsSection = observer(function TagsSection() {
+  const service = useService(ChainSettingsService);
+  const error = service.$model.addTag.error ?? service.$model.deleteTag.error;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-medium">标签</h2>
+      <p className="text-meta text-muted">记下时刻时可以从这份名单里给这一刻贴标签。</p>
+      {error && <Banner tone="error">{humanError(error)}</Banner>}
+      {service.tags.length === 0 ? (
+        <EmptyState
+          variant="plain"
+          scope="section"
+          title="还没有标签"
+          description="给这条链的时刻加上标签，方便以后翻找。"
+        />
+      ) : (
+        <ul className="space-y-1">
+          {service.tags.map((t) => (
+            <li key={t.id} className="flex items-center gap-2 py-1 text-sm">
+              <span className="text-ink">#{t.name}</span>
+              <IconButton
+                icon={X}
+                label={`删除标签 ${t.name}`}
+                onClick={() => void service.deleteTag(t.id).catch(() => undefined)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-col gap-2 min-[480px]:flex-row min-[480px]:items-center">
+        <Input
+          aria-label="新标签"
+          value={service.newTagName}
+          onChange={(e) => (service.newTagName = e.target.value)}
+          placeholder="新标签"
+          className="min-w-0 flex-1"
+        />
+        <Button
+          variant="quiet"
+          className="w-full min-[480px]:w-auto"
+          disabled={!service.newTagName.trim()}
+          loading={service.$model.addTag.loading}
+          onClick={() => void service.addTag().catch(() => undefined)}
+        >
+          添加
+        </Button>
+      </div>
+    </div>
+  );
+});
+
 const ProfileSection = observer(function ProfileSection() {
   const service = useService(ChainSettingsService);
   const toast = useToast();
-  const error = service.$model.saveProfile.error ?? service.$model.addTag.error ?? service.$model.deleteTag.error;
+  const error = service.$model.saveProfile.error;
 
   // 外观编辑器是纯受控组件：draft 只读，所有变更经 action 回调进 service（组件不碰 client）
   const appearanceActions: ChainAppearanceActions = {
@@ -397,48 +454,6 @@ const ProfileSection = observer(function ProfileSection() {
         >
           保存
         </Button>
-      </div>
-      <div className="pt-4">
-        <h3 className="mb-2 text-sm text-muted">标签</h3>
-        {service.tags.length === 0 ? (
-          <EmptyState
-            variant="plain"
-            scope="section"
-            title="还没有标签"
-            description="给这条链的时刻加上标签，方便以后翻找。"
-          />
-        ) : (
-          <ul className="space-y-1">
-            {service.tags.map((t) => (
-              <li key={t.id} className="flex items-center gap-2 py-1 text-sm">
-                <span className="text-ink">#{t.name}</span>
-                <IconButton
-                  icon={X}
-                  label={`删除标签 ${t.name}`}
-                  onClick={() => void service.deleteTag(t.id).catch(() => undefined)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="mt-2 flex flex-col gap-2 min-[480px]:flex-row min-[480px]:items-center">
-          <Input
-            aria-label="新标签"
-            value={service.newTagName}
-            onChange={(e) => (service.newTagName = e.target.value)}
-            placeholder="新标签"
-            className="min-w-0 flex-1"
-          />
-          <Button
-            variant="quiet"
-            className="w-full min-[480px]:w-auto"
-            disabled={!service.newTagName.trim()}
-            loading={service.$model.addTag.loading}
-            onClick={() => void service.addTag().catch(() => undefined)}
-          >
-            添加
-          </Button>
-        </div>
       </div>
       <div className="pt-4">
         <DangerSection />

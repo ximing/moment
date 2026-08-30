@@ -1,6 +1,6 @@
 import { Service } from '@rabjs/react';
 import { ApiError } from '@moment/api-client';
-import type { ChainDto, ChainImageFocus, ChainJobDto, ShareLinkDto } from '@moment/dto';
+import type { ChainDto, ChainImageFocus, ChainJobDto, PersonResponse, ShareLinkDto } from '@moment/dto';
 import { client } from '@/api/client';
 import type {
   ChainAppearanceDraft,
@@ -95,6 +95,9 @@ export class ChainSettingsService extends Service {
   tags: Awaited<ReturnType<typeof client.listTags>>['tags'] = [];
   jobs: ChainJobDto[] = [];
   newTagName = '';
+  /** 链级人物词典（记下时「和谁在一起」的名单） */
+  persons: PersonResponse[] = [];
+  newPersonName = '';
 
   // 成员操作
   transferId: string | null = null;
@@ -131,6 +134,7 @@ export class ChainSettingsService extends Service {
       void this.loadMembers().catch(() => undefined);
       void this.loadShareLinks().catch(() => undefined);
       void this.loadTags().catch(() => undefined);
+      void this.loadPersons().catch(() => undefined);
     }
     if (!this.formHydrated && this.chain) {
       // 首载水合资料表单（之后用户改动不覆盖）
@@ -317,6 +321,32 @@ export class ChainSettingsService extends Service {
 
   async loadTags(): Promise<void> {
     this.tags = (await client.listTags(this.chainId)).tags;
+  }
+
+  async loadPersons(): Promise<void> {
+    this.persons = (await client.listPersons(this.chainId)).persons;
+  }
+
+  async addPerson(): Promise<void> {
+    const name = this.newPersonName.trim();
+    if (!name) return;
+    await client.createPerson(this.chainId, { name });
+    this.newPersonName = '';
+    await this.loadPersons();
+  }
+
+  async renamePerson(personId: string, name: string): Promise<void> {
+    const next = name.trim();
+    if (!next) return;
+    const current = this.persons.find((p) => p.id === personId);
+    if (!current || current.name === next) return;
+    await client.renamePerson(this.chainId, personId, { name: next });
+    await this.loadPersons();
+  }
+
+  async removePerson(personId: string): Promise<void> {
+    await client.removePerson(this.chainId, personId);
+    await this.loadPersons();
   }
 
   async createShareLink(): Promise<void> {

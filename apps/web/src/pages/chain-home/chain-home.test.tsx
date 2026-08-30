@@ -223,6 +223,10 @@ function seedChainHome(moments: MomentResponse[], chain: ChainDetailDto = CHAIN)
   ];
   // before 锚定 2026-08：「当前查看年份」展开规则不依赖真实当前年份，跨年分组可确定性断言
   service.filter = { order: 'happened_at', chainIds: ['chain-1'], before: monthBeforeParam('2026-08') };
+  service.coverBusy = false;
+  service.coverError = null;
+  service.repositioning = false;
+  service.repositionFocus = null;
 }
 
 function renderChainHome() {
@@ -372,7 +376,7 @@ describe('链首页封面', () => {
     expect(img?.parentElement?.className.split(/\s+/)).not.toContain('rounded-surface-lg');
     // 封面在内容列之外（通栏）；标题仍在 max-w-content 里
     const cover = img!.closest('[aria-hidden]');
-    const column = cover?.parentElement?.querySelector('.max-w-content');
+    const column = screen.getByRole('heading', { level: 1, name: '周末小家' }).closest('.max-w-content');
     expect(column).not.toBeNull();
     expect(column!.contains(cover)).toBe(false);
     expect(within(column as HTMLElement).getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
@@ -404,6 +408,69 @@ describe('链首页封面', () => {
 
     // 页面上没有任何 <img>（成员头像簇为字母占位、时刻无媒体）
     expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('链色点与链名同一行；直接露出设置，没有链操作菜单', () => {
+    seedChainHome([TEXT_MOMENT], COVERED_CHAIN);
+    renderChainHome();
+
+    const heading = screen.getByRole('heading', { level: 1, name: '周末小家' });
+    expect(heading.parentElement?.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['flex', 'items-center']),
+    );
+    expect(heading.previousElementSibling).toHaveClass('rounded-full');
+    expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '链操作' })).toBeNull();
+  });
+
+  it('owner 有封面时露出更换 / 调整 / 去掉', () => {
+    seedChainHome([TEXT_MOMENT], COVERED_CHAIN);
+    renderChainHome();
+
+    expect(screen.getByRole('button', { name: '更换封面' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '调整位置' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '去掉封面' })).toBeInTheDocument();
+  });
+
+  it('非 owner 有封面时没有更换 / 调整 / 去掉', () => {
+    seedChainHome([TEXT_MOMENT], { ...COVERED_CHAIN, myRole: 'editor' });
+    const { unmount } = renderChainHome();
+    expect(screen.queryByRole('button', { name: '更换封面' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '调整位置' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '去掉封面' })).toBeNull();
+    unmount();
+
+    seedChainHome([TEXT_MOMENT], { ...COVERED_CHAIN, myRole: 'viewer' });
+    renderChainHome();
+    expect(screen.queryByRole('button', { name: '更换封面' })).toBeNull();
+  });
+
+  it('owner 无封面时露出添加封面；非 owner 没有', () => {
+    seedChainHome([TEXT_MOMENT]);
+    const { unmount } = renderChainHome();
+    expect(screen.getByRole('button', { name: '添加封面' })).toBeInTheDocument();
+    unmount();
+
+    seedChainHome([TEXT_MOMENT], { ...CHAIN, myRole: 'editor' });
+    const second = renderChainHome();
+    expect(screen.queryByRole('button', { name: '添加封面' })).toBeNull();
+    second.unmount();
+
+    seedChainHome([TEXT_MOMENT], { ...CHAIN, myRole: 'viewer' });
+    renderChainHome();
+    expect(screen.queryByRole('button', { name: '添加封面' })).toBeNull();
+  });
+
+  it('调整位置态露出取消 / 保存位置（jsdom 下须播种后再渲）', () => {
+    seedChainHome([TEXT_MOMENT], COVERED_CHAIN);
+    const service = resolve(ChainHomeService);
+    service.repositioning = true;
+    service.repositionFocus = { x: 0.25, y: 0.75 };
+    renderChainHome();
+
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存位置' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '更换封面' })).toBeNull();
   });
 });
 

@@ -105,6 +105,25 @@ describe('ChainSettingsSections jobs tab', () => {
   });
 });
 
+describe('ChainSettingsSections 标签 tab', () => {
+  it('owner / editor 可见「标签」；viewer 不可见', () => {
+    const s = resolve(ChainSettingsService);
+    s.chain = chain('owner');
+    const { unmount } = renderSections();
+    expect(screen.getByRole('button', { name: '标签' })).toBeInTheDocument();
+    unmount();
+
+    s.chain = chain('editor');
+    const second = renderSections();
+    expect(screen.getByRole('button', { name: '标签' })).toBeInTheDocument();
+    second.unmount();
+
+    s.chain = chain('viewer');
+    renderSections();
+    expect(screen.queryByRole('button', { name: '标签' })).toBeNull();
+  });
+});
+
 describe('JobsSection', () => {
   it('空态「没有处理中的任务」；无重试按钮', async () => {
     api.listChainJobs.mockResolvedValue({ jobs: [] });

@@ -226,6 +226,8 @@ describe('链设置角色门控', () => {
     // 分区导航只剩「成员」
     expect(screen.getByRole('button', { name: '成员' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '分享' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '人物' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '标签' })).toBeNull();
     expect(screen.queryByRole('button', { name: '资料' })).toBeNull();
 
     // owner 专属内容一律不出现
