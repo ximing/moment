@@ -63,11 +63,9 @@ function renderTimeline(props: Partial<Parameters<typeof Timeline>[0]> = {}) {
 }
 
 describe('Timeline 刷新时保留已有列表', () => {
-  it('首屏 pending 且无数据时渲染骨架', () => {
+  it('首屏 pending 且无数据时相册骨架 8 张纸', () => {
     const { container } = renderTimeline({ isPending: true, moments: [] });
-    expect(screen.queryByRole('article')).toBeNull();
-    expect(screen.queryByText('空时间线')).toBeNull();
-    expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-skeleton-note]').length).toBe(8);
   });
 
   it('已有时刻时 pending 不换成骨架，文章仍在', () => {
@@ -79,5 +77,20 @@ describe('Timeline 刷新时保留已有列表', () => {
     renderTimeline({ isError: true, moments: [MOMENT] });
     expect(screen.getByRole('article')).toHaveTextContent('已有内容');
     expect(screen.queryByText('没法刷新，点重试')).toBeNull();
+  });
+});
+
+describe('Timeline 按月相册网格', () => {
+  it('按月渲染 region，不出现「今天」日期结和日子线', () => {
+    renderTimeline({ moments: [MOMENT] });
+    expect(screen.getByRole('region', { name: '2026 · 8 月' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '今天' })).toBeNull();
+    expect(document.querySelector('.border-dashed')).toBeNull();
+  });
+
+  it('variant=single 不渲染月头', () => {
+    renderTimeline({ moments: [MOMENT], variant: 'single' });
+    expect(screen.queryByRole('region', { name: '2026 · 8 月' })).toBeNull();
+    expect(screen.getByRole('article')).toBeInTheDocument();
   });
 });

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { Settings } from 'lucide-react';
-import { ComposerEntry } from '@/compose/composer-entry';
 import { AddCoverButton, EditableChainCover } from '@/chain/chain-cover-controls';
 import { ChainCover } from '@/chain/ChainCover';
 import { ChainMark } from '@/chain/ChainMark';
@@ -183,7 +182,6 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
         />
         <Timeline
           moments={service.moments}
-          hideSignature={service.filter.order === 'created_at'}
           isPending={service.$model.loadFirst.loading}
           isError={Boolean(service.$model.loadFirst.error)}
           onRetry={() => void service.loadFirst()}
@@ -195,7 +193,6 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
             const birthdate = chain.payload?.birthdate;
             return typeof birthdate === 'string' ? babyAgeLabel(birthdate, m.happenedAt, m.happenedTzOffset) : '';
           }}
-          entry={canCompose(chain) ? <ComposerEntry chainId={chain.id} /> : undefined}
           onPersonFilter={(p) => service.togglePersonFilter(p)}
           onPlaceFilter={(place) => service.togglePlaceFilter(place)}
           empty={

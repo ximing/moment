@@ -1,5 +1,4 @@
 import { bindServices, observer, useService } from '@rabjs/react';
-import { ComposerEntry } from '@/compose/composer-entry';
 import { humanError } from '@/lib/errors';
 import { canCompose } from '@/lib/roles';
 import { formatSearchParsed } from '@/lib/search-summary';
@@ -41,7 +40,6 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
   );
   // viewer（任何链都不可写）全程不见发布入口（spec §5）
   const writable = chains.some(canCompose);
-  const entry = writable ? <ComposerEntry /> : undefined;
   const loading = service.$model.loadFirst.loading;
   const noChains = !loading && chains.length === 0;
 
@@ -102,14 +100,12 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
       <Timeline
         moments={service.moments}
         chainLookById={looks}
-        hideSignature={service.filter.order === 'created_at'}
         isPending={loading}
         isError={Boolean(service.$model.loadFirst.error)}
         onRetry={() => void service.loadFirst()}
         hasNextPage={service.hasMore}
         isFetchingNextPage={service.$model.loadMore.loading}
         fetchNextPage={() => void service.loadMore()}
-        entry={entry}
         onPersonFilter={(p) => service.togglePersonFilter(p)}
         onPlaceFilter={(place) => service.togglePlaceFilter(place)}
         empty={
