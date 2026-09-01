@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# 一键启动本地开发：MySQL + 迁移 + API :3000 + worker + Web :5173
+# 一键启动本地开发：迁移 + API :3000 + worker + Web :5173
+# 数据库走 apps/server/.env（外部库已配好，不拉 Docker）
 # 用法：
 #   ./dev.sh          启动（已在跑则只打印地址）
-#   ./dev.sh stop     停掉本脚本拉起的进程（不动 MySQL）
+#   ./dev.sh stop     停掉本脚本拉起的进程
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -40,7 +41,7 @@ stop_dev() {
     done < "$PID_FILE"
     rm -f "$PID_FILE"
   fi
-  echo "已停止 API / worker / Web（MySQL 容器未动）"
+  echo "已停止 API / worker / Web"
 }
 
 if [[ "${1:-}" == "stop" ]]; then
@@ -48,33 +49,12 @@ if [[ "${1:-}" == "stop" ]]; then
   exit 0
 fi
 
-need docker
 need pnpm
 need curl
 
 if [[ ! -f apps/server/.env ]]; then
-  echo "没有 apps/server/.env。若确认没有真实凭据：cp apps/server/.env.example apps/server/.env" >&2
+  echo "没有 apps/server/.env。外部库连接写在这个文件里，请先配好再启动。" >&2
   exit 1
-fi
-
-if docker compose ps mysql --format '{{.Health}}' 2>/dev/null | grep -qx healthy; then
-  echo "MySQL 已就绪"
-else
-  echo "启动 MySQL…"
-  docker compose up -d mysql
-  ok=0
-  for _ in $(seq 1 60); do
-    if docker compose ps mysql --format '{{.Health}}' 2>/dev/null | grep -qx healthy; then
-      ok=1
-      break
-    fi
-    sleep 1
-  done
-  if [[ "$ok" != 1 ]]; then
-    echo "MySQL 未进入 healthy" >&2
-    docker compose ps mysql >&2 || true
-    exit 1
-  fi
 fi
 
 echo "构建 dto / api-client…"

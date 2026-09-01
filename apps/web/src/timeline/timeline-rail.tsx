@@ -157,7 +157,14 @@ function RailContent({
                         <li key={mo.month}>
                           <button
                             type="button"
-                            onClick={() => onChange({ ...value, before: monthBeforeParam(mo.month) })}
+                            onClick={() => {
+                              // 最新月 = 不设 before（与「回到今天」同一份列表）；更早的月才锚定
+                              const latest = index[0]?.month;
+                              onChange({
+                                ...value,
+                                before: mo.month === latest ? undefined : monthBeforeParam(mo.month),
+                              });
+                            }}
                             className={`flex w-full items-baseline justify-between rounded-menu-item px-2 py-1.5 text-meta transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset ${
                               active
                                 ? 'bg-[color-mix(in_srgb,var(--select)_24%,transparent)] font-semibold text-ink'

@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>时刻 · 空间手感样稿</title>
+  <style>
+    @font-face {
+      font-family: "Smiley Sans";
+      src: url("../SmileySans-Oblique.ttf.woff2") format("woff2");
+      font-display: swap;
+    }
+    :root {
+      --paper: #f3ebe3;
+      --ink: #2b201c;
+      --muted: #8a7368;
+      --action: #c94a3a;
+      --gold: #e4c7a0;
+      --dusk: #16110f;
+      --lamp: #f0d3a8;
+      --ease: 280ms cubic-bezier(.2, .8, .2, 1);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: "PingFang SC", "Hiragino Sans GB", "Songti SC", serif;
+      color: var(--ink);
+      background: var(--dusk);
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+    img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+
+    .display { font-family: "Smiley Sans", "PingFang SC", sans-serif; font-weight: 400; }
+
+    /* —— 样稿壳，不是产品 —— */
+    .chrome {
+      position: fixed; z-index: 40; inset: 12px 12px auto 12px;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      pointer-events: none;
+    }
+    .chrome > * { pointer-events: auto; }
+    .brand {
+      height: 32px; padding: 0 12px; border-radius: 999px;
+      background: rgba(22, 17, 15, .72); color: var(--paper);
+      display: flex; align-items: center; gap: 8px;
+      backdrop-filter: blur(10px);
+      font-size: 13px;
+    }
+    .brand b { font-weight: 600; }
+    .brand span { color: #cbb7aa; }
+    .modes {
+      display: flex; gap: 4px; padding: 3px;
+      border-radius: 999px;
+      background: rgba(243, 235, 227, .92);
+      backdrop-filter: blur(10px);
+    }
+    .modes button {
+      height: 28px; padding: 0 12px; border-radius: 999px;
+      font-size: 13px; color: var(--muted);
+    }
+    .modes button.on { background: var(--ink); color: var(--paper); }
+    .hint {
+      margin-left: auto;
+      height: 32px; padding: 0 12px; border-radius: 999px;
+      background: rgba(22, 17, 15, .55); color: #e8d8cc;
+      display: flex; align-items: center;
+      font-size: 12px; letter-spacing: .02em;
+    }
+
+    .scene { display: none; position: absolute; inset: 0; z-index: 1; }
+    .scene.on { display: block; }
+
+    /* —— 家里的墙 —— */
+    #home {
+      background:
+        radial-gradient(1200px 600px at 50% 30%, rgba(240, 211, 168, .18), transparent 60%),
+        #1c1613;
+    }
+    .home-stage {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      perspective: 1400px;
+    }
+    .wall-board {
+      width: min(1100px, 92vw);
+      height: min(620px, 72vh);
+      transform: rotateX(6deg);
+      transform-style: preserve-3d;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.04), transparent 40%),
+        #3a2c26;
+      border: 10px solid #2a1f1b;
+      box-shadow:
+        0 40px 80px rgba(0,0,0,.45),
+        inset 0 0 80px rgba(0,0,0,.25);
+      padding: 36px 40px 48px;
+      display: grid;
+      grid-template-columns: 1.1fr .9fr 1fr;
+      grid-template-rows: 1.15fr .85fr;
+      gap: 22px;
+    }
+    .frame {
+      position: relative;
+      background: #f7efe6;
+      padding: 10px 10px 28px;
+      box-shadow: 0 12px 28px rgba(0,0,0,.35);
+      transform: rotate(var(--tilt, 0deg));
+      transition: transform var(--ease), box-shadow var(--ease);
+      overflow: hidden;
+    }
+    .frame:hover, .frame:focus-visible {
+      transform: rotate(0deg) translateY(-6px) scale(1.02);
+      box-shadow: 0 22px 40px rgba(0,0,0,.45);
+      outline: none;
+    }
+    .frame img { aspect-ratio: 4/3; }
+    .frame .cap {
+      position: absolute; left: 10px; right: 10px; bottom: 6px;
+      font-size: 12px; color: #6b5348; letter-spacing: .08em;
+    }
+    .frame.hero { grid-column: 1 / 3; grid-row: 1; --tilt: -1.2deg; padding-bottom: 34px; }
+    .frame.hero img { aspect-ratio: 16/9; }
+    .frame.a { --tilt: 1.6deg; }
+    .frame.b { --tilt: -2deg; }
+    .frame.c { grid-column: 3; grid-row: 1 / 3; --tilt: .8deg; padding-bottom: 36px; }
+    .frame.c img { height: calc(100% - 18px); aspect-ratio: auto; }
+    .home-copy {
+      position: absolute; left: 8vw; bottom: 8vh; color: var(--paper);
+      max-width: 420px; pointer-events: none;
+    }
+    .home-copy h1 { margin: 0 0 8px; font-size: 42px; letter-spacing: .04em; }
+    .home-copy p { margin: 0; color: #d9c4b6; font-size: 15px; line-height: 1.7; }
+
+    /* —— 走进日子 —— */
+    #day { background: #100c0a; }
+    .viewport {
+      position: absolute; inset: 0;
+      perspective: 900px;
+      overflow: hidden;
+      cursor: grab;
+    }
+    .viewport.grabbing { cursor: grabbing; }
+    .world {
+      position: absolute; left: 50%; top: 55%;
+      width: 0; height: 0;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+    .back-wall {
+      position: absolute; left: -800px; top: -420px;
+      width: 1600px; height: 720px;
+      background:
+        radial-gradient(ellipse at 50% 30%, rgba(240, 211, 168, .08), transparent 50%),
+        linear-gradient(#2c221e, #171210);
+      transform: translateZ(-560px);
+    }
+    .floor {
+      position: absolute; left: -900px; top: 80px;
+      width: 1800px; height: 1400px;
+      background:
+        radial-gradient(ellipse at 50% 0%, rgba(240, 211, 168, .16), transparent 55%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 2px, transparent 2px 90px),
+        #241a16;
+      transform: rotateX(90deg) translateZ(-80px);
+      transform-origin: top;
+    }
+    .date-on-floor {
+      position: absolute; left: 50%; top: 10%;
+      transform: translate(-50%, 0);
+      color: rgba(247, 239, 230, .88);
+      text-align: center;
+      text-shadow: 0 8px 24px rgba(0,0,0,.5);
+      pointer-events: none;
+    }
+    .date-on-floor h2 { margin: 0; font-size: 64px; letter-spacing: .12em; }
+    .date-on-floor small { display: block; margin-top: 8px; font-size: 16px; color: var(--gold); letter-spacing: .28em; }
+    .polaroid {
+      position: absolute; left: 0; top: 0;
+      width: 220px; padding: 10px 10px 32px;
+      background: #f7efe6;
+      box-shadow: 0 18px 40px rgba(0,0,0,.4);
+      transform-style: preserve-3d;
+      cursor: pointer;
+    }
+    .polaroid img { height: 150px; }
+    .polaroid .cap { position: absolute; left: 10px; right: 10px; bottom: 8px; font-size: 12px; color: #6b5348; }
+    .polaroid:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+    .door {
+      position: absolute; width: 160px; height: 280px;
+      border: 2px solid rgba(228, 199, 160, .35);
+      background: linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.55));
+      color: var(--gold);
+      display: grid; place-items: center;
+      letter-spacing: .2em;
+      font-size: 13px;
+    }
+    .door:hover { background: rgba(201, 74, 58, .25); }
+    .day-ui {
+      position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%);
+      display: flex; gap: 8px; z-index: 5;
+    }
+    .ghost {
+      height: 36px; padding: 0 14px; border-radius: 999px;
+      background: rgba(243, 235, 227, .9); color: var(--ink); font-size: 13px;
+    }
+    .ghost.quiet { background: rgba(22,17,15,.6); color: var(--paper); }
+
+    /* —— 记忆墙画布 —— */
+    #wall { background: #d9cfc4; }
+    .canvas-view {
+      position: absolute; inset: 0; overflow: hidden; cursor: grab;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(255,255,255,.35), transparent 40%),
+        #d7ccc1;
+    }
+    .canvas-view.grabbing { cursor: grabbing; }
+    .board {
+      position: absolute; left: 0; top: 0;
+      width: 4200px; height: 2800px;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+    .cluster-label {
+      position: absolute;
+      font-size: 28px; color: #5c463c; letter-spacing: .16em;
+      pointer-events: none;
+    }
+    .pin {
+      position: absolute;
+      width: 210px; padding: 9px 9px 30px;
+      background: #fbf6ef;
+      box-shadow: 0 10px 24px rgba(60, 40, 30, .18);
+      cursor: pointer;
+      transition: box-shadow var(--ease);
+    }
+    .pin:hover { box-shadow: 0 16px 32px rgba(60, 40, 30, .28); z-index: 2; }
+    .pin img { height: 142px; }
+    .pin .cap { position: absolute; left: 9px; right: 9px; bottom: 8px; font-size: 12px; color: #6b5348; }
+    .pin.wide { width: 280px; }
+    .pin.wide img { height: 150px; }
+    .pin.tall { width: 170px; }
+    .pin.tall img { height: 210px; }
+
+    /* —— 把记忆拿出来 —— */
+    #talk {
+      background:
+        radial-gradient(800px 500px at 50% 40%, rgba(240, 211, 168, .12), transparent 55%),
+        #0e0b0a;
+      color: var(--paper);
+    }
+    .talk-stage {
+      position: absolute; inset: 0;
+      perspective: 1200px;
+      overflow: hidden;
+    }
+    .held {
+      position: absolute; left: 50%; top: 42%;
+      width: 0; height: 0;
+      transform-style: preserve-3d;
+    }
+    .held .polaroid { width: 260px; }
+    .held .polaroid img { height: 176px; }
+    .held .polaroid {
+      animation: emerge 900ms cubic-bezier(.16, 1, .3, 1) both;
+    }
+    @keyframes emerge {
+      from { opacity: 0; filter: blur(8px); }
+      to { opacity: 1; filter: blur(0); }
+    }
+    .reply {
+      position: absolute; left: 50%; top: 18%;
+      transform: translateX(-50%);
+      max-width: 640px; text-align: center;
+      font-size: 28px; line-height: 1.5; letter-spacing: .06em;
+      color: #f7efe6;
+      text-shadow: 0 8px 28px rgba(0,0,0,.6);
+      opacity: 0; transition: opacity 500ms ease;
+    }
+    .reply.on { opacity: 1; }
+    .talk-bar {
+      position: absolute; left: 50%; bottom: 36px;
+      transform: translateX(-50%);
+      width: min(720px, 92vw);
+      display: flex; flex-direction: column; gap: 12px; align-items: center;
+    }
+    .prompts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .chip {
+      height: 36px; padding: 0 14px; border-radius: 999px;
+      border: 1px solid rgba(247, 239, 230, .28);
+      color: #f7efe6; font-size: 14px;
+      background: rgba(255,255,255,.06);
+    }
+    .chip:hover, .chip.on { background: var(--action); border-color: transparent; }
+    .ask {
+      width: 100%; height: 48px; border-radius: 999px;
+      padding: 0 20px;
+      background: rgba(247, 239, 230, .1);
+      border: 1px solid rgba(247, 239, 230, .18);
+      color: #f7efe6; font-size: 15px; outline: none;
+    }
+    .ask::placeholder { color: #b9a396; }
+
+    /* —— 拿在手上 —— */
+    .inspect {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(10, 8, 7, .72);
+      display: none; place-items: center;
+      padding: 40px;
+    }
+    .inspect.on { display: grid; }
+    .card {
+      width: min(520px, 92vw);
+      background: #f7efe6;
+      padding: 14px 14px 20px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.5);
+      animation: lift 320ms cubic-bezier(.16,1,.3,1);
+    }
+    @keyframes lift {
+      from { transform: translateY(24px) scale(.96); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+    .card img { height: 320px; }
+    .card h3 { margin: 14px 14px 4px; font-size: 22px; }
+    .card p { margin: 0 14px 16px; color: #6b5348; line-height: 1.7; }
+    .card .row { display: flex; gap: 8px; padding: 0 14px; }
+    .card .row button {
+      height: 36px; padding: 0 14px; border-radius: 999px;
+      background: var(--ink); color: var(--paper); font-size: 13px;
+    }
+    .card .row button.alt { background: transparent; color: var(--ink); border: 1px solid #d8c9c0; }
+
+    .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  </style>
+</head>
+<body>
+  <div class="chrome">
+    <div class="brand"><b class="display">时刻</b><span>空间手感样稿 · 不是产品</span></div>
+    <div class="modes" role="tablist" aria-label="四种打开方式">
+      <button type="button" data-mode="home" class="on">家里的墙</button>
+      <button type="button" data-mode="day">走进日子</button>
+      <button type="button" data-mode="wall">记忆墙</button>
+      <button type="button" data-mode="talk">把记忆拿出来</button>
+    </div>
+    <div class="hint" id="hint">点相框，走进一天</div>
+  </div>
+
+  <section id="home" class="scene on" aria-label="家里的墙">
+    <div class="home-stage">
+      <div class="wall-board">
+        <button class="frame hero" data-enter="today" style="--tilt:-1.4deg">
+          <img src="photos/porridge.jpg" alt="" />
+          <span class="cap">今天 · 自己用勺子</span>
+        </button>
+        <button class="frame a" data-enter="yesterday">
+          <img src="photos/dinner.jpg" alt="" />
+          <span class="cap">昨天 · 晚饭</span>
+        </button>
+        <button class="frame b" data-enter="yearago">
+          <img src="photos/cake.jpg" alt="" />
+          <span class="cap">一年前的今天</span>
+        </button>
+        <button class="frame c" data-enter="summer">
+          <img src="photos/beach.jpg" alt="" />
+          <span class="cap">去年夏天 · 青岛</span>
+        </button>
+      </div>
+    </div>
+    <div class="home-copy">
+      <h1 class="display">今晚想走进哪一天？</h1>
+      <p>墙是家。日子是相框。点进去，不是刷一条动态。</p>
+    </div>
+  </section>
+
+  <section id="day" class="scene" aria-label="走进日子">
+    <div class="viewport" id="viewport">
+      <div class="world" id="world">
+        <div class="back-wall" aria-hidden="true"></div>
+        <div class="floor">
+          <div class="date-on-floor">
+            <h2 class="display" id="floorTitle">今天</h2>
+            <small id="floorSub">8月31日 · 周日</small>
+          </div>
+        </div>
+        <button type="button" class="door" id="doorPrev" style="transform: translate3d(-520px,-40px,-40px) rotateY(18deg)">身后 · 更早</button>
+        <button type="button" class="door" id="doorNext" style="transform: translate3d(480px,-40px,-80px) rotateY(-16deg)">前面 · 更近</button>
+        <div id="roomPhotos"></div>
+      </div>
+    </div>
+    <div class="day-ui">
+      <button type="button" class="ghost" id="toWall">退后，看整面墙</button>
+      <button type="button" class="ghost quiet" id="toTalkFromDay">跟过去说一句</button>
+    </div>
+  </section>
+
+  <section id="wall" class="scene" aria-label="记忆墙">
+    <div class="canvas-view" id="canvasView">
+      <div class="board" id="board">
+        <div class="cluster-label" style="left:1680px;top:980px">今天</div>
+        <div class="cluster-label" style="left:720px;top:860px">昨天</div>
+        <div class="cluster-label" style="left:560px;top:1680px">一年前</div>
+        <div class="cluster-label" style="left:2860px;top:620px">去年夏天</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="talk" class="scene" aria-label="把记忆拿出来">
+    <div class="talk-stage">
+      <p class="reply" id="reply">先叫它一声。记忆会自己走出来。</p>
+      <div class="held" id="held"></div>
+      <div class="talk-bar">
+        <div class="prompts">
+          <button type="button" class="chip" data-prompt="year">去年的今天</button>
+          <button type="button" class="chip" data-prompt="summer">把夏天拿出来</button>
+          <button type="button" class="chip" data-prompt="rain">有雨的晚上</button>
+          <button type="button" class="chip" data-prompt="first">第一次自己吃饭</button>
+        </div>
+        <input class="ask" id="ask" placeholder="跟过去说一句… 回车" />
+      </div>
+    </div>
+  </section>
+
+  <div class="inspect" id="inspect" role="dialog" aria-modal="true">
+    <div class="card">
+      <img id="insImg" alt="" />
+      <h3 id="insTitle"></h3>
+      <p id="insBody"></p>
+      <div class="row">
+        <button type="button" id="insEnter">走进这一天</button>
+        <button type="button" class="alt" id="insClose">放下</button>
+      </div>
+    </div>
+  </div>
+  <p class="sr">拖动环顾，滚轮走近。Esc 放下照片。</p>
+
+  <script>
+    const DAYS = {
+      today:     { label: "今天", sub: "8月31日 · 周日", prev: "yesterday", next: null },
+      yesterday: { label: "昨天", sub: "8月30日 · 周六", prev: "yearago", next: "today" },
+      yearago:   { label: "一年前的今天", sub: "2025年8月31日", prev: "summer", next: "yesterday" },
+      summer:    { label: "去年夏天", sub: "青岛 · 2025年7月", prev: null, next: "yearago" },
+    };
+
+    const MOMENTS = [
+      { id: "porridge", day: "today", src: "photos/porridge.jpg", title: "自己用勺子", body: "粥洒了一圈，她还是不让喂。", time: "08:12", wall: { x: 1720, y: 1080, r: -3, k: "" } },
+      { id: "toys", day: "today", src: "photos/toys.jpg", title: "地板上的下午", body: "积木倒了三次，第四次自己又垒起来。", time: "15:40", wall: { x: 1980, y: 1180, r: 4, k: "wide" } },
+      { id: "evening", day: "today", src: "photos/evening.jpg", title: "晚饭后的路", body: "路灯刚亮。我们走得很慢。", time: "18:51", wall: { x: 1640, y: 1360, r: 1.5, k: "" } },
+      { id: "soup", day: "today", src: "photos/soup.jpg", title: "一勺汤", body: "她吹了很久，才肯喝。", time: "12:04", wall: { x: 2080, y: 980, r: -2, k: "tall" } },
+      { id: "dinner", day: "yesterday", src: "photos/dinner.jpg", title: "转盘上的晚饭", body: "人到齐了，菜还在转。", time: "19:10", wall: { x: 640, y: 980, r: -5, k: "wide" } },
+      { id: "rain", day: "yesterday", src: "photos/rain.jpg", title: "窗上的雨", body: "没有出门。灯一直开着。", time: "20:22", wall: { x: 920, y: 1100, r: 3, k: "tall" } },
+      { id: "shoes", day: "yesterday", src: "photos/shoes.jpg", title: "门口的小红鞋", body: "回来就踢掉。明天还要穿。", time: "18:02", wall: { x: 780, y: 1280, r: -1, k: "" } },
+      { id: "cake", day: "yearago", src: "photos/cake.jpg", title: "那晚的蜡烛", body: "还没学会吹。是爸爸吹的。", time: "20:00", wall: { x: 520, y: 1820, r: 2, k: "wide" } },
+      { id: "note", day: "yearago", src: "photos/note.jpg", title: "冰箱上的太阳", body: "不会写字，先画了一个太阳。", time: "09:30", wall: { x: 840, y: 1900, r: -4, k: "" } },
+      { id: "living", day: "yearago", src: "photos/living.jpg", title: "灯还没关", body: "大家坐着不说话，也很好。", time: "21:18", wall: { x: 680, y: 2080, r: 1, k: "" } },
+      { id: "beach", day: "summer", src: "photos/beach.jpg", title: "沙子还在桶里", body: "帽子被风吹走一次。", time: "17:40", wall: { x: 2920, y: 740, r: -2, k: "wide" } },
+      { id: "swing", day: "summer", src: "photos/swing.jpg", title: "还在晃的秋千", body: "人已经走了，绳子还没停。", time: "16:05", wall: { x: 3180, y: 860, r: 5, k: "" } },
+    ];
+
+    const PROMPTS = {
+      year:   { reply: "一年前的今晚，蜡烛还没吹完。", ids: ["cake", "note", "living"] },
+      summer: { reply: "青岛的沙子，还在那只桶里。", ids: ["beach", "swing"] },
+      rain:   { reply: "雨打在窗上。屋里只有一盏灯。", ids: ["rain", "soup", "dinner"] },
+      first:  { reply: "今早的粥，和门口那双还没干的小红鞋。", ids: ["porridge", "shoes", "toys"] },
+    };
+
+    const HINTS = {
+      home: "点相框，走进一天",
+      day: "拖动环顾 · 滚轮走近 · 点照片拿在手上",
+      wall: "拖动画布 · 触控板捏合缩放 · 点照片",
+      talk: "点一句，或自己打字回车",
+    };
+
+    const state = {
+      mode: "home",
+      day: "today",
+      yaw: 0, pitch: -8, dolly: 0,
+      wx: 40, wy: -80, zs: 0.34,
+      inspect: null,
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const byId = (id) => MOMENTS.find((m) => m.id === id);
+
+    function setMode(mode) {
+      state.mode = mode;
+      document.querySelectorAll(".scene").forEach((el) => el.classList.toggle("on", el.id === mode));
+      document.querySelectorAll(".modes button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+      $("hint").textContent = HINTS[mode];
+      if (mode === "day") renderRoom();
+      if (mode === "wall") renderBoard();
+    }
+
+    function enterDay(id) {
+      state.day = id;
+      state.yaw = 0; state.pitch = -8; state.dolly = 0;
+      setMode("day");
+    }
+
+    function renderRoom() {
+      const day = DAYS[state.day];
+      $("floorTitle").textContent = day.label;
+      $("floorSub").textContent = day.sub;
+      $("doorPrev").style.display = day.prev ? "grid" : "none";
+      $("doorNext").style.display = day.next ? "grid" : "none";
+      const list = MOMENTS.filter((m) => m.day === state.day);
+      const n = list.length;
+      $("roomPhotos").innerHTML = list.map((m, i) => {
+        const t = (i - (n - 1) / 2) * 0.62;
+        const x = Math.sin(t) * 380;
+        const y = -90 + (i % 3) * 36 - 40;
+        const z = -260 - Math.cos(t) * 90;
+        const ry = t * -26;
+        const rz = (i % 2 ? 1 : -1) * 2.4;
+        return `<button type="button" class="polaroid" data-id="${m.id}" style="transform:translate3d(${x}px,${y}px,${z}px) rotateY(${ry}deg) rotateZ(${rz}deg);margin-left:-110px;margin-top:-90px">
+          <img src="${m.src}" alt="" /><span class="cap">${m.title} · ${m.time}</span>
+        </button>`;
+      }).join("");
+      applyCam();
+    }
+
+    function applyCam() {
+      $("world").style.transform =
+        `translateZ(${state.dolly}px) rotateX(${state.pitch}deg) rotateY(${state.yaw}deg)`;
+    }
+
+    function renderBoard() {
+      const board = $("board");
+      board.querySelectorAll(".pin").forEach((n) => n.remove());
+      MOMENTS.forEach((m) => {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "pin " + (m.wall.k || "");
+        el.dataset.id = m.id;
+        el.style.left = m.wall.x + "px";
+        el.style.top = m.wall.y + "px";
+        el.style.transform = `rotate(${m.wall.r}deg)`;
+        el.innerHTML = `<img src="${m.src}" alt="" /><span class="cap">${m.title}</span>`;
+        board.appendChild(el);
+      });
+      applyBoard();
+    }
+
+    function applyBoard() {
+      $("board").style.transform = `translate(${state.wx}px, ${state.wy}px) scale(${state.zs})`;
+    }
+
+    function openInspect(id) {
+      const m = byId(id);
+      if (!m) return;
+      state.inspect = id;
+      $("insImg").src = m.src;
+      $("insTitle").textContent = m.title;
+      $("insBody").textContent = m.body + "  ·  " + DAYS[m.day].label + " " + m.time;
+      $("inspect").classList.add("on");
+    }
+    function closeInspect() {
+      state.inspect = null;
+      $("inspect").classList.remove("on");
+    }
+
+    function summon(key) {
+      const p = PROMPTS[key];
+      if (!p) return;
+      document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.prompt === key));
+      const reply = $("reply");
+      reply.textContent = p.reply;
+      reply.classList.add("on");
+      const held = $("held");
+      held.innerHTML = "";
+      p.ids.forEach((id, i) => {
+        const m = byId(id);
+        const t = (i - (p.ids.length - 1) / 2) * 1.05;
+        const x = Math.sin(t) * 260;
+        const y = Math.cos(t) * 20 - 20;
+        const z = -40 - Math.abs(t) * 40;
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "polaroid";
+        el.dataset.id = m.id;
+        el.style.marginLeft = "-110px";
+        el.style.marginTop = "-90px";
+        el.style.transform = `translate3d(${x}px,${y}px,${z}px) rotateY(${t * -18}deg) rotateZ(${(i % 2 ? 1 : -1) * 3}deg)`;
+        el.style.animationDelay = i * 120 + "ms";
+        el.innerHTML = `<img src="${m.src}" alt="" /><span class="cap">${m.title}</span>`;
+        held.appendChild(el);
+      });
+    }
+
+    function matchAsk(text) {
+      const t = text.trim();
+      if (!t) return;
+      if (/夏|青岛|海|沙子/.test(t)) return summon("summer");
+      if (/去年|一年|蜡烛|生日/.test(t)) return summon("year");
+      if (/雨|窗|灯/.test(t)) return summon("rain");
+      return summon("first");
+    }
+
+    /* events */
+    document.querySelector(".modes").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-mode]");
+      if (b) setMode(b.dataset.mode);
+    });
+    document.querySelector("#home").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-enter]");
+      if (b) enterDay(b.dataset.enter);
+    });
+    $("doorPrev").addEventListener("click", () => DAYS[state.day].prev && enterDay(DAYS[state.day].prev));
+    $("doorNext").addEventListener("click", () => DAYS[state.day].next && enterDay(DAYS[state.day].next));
+    $("toWall").addEventListener("click", () => setMode("wall"));
+    $("toTalkFromDay").addEventListener("click", () => setMode("talk"));
+    $("roomPhotos").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-id]");
+      if (b) openInspect(b.dataset.id);
+    });
+    $("board").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-id]");
+      if (b && !dragged) openInspect(b.dataset.id);
+    });
+    $("held").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-id]");
+      if (b) openInspect(b.dataset.id);
+    });
+    document.querySelector(".prompts").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-prompt]");
+      if (b) summon(b.dataset.prompt);
+    });
+    $("ask").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") matchAsk(e.target.value);
+    });
+    $("insClose").addEventListener("click", closeInspect);
+    $("inspect").addEventListener("click", (e) => { if (e.target.id === "inspect") closeInspect(); });
+    $("insEnter").addEventListener("click", () => {
+      const m = byId(state.inspect);
+      closeInspect();
+      if (m) enterDay(m.day);
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeInspect();
+      if (e.key === "1") setMode("home");
+      if (e.key === "2") setMode("day");
+      if (e.key === "3") setMode("wall");
+      if (e.key === "4") setMode("talk");
+    });
+
+    let dragging = false, dragged = false, lx = 0, ly = 0;
+    function bindLook(el, onMove) {
+      el.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("button") && el.id !== "canvasView") return;
+        dragging = true; dragged = false; lx = e.clientX; ly = e.clientY;
+        el.classList.add("grabbing");
+        el.setPointerCapture(e.pointerId);
+      });
+      el.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - lx, dy = e.clientY - ly;
+        if (Math.abs(dx) + Math.abs(dy) > 4) dragged = true;
+        lx = e.clientX; ly = e.clientY;
+        onMove(dx, dy);
+      });
+      el.addEventListener("pointerup", () => { dragging = false; el.classList.remove("grabbing"); });
+    }
+    bindLook($("viewport"), (dx, dy) => {
+      state.yaw += dx * 0.12;
+      state.pitch = Math.max(-28, Math.min(18, state.pitch - dy * 0.08));
+      applyCam();
+    });
+    $("viewport").addEventListener("wheel", (e) => {
+      e.preventDefault();
+      state.dolly = Math.max(-220, Math.min(420, state.dolly - e.deltaY * 0.45));
+      applyCam();
+    }, { passive: false });
+
+    bindLook($("canvasView"), (dx, dy) => {
+      state.wx += dx;
+      state.wy += dy;
+      applyBoard();
+    });
+    $("canvasView").addEventListener("wheel", (e) => {
+      e.preventDefault();
+      if (e.ctrlKey) {
+        const rect = $("canvasView").getBoundingClientRect();
+        const px = e.clientX - rect.left, py = e.clientY - rect.top;
+        const old = state.zs;
+        const next = Math.max(0.18, Math.min(1.35, old * (1 - e.deltaY * 0.01)));
+        state.wx = px - (px - state.wx) * (next / old);
+        state.wy = py - (py - state.wy) * (next / old);
+        state.zs = next;
+      } else {
+        state.wx -= e.deltaX;
+        state.wy -= e.deltaY;
+      }
+      applyBoard();
+    }, { passive: false });
+
+    renderBoard();
+    $("reply").classList.add("on");
+  </script>
+</body>
+</html>

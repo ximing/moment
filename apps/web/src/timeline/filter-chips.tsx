@@ -10,18 +10,27 @@ export function FilterChips({
   onClearPerson,
   onClearPlace,
   onClearBefore,
+  pinBelowCover = false,
 }: {
   filter: RailFilter;
   onClearPerson: () => void;
   onClearPlace: () => void;
   onClearBefore?: () => void;
+  /** 链首页有封面时贴在 30vh 下沿，避免叠进图里点不到 */
+  pinBelowCover?: boolean;
 }) {
   const hasBefore = Boolean(filter.before);
   const hasPerson = Boolean(filter.personId);
   const hasPlace = Boolean(filter.place);
   if (!hasBefore && !hasPerson && !hasPlace) return null;
   return (
-    <div className="sticky top-2 z-10 mb-4 flex flex-wrap items-center gap-2">
+    <div
+      className={
+        pinBelowCover
+          ? 'sticky top-[30vh] z-20 mb-4 flex flex-wrap items-center gap-2 pt-2'
+          : 'sticky top-2 z-20 mb-4 flex flex-wrap items-center gap-2'
+      }
+    >
       {hasBefore && onClearBefore ? (
         <Button variant="secondary" leadingIcon={ArrowLeft} onClick={onClearBefore}>
           回到今天

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>时刻 · 时间焦距</title>
+  <style>
+    @font-face {
+      font-family: "Smiley Sans";
+      src: url("../SmileySans-Oblique.ttf.woff2") format("woff2");
+      font-display: swap;
+    }
+    :root {
+      --paper: #f3ebe3;
+      --ink: #2b201c;
+      --muted: #8a7368;
+      --action: #c94a3a;
+      --gold: #e4c7a0;
+      --field: #efe6dc;
+      --ease: 420ms cubic-bezier(.2, .8, .2, 1);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: "PingFang SC", "Hiragino Sans GB", "Songti SC", serif;
+      color: var(--ink);
+      background: #d9cfc4;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; border: 0; background: none; }
+    img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .display { font-family: "Smiley Sans", "PingFang SC", sans-serif; }
+
+    .chrome {
+      position: fixed; z-index: 20; inset: 12px 12px auto 12px;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .brand {
+      height: 32px; padding: 0 12px; border-radius: 999px;
+      background: rgba(43, 32, 28, .88); color: var(--paper);
+      display: flex; align-items: center; gap: 8px; font-size: 13px;
+    }
+    .brand span { color: #cbb7aa; }
+    .modes {
+      display: flex; gap: 4px; padding: 3px; border-radius: 999px;
+      background: rgba(243, 235, 227, .94);
+    }
+    .modes button {
+      height: 28px; padding: 0 12px; border-radius: 999px;
+      font-size: 13px; color: var(--muted);
+    }
+    .modes button.on { background: var(--ink); color: var(--paper); }
+    .hint {
+      margin-left: auto; height: 32px; padding: 0 12px; border-radius: 999px;
+      background: rgba(43, 32, 28, .72); color: #f0e4da; font-size: 12px;
+      display: flex; align-items: center;
+    }
+
+    .dock {
+      position: fixed; z-index: 20; left: 50%; bottom: 22px;
+      transform: translateX(-50%);
+      width: min(760px, 94vw);
+      display: flex; flex-direction: column; gap: 10px; align-items: center;
+    }
+    .prompts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .chip {
+      height: 36px; padding: 0 14px; border-radius: 999px;
+      background: rgba(243, 235, 227, .95); color: var(--ink); font-size: 14px;
+      box-shadow: 0 6px 18px rgba(43, 32, 28, .08);
+    }
+    .chip.on { background: var(--action); color: #fffdfb; }
+    .ask {
+      width: 100%; height: 44px; border-radius: 999px; padding: 0 18px;
+      border: 0; background: rgba(243, 235, 227, .95); outline: none; font-size: 15px;
+      box-shadow: 0 6px 18px rgba(43, 32, 28, .08);
+    }
+    .ask::placeholder { color: #9a8478; }
+
+    .field {
+      position: absolute; inset: 0;
+      overflow: hidden; cursor: grab;
+      background:
+        radial-gradient(900px 420px at 70% 45%, rgba(255,255,255,.45), transparent 55%),
+        var(--field);
+      touch-action: none;
+    }
+    .field.grabbing { cursor: grabbing; }
+    .field.axis-y { background:
+      radial-gradient(420px 900px at 50% 28%, rgba(255,255,255,.45), transparent 55%),
+      var(--field);
+    }
+    .axis {
+      position: absolute; inset: 0;
+      pointer-events: none;
+    }
+    .tick {
+      position: absolute; color: #6f5d54; letter-spacing: .12em;
+      font-size: 12px; white-space: nowrap;
+    }
+    .tick b { display: block; font-weight: 600; font-size: 13px; color: var(--ink); letter-spacing: .08em; }
+    .grain {
+      position: absolute; width: 7px; height: 7px; border-radius: 50%;
+      background: #c9b3a6; transform: translate(-50%, -50%);
+      pointer-events: auto; cursor: pointer;
+    }
+    .grain.voice { background: #4b7562; }
+    .grain.video { background: #c94a3a; }
+    .grain.photo { background: #8a6a58; }
+    .now-line {
+      position: absolute; pointer-events: none;
+      background: var(--action); opacity: .85;
+    }
+    .now-label {
+      position: absolute; pointer-events: none;
+      color: var(--action); letter-spacing: .2em; font-size: 13px;
+    }
+    .media {
+      position: absolute;
+      background: #f7efe6;
+      padding: 8px 8px 26px;
+      box-shadow: 0 10px 28px rgba(43, 32, 28, .14);
+      cursor: pointer;
+      transform: translate(-50%, -50%);
+      transition: width var(--ease), height var(--ease), padding var(--ease);
+    }
+    .media img { background: #e8ddd3; }
+    .media .cap {
+      position: absolute; left: 8px; right: 8px; bottom: 6px;
+      font-size: 11px; color: #6b5348; display: flex; justify-content: space-between; gap: 8px;
+    }
+    .media.voice, .media.video {
+      padding: 10px 12px 28px;
+    }
+    .span-body {
+      height: 44px; display: flex; align-items: center; gap: 10px;
+      min-width: 120px;
+    }
+    .play {
+      width: 28px; height: 28px; border-radius: 50%; flex: 0 0 auto;
+      background: var(--ink); color: var(--paper);
+      display: grid; place-items: center; font-size: 11px;
+    }
+    .wave {
+      flex: 1; height: 28px;
+      background: repeating-linear-gradient(90deg, #c9b3a6 0 2px, transparent 2px 7px);
+      border-radius: 4px; overflow: hidden; position: relative;
+    }
+    .wave i {
+      position: absolute; inset: 0 auto 0 0; width: 0%;
+      background: color-mix(in srgb, var(--action) 55%, transparent);
+    }
+    .media.playing .wave i { width: 100%; transition: width linear; }
+    .media.video .span-body { height: 72px; }
+    .media.video img { width: 96px; height: 72px; flex: 0 0 auto; }
+
+    .scale-read {
+      position: fixed; z-index: 15; left: 20px; bottom: 22px;
+      font-size: 12px; color: #6f5d54; letter-spacing: .08em;
+      background: rgba(243, 235, 227, .9); padding: 6px 10px; border-radius: 999px;
+    }
+
+    .hold {
+      position: fixed; inset: 0; z-index: 30; display: none;
+      background: rgba(43, 32, 28, .55);
+      place-items: center;
+    }
+    .hold.on { display: grid; }
+    .hold .sheet {
+      width: min(560px, 92vw); background: #f7efe6; padding: 12px 12px 18px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.35);
+    }
+    .hold img { height: 300px; }
+    .hold h3 { margin: 12px 10px 4px; font-size: 22px; }
+    .hold p { margin: 0 10px 12px; color: #6b5348; line-height: 1.7; }
+    .hold .row { padding: 0 10px; display: flex; gap: 8px; }
+    .hold .row button {
+      height: 36px; padding: 0 14px; border-radius: 999px;
+      background: var(--ink); color: var(--paper); font-size: 13px;
+    }
+    .hold .row button.alt { background: transparent; color: var(--ink); border: 1px solid #d8c9c0; }
+  </style>
+</head>
+<body>
+  <div class="chrome">
+    <div class="brand"><b class="display">时刻</b><span>时间焦距 · 不是河，不是产品</span></div>
+    <div class="modes">
+      <button type="button" data-axis="x" class="on">横着过</button>
+      <button type="button" data-axis="y">竖着过</button>
+    </div>
+    <div class="hint">拖动是沿时间走 · 捏合/Ctrl+滚轮是拉近拉远 · 点一句对到那段</div>
+  </div>
+
+  <div class="field axis-x" id="field" aria-label="时间场"></div>
+  <div class="scale-read" id="scaleRead">焦距 · 一天</div>
+
+  <div class="dock">
+    <div class="prompts">
+      <button type="button" class="chip" data-go="life">拉远</button>
+      <button type="button" class="chip" data-go="today">此刻</button>
+      <button type="button" class="chip" data-go="rain">有雨的晚上</button>
+      <button type="button" class="chip" data-go="year">一年前的今天</button>
+      <button type="button" class="chip" data-go="summer">去年夏天</button>
+    </div>
+    <input class="ask" id="ask" placeholder="对到某一段… 比如 青岛 / 蜡烛 / 粥" />
+  </div>
+
+  <div class="hold" id="hold">
+    <div class="sheet">
+      <img id="hImg" alt="" />
+      <h3 id="hTitle"></h3>
+      <p id="hBody"></p>
+      <div class="row">
+        <button type="button" id="hFocus">对到这一天</button>
+        <button type="button" class="alt" id="hClose">放下</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const HOUR = 3600 * 1000;
+    const DAY = 24 * HOUR;
+    const NOW = Date.parse("2026-09-01T20:30:00+08:00");
+
+    const ITEMS = [
+      { id: "porridge", t: Date.parse("2026-09-01T08:12:00+08:00"), type: "photo", src: "photos/porridge.jpg", title: "自己用勺子", body: "粥洒了一圈，她还是不让喂。", dur: 0 },
+      { id: "soup", t: Date.parse("2026-09-01T12:04:00+08:00"), type: "photo", src: "photos/soup.jpg", title: "一勺汤", body: "她吹了很久，才肯喝。", dur: 0 },
+      { id: "toys", t: Date.parse("2026-09-01T15:40:00+08:00"), type: "voice", src: "photos/toys.jpg", title: "地板上的下午", body: "积木倒了三次。这段是笑声。", dur: 42 * 1000 },
+      { id: "evening", t: Date.parse("2026-09-01T18:51:00+08:00"), type: "video", src: "photos/evening.jpg", title: "晚饭后的路", body: "路灯刚亮。我们走得很慢。", dur: 18 * 1000 },
+      { id: "dinner", t: Date.parse("2026-08-30T19:10:00+08:00"), type: "photo", src: "photos/dinner.jpg", title: "转盘上的晚饭", body: "人到齐了，菜还在转。", dur: 0 },
+      { id: "shoes", t: Date.parse("2026-08-30T18:02:00+08:00"), type: "photo", src: "photos/shoes.jpg", title: "门口的小红鞋", body: "回来就踢掉。", dur: 0 },
+      { id: "rain", t: Date.parse("2026-08-30T20:22:00+08:00"), type: "voice", src: "photos/rain.jpg", title: "窗上的雨", body: "没有出门。灯一直开着。", dur: 76 * 1000 },
+      { id: "cake", t: Date.parse("2025-09-01T20:00:00+08:00"), type: "video", src: "photos/cake.jpg", title: "那晚的蜡烛", body: "还没学会吹。是爸爸吹的。", dur: 24 * 1000 },
+      { id: "note", t: Date.parse("2025-09-01T09:30:00+08:00"), type: "photo", src: "photos/note.jpg", title: "冰箱上的太阳", body: "不会写字，先画了一个太阳。", dur: 0 },
+      { id: "living", t: Date.parse("2025-09-01T21:18:00+08:00"), type: "photo", src: "photos/living.jpg", title: "灯还没关", body: "大家坐着不说话，也很好。", dur: 0 },
+      { id: "beach", t: Date.parse("2025-07-18T17:40:00+08:00"), type: "photo", src: "photos/beach.jpg", title: "沙子还在桶里", body: "帽子被风吹走一次。", dur: 0 },
+      { id: "swing", t: Date.parse("2025-07-19T16:05:00+08:00"), type: "video", src: "photos/swing.jpg", title: "还在晃的秋千", body: "人已经走了，绳子还没停。", dur: 11 * 1000 },
+    ];
+
+    const GO = {
+      today:  { center: NOW - 6 * HOUR, span: 16 * HOUR },
+      rain:   { center: Date.parse("2026-08-30T20:00:00+08:00"), span: 10 * HOUR },
+      year:   { center: Date.parse("2025-09-01T16:00:00+08:00"), span: 20 * HOUR },
+      summer: { center: Date.parse("2025-07-19T08:00:00+08:00"), span: 4 * DAY },
+      life:   { center: Date.parse("2026-01-10T00:00:00+08:00"), span: 520 * DAY },
+    };
+
+    const view = {
+      axis: "x",
+      center: GO.life.center,
+      span: GO.life.span,
+      targetCenter: GO.life.center,
+      targetSpan: GO.life.span,
+    };
+
+    const field = document.getElementById("field");
+    const scaleRead = document.getElementById("scaleRead");
+    let playing = null;
+    let holdId = null;
+    let animToken = 0;
+
+    function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function spanName(span) {
+      if (span < 18 * HOUR) return "焦距 · 几个小时";
+      if (span < 2.5 * DAY) return "焦距 · 一天";
+      if (span < 12 * DAY) return "焦距 · 几天";
+      if (span < 50 * DAY) return "焦距 · 一个月";
+      if (span < 200 * DAY) return "焦距 · 一季";
+      return "焦距 · 一年开外";
+    }
+
+    function lod(span) {
+      if (span > 80 * DAY) return "year";
+      if (span > 14 * DAY) return "month";
+      if (span > 2 * DAY) return "days";
+      return "hours";
+    }
+
+    function pos(t) {
+      const w = field.clientWidth, h = field.clientHeight;
+      const p = (t - view.center) / view.span;
+      if (view.axis === "x") return { x: w * 0.5 + p * w, y: h * 0.46 };
+      return { x: w * 0.52, y: h * 0.42 + p * h };
+    }
+
+    function ticks() {
+      const level = lod(view.span);
+      const start = view.center - view.span * 0.7;
+      const end = view.center + view.span * 0.7;
+      const out = [];
+      if (level === "year" || level === "month") {
+        const d = new Date(start);
+        d.setDate(1); d.setHours(0, 0, 0, 0);
+        while (d.getTime() < end) {
+          const t = d.getTime();
+          const label = d.getMonth() === 0 || level === "month"
+            ? (d.getMonth() === 0 ? `${d.getFullYear()} 年` : `${d.getMonth() + 1} 月`)
+            : `${d.getMonth() + 1} 月`;
+          out.push({ t, label, major: d.getMonth() === 0 });
+          d.setMonth(d.getMonth() + 1);
+        }
+      } else {
+        const step = view.span < 16 * HOUR ? 2 * HOUR : DAY;
+        let t = Math.floor(start / step) * step;
+        while (t < end) {
+          const d = new Date(t);
+          const label = step === DAY
+            ? `${d.getMonth() + 1}/${d.getDate()}`
+            : `${String(d.getHours()).padStart(2, "0")}:00`;
+          out.push({ t, label, major: d.getHours() === 0 || step === DAY });
+          t += step;
+        }
+      }
+      return out;
+    }
+
+    function mediaSize(item, level) {
+      if (level === "hours") {
+        if (item.type === "photo") return { w: 210, h: 168 };
+        if (item.type === "video") return { w: 280, h: 118 };
+        return { w: 240, h: 88 };
+      }
+      if (level === "days") {
+        if (item.type === "photo") return { w: 120, h: 96 };
+        return { w: 160, h: 64 };
+      }
+      return null;
+    }
+
+    function render() {
+      const level = lod(view.span);
+      const w = field.clientWidth, h = field.clientHeight;
+      const nowP = pos(NOW);
+      const nowIn = view.axis === "x"
+        ? nowP.x > -40 && nowP.x < w + 40
+        : nowP.y > -40 && nowP.y < h + 40;
+      let html = `<div class="axis">`;
+
+      if (nowIn && view.axis === "x") {
+        html += `<div class="now-line" style="left:${nowP.x}px;top:64px;bottom:120px;width:2px"></div>`;
+        html += `<div class="now-label display" style="left:${nowP.x + 10}px;top:72px">此刻</div>`;
+      } else if (nowIn) {
+        html += `<div class="now-line" style="top:${nowP.y}px;left:80px;right:40px;height:2px"></div>`;
+        html += `<div class="now-label display" style="top:${nowP.y - 22}px;left:24px">此刻</div>`;
+      }
+
+      for (const tk of ticks()) {
+        const p = pos(tk.t);
+        if (view.axis === "x") {
+          html += `<div class="tick" style="left:${p.x}px;top:${h * 0.72}px;transform:translateX(-50%)">${tk.major ? `<b>${tk.label}</b>` : tk.label}</div>`;
+        } else {
+          html += `<div class="tick" style="left:24px;top:${p.y}px;transform:translateY(-50%)">${tk.major ? `<b>${tk.label}</b>` : tk.label}</div>`;
+        }
+      }
+      html += `</div>`;
+
+      const lane = [-70, 0, 80, -40, 50];
+      ITEMS.forEach((item, i) => {
+        const p = pos(item.t);
+        if (view.axis === "x" && (p.x < -200 || p.x > w + 200)) return;
+        if (view.axis === "y" && (p.y < -200 || p.y > h + 200)) return;
+        const off = lane[i % lane.length];
+        const x = view.axis === "x" ? p.x : p.x + off;
+        const y = view.axis === "x" ? p.y + off : p.y;
+        const size = mediaSize(item, level);
+        if (!size) {
+          html += `<button type="button" class="grain ${item.type}" data-id="${item.id}" style="left:${x}px;top:${y}px" title="${item.title}"></button>`;
+          return;
+        }
+        const playingCls = playing === item.id ? " playing" : "";
+        if (item.type === "photo") {
+          html += `<button type="button" class="media photo${playingCls}" data-id="${item.id}" style="left:${x}px;top:${y}px;width:${size.w}px">
+            <img src="${item.src}" alt="" style="height:${size.h - 26}px" />
+            <span class="cap"><span>${item.title}</span><span>${fmt(item.t)}</span></span>
+          </button>`;
+        } else {
+          const kind = item.type === "voice" ? "语音" : "一段影像";
+          const img = item.type === "video" ? `<img src="${item.src}" alt="" />` : "";
+          html += `<button type="button" class="media ${item.type}${playingCls}" data-id="${item.id}" style="left:${x}px;top:${y}px;width:${size.w}px">
+            <div class="span-body">${img}<span class="play">${playing === item.id ? "停" : "过"}</span><span class="wave"><i style="${playing === item.id ? "transition-duration:" + item.dur + "ms" : ""}"></i></span></div>
+            <span class="cap"><span>${item.title} · ${kind}</span><span>${Math.round(item.dur / 1000)}s</span></span>
+          </button>`;
+        }
+      });
+
+      field.innerHTML = html;
+      scaleRead.textContent = spanName(view.span);
+    }
+
+    function fmt(t) {
+      const d = new Date(t);
+      return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+
+    function focusTo(center, span) {
+      const toC = center;
+      const toS = clamp(span, 6 * HOUR, 520 * DAY);
+      const fromC = view.center;
+      const fromS = view.span;
+      view.targetCenter = toC;
+      view.targetSpan = toS;
+      const token = ++animToken;
+      const t0 = performance.now();
+      const dur = 780;
+      function step(now) {
+        if (token !== animToken) return;
+        const u = Math.min(1, (now - t0) / dur);
+        const e = 1 - Math.pow(1 - u, 3);
+        view.center = fromC + (toC - fromC) * e;
+        view.span = Math.exp(Math.log(fromS) + (Math.log(toS) - Math.log(fromS)) * e);
+        render();
+        if (u < 1) requestAnimationFrame(step);
+        else {
+          view.center = toC;
+          view.span = toS;
+          render();
+        }
+      }
+      requestAnimationFrame(step);
+    }
+
+    function go(key) {
+      document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.go === key));
+      const g = GO[key];
+      if (g) focusTo(g.center, g.span);
+    }
+
+    function onAsk(text) {
+      const t = text.trim();
+      if (/夏|青岛|海|沙子|秋千/.test(t)) return go("summer");
+      if (/去年|一年|蜡烛|生日/.test(t)) return go("year");
+      if (/雨|窗|灯/.test(t)) return go("rain");
+      if (/年|一生|全部|看看/.test(t)) return go("life");
+      return go("today");
+    }
+
+    function itemBy(id) { return ITEMS.find((x) => x.id === id); }
+
+    function tapItem(id) {
+      const item = itemBy(id);
+      if (!item) return;
+      const level = lod(view.span);
+      if (level === "year" || level === "month") {
+        focusTo(item.t, 16 * HOUR);
+        return;
+      }
+      if (item.type === "photo") {
+        holdId = id;
+        document.getElementById("hImg").src = item.src;
+        document.getElementById("hTitle").textContent = item.title;
+        document.getElementById("hBody").textContent = item.body + "  ·  " + fmt(item.t);
+        document.getElementById("hold").classList.add("on");
+        return;
+      }
+      if (playing === id) { playing = null; render(); return; }
+      playing = id;
+      render();
+      window.setTimeout(() => {
+        if (playing === id) { playing = null; render(); }
+      }, item.dur);
+    }
+
+    /* pan / zoom */
+    let drag = false, moved = false, lx = 0, ly = 0;
+    field.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("[data-id]")) return;
+      drag = true; moved = false; lx = e.clientX; ly = e.clientY;
+      field.classList.add("grabbing");
+      field.setPointerCapture(e.pointerId);
+    });
+    field.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const dx = e.clientX - lx, dy = e.clientY - ly;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      lx = e.clientX; ly = e.clientY;
+      const dim = view.axis === "x" ? field.clientWidth : field.clientHeight;
+      const delta = view.axis === "x" ? -dx : -dy;
+      const dt = (delta / dim) * view.span;
+      view.center += dt;
+      view.targetCenter = view.center;
+      render();
+    });
+    field.addEventListener("pointerup", () => { drag = false; field.classList.remove("grabbing"); });
+    field.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      if (e.ctrlKey) {
+        const factor = Math.exp(e.deltaY * 0.01);
+        const next = clamp(view.span * factor, 6 * HOUR, 480 * DAY);
+        view.span = next;
+        view.targetSpan = next;
+        render();
+      } else {
+        const dim = view.axis === "x" ? field.clientWidth : field.clientHeight;
+        const delta = view.axis === "x" ? e.deltaX + e.deltaY : e.deltaY;
+        view.center += (delta / dim) * view.span;
+        view.targetCenter = view.center;
+        render();
+      }
+    }, { passive: false });
+
+    field.addEventListener("click", (e) => {
+      if (moved) return;
+      const b = e.target.closest("[data-id]");
+      if (b) tapItem(b.dataset.id);
+    });
+
+    document.querySelector(".modes").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-axis]");
+      if (!b) return;
+      view.axis = b.dataset.axis;
+      document.querySelectorAll(".modes button").forEach((x) => x.classList.toggle("on", x === b));
+      field.classList.toggle("axis-y", view.axis === "y");
+      field.classList.toggle("axis-x", view.axis === "x");
+      render();
+    });
+    document.querySelector(".prompts").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-go]");
+      if (b) go(b.dataset.go);
+    });
+    document.getElementById("ask").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") onAsk(e.target.value);
+    });
+    document.getElementById("hClose").addEventListener("click", () => {
+      holdId = null; document.getElementById("hold").classList.remove("on");
+    });
+    document.getElementById("hold").addEventListener("click", (e) => {
+      if (e.target.id === "hold") document.getElementById("hold").classList.remove("on");
+    });
+    document.getElementById("hFocus").addEventListener("click", () => {
+      const item = itemBy(holdId);
+      document.getElementById("hold").classList.remove("on");
+      if (item) focusTo(item.t, 14 * HOUR);
+    });
+
+    window.addEventListener("resize", render);
+    render();
+  </script>
+</body>
+</html>

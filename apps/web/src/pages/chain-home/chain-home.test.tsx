@@ -372,6 +372,21 @@ describe('链主页时间线', () => {
     // 一次只展开一个历史年份
     expect(within(rail).queryByText('5月')).toBeNull();
   });
+
+  it('点更早月份锚定该月；点最新月清 before', async () => {
+    const user = userEvent.setup();
+    seedChainHome([TEXT_MOMENT]);
+    const service = resolve(ChainHomeService);
+    service.filter = { order: 'happened_at', chainIds: ['chain-1'] };
+    renderChainHome();
+
+    const rail = screen.getByRole('complementary');
+    await user.click(within(rail).getByRole('button', { name: /^7月/ }));
+    expect(service.filter.before).toBe(monthBeforeParam('2026-07'));
+
+    await user.click(within(rail).getByRole('button', { name: /^8月/ }));
+    expect(service.filter.before).toBeUndefined();
+  });
 });
 
 describe('链首页封面', () => {

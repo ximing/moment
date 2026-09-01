@@ -3,7 +3,7 @@ import { SEARCH_MAX_LIMIT, type MonthIndexEntry, type MomentResponse, type Searc
 import { client } from '@/api/client';
 import type { CommentChangedPayload, MomentChangedPayload } from '@/lib/events';
 import { currentTzOffset } from '@/lib/time';
-import { feedQuery } from '@/lib/feed';
+import { feedQuery, scrollToPageTop } from '@/lib/feed';
 import type { RailFilter } from '@/timeline/timeline-rail';
 
 /** 首页状态（spec §4.2）：筛选 + feed 分页 + 月份索引 + 单链标签。 */
@@ -64,7 +64,8 @@ export class FeedHomeService extends Service {
 
   setFilter(next: RailFilter): void {
     this.filter = next;
-    void this.loadFirst();
+    scrollToPageTop();
+    void this.loadFirst().then(() => scrollToPageTop());
     void this.loadMeta();
   }
 

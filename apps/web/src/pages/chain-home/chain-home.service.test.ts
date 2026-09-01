@@ -59,6 +59,15 @@ describe('ChainHomeService chip 过滤', () => {
     );
   });
 
+  it('clearBefore 清 before 并滚回页顶', () => {
+    document.documentElement.scrollTop = 120;
+    const s = resolve(ChainHomeService);
+    s.filter = { order: 'happened_at', chainIds: ['c-1'], before: '2026-09-01T00:00:00.000Z' };
+    s.clearBefore();
+    expect(s.filter.before).toBeUndefined();
+    expect(document.documentElement.scrollTop).toBe(0);
+  });
+
   it('filtered 在仅 personId 时为 true；clearFilters 保留本链 chainIds', () => {
     const s = resolve(ChainHomeService);
     s.filter = { order: 'happened_at', chainIds: ['c-1'], personId: 'p-1', personName: '外婆' };

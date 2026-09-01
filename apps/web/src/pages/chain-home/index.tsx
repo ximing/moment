@@ -179,6 +179,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           ) : null}
         <FilterChips
           filter={service.filter}
+          pinBelowCover={showCover}
           onClearPerson={() =>
             service.setFilter({ ...service.filter, personId: undefined, personName: undefined })
           }

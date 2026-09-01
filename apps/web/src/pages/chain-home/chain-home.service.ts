@@ -14,7 +14,7 @@ import { CENTER_FOCUS } from '@/chain/appearance-model';
 import { uploadChainImage } from '@/chain/appearance-upload';
 import { humanError } from '@/lib/errors';
 import { currentTzOffset } from '@/lib/time';
-import { feedQuery } from '@/lib/feed';
+import { feedQuery, scrollToPageTop } from '@/lib/feed';
 import type { RailFilter } from '@/timeline/timeline-rail';
 import type { ChainChangedPayload, CommentChangedPayload, MomentChangedPayload } from '@/lib/events';
 
@@ -102,7 +102,8 @@ export class ChainHomeService extends Service {
 
   setFilter(next: RailFilter): void {
     this.filter = { ...next, chainIds: [this.chainId] }; // 恒定本链
-    void this.loadFirst();
+    scrollToPageTop();
+    void this.loadFirst().then(() => scrollToPageTop());
     void this.loadMeta();
   }
 

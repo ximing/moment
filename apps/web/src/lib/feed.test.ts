@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { feedQuery } from './feed';
+import { feedQuery, scrollToPageTop } from './feed';
 import type { RailFilter } from '@/timeline/timeline-rail';
 
 describe('feedQuery（spec fused-retrieval §7.1）', () => {
@@ -27,5 +27,13 @@ describe('feedQuery（spec fused-retrieval §7.1）', () => {
     expect(q).not.toHaveProperty('personName');
     expect(q).not.toHaveProperty('happenedFrom');
     expect(q).not.toHaveProperty('happenedTo');
+  });
+});
+
+describe('scrollToPageTop', () => {
+  it('把 documentElement.scrollTop 置 0', () => {
+    document.documentElement.scrollTop = 80;
+    scrollToPageTop();
+    expect(document.documentElement.scrollTop).toBe(0);
   });
 });
