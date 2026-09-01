@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>时刻 · 便利贴相册</title>
+  <style>
+    @font-face {
+      font-family: "Smiley Sans";
+      src: url("../SmileySans-Oblique.ttf.woff2") format("woff2");
+      font-display: swap;
+    }
+    :root {
+      --paper: #f3ebe3;
+      --note: #f7efe6;
+      --ink: #2b201c;
+      --muted: #8a7368;
+      --action: #c94a3a;
+      --line: #e4d6ca;
+      --rail: 184px;
+      --nav: 208px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: "PingFang SC", "Hiragino Sans GB", "Songti SC", serif;
+      color: var(--ink);
+      background: #e8ddd3;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+    img { display: block; width: 100%; object-fit: cover; pointer-events: none; }
+    .display { font-family: "Smiley Sans", "PingFang SC", sans-serif; }
+
+    .shell { display: flex; min-height: 100vh; }
+    .nav {
+      position: sticky; top: 0; align-self: flex-start;
+      width: var(--nav); height: 100vh; padding: 20px 16px;
+      flex: 0 0 var(--nav);
+    }
+    .nav .mark { font-size: 22px; margin: 0 0 28px; }
+    .nav a {
+      display: block; padding: 8px 10px; border-radius: 10px;
+      color: var(--muted); text-decoration: none; font-size: 14px; margin-bottom: 4px;
+    }
+    .nav a.on { background: #f7efe6; color: var(--ink); font-weight: 600; }
+    .nav .sub { font-size: 12px; color: #a08b80; padding: 8px 10px 16px; }
+
+    .main {
+      flex: 1; min-width: 0;
+      padding: 20px 20px 48px;
+      margin-right: var(--rail);
+    }
+    .head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 16px; padding: 0 4px;
+    }
+    .head h1 { margin: 0; font-size: 22px; font-weight: 600; }
+    .head p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+    .hint {
+      font-size: 12px; color: var(--muted);
+      background: rgba(247, 239, 230, .8); padding: 6px 10px; border-radius: 999px;
+    }
+
+    .album { display: flex; flex-direction: column; gap: 8px; }
+    .month-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-auto-flow: dense;
+      gap: 12px;
+      align-items: start;
+    }
+    @media (max-width: 1200px) {
+      .month-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .nav { display: none; }
+    }
+
+    .note {
+      position: relative;
+      background: var(--note);
+      padding: 8px 8px 10px;
+      box-shadow: 0 8px 22px rgba(43, 32, 28, .12);
+      transform: rotate(var(--tilt, 0deg));
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+    .note:hover, .note:focus-visible {
+      transform: rotate(0deg) translateY(-3px);
+      box-shadow: 0 14px 32px rgba(43, 32, 28, .18);
+      outline: none;
+      z-index: 2;
+    }
+    .note img { background: #e8ddd3; }
+    .face { position: relative; }
+    .place-ov {
+      position: absolute; left: 8px; bottom: 8px;
+      max-width: calc(100% - 16px);
+      font-size: 11px; color: #f7efe6; letter-spacing: .02em;
+      text-shadow: 0 1px 6px rgba(43, 32, 28, .7);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .writing { padding: 8px 4px 2px; }
+    .writing .body {
+      margin: 0 0 6px; font-size: 13px; line-height: 1.45; color: var(--ink);
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .writing .tag { color: #4b7562; }
+    .writing .meta {
+      display: flex; flex-wrap: wrap; gap: 6px 10px;
+      font-size: 11px; color: #6b5348; line-height: 1.3;
+    }
+    .writing .who { color: var(--ink); }
+    .note.w2 { grid-column: span 2; }
+    .note.h-photo img { height: 168px; }
+    .note.h-tall img { height: 240px; }
+    .note.h-land img { height: 150px; }
+    .note.h-sq img { height: 190px; }
+    .note.h-hero img { height: 220px; }
+    .note.text { padding: 14px 14px 10px; min-height: 148px; }
+    .note.text .writing .body { font-size: 15px; line-height: 1.6; -webkit-line-clamp: 5; }
+    .span-body {
+      display: flex; align-items: center; gap: 8px;
+      min-height: 52px; padding: 4px 2px 0;
+    }
+    .play {
+      width: 28px; height: 28px; border-radius: 50%; flex: 0 0 auto;
+      background: var(--ink); color: var(--note);
+      display: grid; place-items: center; font-size: 11px;
+    }
+    .wave {
+      flex: 1; height: 26px; border-radius: 4px;
+      background: repeating-linear-gradient(90deg, #c9b3a6 0 2px, transparent 2px 6px);
+    }
+    .note.video { padding-bottom: 28px; }
+    .note.video .thumb { position: relative; }
+    .note.video .thumb img { height: 160px; }
+    .note.video.w2 .thumb img { height: 200px; }
+    .note.video .badge {
+      position: absolute; left: 10px; bottom: 10px;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--ink); color: var(--note);
+      display: grid; place-items: center; font-size: 11px;
+    }
+
+    .month-pin {
+      grid-column: 1 / -1;
+      font-size: 12px; letter-spacing: .16em; color: var(--muted);
+      padding: 8px 2px 0;
+    }
+
+    .rail {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: var(--rail); padding: 28px 16px;
+      overflow: auto;
+    }
+    .rail h2 { margin: 0 0 12px; font-size: 12px; color: var(--muted); font-weight: 400; letter-spacing: .08em; }
+    .year {
+      margin: 16px 0 6px; font-size: 13px; font-weight: 600; color: var(--ink);
+    }
+    .year:first-of-type { margin-top: 0; }
+    .rail button.m {
+      display: flex; justify-content: space-between; align-items: baseline;
+      width: 100%; padding: 5px 8px; border-radius: 8px;
+      font-size: 13px; color: var(--muted);
+    }
+    .rail button.m em { font-style: normal; font-variant-numeric: tabular-nums; font-size: 11px; }
+    .rail button.m.on, .rail button.m:hover {
+      background: #f7efe6; color: var(--ink);
+    }
+
+    .hold {
+      position: fixed; inset: 0; z-index: 40; display: none;
+      place-items: center; background: rgba(43, 32, 28, .5); padding: 32px;
+    }
+    .hold.on { display: grid; }
+    .hold .sheet {
+      width: min(480px, 92vw); background: var(--note); padding: 12px 12px 18px;
+      box-shadow: 0 28px 70px rgba(0,0,0,.3);
+    }
+    .hold img { height: 280px; }
+    .hold h3 { margin: 12px 8px 4px; font-size: 20px; }
+    .hold p { margin: 0 8px 12px; color: #6b5348; line-height: 1.65; font-size: 14px; }
+
+    .bar {
+      position: fixed; z-index: 30; left: calc(var(--nav) + 16px); top: 12px;
+      height: 28px; padding: 0 10px; border-radius: 999px;
+      background: rgba(43, 32, 28, .82); color: #f3ebe3; font-size: 12px;
+      display: flex; align-items: center; gap: 8px; pointer-events: none;
+    }
+    .bar span { color: #cbb7aa; }
+  </style>
+</head>
+<body>
+  <div class="bar"><b class="display">时刻</b><span>便利贴相册样稿 · 对照现在的 list+item</span></div>
+  <div class="shell">
+    <nav class="nav" aria-label="链">
+      <p class="mark display">时刻</p>
+      <a href="#">大家的日子</a>
+      <a class="on" href="#">宝宝成长</a>
+      <a href="#">日常</a>
+      <a href="#">青岛</a>
+      <p class="sub">左栏先借用现壳，这页只改主列形态。</p>
+    </nav>
+
+    <main class="main">
+      <header class="head">
+        <div>
+          <h1>宝宝成长</h1>
+          <p>相册网格 · 便利贴卡片 · 右侧跳月份</p>
+        </div>
+        <span class="hint">点卡片拿起来 · 点右侧月份跳过去</span>
+      </header>
+
+      <div class="album" id="album"></div>
+    </main>
+
+    <aside class="rail" aria-label="时间索引">
+      <h2>时间索引</h2>
+      <div class="year">2026</div>
+      <button type="button" class="m on" data-jump="2026-09">9 月 <em>4</em></button>
+      <button type="button" class="m" data-jump="2026-08">8 月 <em>6</em></button>
+      <button type="button" class="m" data-jump="2026-07">7 月 <em>5</em></button>
+      <button type="button" class="m" data-jump="2026-06">6 月 <em>3</em></button>
+      <div class="year">2025</div>
+      <button type="button" class="m" data-jump="2025-09">9 月 <em>3</em></button>
+      <button type="button" class="m" data-jump="2025-07">7 月 <em>4</em></button>
+    </aside>
+  </div>
+
+  <div class="hold" id="hold">
+    <div class="sheet" id="sheet"></div>
+  </div>
+
+  <script>
+    const ITEMS = [
+      { id: "p1", month: "2026-09", kind: "photo", shape: "h-tall", tilt: -1.4, src: "photos/porridge.jpg", body: "粥洒了一圈，她还是不让喂。", tags: ["早餐"], people: ["朵朵"], place: "家里厨房", author: "妈妈", time: "9/1 早", comments: 2 },
+      { id: "p2", month: "2026-09", kind: "photo", shape: "h-sq", tilt: 1.1, src: "photos/soup.jpg", body: "她吹了很久，才肯喝。", tags: [], people: ["朵朵", "妈妈"], place: "家里", author: "爸爸", time: "9/1 午", comments: 0 },
+      { id: "v1", month: "2026-09", kind: "voice", shape: "", tilt: -0.6, src: "", body: "积木倒了三次。这段是笑声。", tags: ["日常"], people: ["朵朵"], place: "", author: "妈妈", time: "语音 42s", comments: 1 },
+      { id: "m1", month: "2026-09", kind: "video", shape: "w2", tilt: 0.8, src: "photos/evening.jpg", body: "路灯刚亮。我们走得很慢。", tags: ["晚饭后"], people: ["朵朵", "爸爸"], place: "小区南门", author: "妈妈", time: "影像 18s", comments: 3 },
+
+      { id: "d1", month: "2026-08", kind: "photo", shape: "w2 h-land", tilt: -0.9, src: "photos/dinner.jpg", body: "人到齐了，菜还在转。", tags: ["晚饭"], people: ["朵朵", "妈妈", "爸爸", "奶奶"], place: "家里", author: "妈妈", time: "8/30 晚", comments: 4 },
+      { id: "r1", month: "2026-08", kind: "voice", shape: "", tilt: 1.6, src: "photos/rain.jpg", body: "没有出门。灯一直开着。", tags: ["下雨"], people: [], place: "家里", author: "爸爸", time: "语音 76s", comments: 0 },
+      { id: "s1", month: "2026-08", kind: "photo", shape: "h-sq", tilt: -2, src: "photos/shoes.jpg", body: "回来就踢掉。明天还要穿。", tags: [], people: ["朵朵"], place: "门口", author: "妈妈", time: "8/30", comments: 1 },
+      { id: "t1", month: "2026-08", kind: "photo", shape: "h-photo", tilt: 0.4, src: "photos/toys.jpg", body: "积木倒了三次，第四次自己又垒起来。", tags: ["日常"], people: ["朵朵"], place: "客厅", author: "爸爸", time: "8/22", comments: 0 },
+      { id: "tx1", month: "2026-08", kind: "text", shape: "", tilt: 2.2, src: "", body: "今晚奶奶来。把那双小红鞋放门口。", tags: ["提醒"], people: ["奶奶"], place: "", author: "妈妈", time: "8/18", comments: 2 },
+      { id: "so2", month: "2026-08", kind: "photo", shape: "h-tall", tilt: -1, src: "photos/soup.jpg", body: "同一种汤，她喝得更快了。", tags: ["早餐"], people: ["朵朵"], place: "家里厨房", author: "妈妈", time: "8/9", comments: 0 },
+
+      { id: "sw1", month: "2026-07", kind: "video", shape: "", tilt: 1.3, src: "photos/swing.jpg", body: "人已经走了，绳子还没停。", tags: [], people: ["朵朵"], place: "小区公园", author: "爸爸", time: "影像 11s", comments: 1 },
+      { id: "b1", month: "2026-07", kind: "photo", shape: "w2 h-hero", tilt: -1.8, src: "photos/beach.jpg", body: "帽子被风吹走一次。", tags: ["夏天", "海边"], people: ["朵朵", "妈妈", "爸爸"], place: "青岛金沙滩", author: "妈妈", time: "7/19", comments: 5 },
+      { id: "ev2", month: "2026-07", kind: "photo", shape: "h-photo", tilt: 0.7, src: "photos/evening.jpg", body: "夏天的傍晚比较晚。", tags: [], people: ["朵朵"], place: "小区", author: "妈妈", time: "7/8", comments: 0 },
+      { id: "tx2", month: "2026-07", kind: "text", shape: "", tilt: -2.4, src: "", body: "第一次自己说「回家」。", tags: ["第一次"], people: ["朵朵"], place: "", author: "爸爸", time: "7/3", comments: 3 },
+      { id: "to2", month: "2026-07", kind: "photo", shape: "h-sq", tilt: 1.5, src: "photos/toys.jpg", body: "下午的光，很长。", tags: ["日常"], people: ["朵朵"], place: "客厅", author: "妈妈", time: "7/1", comments: 0 },
+
+      { id: "lv1", month: "2026-06", kind: "photo", shape: "w2 h-land", tilt: -0.5, src: "photos/living.jpg", body: "大家坐着不说话，也很好。", tags: [], people: ["朵朵", "妈妈", "爸爸"], place: "客厅", author: "妈妈", time: "6/21", comments: 1 },
+      { id: "n1", month: "2026-06", kind: "photo", shape: "h-sq", tilt: 2, src: "photos/note.jpg", body: "不会写字，先画了一个太阳。", tags: ["画"], people: ["朵朵"], place: "厨房", author: "妈妈", time: "6/12", comments: 2 },
+      { id: "p3", month: "2026-06", kind: "photo", shape: "h-photo", tilt: -1.1, src: "photos/porridge.jpg", body: "还是要人喂。那时候。", tags: ["早餐"], people: ["朵朵"], place: "家里厨房", author: "爸爸", time: "6/2", comments: 0 },
+
+      { id: "c1", month: "2025-09", kind: "video", shape: "w2", tilt: 0.9, src: "photos/cake.jpg", body: "还没学会吹。是爸爸吹的。", tags: ["生日"], people: ["朵朵", "妈妈", "爸爸"], place: "家里", author: "妈妈", time: "影像 24s", comments: 6 },
+      { id: "n2", month: "2025-09", kind: "photo", shape: "h-tall", tilt: -1.7, src: "photos/note.jpg", body: "一年前的冰箱。", tags: ["画"], people: ["朵朵"], place: "厨房", author: "妈妈", time: "9/1", comments: 0 },
+      { id: "lv2", month: "2025-09", kind: "photo", shape: "h-photo", tilt: 1.2, src: "photos/living.jpg", body: "人少一点，灯一样。", tags: [], people: ["朵朵", "奶奶"], place: "客厅", author: "爸爸", time: "9/1", comments: 1 },
+
+      { id: "b2", month: "2025-07", kind: "photo", shape: "h-hero w2", tilt: -0.8, src: "photos/beach.jpg", body: "青岛的沙子，还在那只桶里。", tags: ["夏天", "海边"], people: ["朵朵", "妈妈"], place: "青岛金沙滩", author: "妈妈", time: "7/18", comments: 4 },
+      { id: "sw2", month: "2025-07", kind: "photo", shape: "h-tall", tilt: 1.8, src: "photos/swing.jpg", body: "秋千当时还是新的。", tags: [], people: ["朵朵"], place: "小区公园", author: "爸爸", time: "7/16", comments: 0 },
+      { id: "d2", month: "2025-07", kind: "photo", shape: "h-sq", tilt: -2.1, src: "photos/dinner.jpg", body: "人更挤。", tags: ["晚饭"], people: ["朵朵", "奶奶"], place: "家里", author: "妈妈", time: "7/12", comments: 2 },
+      { id: "tx3", month: "2025-07", kind: "text", shape: "", tilt: 2.6, src: "", body: "出发前一晚。把帽子放进袋子。", tags: ["旅行"], people: [], place: "", author: "妈妈", time: "7/4", comments: 0 },
+    ];
+
+    const album = document.getElementById("album");
+    function writing(it) {
+      const tags = (it.tags || []).map((t) => `<span class="tag">#${t}</span>`).join(" ");
+      const who = (it.people || []).slice(0, 3).join(" · ");
+      const extra = (it.people || []).length > 3 ? "…" : "";
+      const place = it.kind === "photo" || it.kind === "video" ? "" : (it.place ? `📍 ${it.place}` : "");
+      const replies = it.comments > 0 ? `${it.comments} 回应` : "";
+      const body = `${tags}${tags && it.body ? " " : ""}${it.body || ""}`;
+      return `<div class="writing">
+        <p class="body">${body}</p>
+        <div class="meta">
+          ${who ? `<span class="who">${who}${extra}</span>` : ""}
+          ${place ? `<span>${place}</span>` : ""}
+          <span>${it.author} · ${it.time}</span>
+          ${replies ? `<span>${replies}</span>` : ""}
+        </div>
+      </div>`;
+    }
+    function card(it) {
+      const tilt = `--tilt:${it.tilt}deg`;
+      if (it.kind === "text") {
+        return `<button type="button" class="note text ${it.shape}" data-id="${it.id}" data-month="${it.month}" style="${tilt}">${writing(it)}</button>`;
+      }
+      if (it.kind === "voice") {
+        return `<button type="button" class="note voice ${it.shape}" data-id="${it.id}" data-month="${it.month}" style="${tilt}">
+          <div class="span-body"><span class="play">过</span><span class="wave"></span></div>
+          ${writing(it)}
+        </button>`;
+      }
+      const ov = it.place ? `<span class="place-ov">📍 ${it.place}</span>` : "";
+      if (it.kind === "video") {
+        return `<button type="button" class="note video ${it.shape}" data-id="${it.id}" data-month="${it.month}" style="${tilt}">
+          <div class="face thumb"><img src="${it.src}" alt="" /><span class="badge">过</span>${ov}</div>
+          ${writing(it)}
+        </button>`;
+      }
+      return `<button type="button" class="note photo ${it.shape}" data-id="${it.id}" data-month="${it.month}" style="${tilt}">
+        <div class="face"><img src="${it.src}" alt="" />${ov}</div>
+        ${writing(it)}
+      </button>`;
+    }
+    const monthsMap = [];
+    ITEMS.forEach((it) => {
+      const last = monthsMap[monthsMap.length - 1];
+      if (!last || last.month !== it.month) monthsMap.push({ month: it.month, items: [it] });
+      else last.items.push(it);
+    });
+    album.innerHTML = monthsMap.map(({ month, items }) => {
+      const [y, m] = month.split("-");
+      return `<div class="month-pin" id="m-${month}">${y} · ${Number(m)} 月</div>
+        <div class="month-grid">${items.map(card).join("")}</div>`;
+    }).join("");
+
+    const hold = document.getElementById("hold");
+    const sheet = document.getElementById("sheet");
+    album.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-id]");
+      if (!b) return;
+      const it = ITEMS.find((x) => x.id === b.dataset.id);
+      const who = (it.people || []).join(" · ");
+      sheet.innerHTML = (it.src ? `<img src="${it.src}" alt="" />` : "") +
+        `<h3>${it.body}</h3><p>${(it.tags || []).map((t) => "#" + t).join(" ")} ${who ? " · " + who : ""} ${it.place ? " · 📍 " + it.place : ""}<br>${it.author} · ${it.time}${it.comments ? " · " + it.comments + " 回应" : ""}</p>`;
+      hold.classList.add("on");
+    });
+    hold.addEventListener("click", (e) => { if (e.target === hold) hold.classList.remove("on"); });
+    window.addEventListener("keydown", (e) => { if (e.key === "Escape") hold.classList.remove("on"); });
+
+    const months = document.querySelectorAll(".rail .m");
+    function setOn(key) {
+      months.forEach((b) => b.classList.toggle("on", b.dataset.jump === key));
+    }
+    document.querySelector(".rail").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-jump]");
+      if (!b) return;
+      const el = document.getElementById("m-" + b.dataset.jump);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      setOn(b.dataset.jump);
+    });
+
+    const pins = [...document.querySelectorAll(".month-pin")];
+    const io = new IntersectionObserver((entries) => {
+      const vis = entries.filter((x) => x.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (vis) setOn(vis.target.id.slice(2));
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    pins.forEach((p) => io.observe(p));
+  </script>
+</body>
+</html>
