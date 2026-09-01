@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { RSRoot, register } from '@rabjs/react';
+import { RSRoot, register, resolve } from '@rabjs/react';
 import type { MomentMedia } from '@moment/dto';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '@/services/auth.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { MomentSheetContent, type MomentSheetMoment } from './moment-sheet';
@@ -28,6 +28,12 @@ vi.mock('@/api/client', () => ({
 register(AuthService);
 register(ComposeSessionService);
 register(MomentSheetService);
+
+beforeEach(() => {
+  const sheet = resolve(MomentSheetService);
+  sheet.lightboxIndex = null;
+  sheet.confirmDel = false;
+});
 
 function person(id: string, name: string, source: 'manual' | 'ai' = 'manual') {
   return { id, name, userId: null as string | null, source };
@@ -128,7 +134,7 @@ describe('moment-sheet 便利贴纸面', () => {
     expect(screen.getByText('📍 厨房')).not.toHaveClass('moment-note-place-after-play');
   });
 
-  it('有图 + onPlaceFilter：地点叠面子且不嵌在查看媒体按钮内，点击仍筛选', async () => {
+  it('有图 + onPlaceFilter：地点叠面子且不嵌在详情链接内，点击仍筛选', async () => {
     const user = userEvent.setup();
     const onPlaceFilter = vi.fn();
     renderSheet(
@@ -140,8 +146,9 @@ describe('moment-sheet 便利贴纸面', () => {
       { onPlaceFilter },
     );
     const place = screen.getByRole('button', { name: '筛选地点 厨房' });
-    const media = screen.getByRole('button', { name: '查看媒体' });
-    expect(media.contains(place)).toBe(false);
+    const face = screen.getAllByRole('link', { name: '查看这条时刻' }).find((el) => el.querySelector('img'));
+    expect(face).toBeTruthy();
+    expect(face!.contains(place)).toBe(false);
     expect(place.closest('.note-face')).not.toBeNull();
     await user.click(place);
     expect(onPlaceFilter).toHaveBeenCalledWith('厨房');
@@ -168,7 +175,7 @@ describe('moment-sheet 便利贴纸面', () => {
     expect(screen.getByRole('button', { name: '加个表情' })).toBeInTheDocument();
   });
 
-  it('视频面子上地点避开「过」圆钮', () => {
+  it('视频面子上地点避开作者头像，不写死「过」', () => {
     renderSheet(
       moment({
         type: 'video',
@@ -179,10 +186,92 @@ describe('moment-sheet 便利贴纸面', () => {
     const place = screen.getByText('📍 厨房');
     expect(place.closest('.note-face')).not.toBeNull();
     expect(place).toHaveClass('moment-note-place-after-play');
+    expect(screen.queryByText('过')).toBeNull();
+    expect(screen.getByRole('article').querySelector('.note-face')).toHaveTextContent('妈');
   });
 
   it('data-span 来自 noteColSpan', () => {
     renderSheet(moment());
     expect(screen.getByRole('article')).toHaveAttribute('data-span', '1');
+  });
+
+  it('纸面直角、无描边，靠阴影和色面', () => {
+    renderSheet(moment());
+    const article = screen.getByRole('article');
+    expect(article).toHaveClass('moment-note');
+    expect(article).toHaveClass('rounded-none');
+    expect(article.style.getPropertyValue('--tilt')).toBe('');
+  });
+
+  it('有图网格面子是详情链接，点击不打开灯箱', async () => {
+    const user = userEvent.setup();
+    renderSheet(moment({ type: 'media', media: [img()] }));
+    const face = screen.getAllByRole('link', { name: '查看这条时刻' }).find((el) => el.querySelector('img'));
+    expect(face).toHaveAttribute('href', '/moments/m-1');
+    await user.click(face!);
+    expect(resolve(MomentSheetService).lightboxIndex).toBeNull();
+  });
+
+  it('只读分享面子仍是查看媒体并开灯箱', async () => {
+    const user = userEvent.setup();
+    renderSheet(moment({ type: 'media', media: [img()] }), { readOnly: true });
+    await user.click(screen.getByRole('button', { name: '查看媒体' }));
+    expect(resolve(MomentSheetService).lightboxIndex).toBe(0);
+  });
+
+  it('手机 4:3 横拍面子用自身宽高比，不用固定 168 高', () => {
+    renderSheet(
+      moment({
+        type: 'media',
+        media: [{ ...img(), width: 4096, height: 3072 }],
+      }),
+    );
+    const face = screen.getByRole('article').querySelector('.moment-note-face') as HTMLElement;
+    expect(face).not.toHaveClass('moment-note-face-168');
+    expect(Number(face.style.getPropertyValue('--face-ratio'))).toBeCloseTo(4 / 3, 5);
+  });
+
+  it('相册语音卡用作者头像播放，不是写死「过」，也不是进度条', () => {
+    renderSheet(
+      moment({
+        type: 'voice',
+        content: '积木倒了三次。这段是笑声。',
+        author: { id: 'u-2', nickname: '妈妈', avatarUrl: '/api/media/ava-mom' },
+        media: [
+          {
+            ...img('aud-1'),
+            mime: 'audio/wav',
+            url: '/api/media/aud-1',
+            width: null,
+            height: null,
+            duration: 42,
+          },
+        ],
+      }),
+    );
+    const play = screen.getByRole('button', { name: '播放语音' });
+    expect(play).not.toHaveTextContent('过');
+    expect(play.querySelector('img')).toHaveAttribute('src', '/api/media/ava-mom');
+    expect(screen.getByRole('article').querySelector('.moment-note-voice-wave')).not.toBeNull();
+    expect(screen.queryByRole('slider', { name: '语音进度' })).toBeNull();
+  });
+
+  it('详情 variant=single 不倾斜、不链回自己、不裁切面子', async () => {
+    const user = userEvent.setup();
+    renderSheet(
+      moment({
+        type: 'media',
+        media: [img(), img('img-2')],
+      }),
+      { variant: 'single' },
+    );
+    const article = screen.getByRole('article');
+    expect(article).toHaveClass('moment-note-detail');
+    expect(article.style.getPropertyValue('--tilt')).toBe('');
+    expect(screen.queryByRole('link', { name: '查看这条时刻' })).toBeNull();
+    expect(article.querySelector('.moment-note-face')).toBeNull();
+    expect(article.querySelectorAll('img')).toHaveLength(2);
+    await user.click(article.querySelector('img')!);
+    expect(resolve(MomentSheetService).lightboxIndex).toBe(0);
   });
 });

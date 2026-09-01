@@ -10,6 +10,7 @@ import { ChainListService } from '@/services/chain-list.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { NotificationService } from '@/services/notification.service';
 import { ThemeService } from '@/services/theme.service';
+import { resetTimelineListSession } from '@/lib/timeline-list-session';
 import { monthBeforeParam } from '@/lib/time';
 import { MomentSheetContent } from '@/timeline/moment-sheet';
 import { MomentSheetService } from '@/timeline/moment-sheet.service';
@@ -18,7 +19,7 @@ import { ChainHomeService } from './chain-home.service';
 
 // 链主页 / 时间线 / 发布面板契约（plan Task 10）：
 // - 纯文字时刻（media: []）不出现媒体容器；Tag 与正文是同一 text-flow 元素；
-// - 单图时刻把声明了宽高（64×48）的媒体原样交给 MediaBlock，点开进入灯箱 index 0；
+// - 单图时刻网格面子链到 /moments/:id，不在相册里开灯箱；
 // - 单链变体的时刻元信息里没有链来源链接；
 // - commentCount===0 不显示「0 回应」；有回应时纸边是「N 回应」详情链接；
 //   自己的时刻 kebab 打开 ResponsiveMenu；网格无表情入口；
@@ -270,6 +271,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetTimelineListSession();
   mediaBlockCalls.list.length = 0;
   api.listTags.mockResolvedValue({ tags: [] });
   api.uploadMedia.mockResolvedValue({ mediaId: 'media-new', status: 'ready', mime: 'video/mp4', size: 5 });
@@ -501,10 +503,8 @@ describe('链首页封面', () => {
 });
 
 describe('单图时刻媒体交接', () => {
-  it('声明宽高的媒体原样交给 MediaBlock，点开进入灯箱 index 0', async () => {
+  it('网格面子链到时刻详情，不在相册里开灯箱', async () => {
     const user = userEvent.setup();
-    // 经 MomentSheetContent seam 渲染：全局注册的 MomentSheetService 即组件所用实例，
-    // 可直接断言 service 状态（bindServices 的私有容器实例在渲染前无法播种）
     render(
       <MemoryRouter>
         <RSRoot>
@@ -513,11 +513,12 @@ describe('单图时刻媒体交接', () => {
       </MemoryRouter>,
     );
 
-    const face = screen.getByRole('button', { name: '查看媒体' });
-    expect(face.querySelector('img')).toHaveAttribute('src', '/api/media/media-1');
+    const face = screen.getAllByRole('link', { name: '查看这条时刻' }).find((el) => el.querySelector('img'));
+    expect(face).toHaveAttribute('href', '/moments/moment-image');
+    expect(face!.querySelector('img')).toHaveAttribute('src', '/api/media/media-1');
 
-    await user.click(face);
-    expect(resolve(MomentSheetService).lightboxIndex).toBe(0);
+    await user.click(face!);
+    expect(resolve(MomentSheetService).lightboxIndex).toBeNull();
   });
 });
 

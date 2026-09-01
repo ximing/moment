@@ -3,7 +3,7 @@ import { Button } from '@/ui/button/index';
 import type { RailFilter } from './timeline-rail';
 
 const chip =
-  'rounded-full border border-line px-3 py-1 text-caption text-ink transition-colors duration-[var(--ease)] hover:bg-floating-hover focus-visible:outline-none focus-visible:ring-focus';
+  'rounded-none bg-bg px-3 py-1 text-caption text-ink transition-colors duration-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_6%,var(--bg))] focus-visible:outline-none focus-visible:ring-focus';
 
 export function FilterChips({
   filter,

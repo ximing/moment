@@ -165,10 +165,10 @@ function RailContent({
                                 before: mo.month === latest ? undefined : monthBeforeParam(mo.month),
                               });
                             }}
-                            className={`flex w-full items-baseline justify-between rounded-menu-item px-2 py-1.5 text-meta transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset ${
+                            className={`flex w-full items-baseline justify-between px-2 py-1.5 text-meta transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset ${
                               active
-                                ? 'bg-[color-mix(in_srgb,var(--select)_24%,transparent)] font-semibold text-ink'
-                                : 'text-muted hover:bg-floating-hover hover:text-ink'
+                                ? 'bg-bg font-semibold text-ink'
+                                : 'text-muted hover:bg-bg hover:text-ink'
                             }`}
                           >
                             {/* 年份已由章节承担，月份条目只写「N月」；含数字，不用 font-display */}
@@ -241,8 +241,8 @@ function RailContent({
   );
 }
 
-/** 筛选 chips：选中 --select 轻强调色面、未选中 1px --line 描边；不复用正文内 Tag 样式（spec §10）。 */
+/** 筛选 chips：选中 --select 色面、未选中 --bg 色面；不画描边（对照 album.html）。 */
 const chip =
-  'rounded-full border px-3 py-1 text-caption transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus';
-const chipOn = 'border-transparent bg-select text-select-fg';
-const chipOff = 'border-line text-ink hover:bg-floating-hover';
+  'px-3 py-1 text-caption transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus';
+const chipOn = 'bg-select text-select-fg';
+const chipOff = 'bg-bg text-ink hover:bg-[color-mix(in_srgb,var(--ink)_6%,var(--bg))]';

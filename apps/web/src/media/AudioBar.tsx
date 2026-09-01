@@ -1,12 +1,12 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { Pause, Play } from 'lucide-react';
 import { originalDisplayUrl } from '@/lib/media-src';
 import { Icon } from '@/ui/Icon';
 
-// 语音播放条（spec voice-moment §5）：播放/暂停 + 进度条 + 时长；v1 不渲染波形（spec §0 搁置决策）。
+// 语音播放条（spec voice-moment §5）：control = 播放/暂停 + 进度条 + 时长（详情/发布）。
+// 相册 variant=note 走作者头像 + 波形条，不渲染 range。
 // 直出接口签发的预签名 GET。
-// 视觉只消费 token：rounded-surface-md / bg-surface / bg-action / text-action-fg / text-meta / text-muted。
 
 function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
@@ -15,7 +15,17 @@ function formatDuration(seconds: number): string {
   return `${m}:${s < 10 ? `0${s}` : `${s}`}`;
 }
 
-export function AudioBar({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
+export function AudioBar({
+  media,
+  shareToken,
+  variant = 'control',
+  face,
+}: {
+  media: MomentMedia;
+  shareToken?: string;
+  variant?: 'control' | 'note';
+  face?: ReactNode;
+}) {
   const url = originalDisplayUrl(media, shareToken);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -33,23 +43,46 @@ export function AudioBar({ media, shareToken }: { media: MomentMedia; shareToken
     }
   };
 
+  const audioEl = url ? (
+    <audio
+      ref={audioRef}
+      src={url}
+      preload="metadata"
+      onPlay={() => setPlaying(true)}
+      onPause={() => setPlaying(false)}
+      onEnded={() => {
+        setPlaying(false);
+        setPosition(0);
+      }}
+      onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
+      onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+    />
+  ) : null;
+
+  if (variant === 'note') {
+    const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
+    return (
+      <div className="moment-note-voice">
+        {audioEl}
+        <button
+          type="button"
+          aria-label={playing ? '暂停语音' : '播放语音'}
+          disabled={!url}
+          onClick={toggle}
+          className="moment-note-voice-play text-caption focus-visible:outline-none focus-visible:ring-focus disabled:opacity-50"
+        >
+          {face}
+        </button>
+        <span className="moment-note-voice-wave" aria-hidden>
+          <i style={{ ['--p' as string]: `${pct}%` }} />
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-3 rounded-surface-md bg-surface px-3 py-2">
-      {url && (
-        <audio
-          ref={audioRef}
-          src={url}
-          preload="metadata"
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onEnded={() => {
-            setPlaying(false);
-            setPosition(0);
-          }}
-          onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        />
-      )}
+      {audioEl}
       <button
         type="button"
         aria-label={playing ? '暂停语音' : '播放语音'}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { observer, useService } from '@rabjs/react';
 import type { PublicShareMoment, TemplateManifest } from '@moment/dto';
 import type { ChainLook } from '@/chain/ChainMark';
@@ -7,8 +7,8 @@ import { useLoadMoreSentinel } from '@/lib/use-load-more-sentinel';
 import { Banner, InlineProgress } from '@/ui/feedback/index';
 import { MomentSheet } from './moment-sheet';
 import { AlbumSkeleton } from './album-skeleton';
+import { albumColCount, ALBUM_GAP_PX, masonryItemStyle, packAlbumMonth } from './album-pack';
 import { groupMomentsByMonth, monthHeading } from './group-by-month';
-import { noteColSpan } from './note-layout';
 
 export const Timeline = observer(function Timeline({
   moments,
@@ -52,13 +52,12 @@ export const Timeline = observer(function Timeline({
 }) {
   const sentinelRef = useLoadMoreSentinel(!isPending && !isError, hasNextPage, isFetchingNextPage, fetchNextPage);
   const composeSession = useService(ComposeSessionService);
+  const colCount = useAlbumColCount();
 
   const renderSheet = (m: PublicShareMoment) => {
-    const span = noteColSpan(m) === 2 ? 'col-span-2' : undefined;
     const grow = m.id === composeSession.lastCreatedId ? 'animate-[grow-in_200ms_ease-out]' : undefined;
-    const className = [span, grow].filter(Boolean).join(' ') || undefined;
     return (
-      <div key={m.id} className={className}>
+      <div key={m.id} className={grow ? `${grow} w-full` : 'w-full'}>
         <MomentSheet
           moment={m}
           chainName={chainLookById?.get(m.chainId)?.name}
@@ -114,12 +113,105 @@ export const Timeline = observer(function Timeline({
       {groupMomentsByMonth(moments, order).map((g) => (
         <section key={g.month} aria-label={monthHeading(g.month)} className="mb-8">
           <h2 className="mb-3 text-caption tracking-wide text-muted">{monthHeading(g.month)}</h2>
-          <div className="grid grid-cols-2 gap-3 [grid-auto-flow:dense] min-[900px]:grid-cols-3 min-[1400px]:grid-cols-4">
-            {g.moments.map(renderSheet)}
-          </div>
+          <AlbumMonthGrid moments={g.moments} colCount={colCount} renderSheet={renderSheet} />
         </section>
       ))}
       {tail}
     </>
   );
 });
+
+function AlbumMonthGrid({
+  moments,
+  colCount,
+  renderSheet,
+}: {
+  moments: PublicShareMoment[];
+  colCount: number;
+  renderSheet: (m: PublicShareMoment) => ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  const [measured, setMeasured] = useState<ReadonlyMap<string, number>>(() => new Map());
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const apply = () => {
+      const w = el.clientWidth;
+      setWidth((prev) => (prev === w ? prev : w));
+    };
+    apply();
+    window.addEventListener('resize', apply);
+    if (typeof ResizeObserver !== 'function') {
+      return () => window.removeEventListener('resize', apply);
+    }
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      window.removeEventListener('resize', apply);
+      ro.disconnect();
+    };
+  }, []);
+
+  const colWidth = width > 0 && colCount > 0 ? (width - ALBUM_GAP_PX * (colCount - 1)) / colCount : 0;
+  const positioned = colWidth > 0;
+
+  const { placements, totalHeight } = useMemo(
+    () => packAlbumMonth(moments, colCount, colWidth, positioned ? measured : undefined),
+    [moments, colCount, colWidth, measured, positioned],
+  );
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !positioned) return;
+    const next = new Map<string, number>();
+    let changed = false;
+    for (const node of el.querySelectorAll<HTMLElement>('[data-note-id]')) {
+      const id = node.dataset.noteId;
+      if (!id) continue;
+      const h = Math.round(node.offsetHeight);
+      next.set(id, h);
+      if (measured.get(id) !== h) changed = true;
+    }
+    if (changed || next.size !== measured.size) setMeasured(next);
+  });
+
+  return (
+    <div ref={ref} className="relative w-full" style={positioned ? { height: totalHeight } : undefined}>
+      {placements.map((p) => {
+        const box = positioned ? masonryItemStyle(p.col, p.span, p.y, colWidth) : undefined;
+        return (
+          <div
+            key={p.item.id}
+            data-note-id={p.item.id}
+            className={positioned ? 'absolute' : undefined}
+            style={box ? { left: box.left, top: box.top, width: box.width } : undefined}
+          >
+            {renderSheet(p.item)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function useAlbumColCount(): number {
+  const [n, setN] = useState(albumColCount);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const sync = () => setN(albumColCount());
+    const wide = window.matchMedia('(min-width: 1400px)');
+    const mid = window.matchMedia('(min-width: 900px)');
+    wide.addEventListener('change', sync);
+    mid.addEventListener('change', sync);
+    window.addEventListener('resize', sync);
+    sync();
+    return () => {
+      wide.removeEventListener('change', sync);
+      mid.removeEventListener('change', sync);
+      window.removeEventListener('resize', sync);
+    };
+  }, []);
+  return n;
+}

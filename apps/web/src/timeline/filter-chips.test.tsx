@@ -37,6 +37,7 @@ describe('FilterChips（spec §7.1 列表顶清除 chip）', () => {
     expect(onClearPlace).toHaveBeenCalledTimes(1);
     expect(screen.getByText('外婆 ×')).toBeInTheDocument();
     expect(screen.getByText('📍 朝阳公园 ×')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '清除人物筛选 外婆' }).className).not.toMatch(/\bborder-line\b/);
   });
 
   it('before 时渲染「回到今天」', async () => {

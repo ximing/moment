@@ -5,7 +5,7 @@ export function AlbumSkeleton() {
         <div
           key={i}
           data-skeleton-note
-          className="h-40 rounded-surface-md bg-feedback-skeleton"
+          className="h-40 bg-feedback-skeleton"
         />
       ))}
     </div>

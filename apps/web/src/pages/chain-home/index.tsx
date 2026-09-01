@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { Settings } from 'lucide-react';
@@ -41,6 +41,17 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
   useEffect(() => {
     service.hydrate(chainId);
   }, [service, chainId]);
+
+  useLayoutEffect(() => {
+    const y = service.restoredScrollY;
+    if (y) {
+      document.documentElement.scrollTop = y;
+      document.body.scrollTop = y;
+    }
+    return () => {
+      service.persistSession(document.documentElement.scrollTop || document.body.scrollTop || 0);
+    };
+  }, [service]);
 
   // 三态判定（防 hydrate effect 首帧闪错误态）：骨架 = 无 chain 且（加载中或无错）
   const chainErr = service.$model.loadChain.error;

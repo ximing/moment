@@ -11,6 +11,7 @@ import { NotificationService } from '@/services/notification.service';
 import { ThemeService } from '@/services/theme.service';
 import { MomentSheetContent } from '@/timeline/moment-sheet';
 import { MomentSheetService } from '@/timeline/moment-sheet.service';
+import { peekViewedMomentId, resetTimelineListSession } from '@/lib/timeline-list-session';
 import { FeedHomeContent } from './feed-home/index';
 import { FeedHomeService } from './feed-home/feed-home.service';
 import { MomentPageContent } from './moment/index';
@@ -266,6 +267,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetTimelineListSession();
   mediaBlockCalls.list.length = 0;
   api.getFeed.mockResolvedValue({ moments: [], nextCursor: null });
   api.getMonthIndex.mockResolvedValue({ months: [] });
@@ -368,6 +370,71 @@ describe('时刻详情', () => {
     renderDetail();
 
     expect(screen.getByRole('button', { name: '加个表情' })).toBeInTheDocument();
+  });
+
+  it('hydrate 记下当前时刻，供列表返回时只补这一条', () => {
+    const service = resolve(MomentPageService);
+    service.momentId = '';
+    service.hydrate('moment-text');
+    expect(peekViewedMomentId()).toBe('moment-text');
+  });
+
+  it('进入详情把视口拉回顶部，不带着列表滚动', () => {
+    document.documentElement.scrollTop = 480;
+    document.body.scrollTop = 480;
+    seedMomentDetail([OWN_COMMENT]);
+    renderDetail();
+    expect(document.documentElement.scrollTop).toBe(0);
+    expect(document.body.scrollTop).toBe(0);
+  });
+
+  it('详情不是倾斜便利贴：返回上一页、有图走 MediaBlock、评论仍在', () => {
+    const service = resolve(MomentPageService);
+    service.momentId = 'moment-images';
+    service.moment = TWO_IMAGE_MOMENT;
+    service.deleted = false;
+    service.comments = [OWN_COMMENT];
+    service.nextCursor = null;
+    service.draft = '';
+    render(
+      <MemoryRouter initialEntries={['/moments/moment-images']}>
+        <RSRoot>
+          <Routes>
+            <Route path="/moments/:momentId" element={<MomentPageContent />} />
+          </Routes>
+        </RSRoot>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('button', { name: '返回' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '回链' })).toBeNull();
+    const article = screen.getByRole('article');
+    expect(article).toHaveClass('moment-note-detail');
+    expect(article.style.getPropertyValue('--tilt')).toBe('');
+    expect(screen.queryByRole('link', { name: '查看这条时刻' })).toBeNull();
+    expect(screen.getByTestId('media-block')).toBeInTheDocument();
+    expect(mediaBlockCalls.list.at(-1)?.media.map((m) => m.id)).toEqual(['media-1', 'media-2']);
+    expect(typeof mediaBlockCalls.list.at(-1)?.onOpen).toBe('function');
+    expect(screen.getByRole('heading', { name: '评论' })).toBeInTheDocument();
+    expect(screen.getByText('面包还热着呢')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '回复' })).toBeInTheDocument();
+  });
+
+  it('大屏详情左时刻右评论，不再锁内容列', () => {
+    seedMomentDetail([OWN_COMMENT, OTHER_COMMENT]);
+    const { container } = renderDetail();
+    const article = screen.getByRole('article');
+    const comments = screen.getByRole('heading', { name: '评论' }).closest('section');
+    expect(comments).not.toBeNull();
+    expect(article.contains(comments)).toBe(false);
+    const layout = container.querySelector('[data-moment-detail-layout]');
+    expect(layout).not.toBeNull();
+    expect(layout).toContainElement(article);
+    expect(layout).toContainElement(comments);
+    expect(layout).toHaveClass('min-[900px]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]');
+    expect(article.compareDocumentPosition(comments!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: '返回' }).closest('.max-w-content')).toBeNull();
+    expect(layout!.closest('.max-w-content')).toBeNull();
   });
 
   it('渲染回复 Field，提交走既有 createComment', async () => {

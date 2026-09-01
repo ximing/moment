@@ -4,6 +4,12 @@ import { client } from '@/api/client';
 import type { CommentChangedPayload, MomentChangedPayload } from '@/lib/events';
 import { currentTzOffset } from '@/lib/time';
 import { feedQuery, scrollToPageTop } from '@/lib/feed';
+import {
+  peekFeedListSession,
+  peekViewedMomentId,
+  saveFeedListSession,
+  takeViewedMomentId,
+} from '@/lib/timeline-list-session';
 import type { RailFilter } from '@/timeline/timeline-rail';
 
 /** 首页状态（spec §4.2）：筛选 + feed 分页 + 月份索引 + 单链标签。 */
@@ -18,13 +24,16 @@ export class FeedHomeService extends Service {
   searchQ = '';
   searchParsed: SearchParsed | null = null;
   searchError: unknown = null;
+  restoredScrollY = 0;
   private gen = 0;
   private loadingMore = false;
 
   constructor() {
     super();
-    void this.loadFirst();
-    void this.loadMeta();
+    if (!this.adoptSession()) {
+      void this.loadFirst();
+      void this.loadMeta();
+    }
     this.on(
       'moment:changed',
       (p: MomentChangedPayload) => {
@@ -108,6 +117,42 @@ export class FeedHomeService extends Service {
     this.searchParsed = null;
     this.searchError = null;
     await this.loadFirst();
+  }
+
+  persistSession(scrollY: number): void {
+    saveFeedListSession({
+      filter: { ...this.filter },
+      moments: this.moments.slice(),
+      nextCursor: this.nextCursor,
+      monthIndex: this.monthIndex.slice(),
+      tags: this.tags.slice(),
+      searching: this.searching,
+      searchQ: this.searchQ,
+      searchParsed: this.searchParsed,
+      scrollY,
+    });
+  }
+
+  /** 从详情返回：有查看记录才吃快照，避免链页往返套用过期 feed。 */
+  adoptSession(): boolean {
+    const viewed = peekViewedMomentId();
+    const session = peekFeedListSession();
+    if (!viewed || !session?.moments.length) return false;
+    this.filter = { ...session.filter };
+    this.moments = session.moments.slice();
+    this.nextCursor = session.nextCursor;
+    this.monthIndex = session.monthIndex.slice();
+    this.tags = session.tags.slice();
+    this.searching = session.searching;
+    this.searchQ = session.searchQ;
+    this.searchParsed = session.searchParsed;
+    this.restoredScrollY = session.scrollY;
+    void this.refreshListedMoment(viewed);
+    // StrictMode 会同步卸载再挂一次：等本轮构造结束再清，避免第二次当成冷启动整表重拉。
+    queueMicrotask(() => {
+      if (peekViewedMomentId() === viewed) takeViewedMomentId();
+    });
+    return true;
   }
 
   /** 点赞/评论只刷新这一条，避免 loadFirst 丢掉已翻页列表并把滚动打回顶部。 */

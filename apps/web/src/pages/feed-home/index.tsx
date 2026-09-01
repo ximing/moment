@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { humanError } from '@/lib/errors';
 import { canCompose } from '@/lib/roles';
@@ -24,6 +25,17 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
   const service = useService(FeedHomeService);
   const chainList = useService(ChainListService);
   const composeSession = useService(ComposeSessionService);
+
+  useLayoutEffect(() => {
+    const y = service.restoredScrollY;
+    if (y) {
+      document.documentElement.scrollTop = y;
+      document.body.scrollTop = y;
+    }
+    return () => {
+      service.persistSession(document.documentElement.scrollTop || document.body.scrollTop || 0);
+    };
+  }, [service]);
   const chains = chainList.chains;
   const looks = new Map(
     chains.map((c) => [

@@ -15,6 +15,12 @@ import { uploadChainImage } from '@/chain/appearance-upload';
 import { humanError } from '@/lib/errors';
 import { currentTzOffset } from '@/lib/time';
 import { feedQuery, scrollToPageTop } from '@/lib/feed';
+import {
+  peekChainListSession,
+  peekViewedMomentId,
+  saveChainListSession,
+  takeViewedMomentId,
+} from '@/lib/timeline-list-session';
 import type { RailFilter } from '@/timeline/timeline-rail';
 import type { ChainChangedPayload, CommentChangedPayload, MomentChangedPayload } from '@/lib/events';
 
@@ -40,11 +46,13 @@ export class ChainHomeService extends Service {
   coverError: string | null = null;
   repositioning = false;
   repositionFocus: ChainImageFocus | null = null;
+  restoredScrollY = 0;
   private gen = 0;
   private loadingMore = false;
 
   constructor() {
     super();
+    this.adoptSession();
     this.on(
       'moment:changed',
       (p: MomentChangedPayload) => {
@@ -146,6 +154,44 @@ export class ChainHomeService extends Service {
     this.searchParsed = null;
     this.searchError = null;
     await this.loadFirst();
+  }
+
+  persistSession(scrollY: number): void {
+    saveChainListSession({
+      chainId: this.chainId,
+      chain: this.chain,
+      filter: { ...this.filter },
+      moments: this.moments.slice(),
+      nextCursor: this.nextCursor,
+      monthIndex: this.monthIndex.slice(),
+      tags: this.tags.slice(),
+      searching: this.searching,
+      searchQ: this.searchQ,
+      searchParsed: this.searchParsed,
+      scrollY,
+    });
+  }
+
+  adoptSession(): boolean {
+    const viewed = peekViewedMomentId();
+    const session = peekChainListSession();
+    if (!viewed || !session?.chainId || !session.moments.length) return false;
+    this.chainId = session.chainId;
+    this.chain = session.chain;
+    this.filter = { ...session.filter };
+    this.moments = session.moments.slice();
+    this.nextCursor = session.nextCursor;
+    this.monthIndex = session.monthIndex.slice();
+    this.tags = session.tags.slice();
+    this.searching = session.searching;
+    this.searchQ = session.searchQ;
+    this.searchParsed = session.searchParsed;
+    this.restoredScrollY = session.scrollY;
+    void this.refreshListedMoment(viewed);
+    queueMicrotask(() => {
+      if (peekViewedMomentId() === viewed) takeViewedMomentId();
+    });
+    return true;
   }
 
   /** 点赞/评论只刷新这一条，避免 loadFirst 丢掉已翻页列表并把滚动打回顶部。 */

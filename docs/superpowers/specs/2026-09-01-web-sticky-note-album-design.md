@@ -23,7 +23,7 @@
 - 不改 `GET /feed`、`GET /chains/:id/moments`、`GET /moments/:id`、月份索引、tag/person/place 接口的字段名与分页。
 - 不改记下/编辑面板、灯箱内部控件、评论详情页 `/moments/:id` 的信息结构。
 - 不新增 token、不改 `tokens.css` 色值、不改 package scripts。
-- 不做瀑布流第三方库；用 CSS Grid + `dense`，按月分包以免跨月抽洞。
+- 不做瀑布流第三方库；自研最短槽位打包（可 span 2），按月分包以免跨月抽洞。
 - 不在网格上做表情点选、不在网格上展开评论输入。
 
 ## 2. 页面结构
@@ -44,9 +44,9 @@
 
 ```text
 2026 · 9 月
-[ grid dense：本月卡片 ]
+[ 最短槽位瀑布：本月卡片 ]
 2026 · 8 月
-[ grid dense：本月卡片 ]
+[ 最短槽位瀑布：本月卡片 ]
 ```
 
 - 月头是 caption / muted，字距放松，不是大日期结。
@@ -61,11 +61,10 @@
 
 ### 3.1 纸面
 
-- 底：`--surface`。
+- 底：`--field-bg`（纸色，比 `--surface` 更暖、不发白）。页面底用 `color-mix(stroke 20%, bg)` 托起纸面，侧栏/右栏不画分割线。
 - 内边距：8px 画面四周，纸边书写区再 8px 4px 2px（档位内）。
-- 圆角：`--field-radius`（13px）或页面已用的 `rounded-surface-md`，全站统一一种，禁止第三种。
-- 轻阴影（本 spec 对总规范 §2.4 / §6.1 的定点修订）：`0 8px 22px color-mix(in srgb, var(--ink) 12%, transparent)`。禁止 `--elev` / `--shadow` / `--floating-shadow`（legacy 或浮层级）。
-- 倾角：由 `moment.id` 哈希映射到 `{ -2, -1, 0, 1, 2 }` 度，固定不随机。`:hover` / `:focus-visible` 回正并上移 4px。`prefers-reduced-motion: reduce` 时倾角恒 0、无位移。
+- 圆角：直角。播放入口用作者头像圆。
+- 轻阴影：`0 8px 22px color-mix(in srgb, var(--ink) 12%, transparent)`。列表不倾斜、不悬停抬起。详情无纸面阴影。禁止 `--elev` / `--shadow` / `--floating-shadow`。
 - `focus-visible`：`--focus` 环，offset 2px。
 
 ### 3.2 面子（媒体）
@@ -73,8 +72,8 @@
 | `type` | 面子 |
 |---|---|
 | `media` | 第一张图铺满面子；多于 1 张时画面右下角 caption 色叠 `N` |
-| `video` | 封面（`posterDerivedUrl` \|\| `posterUrl` \|\| 第一帧图）+ 画面左下「过」圆钮（`--ink` 底、`--surface` 字） |
-| `voice` | 无大图：纸面上 `AudioBar`（现组件）或同等播放条；0~8 张附图时第一条图作 88×64 缩略，不把语音变成宫格 |
+| `video` | 封面（`posterDerivedUrl` \|\| `posterUrl` \|\| 第一帧图）+ 画面左下作者头像 |
+| `voice` | 无大图：作者头像作播放钮 + 竖线波形条；不在网格里放进度条播放器。附图只在详情页展开 |
 | `text` | 无面子图，书写区从纸顶开始，正文最多 5 行 |
 
 - 有媒体时媒体自己当面子，不再外套第二层卡片。
@@ -120,19 +119,24 @@
 
 ### 3.5 异形占位（span）
 
-在当月 Grid 内，`grid-auto-flow: dense`。列跨度只允许 1 或 2。
+当月相册用「最短槽位」瀑布，不是 CSS Grid 行模型：
 
-| 条件 | 列跨 | 面子高度档 |
+- 列数 2 / 3 / 4 随断点。卡按时间序投入 **当前最矮、且能放下其 span 的相邻槽**（并列取最左）。
+- 视频 / 宽图 / 多图：有同伴时优先占 `min(列数-1, 3)`，把剩下的一列留给矮卡（照片在上、语音叠在下），避免视频只占两列、右侧另开一列语音。
+- 独占一个月的卡适当放大：视频最多 span 3，照片/文字/语音 span 2。
+- 列数不足、或相邻槽不等高会留洞时把 span 逐级减到能放平。
+- 面子高度用媒体 `width/height` 和所占列宽算；纸边高度用 `@chenglou/pretext` 按 `text-meta`（13 / 20）量正文（最多 2 行，纯文字 5 行）。
+- 实测高度再修正一次，避免估计和真实纸边不一致。
+
+| 条件 | 列跨 | 面子宽高比 |
 |---|---|---|
-| `video`，或单图 `width/height ≥ 1.4` | 2 | 192 |
-| `media` 且 2–9 张 | 2 | 168 |
-| 单图 `height/width ≥ 1.25`（竖图） | 1 | 240 |
-| 其它单图 | 1 | 168；接近方（0.9–1.1）用 192 |
-| `voice` / `text` | 1 | 内容撑开，无固定面子高 |
+| `video`，或单图 `width/height ≥ 1.4` | 2 | 16/9（更宽夹到 16/9） |
+| `media` 且 2–9 张 | 2 | 3/2 |
+| 手机竖拍 `≤ 3/4`（含 3:4） | 1 | 3/4 |
+| 手机横拍 4:3 与介于 3/4–4/3 的单图 | 1 | 用照片自身比（4:3 即 4/3） |
+| `voice` / `text` | 1 | 无面子，内容撑开 |
 
-面子高度只允许 168 / 192 / 240。禁止第五档。
-
-最后一列只剩 1 格而卡片声明 span 2：CSS Grid 自动落到下一行，不要 JS 改 span。
+面子按 `aspect-ratio` 吃所占列宽，不再用 168/192/240 固定高度——家庭照片以手机 4:3 / 3:4 为主，固定高度会把脑袋裁掉。`object-fit: cover` 只处理被夹过的极端比。
 
 ### 3.6 互动
 
@@ -163,7 +167,8 @@
 
 | 文件 | 变化 |
 |---|---|
-| `apps/web/src/timeline/timeline.tsx` | 去掉日子线/日期结；按月包 Grid；哨兵保留 |
+| `apps/web/src/timeline/timeline.tsx` | 去掉日子线/日期结；按月最短槽位瀑布；哨兵保留 |
+| `apps/web/src/timeline/album-pack.ts` | span 1/2 最短槽位；列数断点 |
 | `apps/web/src/timeline/moment-sheet.tsx` | 便利贴外壳 + 3.2–3.4 信息层；Lightbox / 删除 / 评论展开迁到详情为主，预览评论从网格移除 |
 | `apps/web/src/timeline/moment-sheet.service.ts` | 可删 `showComments` 预览路径（网格不再展开评论）；Lightbox / 删除保留 |
 | `apps/web/src/shell/Shell.tsx` | 主列不再锁 760；为网格让出宽度 |

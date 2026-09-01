@@ -8,7 +8,7 @@ import { MemoriesService } from './memories.service';
 
 // 那年今日入口条 + 同页内嵌面板（spec memories-today §4）：
 // 有周年内容才渲染（无内容不打扰）；点击展开按年份分组的面板，复用 MomentSheet。
-// 视觉只消费 token：rounded-surface-lg 内容色面圆角、bg-surface、text-body/text-meta
+// 视觉只消费 token：bg-bg 色面、text-body/text-meta；直角、不画描边（对照 album.html）。
 // 语义字号，焦点环 ring-focus；不加阴影，与日子线上的内容层同一克制。
 // 面板是内容流的一部分（同页展开），不是浮层，不走 z-index 层级。
 
@@ -30,7 +30,7 @@ export const MemoriesEntryContent = observer(function MemoriesEntryContent({
         aria-expanded={service.open}
         aria-controls="memories-today-panel"
         onClick={() => service.toggle()}
-        className="flex w-full items-center gap-3 rounded-surface-lg bg-surface px-4 py-4 text-left transition-colors duration-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_4%,var(--surface))] focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-offset-focus focus-visible:ring-offset-bg"
+        className="flex w-full items-center gap-3 bg-bg px-4 py-4 text-left transition-colors duration-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_4%,var(--bg))] focus-visible:outline-none focus-visible:ring-focus"
       >
         <span aria-hidden className="text-body">
           📅

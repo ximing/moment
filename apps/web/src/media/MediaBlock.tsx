@@ -51,14 +51,14 @@ export function MediaBlock({
   }
   if (media.length === 1) {
     return (
-      <div className="w-fit max-w-full overflow-hidden rounded-surface-lg">
+      <div className="w-fit max-w-full overflow-hidden">
         <ImageOne media={media[0]!} shareToken={shareToken} single onClick={() => onOpen?.(0)} />
       </div>
     );
   }
   return (
     <div
-      className={`grid ${media.length === 2 ? 'grid-cols-2' : 'grid-cols-3'} gap-1 overflow-hidden rounded-surface-lg`}
+      className={`grid ${media.length === 2 ? 'grid-cols-2' : 'grid-cols-3'} gap-1 overflow-hidden`}
     >
       {media.map((m, i) => (
         <ImageOne key={m.id} media={m} shareToken={shareToken} onClick={() => onOpen?.(i)} />
@@ -103,7 +103,7 @@ function ImageOne({
     <button
       type="button"
       onClick={onClick}
-      className={`block overflow-hidden focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset ${single ? 'max-w-full' : 'w-full'}`}
+      className={`block overflow-hidden border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset ${single ? 'max-w-full' : 'w-full'}`}
     >
       {single ? (
         // 固有像素宽（width/height 属性）；比内容列窄则原尺寸，否则压到列宽
@@ -132,7 +132,7 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
         <MediaSkeletonStyles />
         <div
           aria-hidden
-          className={`aspect-video w-full rounded-surface-lg bg-feedback-skeleton ${mediaSkeletonClass}`}
+          className={`aspect-video w-full bg-feedback-skeleton ${mediaSkeletonClass}`}
         />
       </>
     );
@@ -147,7 +147,7 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
   };
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-surface-lg bg-ink">
+    <div className="relative aspect-video w-full overflow-hidden bg-ink">
       <video
         ref={videoRef}
         src={url}

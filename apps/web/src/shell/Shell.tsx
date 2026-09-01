@@ -14,9 +14,8 @@ import { CreateChainDialog } from './create-chain-dialog';
 import { UserMenu } from './user-menu';
 
 // 壳层视觉只消费 tokens.css 经 Tailwind 语义映射发布的 token（plan Task 9）：
-// 侧栏 w-sidebar、导航项 rounded-menu-item / text-meta、悬停色面 floating-hover、
-// 内容列 max-w-content；当前导航只用轻色面与字重（C 端总规范 §3.1），不画阴影。
-// 顶栏断点沿用既有 min-[1400px] / min-[900px]。
+// 侧栏 w-sidebar、导航项 rounded-menu-item / text-meta、当前项 bg-bg 色面（对照 album.html，不画分割线）。
+// 内容列 max-w-content；顶栏断点沿用既有 min-[1400px] / min-[900px]。
 
 export const Shell = observer(function Shell() {
   const composeSession = useService(ComposeSessionService);
@@ -24,10 +23,13 @@ export const Shell = observer(function Shell() {
   const location = useLocation();
   const feedMatch = useMatch({ path: '/', end: true });
   const chainHomeMatch = useMatch({ path: '/chains/:chainId', end: true });
+  const momentMatch = useMatch({ path: '/moments/:momentId', end: true });
   const chainId = chainHomeMatch?.params.chainId;
-  // 链首页封面要铺满侧栏与时间索引之间的主栏（Notion 通栏）；feed 与链首页主列加宽，其它页仍走内容列。
+  // 链首页封面要铺满侧栏与时间索引之间的主栏（Notion 通栏）；feed / 链首页 / 时刻详情主列加宽，其它页仍走内容列。详情无时间索引，不预留 rail。
   const chainHome = Boolean(chainHomeMatch);
-  const wideMain = Boolean(feedMatch) || chainHome;
+  const momentDetail = Boolean(momentMatch);
+  const wideMain = Boolean(feedMatch) || chainHome || momentDetail;
+  const railPad = !chainHome && !momentDetail;
   const [creating, setCreating] = useState(false);
 
   const chainList = useService(ChainListService);
@@ -47,8 +49,8 @@ export const Shell = observer(function Shell() {
   }, [location.search, location.pathname, chainId, navigate, composeSession]);
 
   return (
-    <div className="min-h-screen bg-bg">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-sidebar flex-col border-r border-line bg-surface px-3 pt-6 min-[1400px]:flex">
+    <div className="min-h-screen">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-sidebar flex-col px-3 pt-6 min-[1400px]:flex">
         <Brand />
         <nav className="mt-6 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
           <NavLink to="/" end className={sideLink}>
@@ -61,7 +63,7 @@ export const Shell = observer(function Shell() {
             onClick={() => setCreating(true)}
             className="mt-1 flex w-full items-center gap-2 rounded-menu-item px-2 py-1.5 text-left text-meta text-muted transition-colors duration-[var(--ease)] hover:bg-floating-hover hover:text-ink focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset"
           >
-            <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-dashed border-stroke">
+            <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
               <Icon icon={Plus} size={12} />
             </span>
             开一条新的链
@@ -75,12 +77,12 @@ export const Shell = observer(function Shell() {
 
       <div
         className={
-          chainHome
-            ? 'min-[1400px]:pl-[var(--sidebar)]'
-            : 'min-[1400px]:pl-[var(--sidebar)] min-[1400px]:pr-[var(--rail)]'
+          railPad
+            ? 'min-[1400px]:pl-[var(--sidebar)] min-[1400px]:pr-[var(--rail)]'
+            : 'min-[1400px]:pl-[var(--sidebar)]'
         }
       >
-        <header className="sticky top-0 z-20 flex items-center gap-2 bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] px-4 py-3 backdrop-blur min-[1400px]:hidden">
+        <header className="sticky top-0 z-20 flex items-center gap-2 bg-[color-mix(in_srgb,var(--stroke)_20%,var(--bg))] px-4 py-3 min-[1400px]:hidden">
           <Brand compact />
           <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <NavLink to="/" end className={chipLink}>
@@ -132,12 +134,12 @@ const NAV_FOCUS =
 
 function sideLink({ isActive }: { isActive: boolean }) {
   return `flex items-center gap-2 truncate rounded-menu-item px-2 py-1.5 text-meta transition-colors duration-[var(--ease)] ${NAV_FOCUS} ${
-    isActive ? 'bg-floating-hover font-semibold text-ink' : 'text-muted hover:bg-floating-hover hover:text-ink'
+    isActive ? 'bg-bg font-semibold text-ink' : 'text-muted hover:bg-bg hover:text-ink'
   }`;
 }
 
 function chipLink({ isActive }: { isActive: boolean }) {
   return `inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-sm transition-colors duration-[var(--ease)] ${NAV_FOCUS} ${
-    isActive ? 'bg-surface font-semibold text-ink' : 'text-muted hover:bg-floating-hover hover:text-ink'
+    isActive ? 'bg-bg font-semibold text-ink' : 'text-muted hover:bg-bg hover:text-ink'
   }`;
 }

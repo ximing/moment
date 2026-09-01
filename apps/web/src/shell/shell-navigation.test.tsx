@@ -136,6 +136,7 @@ function shellTree(initialPath: string): ReactElement {
               <Route path="/" element={<Probe />} />
               <Route path="/chains/:chainId" element={<Probe />} />
               <Route path="/chains/:chainId/settings" element={<Probe />} />
+              <Route path="/moments/:momentId" element={<Probe />} />
               <Route path="/me" element={<Probe />} />
               <Route path="/notifications" element={<Probe />} />
             </Route>
@@ -202,6 +203,21 @@ describe('Shell 认证导航', () => {
     expect(feedMain.className.split(/\s+/)).not.toContain('max-w-content');
     expect(feedMain.parentElement!.className).toContain('pr-[var(--rail)]');
     feed.unmount();
+  });
+
+  it('时刻详情 main 铺开且不预留 rail 右垫', () => {
+    const page = renderShell('/moments/moment-1');
+    const main = page.container.querySelector('main')!;
+    expect(main.className.split(/\s+/)).not.toContain('max-w-content');
+    expect(main.parentElement!.className).not.toContain('pr-[var(--rail)]');
+  });
+
+  it('侧栏用色面分区，不画右边框', () => {
+    const page = renderShell('/');
+    const aside = page.container.querySelector('aside')!;
+    expect(aside.className.split(/\s+/)).not.toContain('border-r');
+    expect(aside.className.split(/\s+/)).not.toContain('border-line');
+    expect(aside.className.split(/\s+/)).not.toContain('bg-surface');
   });
 
   it('链导航右键提供「链设置」命令并跳转到链设置页', async () => {

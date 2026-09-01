@@ -1,5 +1,6 @@
 import { register, resolve } from '@rabjs/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { rememberViewedMoment, resetTimelineListSession } from '@/lib/timeline-list-session';
 import { FeedHomeService } from './feed-home.service';
 
 const emptyPage = { moments: [], nextCursor: null };
@@ -30,14 +31,18 @@ beforeEach(() => {
     nextCursor: null,
     parsed: { personNames: [], place: null, time: null, text: '' },
   });
+  resetTimelineListSession();
   const s = resolve(FeedHomeService);
   s.filter = { order: 'happened_at' };
   s.moments = [];
   s.nextCursor = null;
+  s.monthIndex = [];
+  s.tags = [];
   s.searching = false;
   s.searchQ = '';
   s.searchParsed = null;
   s.searchError = null;
+  s.restoredScrollY = 0;
 });
 
 describe('FeedHomeService chip 过滤', () => {
@@ -204,6 +209,58 @@ describe('FeedHomeService 点赞/评论不整表重拉', () => {
     api.getFeed.mockResolvedValueOnce({ moments: [{ id: 'm-new' }], nextCursor: null });
     s.emit('moment:changed', { momentId: 'm-new', chainId: 'c-1', op: 'create' }, 'global');
     await vi.waitFor(() => expect(api.getFeed).toHaveBeenCalled());
+  });
+});
+
+describe('FeedHomeService 从详情返回只补一条', () => {
+  it('adoptSession 在记下了查看过的时刻时恢复列表，只 getMoment 不 getFeed', async () => {
+    const s = resolve(FeedHomeService);
+    const kept = { id: 'm-keep', commentCount: 0 } as never;
+    const target = { id: 'm-1', commentCount: 0 } as never;
+    s.filter = { order: 'happened_at', personId: 'p-1', personName: '外婆' };
+    s.moments = [kept, target];
+    s.nextCursor = 'cur-2';
+    s.monthIndex = [{ year: 2026, month: 7, count: 1 } as never];
+    s.persistSession(320);
+    s.moments = [];
+    s.nextCursor = null;
+    s.filter = { order: 'happened_at' };
+    rememberViewedMoment('m-1');
+    api.getMoment.mockResolvedValueOnce({ id: 'm-1', commentCount: 4 });
+    api.getFeed.mockClear();
+
+    expect(s.adoptSession()).toBe(true);
+    expect(s.moments[0]).toEqual(kept);
+    expect(s.nextCursor).toBe('cur-2');
+    expect(s.filter.personId).toBe('p-1');
+    expect(s.restoredScrollY).toBe(320);
+    expect(api.getFeed).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(s.moments[1]).toEqual({ id: 'm-1', commentCount: 4 }));
+    expect(api.getMoment).toHaveBeenCalledWith('m-1');
+  });
+
+  it('没有查看过的时刻时 adoptSession 不恢复，避免链页往返吃到旧 feed', () => {
+    const s = resolve(FeedHomeService);
+    s.moments = [{ id: 'm-old' } as never];
+    s.persistSession(80);
+    s.moments = [];
+    expect(s.adoptSession()).toBe(false);
+    expect(s.moments).toEqual([]);
+  });
+
+  it('persistSession 在 loadFirst 进行中且列表空时不覆盖已有会话', async () => {
+    const s = resolve(FeedHomeService);
+    s.moments = [{ id: 'm-keep' } as never];
+    rememberViewedMoment('m-keep');
+    s.persistSession(10);
+    s.moments = [];
+    api.getFeed.mockImplementationOnce(() => new Promise(() => undefined));
+    void s.loadFirst();
+    s.persistSession(0);
+    s.moments = [];
+    rememberViewedMoment('m-keep');
+    expect(s.adoptSession()).toBe(true);
+    expect(s.moments).toEqual([{ id: 'm-keep' }]);
   });
 });
 

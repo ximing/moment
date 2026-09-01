@@ -1,5 +1,6 @@
 import { register, resolve } from '@rabjs/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { rememberViewedMoment, resetTimelineListSession } from '@/lib/timeline-list-session';
 import { ChainHomeService } from './chain-home.service';
 
 const api = vi.hoisted(() => ({
@@ -34,11 +35,15 @@ beforeEach(() => {
     nextCursor: null,
     parsed: { personNames: [], place: null, time: null, text: '' },
   });
+  resetTimelineListSession();
   const s = resolve(ChainHomeService);
   s.chainId = 'c-1';
+  s.chain = { id: 'c-1', myRole: 'owner' } as never;
   s.filter = { order: 'happened_at', chainIds: ['c-1'] };
   s.moments = [];
   s.nextCursor = null;
+  s.monthIndex = [];
+  s.tags = [];
   s.searching = false;
   s.searchQ = '';
   s.searchParsed = null;
@@ -47,6 +52,7 @@ beforeEach(() => {
   s.coverError = null;
   s.repositioning = false;
   s.repositionFocus = null;
+  s.restoredScrollY = 0;
 });
 
 describe('ChainHomeService chip 过滤', () => {
@@ -171,6 +177,32 @@ describe('ChainHomeService 点赞/评论不整表重拉', () => {
     expect(s.moments[0]).toEqual(kept);
     expect(api.getMoment).toHaveBeenCalledWith('m-1');
     expect(api.getFeed).not.toHaveBeenCalled();
+  });
+});
+
+describe('ChainHomeService 从详情返回只补一条', () => {
+  it('adoptSession 恢复本链列表后 hydrate 同 id 不再 loadFirst', async () => {
+    const s = resolve(ChainHomeService);
+    const kept = { id: 'm-keep' } as never;
+    s.moments = [kept, { id: 'm-1', commentCount: 0 } as never];
+    s.nextCursor = 'c-next';
+    s.persistSession(180);
+    s.moments = [];
+    s.chainId = '';
+    s.chain = null;
+    rememberViewedMoment('m-1');
+    api.getMoment.mockResolvedValueOnce({ id: 'm-1', commentCount: 2 });
+    api.getFeed.mockClear();
+    api.getChain.mockClear();
+
+    expect(s.adoptSession()).toBe(true);
+    expect(s.chainId).toBe('c-1');
+    expect(s.moments[0]).toEqual(kept);
+    expect(s.restoredScrollY).toBe(180);
+    s.hydrate('c-1');
+    expect(api.getFeed).not.toHaveBeenCalled();
+    expect(api.getChain).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(s.moments[1]).toEqual({ id: 'm-1', commentCount: 2 }));
   });
 });
 

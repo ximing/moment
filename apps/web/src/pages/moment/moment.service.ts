@@ -2,6 +2,7 @@ import { Service } from '@rabjs/react';
 import type { CommentDto, MomentResponse } from '@moment/dto';
 import { client } from '@/api/client';
 import type { MomentChangedPayload, CommentChangedPayload } from '@/lib/events';
+import { rememberViewedMoment } from '@/lib/timeline-list-session';
 
 /** 详情页状态（spec §4.4）：moment + 评论分页 + 草稿。写成功 emit，不直接拉别人的缓存。 */
 export class MomentPageService extends Service {
@@ -42,6 +43,7 @@ export class MomentPageService extends Service {
 
   /** 路由 param 进来；幂等挡 StrictMode 双调用 */
   hydrate(momentId: string): void {
+    rememberViewedMoment(momentId);
     if (this.momentId === momentId) return;
     this.momentId = momentId;
     this.moment = null;

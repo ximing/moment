@@ -71,6 +71,7 @@ describe('媒体数量分支', () => {
     // 窄于内容列时用固有宽，最大不超过列宽（不要 w-full 拉满）
     expect(img.className.split(/\s+/)).toEqual(expect.arrayContaining(['max-w-full', 'h-auto']));
     expect(img.className.split(/\s+/)).not.toContain('w-full');
+    expect(container.firstElementChild?.className ?? '').not.toMatch(/rounded-surface/);
 
     await user.click(screen.getByRole('button'));
     expect(onOpen).toHaveBeenCalledWith(0);

@@ -13,16 +13,18 @@ import { AuthService } from '@/services/auth.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import type { ChainAppearanceColor, ChainIcon, ChainImageFocus, TemplateManifest } from '@moment/dto';
 import { ChainMark } from '@/chain/ChainMark';
+import { Avatar } from '@/ui/Avatar';
 import { cardDisplayUrl, posterDisplayUrl } from '@/lib/media-src';
 import { formatHappenedClock } from '@/lib/time';
 import { resolveMilestoneLabel, summarizePayload } from '@/lib/template';
 import { AudioBar } from '@/media/AudioBar';
+import { MediaBlock } from '@/media/MediaBlock';
 import { IconButton } from '@/ui/button/index';
 import { AlertDialog } from '@/ui/modal/index';
 import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
 import { Lightbox } from './lightbox';
 import { MomentSheetService } from './moment-sheet.service';
-import { firstImage, firstVideo, noteColSpan, noteFaceHeight, noteTiltDeg } from './note-layout';
+import { firstImage, firstVideo, noteColSpan, noteFaceRatio } from './note-layout';
 import { ReactionBar } from './reaction-bar';
 import './moment-sheet.css';
 
@@ -88,15 +90,20 @@ export const MomentSheetContent = observer(function MomentSheetContent({
 
   const moment = momentProp;
   const mine = auth.user?.id === moment.author.id;
+  const isDetail = variant === 'single';
   const images = moment.media.filter((m) => m.mime.startsWith('image/'));
-  const lightboxItems: MomentMedia[] =
-    images.length > 0 ? images : moment.media.filter((m) => m.mime.startsWith('video/'));
+  const visualMedia = moment.media.filter((m) => m.mime.startsWith('image/') || m.mime.startsWith('video/'));
+  const lightboxItems: MomentMedia[] = isDetail
+    ? visualMedia
+    : images.length > 0
+      ? images
+      : moment.media.filter((m) => m.mime.startsWith('video/'));
   const isVoice = moment.type === 'voice';
   const audioMedia = isVoice ? moment.media.find((m) => m.mime.startsWith('audio/')) : undefined;
   const coverImage = firstImage(moment);
   const coverVideo = firstVideo(moment);
-  const faceHeight = noteFaceHeight(moment);
-  const hasFace = (moment.type === 'media' || moment.type === 'video') && faceHeight !== null;
+  const faceRatio = noteFaceRatio(moment);
+  const hasFace = !isDetail && (moment.type === 'media' || moment.type === 'video') && faceRatio !== null;
   const faceSrc = coverImage
     ? cardDisplayUrl(coverImage, shareToken)
     : coverVideo
@@ -104,8 +111,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
       : null;
   const placeName = moment.place?.name ?? null;
   const placeOnFace = Boolean(hasFace && placeName);
-  const placeOnEdge = Boolean(!hasFace && placeName);
-  const voiceThumbSrc = isVoice && coverImage ? cardDisplayUrl(coverImage, shareToken) : null;
+  const placeOnEdge = Boolean((!hasFace || isDetail) && placeName);
 
   let kindSummary: ReactNode = null;
   if (moment.kind !== 'standard' && templateManifest) {
@@ -206,7 +212,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
           {ageLabel ? ` · ${ageLabel}` : ''}
         </span>
         {moment.commentCount > 0 &&
-          (readOnly ? (
+          (readOnly || isDetail ? (
             <span>{moment.commentCount} 回应</span>
           ) : (
             <Link
@@ -248,59 +254,71 @@ export const MomentSheetContent = observer(function MomentSheetContent({
     </>
   );
 
+  const faceInner = (
+    <>
+      {faceSrc && <img src={faceSrc} alt="" />}
+      {moment.type === 'video' && (
+        <span aria-hidden className="absolute bottom-2 left-2 overflow-hidden rounded-full">
+          <Avatar name={moment.author.nickname} src={moment.author.avatarUrl} size={32} />
+        </span>
+      )}
+      {images.length > 1 && (
+        <span className="absolute bottom-2 right-2 text-caption text-surface">{images.length}</span>
+      )}
+    </>
+  );
+
   return (
     <article
-      className={`moment-note${moment.type === 'text' ? ' moment-note-text' : ''}`}
+      className={`moment-note rounded-none${moment.type === 'text' ? ' moment-note-text' : ''}${isDetail ? ' moment-note-detail' : ''}`}
       data-span={noteColSpan(moment)}
-      style={{ ['--tilt' as string]: `${noteTiltDeg(moment.id, false)}deg` }}
     >
-      {hasFace && (
-        <div className={`note-face moment-note-face moment-note-face-${faceHeight}`}>
-          <button
-            type="button"
-            className="h-full w-full border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-focus"
-            aria-label="查看媒体"
-            onClick={() => {
-              service.lightboxIndex = 0;
-            }}
-          >
-            {faceSrc && <img src={faceSrc} alt="" />}
-            {moment.type === 'video' && (
-              <span
-                aria-hidden
-                className="absolute bottom-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-ink text-caption text-surface"
-              >
-                过
-              </span>
-            )}
-            {images.length > 1 && (
-              <span className="absolute bottom-2 right-2 text-caption text-surface">{images.length}</span>
-            )}
-          </button>
-          {placeOnFace ? placeControl(true) : null}
-        </div>
+      {isDetail && visualMedia.length > 0 && (
+        <MediaBlock
+          media={visualMedia}
+          shareToken={shareToken}
+          onOpen={(index) => {
+            service.lightboxIndex = index;
+          }}
+        />
       )}
 
-      {isVoice && (
-        <div className="flex items-center gap-2">
-          {audioMedia && (
-            <div className="min-w-0 flex-1">
-              <AudioBar media={audioMedia} shareToken={shareToken} />
-            </div>
-          )}
-          {voiceThumbSrc && (
+      {hasFace && (
+        <div
+          className="note-face moment-note-face"
+          style={{ ['--face-ratio' as string]: String(faceRatio) }}
+        >
+          {readOnly ? (
             <button
               type="button"
-              className="moment-note-voice-thumb focus-visible:outline-none focus-visible:ring-focus"
+              className="absolute inset-0 border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-focus"
               aria-label="查看媒体"
               onClick={() => {
                 service.lightboxIndex = 0;
               }}
             >
-              <img src={voiceThumbSrc} alt="" />
+              {faceInner}
             </button>
+          ) : (
+            <Link
+              to={`/moments/${moment.id}`}
+              className="absolute inset-0 focus-visible:outline-none focus-visible:ring-focus"
+              aria-label="查看这条时刻"
+            >
+              {faceInner}
+            </Link>
           )}
+          {placeOnFace ? placeControl(true) : null}
         </div>
+      )}
+
+      {isVoice && audioMedia && (
+        <AudioBar
+          media={audioMedia}
+          shareToken={shareToken}
+          variant={isDetail ? 'control' : 'note'}
+          face={<Avatar name={moment.author.nickname} src={moment.author.avatarUrl} size={32} />}
+        />
       )}
 
       {!readOnly && mine && (
@@ -325,14 +343,14 @@ export const MomentSheetContent = observer(function MomentSheetContent({
       )}
 
       <div className="moment-note-writing relative">
-        {!readOnly && (
+        {!readOnly && !isDetail && (
           <Link
             to={`/moments/${moment.id}`}
             className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-focus"
             aria-label="查看这条时刻"
           />
         )}
-        <div className={`relative z-10${readOnly ? '' : ' pointer-events-none'}`}>{writing}</div>
+        <div className={`relative z-10${readOnly || isDetail ? '' : ' pointer-events-none'}`}>{writing}</div>
       </div>
 
       {service.lightboxIndex !== null && (

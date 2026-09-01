@@ -22,14 +22,15 @@
     sans-serif;
   line-height: 1.6;
   color: var(--ink);
-  background-color: var(--bg);
+  background-color: color-mix(in srgb, var(--stroke) 20%, var(--bg));
   -webkit-font-smoothing: antialiased;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg);
+  /* 比 --bg 略深的纸底，便利贴用 --bg 浮起来（对照 album.html，不画分割线） */
+  background: color-mix(in srgb, var(--stroke) 20%, var(--bg));
 }
 
 #root {
