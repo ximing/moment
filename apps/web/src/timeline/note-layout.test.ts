@@ -62,6 +62,15 @@ describe('noteColSpan / noteFaceRatio', () => {
     expect(noteFaceRatio(m)).toBe(3 / 4);
   });
 
+  it('多图 4:3 封面也不跨列，只因张数多不放大', () => {
+    const m = base({
+      type: 'media',
+      media: [img({ id: 'a', width: 4096, height: 3072 }), img({ id: 'b', width: 100, height: 100 })],
+    });
+    expect(noteColSpan(m)).toBe(1);
+    expect(noteFaceRatio(m)).toBe(4 / 3);
+  });
+
   it('手机横拍 4:3（4096×3072）span 1，面子跟 4/3 走', () => {
     const m = base({ type: 'media', media: [img({ id: 'w', width: 4096, height: 3072 })] });
     expect(noteColSpan(m)).toBe(1);

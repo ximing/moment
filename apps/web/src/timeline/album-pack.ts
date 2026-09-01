@@ -13,11 +13,16 @@ export type MasonryPlacement<T> = {
   h: number;
 };
 
-/** 竖图永不跨列；横图/横屏视频最多 span 2，避免一张占满三列。 */
-export function notePreferredSpan(moment: PublicShareMoment, colCount: number, siblingCount: number): number {
+/** 竖图永不跨列；横图/横屏视频最多 span 2。shownRatio 是解码后的画面比，优先于 dto。 */
+export function notePreferredSpan(
+  moment: PublicShareMoment,
+  colCount: number,
+  siblingCount: number,
+  shownRatio?: number,
+): number {
   const n = Math.max(1, colCount);
   if (n === 1) return 1;
-  const r = noteFaceRatio(moment);
+  const r = shownRatio ?? noteFaceRatio(moment);
   if (r !== null && r < 1) return 1;
   if (siblingCount <= 0) return Math.min(2, n);
   if (noteColSpan(moment) === 2) return Math.min(2, n);
@@ -188,13 +193,14 @@ export function packAlbumMonth(
   colCount: number,
   colWidthPx: number,
   measuredHeights?: ReadonlyMap<string, number>,
+  measuredRatios?: ReadonlyMap<string, number>,
 ): { placements: MasonryPlacement<PublicShareMoment>[]; totalHeight: number } {
   const n = Math.max(1, colCount);
   const siblings = Math.max(0, moments.length - 1);
   return packSpanningMasonry(
     moments,
     n,
-    (m) => notePreferredSpan(m, n, siblings),
+    (m) => notePreferredSpan(m, n, siblings, measuredRatios?.get(m.id)),
     (m, span) => measuredHeights?.get(m.id) ?? estimateNoteHeightPx(m, span, colWidthPx),
     ALBUM_GAP_PX,
   );

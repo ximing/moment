@@ -29,8 +29,6 @@ export function noteColSpan(moment: PublicShareMoment): NoteColSpan {
   const r = ratio(coverMedia(moment));
   if (r !== null && r < 1) return 1;
   if (moment.type === 'video') return 2;
-  const images = moment.media.filter((x) => x.mime.startsWith('image/'));
-  if (moment.type === 'media' && images.length >= 2) return 2;
   if (r !== null && r >= 1.4) return 2;
   return 1;
 }

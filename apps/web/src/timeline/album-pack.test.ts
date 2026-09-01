@@ -170,6 +170,18 @@ describe('packAlbumMonth', () => {
     expect(byId.v2!.y).toBeGreaterThan(byId.v1!.y);
   });
 
+  it('实测画面是竖的时，即使 dto 写成横屏视频也只占 1 列', () => {
+    const video = moment({
+      id: 'v',
+      type: 'video',
+      media: [img(1920, 1080, 'video/mp4')],
+    });
+    const land = moment({ id: 'land', type: 'media', media: [img(4096, 3072)] });
+    const ratios = new Map<string, number>([['v', 9 / 16]]);
+    const { placements } = packAlbumMonth([video, land], 4, 200, undefined, ratios);
+    expect(placements.find((p) => p.item.id === 'v')).toMatchObject({ span: 1 });
+  });
+
   it('竖拍无论单张还是独占月份都不跨列，避免一张通天高', () => {
     const port = moment({ id: 'port', type: 'media', media: [img(960, 1280)] });
     expect(packAlbumMonth([port], 4, 200).placements[0]).toMatchObject({ col: 0, span: 1 });

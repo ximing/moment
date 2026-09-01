@@ -10,6 +10,14 @@ import { AlbumSkeleton } from './album-skeleton';
 import { albumColCount, ALBUM_GAP_PX, masonryItemStyle, packAlbumMonth } from './album-pack';
 import { groupMomentsByMonth, monthHeading } from './group-by-month';
 
+function numberMapEq(a: ReadonlyMap<string, number>, b: ReadonlyMap<string, number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of b) {
+    if (a.get(k) !== v) return false;
+  }
+  return true;
+}
+
 export const Timeline = observer(function Timeline({
   moments,
   chainLookById,
@@ -133,6 +141,7 @@ function AlbumMonthGrid({
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [measured, setMeasured] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const [ratios, setRatios] = useState<ReadonlyMap<string, number>>(() => new Map());
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -158,24 +167,46 @@ function AlbumMonthGrid({
   const positioned = colWidth > 0;
 
   const { placements, totalHeight } = useMemo(
-    () => packAlbumMonth(moments, colCount, colWidth, positioned ? measured : undefined),
-    [moments, colCount, colWidth, measured, positioned],
+    () =>
+      packAlbumMonth(
+        moments,
+        colCount,
+        colWidth,
+        positioned ? measured : undefined,
+        positioned ? ratios : undefined,
+      ),
+    [moments, colCount, colWidth, measured, ratios, positioned],
   );
+
+  const packKey = placements.map((p) => `${p.item.id}:${p.span}`).join('|');
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !positioned) return;
-    const next = new Map<string, number>();
-    let changed = false;
-    for (const node of el.querySelectorAll<HTMLElement>('[data-note-id]')) {
-      const id = node.dataset.noteId;
-      if (!id) continue;
-      const h = Math.round(node.offsetHeight);
-      next.set(id, h);
-      if (measured.get(id) !== h) changed = true;
-    }
-    if (changed || next.size !== measured.size) setMeasured(next);
-  });
+    const collect = () => {
+      const nextH = new Map<string, number>();
+      const nextR = new Map<string, number>();
+      for (const node of el.querySelectorAll<HTMLElement>('[data-note-id]')) {
+        const id = node.dataset.noteId;
+        if (!id) continue;
+        nextH.set(id, Math.round(node.offsetHeight));
+        const face = node.querySelector('.moment-note-face');
+        if (face instanceof HTMLElement) {
+          const raw = face.style.getPropertyValue('--face-ratio').trim();
+          const r = Number(raw);
+          if (Number.isFinite(r) && r > 0) nextR.set(id, r);
+        }
+      }
+      setMeasured((prev) => (numberMapEq(prev, nextH) ? prev : nextH));
+      setRatios((prev) => (numberMapEq(prev, nextR) ? prev : nextR));
+    };
+    collect();
+    if (typeof ResizeObserver !== 'function') return;
+    const ro = new ResizeObserver(collect);
+    ro.observe(el);
+    for (const node of el.querySelectorAll('[data-note-id]')) ro.observe(node);
+    return () => ro.disconnect();
+  }, [positioned, packKey]);
 
   return (
     <div ref={ref} className="relative w-full" style={positioned ? { height: totalHeight } : undefined}>
