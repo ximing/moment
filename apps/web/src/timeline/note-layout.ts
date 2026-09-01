@@ -15,29 +15,35 @@ function ratio(media: MomentMedia | undefined): number | null {
   return media.width / media.height;
 }
 
+export function clampFaceRatio(r: number): number {
+  if (r >= 16 / 9) return 16 / 9;
+  if (r <= 9 / 16) return 9 / 16;
+  return r;
+}
+
+function coverMedia(moment: PublicShareMoment): MomentMedia | undefined {
+  return firstImage(moment) ?? firstVideo(moment);
+}
+
 export function noteColSpan(moment: PublicShareMoment): NoteColSpan {
+  const r = ratio(coverMedia(moment));
+  if (r !== null && r < 1) return 1;
   if (moment.type === 'video') return 2;
   const images = moment.media.filter((x) => x.mime.startsWith('image/'));
   if (moment.type === 'media' && images.length >= 2) return 2;
-  const r = ratio(images[0]);
   if (r !== null && r >= 1.4) return 2;
   return 1;
 }
 
 /**
- * 面子宽/高。手机主档 4:3 / 3:4 原样用，避免固定高度把脑袋裁掉。
- * 超宽（≥1.4）跟 16:9 走并 span 2；超竖夹到 3:4。
+ * 面子宽/高：跟封面媒体自身比走，只把极端超宽/超竖夹到 16:9 / 9:16。
+ * 竖屏视频不再强行 16/9，多图不再强行 3/2，避免把竖图裁成横盒子。
  */
 export function noteFaceRatio(moment: PublicShareMoment): number | null {
   if (moment.type === 'voice' || moment.type === 'text') return null;
-  if (moment.type === 'video') return 16 / 9;
-  const images = moment.media.filter((x) => x.mime.startsWith('image/'));
-  if (images.length >= 2) return 3 / 2;
-  const r = ratio(images[0]);
-  if (r === null) return 4 / 3;
-  if (r >= 1.4) return Math.min(r, 16 / 9);
-  if (r <= 3 / 4) return 3 / 4;
-  return r;
+  const r = ratio(coverMedia(moment));
+  if (r === null) return moment.type === 'video' ? 16 / 9 : 4 / 3;
+  return clampFaceRatio(r);
 }
 
 export function noteTiltDeg(id: string, reducedMotion: boolean): -2 | -1 | 0 | 1 | 2 {

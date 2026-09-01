@@ -13,16 +13,14 @@ export type MasonryPlacement<T> = {
   h: number;
 };
 
-/** 视频/宽图在有同伴时尽量占满「留一列给矮卡」；独占月份再放大。 */
+/** 竖图永不跨列；横图/横屏视频最多 span 2，避免一张占满三列。 */
 export function notePreferredSpan(moment: PublicShareMoment, colCount: number, siblingCount: number): number {
   const n = Math.max(1, colCount);
   if (n === 1) return 1;
-  const hero = moment.type === 'video' || noteColSpan(moment) === 2;
-  if (siblingCount <= 0) {
-    if (hero) return Math.min(3, n);
-    return Math.min(2, n);
-  }
-  if (hero) return Math.min(n, Math.max(2, n - 1), 3);
+  const r = noteFaceRatio(moment);
+  if (r !== null && r < 1) return 1;
+  if (siblingCount <= 0) return Math.min(2, n);
+  if (noteColSpan(moment) === 2) return Math.min(2, n);
   return 1;
 }
 

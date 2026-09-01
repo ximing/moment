@@ -152,7 +152,7 @@ function moment(over: Partial<PublicShareMoment>): PublicShareMoment {
 }
 
 describe('packAlbumMonth', () => {
-  it('4 列时视频占 3 列大块，照片和语音叠在剩下的一列', () => {
+  it('4 列时横屏视频最多跨 2 列，不占满三列挤掉邻居', () => {
     const photo = moment({ id: 'photo', type: 'media', media: [img(4096, 3072)] });
     const video = moment({
       id: 'video',
@@ -164,11 +164,18 @@ describe('packAlbumMonth', () => {
     const { placements } = packAlbumMonth([photo, video, v1, v2], 4, 200);
     const byId = Object.fromEntries(placements.map((p) => [p.item.id, p]));
     expect(byId.photo).toMatchObject({ col: 0, span: 1 });
-    expect(byId.video).toMatchObject({ col: 1, span: 3 });
-    expect(byId.v1?.col).toBe(0);
-    expect(byId.v2?.col).toBe(0);
-    expect(byId.v1!.y).toBeGreaterThan(byId.photo!.y);
+    expect(byId.video).toMatchObject({ col: 1, span: 2 });
+    expect(byId.v1?.col).toBe(3);
+    expect(byId.v2?.col).toBe(3);
     expect(byId.v2!.y).toBeGreaterThan(byId.v1!.y);
+  });
+
+  it('竖拍无论单张还是独占月份都不跨列，避免一张通天高', () => {
+    const port = moment({ id: 'port', type: 'media', media: [img(960, 1280)] });
+    expect(packAlbumMonth([port], 4, 200).placements[0]).toMatchObject({ col: 0, span: 1 });
+    const withFriend = moment({ id: 'land', type: 'media', media: [img(4096, 3072)] });
+    const packed = packAlbumMonth([port, withFriend], 4, 200);
+    expect(packed.placements.find((p) => p.item.id === 'port')).toMatchObject({ span: 1 });
   });
 
   it('月份里只有一张 4:3 照片时放大到 span 2，不留三列空', () => {
@@ -177,14 +184,14 @@ describe('packAlbumMonth', () => {
     expect(placements[0]).toMatchObject({ col: 0, span: 2 });
   });
 
-  it('月份里只有一条视频时放大到 span 3', () => {
+  it('月份里只有一条横屏视频时放大到 span 2，不再跨 3 列', () => {
     const video = moment({
       id: 'solo-video',
       type: 'video',
       media: [img(1920, 1080, 'video/mp4')],
     });
     const { placements } = packAlbumMonth([video], 4, 200);
-    expect(placements[0]).toMatchObject({ col: 0, span: 3 });
+    expect(placements[0]).toMatchObject({ col: 0, span: 2 });
   });
 });
 

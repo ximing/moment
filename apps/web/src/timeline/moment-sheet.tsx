@@ -1,4 +1,4 @@
-import { useEffect, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import {
   type MomentMedia,
@@ -24,7 +24,7 @@ import { AlertDialog } from '@/ui/modal/index';
 import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
 import { Lightbox } from './lightbox';
 import { MomentSheetService } from './moment-sheet.service';
-import { firstImage, firstVideo, noteColSpan, noteFaceRatio } from './note-layout';
+import { clampFaceRatio, firstImage, firstVideo, noteColSpan, noteFaceRatio } from './note-layout';
 import { ReactionBar } from './reaction-bar';
 import './moment-sheet.css';
 
@@ -84,9 +84,13 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   const auth = useService(AuthService);
   const composeSession = useService(ComposeSessionService);
 
+  const [shownRatio, setShownRatio] = useState<number | null>(null);
   useEffect(() => {
     service.hydrate(momentProp);
   }, [service, momentProp]);
+  useEffect(() => {
+    setShownRatio(null);
+  }, [momentProp.id]);
 
   const moment = momentProp;
   const mine = auth.user?.id === moment.author.id;
@@ -102,7 +106,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   const audioMedia = isVoice ? moment.media.find((m) => m.mime.startsWith('audio/')) : undefined;
   const coverImage = firstImage(moment);
   const coverVideo = firstVideo(moment);
-  const faceRatio = noteFaceRatio(moment);
+  const faceRatio = shownRatio ?? noteFaceRatio(moment);
   const hasFace = !isDetail && (moment.type === 'media' || moment.type === 'video') && faceRatio !== null;
   const faceSrc = coverImage
     ? cardDisplayUrl(coverImage, shareToken)
@@ -256,7 +260,18 @@ export const MomentSheetContent = observer(function MomentSheetContent({
 
   const faceInner = (
     <>
-      {faceSrc && <img src={faceSrc} alt="" />}
+      {faceSrc && (
+        <img
+          src={faceSrc}
+          alt=""
+          onLoad={(e) => {
+            const im = e.currentTarget;
+            if (im.naturalWidth > 0 && im.naturalHeight > 0) {
+              setShownRatio(clampFaceRatio(im.naturalWidth / im.naturalHeight));
+            }
+          }}
+        />
+      )}
       {moment.type === 'video' && (
         <span aria-hidden className="absolute bottom-2 left-2 overflow-hidden rounded-full">
           <Avatar name={moment.author.nickname} src={moment.author.avatarUrl} size={32} />

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MomentMedia, PublicShareMoment } from '@moment/dto';
-import { noteColSpan, noteFaceRatio, noteTiltDeg } from './note-layout';
+import { clampFaceRatio, noteColSpan, noteFaceRatio, noteTiltDeg } from './note-layout';
 
 function img(partial: Partial<MomentMedia> & Pick<MomentMedia, 'id' | 'width' | 'height'>): MomentMedia {
   return {
@@ -41,19 +41,25 @@ function base(over: Partial<PublicShareMoment>): PublicShareMoment {
 }
 
 describe('noteColSpan / noteFaceRatio', () => {
-  it('video → span 2，面子 16/9', () => {
+  it('横屏视频 → span 2，面子跟 16/9 走', () => {
     const m = base({ type: 'video', media: [img({ id: 'v', width: 1920, height: 1080, mime: 'video/mp4' })] });
     expect(noteColSpan(m)).toBe(2);
     expect(noteFaceRatio(m)).toBe(16 / 9);
   });
 
-  it('2–9 张图 → span 2，面子 3/2', () => {
+  it('竖屏视频 → span 1，面子跟 9/16 走，不裁成 16/9', () => {
+    const m = base({ type: 'video', media: [img({ id: 'v', width: 720, height: 1280, mime: 'video/mp4' })] });
+    expect(noteColSpan(m)).toBe(1);
+    expect(noteFaceRatio(m)).toBe(9 / 16);
+  });
+
+  it('多图跟封面自身比，竖封面不跨列', () => {
     const m = base({
       type: 'media',
-      media: [img({ id: 'a', width: 100, height: 100 }), img({ id: 'b', width: 100, height: 100 })],
+      media: [img({ id: 'a', width: 960, height: 1280 }), img({ id: 'b', width: 100, height: 100 })],
     });
-    expect(noteColSpan(m)).toBe(2);
-    expect(noteFaceRatio(m)).toBe(3 / 2);
+    expect(noteColSpan(m)).toBe(1);
+    expect(noteFaceRatio(m)).toBe(3 / 4);
   });
 
   it('手机横拍 4:3（4096×3072）span 1，面子跟 4/3 走', () => {
@@ -66,6 +72,12 @@ describe('noteColSpan / noteFaceRatio', () => {
     const m = base({ type: 'media', media: [img({ id: 'p', width: 3072, height: 4096 })] });
     expect(noteColSpan(m)).toBe(1);
     expect(noteFaceRatio(m)).toBe(3 / 4);
+  });
+
+  it('9:16 竖拍不夹成 3:4，整张都露出来', () => {
+    const m = base({ type: 'media', media: [img({ id: 'p', width: 720, height: 1280 })] });
+    expect(noteColSpan(m)).toBe(1);
+    expect(noteFaceRatio(m)).toBe(9 / 16);
   });
 
   it('16:9 横图 span 2，面子跟 16/9 走', () => {
@@ -84,6 +96,12 @@ describe('noteColSpan / noteFaceRatio', () => {
     expect(noteColSpan(base({ type: 'voice' }))).toBe(1);
     expect(noteFaceRatio(base({ type: 'voice' }))).toBeNull();
     expect(noteFaceRatio(base({ type: 'text' }))).toBeNull();
+  });
+
+  it('clampFaceRatio 只夹极端超宽超竖', () => {
+    expect(clampFaceRatio(2)).toBe(16 / 9);
+    expect(clampFaceRatio(0.4)).toBe(9 / 16);
+    expect(clampFaceRatio(1)).toBe(1);
   });
 
   it('缺宽高的单图 → span 1，按手机横拍 4/3', () => {

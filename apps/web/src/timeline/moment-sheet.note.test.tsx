@@ -231,6 +231,17 @@ describe('moment-sheet 便利贴纸面', () => {
     expect(Number(face.style.getPropertyValue('--face-ratio'))).toBeCloseTo(4 / 3, 5);
   });
 
+  it('手机 3:4 竖拍面子用自身宽高比，不裁进 4:3 横盒', () => {
+    renderSheet(
+      moment({
+        type: 'media',
+        media: [{ ...img(), width: 3072, height: 4096 }],
+      }),
+    );
+    const face = screen.getByRole('article').querySelector('.moment-note-face') as HTMLElement;
+    expect(Number(face.style.getPropertyValue('--face-ratio'))).toBeCloseTo(3 / 4, 5);
+  });
+
   it('相册语音卡用作者头像播放，不是写死「过」，也不是进度条', () => {
     renderSheet(
       moment({
