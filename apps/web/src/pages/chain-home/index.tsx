@@ -13,12 +13,13 @@ import { babyAgeLabel } from '@/lib/template';
 import { canCompose, isOwner } from '@/lib/roles';
 import { humanError } from '@/lib/errors';
 import { formatSearchParsed } from '@/lib/search-summary';
+import { AlbumSkeleton } from '@/timeline/album-skeleton';
 import { FilterChips } from '@/timeline/filter-chips';
 import { TimelineSearchField } from '@/timeline/search-field';
 import { Timeline } from '@/timeline/timeline';
 import { TimelineRail } from '@/timeline/timeline-rail';
 import { IconButton } from '@/ui/button/index';
-import { Banner, EmptyState, TimelineSkeleton } from '@/ui/feedback/index';
+import { Banner, EmptyState } from '@/ui/feedback/index';
 import { Tooltip } from '@/ui/tooltip/index';
 import { ChainAudience } from './chain-audience';
 import { ChainHomeService } from './chain-home.service';
@@ -44,7 +45,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
   // 三态判定（防 hydrate effect 首帧闪错误态）：骨架 = 无 chain 且（加载中或无错）
   const chainErr = service.$model.loadChain.error;
   if (!service.chain && (service.$model.loadChain.loading || !chainErr)) {
-    return <TimelineSkeleton />;
+    return <AlbumSkeleton />;
   }
   if (!service.chain) {
     return (
@@ -78,7 +79,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
             onError={() => setFailedCoverId(chain.coverMediaId)}
           />
         ))}
-      <div className="mx-auto w-full max-w-content px-5 pt-6 min-[900px]:px-8">
+      <div className="w-full px-5 pt-6 min-[900px]:px-8">
       {service.coverError ? (
         <div className="mb-4">
           <Banner tone="error">{service.coverError}</Banner>
@@ -188,6 +189,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           hasNextPage={service.hasMore}
           isFetchingNextPage={service.$model.loadMore.loading}
           fetchNextPage={() => void service.loadMore()}
+          order={service.filter.order}
           templateManifest={chain.templateManifest}
           ageLabelOf={(m) => {
             const birthdate = chain.payload?.birthdate;
@@ -195,6 +197,12 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           }}
           onPersonFilter={(p) => service.togglePersonFilter(p)}
           onPlaceFilter={(place) => service.togglePlaceFilter(place)}
+          onTagFilter={(tag) =>
+            service.setFilter({
+              ...service.filter,
+              tagId: service.filter.tagId === tag.id ? undefined : tag.id,
+            })
+          }
           empty={
             service.searching ? (
               <EmptyState

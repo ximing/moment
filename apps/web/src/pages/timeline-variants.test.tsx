@@ -279,7 +279,6 @@ beforeEach(() => {
   resolve(ComposeSessionService).lastCreatedId = null;
   const sheet = resolve(MomentSheetService);
   sheet.lightboxIndex = null;
-  sheet.showComments = false;
   sheet.confirmDel = false;
 });
 
@@ -403,11 +402,11 @@ describe('公开分享相册', () => {
     const { container } = renderShare();
 
     const imgs = [...container.querySelectorAll('img')].map((el) => el.getAttribute('src'));
-    // 头像与封面都走 ?st= 通道（token 带空格，必须 encode）
+    // 头像与封面都走 ?st= 通道（token 带空格，必须 encode）；面子图同样带 st=
     expect(imgs).toContain('/api/media/m-avatar?st=tok%20en');
     expect(imgs).toContain('/api/media/m-cover?st=tok%20en');
-    // 封面只出现在页头：时刻媒体经 MediaBlock 桩渲染按钮，不产生额外 <img>
-    expect(imgs).toHaveLength(2);
+    expect(imgs).toContain('/api/media/media-1?st=tok%20en');
+    expect(imgs).toHaveLength(3);
 
     const cover = container.querySelector('img[src="/api/media/m-cover?st=tok%20en"]');
     expect(cover).toHaveStyle({ objectPosition: '25% 75%' });
@@ -434,9 +433,8 @@ describe('公开分享相册', () => {
     expect(screen.queryByRole('button', { name: '加个表情' })).toBeNull();
     expect(screen.queryByRole('button', { name: '更多操作' })).toBeNull();
 
-    const handoff = mediaBlockCalls.list.at(-1);
-    expect(handoff?.shareToken).toBe('tok en');
-    expect(handoff?.media).toHaveLength(2);
+    const face = screen.getByRole('button', { name: '查看媒体' }).querySelector('img');
+    expect(face).toHaveAttribute('src', '/api/media/media-1?st=tok%20en');
   });
 
   it('点媒体把被点 index 交给灯箱；灯箱按该 index 用 ?st= URL 渲染', async () => {
@@ -450,8 +448,8 @@ describe('公开分享相册', () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByTestId('media-open-1'));
-    expect(resolve(MomentSheetService).lightboxIndex).toBe(1);
+    await user.click(screen.getByRole('button', { name: '查看媒体' }));
+    expect(resolve(MomentSheetService).lightboxIndex).toBe(0);
   });
 
   it('lightboxIndex 已是被点序号时，Lightbox 按该序号渲染分享 URL 的媒体', () => {

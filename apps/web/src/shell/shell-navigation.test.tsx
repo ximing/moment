@@ -196,6 +196,14 @@ describe('Shell 认证导航', () => {
     expect(settingsMain.parentElement!.className).toContain('pr-[var(--rail)]');
   });
 
+  it('大家的日子 main 与链首页一样不加 max-w-content，仍预留 rail 右垫', () => {
+    const feed = renderShell('/');
+    const feedMain = feed.container.querySelector('main')!;
+    expect(feedMain.className.split(/\s+/)).not.toContain('max-w-content');
+    expect(feedMain.parentElement!.className).toContain('pr-[var(--rail)]');
+    feed.unmount();
+  });
+
   it('链导航右键提供「链设置」命令并跳转到链设置页', async () => {
     const user = userEvent.setup();
     renderShell('/');

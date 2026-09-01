@@ -32,10 +32,8 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
   const loadErr = service.$model.loadFirst.error;
   if (!service.chain && (service.$model.loadFirst.loading || !loadErr)) {
     return (
-      <div className="min-h-screen bg-bg px-6 py-16">
-        <div className="mx-auto max-w-content">
-          <TimelineSkeleton />
-        </div>
+      <div className="min-h-screen w-full bg-bg px-6 py-8">
+        <TimelineSkeleton />
       </div>
     );
   }
@@ -73,7 +71,7 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
         />
       )}
       <header className={showCover ? '' : 'border-b border-line'}>
-        <div className={`mx-auto max-w-content px-6 ${showCover ? 'pb-8' : 'py-8'}`}>
+        <div className={`w-full px-6 ${showCover ? 'pb-8' : 'py-8'}`}>
           {showCover && chain ? (
             <div className="mb-3">
               <ChainMark
@@ -104,7 +102,7 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
           <p className="mt-2 text-caption text-muted">只读分享 · 时刻</p>
         </div>
       </header>
-      <main className="mx-auto max-w-content px-6 py-8">
+      <main className="w-full px-6 py-8">
         {service.recap && (
           <section className="mb-8">
             <h2 className="mb-4 text-body font-semibold text-ink">

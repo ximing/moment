@@ -22,9 +22,12 @@ export const Shell = observer(function Shell() {
   const composeSession = useService(ComposeSessionService);
   const navigate = useNavigate();
   const location = useLocation();
-  const chainId = useMatch('/chains/:chainId')?.params.chainId;
-  // 链首页封面要铺满侧栏与时间索引之间的主栏（Notion 通栏）；其它页仍走内容列。
-  const chainHome = Boolean(chainId);
+  const feedMatch = useMatch({ path: '/', end: true });
+  const chainHomeMatch = useMatch({ path: '/chains/:chainId', end: true });
+  const chainId = chainHomeMatch?.params.chainId;
+  // 链首页封面要铺满侧栏与时间索引之间的主栏（Notion 通栏）；feed 与链首页主列加宽，其它页仍走内容列。
+  const chainHome = Boolean(chainHomeMatch);
+  const wideMain = Boolean(feedMatch) || chainHome;
   const [creating, setCreating] = useState(false);
 
   const chainList = useService(ChainListService);
@@ -100,7 +103,9 @@ export const Shell = observer(function Shell() {
           className={
             chainHome
               ? 'w-full pb-32'
-              : 'mx-auto w-full max-w-content px-5 pb-32 pt-6 min-[900px]:px-8'
+              : wideMain
+                ? 'w-full px-5 pb-32 pt-6 min-[900px]:px-8'
+                : 'mx-auto w-full max-w-content px-5 pb-32 pt-6 min-[900px]:px-8'
           }
         >
           <Outlet />

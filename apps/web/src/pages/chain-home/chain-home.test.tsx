@@ -20,8 +20,8 @@ import { ChainHomeService } from './chain-home.service';
 // - 纯文字时刻（media: []）不出现媒体容器；Tag 与正文是同一 text-flow 元素；
 // - 单图时刻把声明了宽高（64×48）的媒体原样交给 MediaBlock，点开进入灯箱 index 0；
 // - 单链变体的时刻元信息里没有链来源链接；
-// - 回应入口文案为「N 条回应」（含 0），自己的时刻 kebab 打开 ResponsiveMenu，
-//   表情触发器打开 ReactionPopover；
+// - commentCount===0 不显示「0 回应」；有回应时纸边是「N 回应」详情链接；
+//   自己的时刻 kebab 打开 ResponsiveMenu；网格无表情入口；
 // - 时间索引按年分组：历史年份折叠为一行，点击只展开该年；
 // - 有草稿的 ComposePanel 关闭（取消 / Escape）先弹 AlertDialog「继续记录 / 放弃记录」。
 //
@@ -281,7 +281,6 @@ beforeEach(() => {
   resolve(ComposeSessionService).lastCreatedId = null;
   const sheet = resolve(MomentSheetService);
   sheet.lightboxIndex = null;
-  sheet.showComments = false;
   sheet.confirmDel = false;
 });
 
@@ -305,20 +304,22 @@ describe('链主页时间线', () => {
     renderChainHome();
 
     for (const article of screen.getAllByRole('article')) {
-      expect(within(article).queryByRole('link')).toBeNull();
+      expect(within(article).queryByRole('link', { name: /周末小家/ })).toBeNull();
       expect(within(article).queryByText('周末小家')).toBeNull();
     }
     // 链名只出现在页眉
     expect(screen.getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
   });
 
-  it('回应入口文案为「N 条回应」，0 条也显示', () => {
+  it('commentCount 为 0 不显示回应，有回应时纸边是时刻详情链接', () => {
     seedChainHome([TEXT_MOMENT, IMAGE_MOMENT]);
     renderChainHome();
 
     const [textArticle, imageArticle] = screen.getAllByRole('article');
-    expect(within(textArticle!).getByRole('button', { name: '1 条回应' })).toBeInTheDocument();
-    expect(within(imageArticle!).getByRole('button', { name: '0 条回应' })).toBeInTheDocument();
+    const comments = within(textArticle!).getByRole('link', { name: '1 回应' });
+    expect(comments).toHaveAttribute('href', expect.stringContaining('/moments/'));
+    expect(within(imageArticle!).queryByText('0 回应')).toBeNull();
+    expect(within(imageArticle!).queryByRole('link', { name: /回应/ })).toBeNull();
   });
 
   it('自己时刻的 kebab 打开 ResponsiveMenu（编辑 / 删除），他人时刻没有 kebab', async () => {
@@ -334,13 +335,11 @@ describe('链主页时间线', () => {
     expect(screen.getByRole('menuitem', { name: '删除' })).toBeInTheDocument();
   });
 
-  it('表情触发器打开 ReactionPopover', async () => {
-    const user = userEvent.setup();
+  it('网格卡片没有表情入口', () => {
     seedChainHome([TEXT_MOMENT]);
     renderChainHome();
 
-    await user.click(screen.getByRole('button', { name: '加个表情' }));
-    expect(await screen.findByRole('grid', { name: '选择表情' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '加个表情' })).toBeNull();
   });
 
   it('时间索引按年分组：历史年份折叠为一行，点击只展开该年', async () => {
@@ -374,12 +373,13 @@ describe('链首页封面', () => {
     expect(img).toHaveAttribute('src', 'blob:mock-cover-1');
     expect(img).toHaveStyle({ objectPosition: '25% 75%' });
     expect(img?.parentElement?.className.split(/\s+/)).not.toContain('rounded-surface-lg');
-    // 封面在内容列之外（通栏）；标题仍在 max-w-content 里
+    // 封面在内容列之外（通栏）；标题仍在，网格祖先不再要求 max-w-content
     const cover = img!.closest('[aria-hidden]');
-    const column = screen.getByRole('heading', { level: 1, name: '周末小家' }).closest('.max-w-content');
-    expect(column).not.toBeNull();
-    expect(column!.contains(cover)).toBe(false);
-    expect(within(column as HTMLElement).getByRole('heading', { level: 1, name: '周末小家' })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { level: 1, name: '周末小家' });
+    expect(heading.closest('.max-w-content')).toBeNull();
+    expect(heading).toBeInTheDocument();
+    expect(cover).not.toBeNull();
+    expect(heading.closest('.px-5')!.contains(cover)).toBe(false);
     const rail = container.querySelector('aside.w-rail');
     expect(rail?.className.split(/\s+/)).toContain('top-[30vh]');
     expect(rail?.className.split(/\s+/)).not.toContain('inset-y-0');
@@ -487,11 +487,10 @@ describe('单图时刻媒体交接', () => {
       </MemoryRouter>,
     );
 
-    const handoff = mediaBlockCalls.list.at(-1);
-    expect(handoff?.media).toHaveLength(1);
-    expect(handoff?.media[0]).toMatchObject({ width: 64, height: 48 });
+    const face = screen.getByRole('button', { name: '查看媒体' });
+    expect(face.querySelector('img')).toHaveAttribute('src', '/api/media/media-1');
 
-    await user.click(screen.getByTestId('media-open-0'));
+    await user.click(face);
     expect(resolve(MomentSheetService).lightboxIndex).toBe(0);
   });
 });

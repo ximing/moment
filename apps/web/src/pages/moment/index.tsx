@@ -70,6 +70,7 @@ export const MomentPageContent = observer(function MomentPageContent() {
         回链
       </Link>
       <Timeline
+        variant="single"
         moments={[moment]}
         isPending={false}
         isError={false}

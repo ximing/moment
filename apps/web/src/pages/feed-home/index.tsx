@@ -106,8 +106,15 @@ export const FeedHomeContent = observer(function FeedHomeContent() {
         hasNextPage={service.hasMore}
         isFetchingNextPage={service.$model.loadMore.loading}
         fetchNextPage={() => void service.loadMore()}
+        order={service.filter.order}
         onPersonFilter={(p) => service.togglePersonFilter(p)}
         onPlaceFilter={(place) => service.togglePlaceFilter(place)}
+        onTagFilter={(tag) =>
+          service.setFilter({
+            ...service.filter,
+            tagId: service.filter.tagId === tag.id ? undefined : tag.id,
+          })
+        }
         empty={
           noChains ? (
             <EmptyState
