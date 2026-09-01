@@ -163,6 +163,7 @@ describe('那年今日入口条', () => {
     expect(screen.getByRole('heading', { name: '2020 年 · 1 条' })).toBeInTheDocument();
     expect(screen.getAllByRole('article')).toHaveLength(3);
     expect(screen.getByText('初雪')).toBeInTheDocument();
+    expect(screen.getAllByRole('article')[0]?.closest('.max-w-content')).not.toBeNull();
   });
 
   it('点击入口条交给 Service.toggle（打开并重拉）', async () => {

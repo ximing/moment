@@ -342,6 +342,17 @@ describe('链主页时间线', () => {
     expect(screen.queryByRole('button', { name: '加个表情' })).toBeNull();
   });
 
+  it('首屏 AlbumSkeleton 与内容列同左右垫', () => {
+    const service = resolve(ChainHomeService);
+    service.chainId = 'chain-1';
+    service.chain = null;
+    const { container } = renderChainHome();
+    const note = container.querySelector('[data-skeleton-note]');
+    expect(note).not.toBeNull();
+    const padded = note!.closest('.px-5');
+    expect(padded?.className.split(/\s+/)).toEqual(expect.arrayContaining(['px-5', 'pt-6', 'min-[900px]:px-8']));
+  });
+
   it('时间索引按年分组：历史年份折叠为一行，点击只展开该年', async () => {
     const user = userEvent.setup();
     seedChainHome([TEXT_MOMENT]);

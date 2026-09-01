@@ -307,6 +307,13 @@ describe('大家的日子 feed', () => {
     expect(resolve(ComposeSessionService).request).not.toBeNull();
   });
 
+  it('网格没有表情入口', async () => {
+    await seedFeed([TEXT_MOMENT]);
+    renderFeed();
+
+    expect(screen.queryByRole('button', { name: '加个表情' })).toBeNull();
+  });
+
   it('feed 项元信息带「● 链名」来源链接，指向 /chains/:chainId', async () => {
     await seedFeed([TEXT_MOMENT]);
     renderFeed();
@@ -355,6 +362,13 @@ describe('时刻详情', () => {
       </MemoryRouter>,
     );
   }
+
+  it('详情页有表情入口', () => {
+    seedMomentDetail([OWN_COMMENT, OTHER_COMMENT]);
+    renderDetail();
+
+    expect(screen.getByRole('button', { name: '加个表情' })).toBeInTheDocument();
+  });
 
   it('渲染回复 Field，提交走既有 createComment', async () => {
     seedMomentDetail([OWN_COMMENT, OTHER_COMMENT]);

@@ -81,9 +81,18 @@ describe('Timeline 刷新时保留已有列表', () => {
 });
 
 describe('Timeline 按月相册网格', () => {
-  it('按月渲染 region，不出现「今天」日期结和日子线', () => {
-    renderTimeline({ moments: [MOMENT] });
-    expect(screen.getByRole('region', { name: '2026 · 8 月' })).toBeInTheDocument();
+  it('按月渲染 region，月与月之间 mb-8，不出现「今天」日期结和日子线', () => {
+    const earlier: PublicShareMoment = {
+      ...MOMENT,
+      id: 'm-2',
+      happenedAt: '2026-07-02T02:00:00.000Z',
+      createdAt: '2026-07-02T02:00:00.000Z',
+    };
+    renderTimeline({ moments: [MOMENT, earlier] });
+    const august = screen.getByRole('region', { name: '2026 · 8 月' });
+    const july = screen.getByRole('region', { name: '2026 · 7 月' });
+    expect(august).toHaveClass('mb-8');
+    expect(july).toHaveClass('mb-8');
     expect(screen.queryByRole('heading', { name: '今天' })).toBeNull();
     expect(document.querySelector('.border-dashed')).toBeNull();
   });

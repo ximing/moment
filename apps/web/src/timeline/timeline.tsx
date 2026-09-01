@@ -69,6 +69,7 @@ export const Timeline = observer(function Timeline({
           chainAvatarFocus={chainLookById?.get(m.chainId)?.avatarFocus}
           shareToken={shareToken}
           readOnly={readOnly}
+          variant={variant}
           templateManifest={templateManifest}
           ageLabel={ageLabelOf?.(m)}
           onPersonFilter={readOnly ? undefined : onPersonFilter}
@@ -111,7 +112,7 @@ export const Timeline = observer(function Timeline({
   return (
     <>
       {groupMomentsByMonth(moments, order).map((g) => (
-        <section key={g.month} aria-label={monthHeading(g.month)}>
+        <section key={g.month} aria-label={monthHeading(g.month)} className="mb-8">
           <h2 className="mb-3 text-caption tracking-wide text-muted">{monthHeading(g.month)}</h2>
           <div className="grid grid-cols-2 gap-3 [grid-auto-flow:dense] min-[900px]:grid-cols-3 min-[1400px]:grid-cols-4">
             {g.moments.map(renderSheet)}

@@ -8,7 +8,8 @@ import { PublicChainCover } from '@/chain/ChainCover';
 import { AggregateView } from '@/chain/aggregate-views';
 import { MapView } from '@/chain/map-view';
 import { MarkdownText } from '@/pages/recap/markdown-text';
-import { EmptyState, TimelineSkeleton } from '@/ui/feedback/index';
+import { AlbumSkeleton } from '@/timeline/album-skeleton';
+import { EmptyState } from '@/ui/feedback/index';
 import { isHttpUrl } from '@/lib/media-src';
 import { ShareAlbumService } from './share-album.service';
 
@@ -33,7 +34,7 @@ export const ShareAlbumPageContent = observer(function ShareAlbumPageContent() {
   if (!service.chain && (service.$model.loadFirst.loading || !loadErr)) {
     return (
       <div className="min-h-screen w-full bg-bg px-6 py-8">
-        <TimelineSkeleton />
+        <AlbumSkeleton />
       </div>
     );
   }

@@ -10,16 +10,8 @@
   text-align: left;
 }
 .moment-note:hover,
-.moment-note:focus-visible,
 .moment-note:focus-within {
   transform: rotate(0deg) translateY(-4px);
-  outline: none;
-}
-.moment-note:focus-visible,
-.moment-note:focus-within {
-  box-shadow:
-    0 8px 22px color-mix(in srgb, var(--ink) 12%, transparent),
-    0 0 0 var(--focus-ring-w) var(--focus);
 }
 .moment-note-face {
   position: relative;
@@ -51,9 +43,9 @@
   background: none;
   font: inherit;
 }
-.moment-note-place:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 var(--focus-ring-w) var(--focus);
+.moment-note-place-after-play {
+  left: 48px;
+  max-width: calc(100% - 56px);
 }
 .moment-note-writing { padding: 8px 4px 2px; }
 .moment-note-body {
@@ -61,6 +53,7 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+  white-space: pre-wrap;
 }
 .moment-note-text .moment-note-body { -webkit-line-clamp: 5; }
 .moment-note-voice-thumb {
@@ -83,7 +76,6 @@
 @media (prefers-reduced-motion: reduce) {
   .moment-note,
   .moment-note:hover,
-  .moment-note:focus-visible,
   .moment-note:focus-within {
     transform: none;
     transition: none;

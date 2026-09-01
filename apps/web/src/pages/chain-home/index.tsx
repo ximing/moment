@@ -45,7 +45,11 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
   // 三态判定（防 hydrate effect 首帧闪错误态）：骨架 = 无 chain 且（加载中或无错）
   const chainErr = service.$model.loadChain.error;
   if (!service.chain && (service.$model.loadChain.loading || !chainErr)) {
-    return <AlbumSkeleton />;
+    return (
+      <div className="w-full px-5 pt-6 min-[900px]:px-8">
+        <AlbumSkeleton />
+      </div>
+    );
   }
   if (!service.chain) {
     return (

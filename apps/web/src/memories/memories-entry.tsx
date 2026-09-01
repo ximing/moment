@@ -24,7 +24,7 @@ export const MemoriesEntryContent = observer(function MemoriesEntryContent({
   if (!summary) return null;
 
   return (
-    <section aria-label="往年今日" className="mb-6">
+    <section aria-label="往年今日" className="mb-6 max-w-content">
       <button
         type="button"
         aria-expanded={service.open}

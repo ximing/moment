@@ -23,6 +23,7 @@ import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
 import { Lightbox } from './lightbox';
 import { MomentSheetService } from './moment-sheet.service';
 import { firstImage, firstVideo, noteColSpan, noteFaceHeight, noteTiltDeg } from './note-layout';
+import { ReactionBar } from './reaction-bar';
 import './moment-sheet.css';
 
 /**
@@ -35,7 +36,7 @@ export type MomentSheetMoment = PublicShareMoment & {
 };
 
 // 便利贴纸面（spec sticky-note-album §3）：面子媒体 + 纸边书写。网格不渲染
-// ReactionBar、不展开评论；阴影与面子高度只落在 moment-sheet.css。
+// ReactionBar、不展开评论；详情 variant=single 挂表情条。阴影与面子高度只落在 moment-sheet.css。
 
 function stop(e: MouseEvent) {
   e.preventDefault();
@@ -54,6 +55,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   readOnly,
   templateManifest,
   ageLabel,
+  variant = 'album',
   onPersonFilter,
   onPlaceFilter,
   onTagFilter,
@@ -70,6 +72,8 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   templateManifest?: TemplateManifest | null;
   /** baby 年龄标注（「1 岁 2 个月」）；由调用方按链 payload.birthdate 计算 */
   ageLabel?: string;
+  /** 网格不渲染表情；详情页 variant=single 与现网一致挂 ReactionBar */
+  variant?: 'album' | 'single';
   onPersonFilter?: (person: { id: string; name: string }) => void;
   onPlaceFilter?: (place: string) => void;
   onTagFilter?: (tag: { id: string; name: string }) => void;
@@ -119,8 +123,9 @@ export const MomentSheetContent = observer(function MomentSheetContent({
 
   const placeControl = (overlay: boolean) => {
     if (!placeName) return null;
+    const overlayClass = `moment-note-place${overlay && moment.type === 'video' ? ' moment-note-place-after-play' : ''}`;
     const className = overlay
-      ? 'moment-note-place pointer-events-auto'
+      ? `${overlayClass} pointer-events-auto focus-visible:outline-none focus-visible:ring-focus`
       : 'pointer-events-auto border-0 bg-transparent p-0 text-left text-meta text-muted focus-visible:outline-none focus-visible:ring-focus';
     const label = `📍 ${placeName}`;
     if (onPlaceFilter) {
@@ -138,19 +143,19 @@ export const MomentSheetContent = observer(function MomentSheetContent({
         </button>
       );
     }
-    return overlay ? <span className="moment-note-place">{label}</span> : <span>{label}</span>;
+    return overlay ? <span className={overlayClass}>{label}</span> : <span>{label}</span>;
   };
 
   const writing = (
     <>
       {hasBody && (
-        <p className="moment-note-body text-meta text-ink">
+        <p className="moment-note-body whitespace-pre-wrap text-meta text-ink">
           {moment.tags.map((t) =>
             onTagFilter ? (
               <button
                 key={t.id}
                 type="button"
-                className="pointer-events-auto border-0 bg-transparent p-0 text-tag focus-visible:outline-none focus-visible:ring-focus"
+                className="mr-2 pointer-events-auto border-0 bg-transparent p-0 text-tag focus-visible:outline-none focus-visible:ring-focus"
                 onClick={(e) => {
                   stop(e);
                   onTagFilter({ id: t.id, name: t.name });
@@ -159,7 +164,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
                 #{t.name}
               </button>
             ) : (
-              <span key={t.id} className="text-tag">
+              <span key={t.id} className="mr-2 text-tag">
                 #{t.name}
               </span>
             ),
@@ -206,7 +211,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
           ) : (
             <Link
               to={`/moments/${moment.id}`}
-              className="pointer-events-auto relative z-10 text-muted"
+              className="pointer-events-auto relative z-10 text-muted focus-visible:outline-none focus-visible:ring-focus"
               onClick={(e) => {
                 e.stopPropagation();
               }}
@@ -217,7 +222,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
         {chainName && !shareToken && (
           <Link
             to={`/chains/${moment.chainId}`}
-            className="pointer-events-auto relative z-10 inline-flex items-center gap-1 text-muted hover:text-ink"
+            className="pointer-events-auto relative z-10 inline-flex items-center gap-1 text-muted hover:text-ink focus-visible:outline-none focus-visible:ring-focus"
             onClick={(e) => {
               e.stopPropagation();
             }}
@@ -235,6 +240,11 @@ export const MomentSheetContent = observer(function MomentSheetContent({
           </Link>
         )}
       </p>
+      {variant === 'single' && !readOnly && (
+        <div className="pointer-events-auto mt-2">
+          <ReactionBar moment={moment} onReact={(emoji) => void service.react(emoji)} />
+        </div>
+      )}
     </>
   );
 

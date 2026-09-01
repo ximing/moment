@@ -75,21 +75,35 @@ function moment(over: Partial<MomentSheetMoment> = {}): MomentSheetMoment {
 
 function renderSheet(
   m: MomentSheetMoment,
-  props: { readOnly?: boolean; onPlaceFilter?: (place: string) => void } = {},
+  props: {
+    readOnly?: boolean;
+    variant?: 'album' | 'single';
+    onPlaceFilter?: (place: string) => void;
+  } = {},
 ) {
   return render(
     <MemoryRouter>
       <RSRoot>
-        <MomentSheetContent moment={m} readOnly={props.readOnly} onPlaceFilter={props.onPlaceFilter} />
+        <MomentSheetContent
+          moment={m}
+          readOnly={props.readOnly}
+          variant={props.variant}
+          onPlaceFilter={props.onPlaceFilter}
+        />
       </RSRoot>
     </MemoryRouter>,
   );
 }
 
 describe('moment-sheet 便利贴纸面', () => {
-  it('Tag 与正文同一段 text-meta', () => {
+  it('Tag 与正文同一段 text-meta，标签 8px 间距不紧贴', () => {
     renderSheet(moment({ tags: [{ id: 't1', name: '早餐' }], content: '粥洒了一圈' }));
-    expect(screen.getByText('#早餐').closest('p')).toHaveTextContent('#早餐粥洒了一圈');
+    const tag = screen.getByText('#早餐');
+    const body = tag.closest('p');
+    expect(body).toHaveClass('moment-note-body');
+    expect(body).toHaveTextContent('#早餐');
+    expect(body).toHaveTextContent('粥洒了一圈');
+    expect(tag).toHaveClass('mr-2');
   });
 
   it('超过 3 个人物截成三人加省略号', () => {
@@ -111,6 +125,7 @@ describe('moment-sheet 便利贴纸面', () => {
     );
     expect(screen.getByText('📍 厨房').closest('.note-face')).not.toBeNull();
     expect(screen.getAllByText('📍 厨房')).toHaveLength(1);
+    expect(screen.getByText('📍 厨房')).not.toHaveClass('moment-note-place-after-play');
   });
 
   it('有图 + onPlaceFilter：地点叠面子且不嵌在查看媒体按钮内，点击仍筛选', async () => {
@@ -140,9 +155,30 @@ describe('moment-sheet 便利贴纸面', () => {
     expect(screen.getByRole('link', { name: /2 回应/ })).toHaveAttribute('href', '/moments/m-1');
   });
 
-  it('readOnly 不渲染表情入口', () => {
-    renderSheet(moment(), { readOnly: true });
+  it('网格默认不渲染表情入口；readOnly 也不渲染', () => {
+    const { unmount } = renderSheet(moment());
     expect(screen.queryByRole('button', { name: '加个表情' })).toBeNull();
+    unmount();
+    renderSheet(moment(), { readOnly: true, variant: 'single' });
+    expect(screen.queryByRole('button', { name: '加个表情' })).toBeNull();
+  });
+
+  it('variant=single 渲染表情入口', () => {
+    renderSheet(moment(), { variant: 'single' });
+    expect(screen.getByRole('button', { name: '加个表情' })).toBeInTheDocument();
+  });
+
+  it('视频面子上地点避开「过」圆钮', () => {
+    renderSheet(
+      moment({
+        type: 'video',
+        media: [{ ...img(), mime: 'video/mp4', width: 1920, height: 1080 }],
+        place: { lat: 1, lng: 1, name: '厨房', source: 'manual' },
+      }),
+    );
+    const place = screen.getByText('📍 厨房');
+    expect(place.closest('.note-face')).not.toBeNull();
+    expect(place).toHaveClass('moment-note-place-after-play');
   });
 
   it('data-span 来自 noteColSpan', () => {
