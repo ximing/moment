@@ -1,0 +1,83 @@
+.moment-note {
+  position: relative;
+  width: 100%;
+  padding: 8px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--ink) 12%, transparent);
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform var(--ease), box-shadow var(--ease);
+  text-align: left;
+}
+.moment-note:hover,
+.moment-note:focus-visible {
+  transform: rotate(0deg) translateY(-4px);
+  outline: none;
+}
+.moment-note:focus-visible {
+  box-shadow:
+    0 8px 22px color-mix(in srgb, var(--ink) 12%, transparent),
+    0 0 0 var(--focus-ring-w) var(--focus);
+}
+.moment-note-face {
+  position: relative;
+  overflow: hidden;
+  border-radius: calc(var(--radius-md) - 4px);
+}
+.moment-note-face-168 { height: 168px; }
+.moment-note-face-192 { height: 192px; }
+.moment-note-face-240 { height: 240px; }
+.moment-note-face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.moment-note-place {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--surface);
+  text-shadow: 0 1px 6px color-mix(in srgb, var(--ink) 70%, transparent);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+}
+.moment-note-writing { padding: 8px 4px 2px; }
+.moment-note-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.moment-note-text .moment-note-body { -webkit-line-clamp: 5; }
+.moment-note-voice-thumb {
+  width: 88px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: calc(var(--radius-md) - 4px);
+}
+.moment-note-voice-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+@media (prefers-reduced-motion: reduce) {
+  .moment-note,
+  .moment-note:hover,
+  .moment-note:focus-visible {
+    transform: none;
+    transition: none;
+  }
+}

@@ -1,5 +1,7 @@
+import type { ReactElement } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { RSRoot, register } from '@rabjs/react';
 import type { PublicShareMoment } from '@moment/dto';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,11 +10,11 @@ import { ComposeSessionService } from '@/services/compose-session.service';
 import { MomentSheetContent } from './moment-sheet';
 import { MomentSheetService } from './moment-sheet.service';
 
-// 人物 chip 行与地点行的只读展示（spec people-place §7/§8）：
-// - 链内形态（MomentResponse）：persons chips（span 非按钮——不可点，过滤属 M2）+
-//   ai 行「AI」角标 + 「📍 name」地点行；
-// - exif 坐标待回填（name:null）不显示地点行（偏差 9）；
-// - 公开分享形态（PublicShareMoment：两键不存在）两者都不渲染——隐私红线在展示层生效。
+// 纸边人物/地点（spec sticky-note-album §3.3 / §3.4）：
+// - 人物最多 3 名以「 · 」连接，无「AI」角标；
+// - 无面子图时地点走纸边「📍 name」；exif name:null 不渲染；
+// - 公开分享形态（无 persons/place 键）两者都不渲染；
+// - 传入 onPersonFilter / onPlaceFilter 时人物/地点是 button。
 
 vi.mock('@/api/client', () => ({
   client: new Proxy({}, { get: () => () => new Promise(() => undefined) }),
@@ -57,38 +59,38 @@ function moment(partial: {
   };
 }
 
+function renderSheet(ui: ReactElement) {
+  return render(
+    <MemoryRouter>
+      <RSRoot>{ui}</RSRoot>
+    </MemoryRouter>,
+  );
+}
+
 describe('moment-sheet 人物/地点展示（spec people-place §7）', () => {
-  // RSRoot 包裹（timeline-variants/chain-home 既有范式）：useService 需要 RAB 容器上下文。
-  // 三个用例均不传 chainName 且 readOnly（Link 渲染路径未触发），无需 MemoryRouter。
-  it('链内形态：人物 chips（只读 span）+ AI 角标 + 地点行', () => {
-    render(
-      <RSRoot>
-        <MomentSheetContent
-          readOnly
-          moment={moment({
-            persons: [
-              { id: 'p-1', name: '爸爸', userId: 'u-1', source: 'manual' },
-              { id: 'p-2', name: '外婆', userId: null, source: 'ai' },
-            ],
-            place: { lat: 39.9, lng: 116.4, name: '外婆家', source: 'manual' },
-          })}
-        />
-      </RSRoot>,
+  it('纯文字 + 人物 + 地点：纸边「爸爸 · 外婆」，无 AI，📍 在纸边（无面子图）', () => {
+    renderSheet(
+      <MomentSheetContent
+        readOnly
+        moment={moment({
+          persons: [
+            { id: 'p-1', name: '爸爸', userId: 'u-1', source: 'manual' },
+            { id: 'p-2', name: '外婆', userId: null, source: 'ai' },
+          ],
+          place: { lat: 39.9, lng: 116.4, name: '外婆家', source: 'manual' },
+        })}
+      />,
     );
     const group = screen.getByLabelText('和谁在一起');
-    expect(within(group).getByText('爸爸')).toBeInTheDocument();
-    expect(within(group).getByText('外婆')).toBeInTheDocument();
-    expect(within(group).getByText('AI')).toBeInTheDocument();
-    // 只读展示：chip 是 span 不是 button（spec §7：点击过滤属 M2，v1 不可点）
-    expect(within(group).queryByRole('button')).toBeNull();
+    expect(group).toHaveTextContent('爸爸 · 外婆');
+    expect(screen.queryByText('AI')).toBeNull();
     expect(screen.getByText('📍 外婆家')).toBeInTheDocument();
+    expect(screen.getByText('📍 外婆家').closest('.note-face')).toBeNull();
   });
 
   it('exif 坐标待回填（name:null）→ 不显示地点行（偏差 9）', () => {
-    render(
-      <RSRoot>
-        <MomentSheetContent readOnly moment={moment({ place: { lat: 39.9, lng: 116.4, name: null, source: 'exif' } })} />
-      </RSRoot>,
+    renderSheet(
+      <MomentSheetContent readOnly moment={moment({ place: { lat: 39.9, lng: 116.4, name: null, source: 'exif' } })} />,
     );
     expect(screen.queryByText(/📍/)).toBeNull();
   });
@@ -97,42 +99,35 @@ describe('moment-sheet 人物/地点展示（spec people-place §7）', () => {
     const shared = Object.fromEntries(
       Object.entries(moment({})).filter(([k]) => k !== 'persons' && k !== 'place'),
     ) as unknown as PublicShareMoment;
-    render(
-      <RSRoot>
-        <MomentSheetContent readOnly moment={shared} />
-      </RSRoot>,
-    );
+    renderSheet(<MomentSheetContent readOnly moment={shared} />);
     expect(screen.queryByLabelText('和谁在一起')).toBeNull();
     expect(screen.queryByText(/📍/)).toBeNull();
   });
 
-  it('传入 onPersonFilter/onPlaceFilter：chip 是 button，再点回调；AI 角标仍在', async () => {
+  it('传入 onPersonFilter/onPlaceFilter：人物/地点是 button，再点回调；无 AI 角标', async () => {
     const user = userEvent.setup();
     const onPersonFilter = vi.fn();
     const onPlaceFilter = vi.fn();
-    render(
-      <RSRoot>
-        <MomentSheetContent
-          readOnly
-          moment={moment({
-            persons: [
-              { id: 'p-1', name: '爸爸', userId: 'u-1', source: 'manual' },
-              { id: 'p-2', name: '外婆', userId: null, source: 'ai' },
-            ],
-            place: { lat: 39.9, lng: 116.4, name: '外婆家', source: 'manual' },
-          })}
-          onPersonFilter={onPersonFilter}
-          onPlaceFilter={onPlaceFilter}
-        />
-      </RSRoot>,
+    renderSheet(
+      <MomentSheetContent
+        readOnly
+        moment={moment({
+          persons: [
+            { id: 'p-1', name: '爸爸', userId: 'u-1', source: 'manual' },
+            { id: 'p-2', name: '外婆', userId: null, source: 'ai' },
+          ],
+          place: { lat: 39.9, lng: 116.4, name: '外婆家', source: 'manual' },
+        })}
+        onPersonFilter={onPersonFilter}
+        onPlaceFilter={onPlaceFilter}
+      />,
     );
     const group = screen.getByLabelText('和谁在一起');
     expect(within(group).getByRole('button', { name: '筛选 外婆' })).toBeInTheDocument();
-    expect(within(group).getByText('AI')).toBeInTheDocument();
+    expect(screen.queryByText('AI')).toBeNull();
     await user.click(within(group).getByRole('button', { name: '筛选 外婆' }));
     expect(onPersonFilter).toHaveBeenCalledWith({ id: 'p-2', name: '外婆' });
     await user.click(screen.getByRole('button', { name: '筛选地点 外婆家' }));
     expect(onPlaceFilter).toHaveBeenCalledWith('外婆家');
   });
 });
-
