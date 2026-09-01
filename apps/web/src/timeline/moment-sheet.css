@@ -10,11 +10,13 @@
   text-align: left;
 }
 .moment-note:hover,
-.moment-note:focus-visible {
+.moment-note:focus-visible,
+.moment-note:focus-within {
   transform: rotate(0deg) translateY(-4px);
   outline: none;
 }
-.moment-note:focus-visible {
+.moment-note:focus-visible,
+.moment-note:focus-within {
   box-shadow:
     0 8px 22px color-mix(in srgb, var(--ink) 12%, transparent),
     0 0 0 var(--focus-ring-w) var(--focus);
@@ -37,6 +39,7 @@
   position: absolute;
   left: 8px;
   bottom: 8px;
+  z-index: 10;
   max-width: calc(100% - 16px);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -47,6 +50,10 @@
   border: 0;
   background: none;
   font: inherit;
+}
+.moment-note-place:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--focus-ring-w) var(--focus);
 }
 .moment-note-writing { padding: 8px 4px 2px; }
 .moment-note-body {
@@ -76,7 +83,8 @@
 @media (prefers-reduced-motion: reduce) {
   .moment-note,
   .moment-note:hover,
-  .moment-note:focus-visible {
+  .moment-note:focus-visible,
+  .moment-note:focus-within {
     transform: none;
     transition: none;
   }

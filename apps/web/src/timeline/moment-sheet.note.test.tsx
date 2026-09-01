@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { RSRoot, register } from '@rabjs/react';
 import type { MomentMedia } from '@moment/dto';
@@ -72,11 +73,14 @@ function moment(over: Partial<MomentSheetMoment> = {}): MomentSheetMoment {
   };
 }
 
-function renderSheet(m: MomentSheetMoment, props: { readOnly?: boolean } = {}) {
+function renderSheet(
+  m: MomentSheetMoment,
+  props: { readOnly?: boolean; onPlaceFilter?: (place: string) => void } = {},
+) {
   return render(
     <MemoryRouter>
       <RSRoot>
-        <MomentSheetContent moment={m} readOnly={props.readOnly} />
+        <MomentSheetContent moment={m} readOnly={props.readOnly} onPlaceFilter={props.onPlaceFilter} />
       </RSRoot>
     </MemoryRouter>,
   );
@@ -107,6 +111,25 @@ describe('moment-sheet 便利贴纸面', () => {
     );
     expect(screen.getByText('📍 厨房').closest('.note-face')).not.toBeNull();
     expect(screen.getAllByText('📍 厨房')).toHaveLength(1);
+  });
+
+  it('有图 + onPlaceFilter：地点叠面子且不嵌在查看媒体按钮内，点击仍筛选', async () => {
+    const user = userEvent.setup();
+    const onPlaceFilter = vi.fn();
+    renderSheet(
+      moment({
+        type: 'media',
+        media: [img()],
+        place: { lat: 1, lng: 1, name: '厨房', source: 'manual' },
+      }),
+      { onPlaceFilter },
+    );
+    const place = screen.getByRole('button', { name: '筛选地点 厨房' });
+    const media = screen.getByRole('button', { name: '查看媒体' });
+    expect(media.contains(place)).toBe(false);
+    expect(place.closest('.note-face')).not.toBeNull();
+    await user.click(place);
+    expect(onPlaceFilter).toHaveBeenCalledWith('厨房');
   });
 
   it('commentCount=0 不显示回应；>0 显示「N 回应」且是链到 /moments/:id 的链接', () => {

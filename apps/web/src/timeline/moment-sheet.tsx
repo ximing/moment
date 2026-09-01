@@ -245,28 +245,30 @@ export const MomentSheetContent = observer(function MomentSheetContent({
       style={{ ['--tilt' as string]: `${noteTiltDeg(moment.id, false)}deg` }}
     >
       {hasFace && (
-        <button
-          type="button"
-          className={`note-face moment-note-face moment-note-face-${faceHeight} w-full border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-focus`}
-          aria-label="查看媒体"
-          onClick={() => {
-            service.lightboxIndex = 0;
-          }}
-        >
-          {faceSrc && <img src={faceSrc} alt="" />}
-          {moment.type === 'video' && (
-            <span
-              aria-hidden
-              className="absolute bottom-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-ink text-caption text-surface"
-            >
-              过
-            </span>
-          )}
-          {images.length > 1 && (
-            <span className="absolute bottom-2 right-2 text-caption text-surface">{images.length}</span>
-          )}
+        <div className={`note-face moment-note-face moment-note-face-${faceHeight}`}>
+          <button
+            type="button"
+            className="h-full w-full border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-focus"
+            aria-label="查看媒体"
+            onClick={() => {
+              service.lightboxIndex = 0;
+            }}
+          >
+            {faceSrc && <img src={faceSrc} alt="" />}
+            {moment.type === 'video' && (
+              <span
+                aria-hidden
+                className="absolute bottom-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-ink text-caption text-surface"
+              >
+                过
+              </span>
+            )}
+            {images.length > 1 && (
+              <span className="absolute bottom-2 right-2 text-caption text-surface">{images.length}</span>
+            )}
+          </button>
           {placeOnFace ? placeControl(true) : null}
-        </button>
+        </div>
       )}
 
       {isVoice && (
@@ -316,7 +318,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
         {!readOnly && (
           <Link
             to={`/moments/${moment.id}`}
-            className="absolute inset-0 z-0"
+            className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-focus"
             aria-label="查看这条时刻"
           />
         )}
