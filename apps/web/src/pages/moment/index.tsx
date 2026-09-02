@@ -16,7 +16,7 @@ import { MomentPageService } from './moment.service';
 // 时刻详情（plan Task 11）：评论 CRUD 与既有 service mutation 不变；回复输入走
 // Field 家族的 Textarea，删除自己的评论先经 AlertDialog 确认（quiet 入口 +
 // danger 终确认），错误反馈走 Banner。评论行是文字流，不画卡片阴影（spec §6）。
-// ≥900px：左时刻（媒体/正文）右评论，主列铺开不锁 --content。
+// ≥900px：左媒体，右描述/人物/地点 + 评论。纯文字仍把书写区留在时刻里。主列铺开不锁 --content。
 
 // 具名导出是测试 seam：bindServices 的私有容器实例在渲染前无法播种，
 // 测试在全局容器注册同名 Service 后直接渲染本组件（timeline-variants.test.tsx）。
@@ -91,6 +91,7 @@ export const MomentPageContent = observer(function MomentPageContent() {
           />
         </div>
         <section className="min-w-0 min-[900px]:sticky min-[900px]:top-6 min-[900px]:max-h-screen min-[900px]:overflow-y-auto">
+          <div data-moment-detail-writing className="hidden min-[900px]:block" />
           <h2 className="mb-3 text-lg font-medium">评论</h2>
           <ul className="space-y-3">
             {service.comments.map((c) => (

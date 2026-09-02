@@ -1,4 +1,5 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
 import {
   type MomentMedia,
@@ -85,16 +86,27 @@ export const MomentSheetContent = observer(function MomentSheetContent({
   const composeSession = useService(ComposeSessionService);
 
   const [shownRatio, setShownRatio] = useState<number | null>(null);
+  const [writingSlot, setWritingSlot] = useState<Element | null>(null);
+  const isDetail = variant === 'single';
+  const asideWriting =
+    isDetail &&
+    momentProp.media.some((m) => m.mime.startsWith('image/') || m.mime.startsWith('video/'));
   useEffect(() => {
     service.hydrate(momentProp);
   }, [service, momentProp]);
   useEffect(() => {
     setShownRatio(null);
   }, [momentProp.id]);
+  useLayoutEffect(() => {
+    if (!asideWriting) {
+      setWritingSlot(null);
+      return;
+    }
+    setWritingSlot(document.querySelector('[data-moment-detail-writing]'));
+  }, [asideWriting, momentProp.id]);
 
   const moment = momentProp;
   const mine = auth.user?.id === moment.author.id;
-  const isDetail = variant === 'single';
   const images = moment.media.filter((m) => m.mime.startsWith('image/'));
   const visualMedia = moment.media.filter((m) => m.mime.startsWith('image/') || m.mime.startsWith('video/'));
   const lightboxItems: MomentMedia[] = isDetail
@@ -156,10 +168,10 @@ export const MomentSheetContent = observer(function MomentSheetContent({
     return overlay ? <span className={overlayClass}>{label}</span> : <span>{label}</span>;
   };
 
-  const writing = (
+  const writing = (bodyClass: string) => (
     <>
       {hasBody && (
-        <p className="moment-note-body whitespace-pre-wrap text-meta text-ink">
+        <p className={`moment-note-body whitespace-pre-wrap ${bodyClass} text-ink`}>
           {moment.tags.map((t) =>
             onTagFilter ? (
               <button
@@ -357,7 +369,9 @@ export const MomentSheetContent = observer(function MomentSheetContent({
         </div>
       )}
 
-      <div className="moment-note-writing relative">
+      <div
+        className={`moment-note-writing relative${asideWriting && writingSlot ? ' min-[900px]:hidden' : ''}`}
+      >
         {!readOnly && !isDetail && (
           <Link
             to={`/moments/${moment.id}`}
@@ -365,8 +379,17 @@ export const MomentSheetContent = observer(function MomentSheetContent({
             aria-label="查看这条时刻"
           />
         )}
-        <div className={`relative z-10${readOnly || isDetail ? '' : ' pointer-events-none'}`}>{writing}</div>
+        <div className={`relative z-10${readOnly || isDetail ? '' : ' pointer-events-none'}`}>
+          {writing('text-meta')}
+        </div>
       </div>
+
+      {writingSlot
+        ? createPortal(
+            <div className="moment-note-writing mb-6">{writing('text-body')}</div>,
+            writingSlot,
+          )
+        : null}
 
       {service.lightboxIndex !== null && (
         <Lightbox

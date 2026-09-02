@@ -437,6 +437,64 @@ describe('时刻详情', () => {
     expect(layout!.closest('.max-w-content')).toBeNull();
   });
 
+  it('有图详情：大屏把描述人物地点放到评论上方且描述用 text-body，小屏仍在时刻里', () => {
+    const service = resolve(MomentPageService);
+    service.momentId = 'moment-images';
+    service.moment = {
+      ...TWO_IMAGE_MOMENT,
+      persons: [{ id: 'p-1', name: '乔乔', userId: 'user-2', source: 'manual' }],
+      place: { lat: 1, lng: 1, name: '海边', source: 'manual' },
+    };
+    service.deleted = false;
+    service.comments = [OWN_COMMENT];
+    service.nextCursor = null;
+    service.draft = '';
+    const { container } = render(
+      <MemoryRouter initialEntries={['/moments/moment-images']}>
+        <RSRoot>
+          <Routes>
+            <Route path="/moments/:momentId" element={<MomentPageContent />} />
+          </Routes>
+        </RSRoot>
+      </MemoryRouter>,
+    );
+
+    const heading = screen.getByRole('heading', { name: '评论' });
+    const comments = heading.closest('section');
+    const slot = container.querySelector('[data-moment-detail-writing]');
+    expect(slot).not.toBeNull();
+    expect(comments).toContainElement(slot as HTMLElement);
+    expect(slot!.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(slot).toHaveClass('hidden', 'min-[900px]:block');
+
+    const articleWriting = screen.getByRole('article').querySelector('.moment-note-writing');
+    expect(articleWriting).toHaveClass('min-[900px]:hidden');
+    const articleBody = articleWriting!.querySelector('.moment-note-body');
+    expect(articleBody).toHaveClass('text-meta');
+    expect(articleBody).not.toHaveClass('text-body');
+    expect(articleBody).toHaveTextContent('周末去看了海');
+
+    const asideBody = slot!.querySelector('.moment-note-body');
+    expect(asideBody).not.toBeNull();
+    expect(asideBody).toHaveClass('text-body');
+    expect(asideBody).not.toHaveClass('text-meta');
+    expect(asideBody).toHaveTextContent('周末去看了海');
+    expect(within(slot as HTMLElement).getByLabelText('和谁在一起')).toHaveTextContent('乔乔');
+    expect(slot).toHaveTextContent('📍 海边');
+  });
+
+  it('纯文字详情书写区仍在时刻里，评论栏没有旁路书写', () => {
+    seedMomentDetail([]);
+    const { container } = renderDetail();
+    const slot = container.querySelector('[data-moment-detail-writing]');
+    expect(slot).not.toBeNull();
+    expect(slot!.querySelector('.moment-note-body')).toBeNull();
+    const writing = screen.getByRole('article').querySelector('.moment-note-writing');
+    expect(writing).not.toHaveClass('min-[900px]:hidden');
+    expect(writing!.querySelector('.moment-note-body')).toHaveClass('text-meta');
+    expect(writing).toHaveTextContent('回家的路上买了刚出炉的面包。');
+  });
+
   it('渲染回复 Field，提交走既有 createComment', async () => {
     seedMomentDetail([OWN_COMMENT, OTHER_COMMENT]);
     renderDetail();

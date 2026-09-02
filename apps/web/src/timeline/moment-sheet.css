@@ -109,6 +109,13 @@
 .moment-note-detail .moment-note-writing {
   padding: 12px 0 0;
 }
+[data-moment-detail-writing] .moment-note-body {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+[data-moment-detail-writing] .moment-note-writing {
+  padding: 0;
+}
 @media (prefers-reduced-motion: reduce) {
   .moment-note {
     transition: none;
