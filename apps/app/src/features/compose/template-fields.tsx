@@ -150,7 +150,7 @@ const MomentFieldControl = observer(function MomentFieldControl({
   }
 
   if (field.type === 'date') {
-    // 官方三模板暂不使用 date 词表；文本输入 YYYY-MM-DD，server 校验格式（简化取舍，报告声明）
+    // 官方模板暂不使用 date 词表；文本输入 YYYY-MM-DD，server 校验格式（简化取舍，报告声明）
     return (
       <Field
         label={field.label}
