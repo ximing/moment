@@ -205,6 +205,21 @@ describe('packAlbumMonth', () => {
     const { placements } = packAlbumMonth([video], 4, 200);
     expect(placements[0]).toMatchObject({ col: 0, span: 2 });
   });
+
+  it('相邻两张文字卡叠在同一列，不并排占两列留下空白', () => {
+    const t1 = moment({ id: 't1', type: 'text', content: '想去香港和广州' });
+    const t2 = moment({
+      id: 't2',
+      type: 'text',
+      content: '下午开了一下午会，脑袋很晕，终端这一趴事情不知道怎么收尾',
+    });
+    const port = moment({ id: 'port', type: 'media', media: [img(960, 1280)] });
+    const land = moment({ id: 'land', type: 'media', media: [img(4096, 3072)] });
+    const { placements } = packAlbumMonth([t1, t2, port, land], 4, 200);
+    const byId = Object.fromEntries(placements.map((p) => [p.item.id, p]));
+    expect(byId.t1?.col).toBe(byId.t2?.col);
+    expect(byId.t2!.y).toBeGreaterThan(byId.t1!.y);
+  });
 });
 
 describe('estimateNoteStack', () => {

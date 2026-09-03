@@ -13,6 +13,10 @@ export type MasonryPlacement<T> = {
   h: number;
 };
 
+function isWritingNote(moment: PublicShareMoment): boolean {
+  return moment.type === 'text' || moment.type === 'voice';
+}
+
 /** 竖图永不跨列；横图/横屏视频最多 span 2。shownRatio 是解码后的画面比，优先于 dto。 */
 export function notePreferredSpan(
   moment: PublicShareMoment,
@@ -48,6 +52,7 @@ export function packShortestColumn<T>(items: T[], weight: (item: T) => number, c
 /**
  * 可跨列的最短槽位：span 占相邻列同一 y，其余卡填当前最矮且能放下的槽。
  * 列高并列时取最左，时间序大致从左到右。
+ * stickTo：相邻书写卡（文字/语音）在列高差不超过一张卡时叠同一列，避免并排留白。
  */
 export function packSpanningMasonry<T>(
   items: T[],
@@ -55,6 +60,7 @@ export function packSpanningMasonry<T>(
   spanOf: (item: T) => number,
   heightOf: (item: T, span: number) => number,
   gap = 0,
+  stickTo?: (prev: T, next: T) => boolean,
 ): { placements: MasonryPlacement<T>[]; totalHeight: number } {
   const n = Math.max(1, colCount);
   const heights = Array<number>(n).fill(0);
@@ -86,6 +92,17 @@ export function packSpanningMasonry<T>(
     while (span > 1 && chosen.uneven) {
       span -= 1;
       chosen = slot(span);
+    }
+    const prev = placements.at(-1);
+    if (prev && span === 1 && stickTo?.(prev.item, item)) {
+      const h1 = heightOf(item, 1);
+      let minH = heights[0]!;
+      for (let c = 1; c < n; c++) if (heights[c]! < minH) minH = heights[c]!;
+      const colH = heights[prev.col]!;
+      if (colH - minH <= h1 + gap) {
+        span = 1;
+        chosen = { col: prev.col, y: colH, uneven: false };
+      }
     }
     const h = heightOf(item, span);
     placements.push({ item, col: chosen.col, span, y: chosen.y, h });
@@ -203,6 +220,7 @@ export function packAlbumMonth(
     (m) => notePreferredSpan(m, n, siblings, measuredRatios?.get(m.id)),
     (m, span) => measuredHeights?.get(m.id) ?? estimateNoteHeightPx(m, span, colWidthPx),
     ALBUM_GAP_PX,
+    (prev, next) => isWritingNote(prev) && isWritingNote(next),
   );
 }
 
