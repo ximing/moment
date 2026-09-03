@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Circle } from 'react-native-maps';
 import type { AggregateResponse } from '@moment/dto';
 import { formatMomentTime } from '../../lib/format';
+import { Icon } from '../../components/Icon';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 
@@ -43,9 +44,12 @@ export function FootprintMap({ aggregate }: { aggregate: Extract<AggregateRespon
       </MapView>
       <View style={styles.list}>
         {aggregate.points.map((p) => (
-          <Text key={p.momentId} style={styles.item}>
-            📍 {p.placeName ?? `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`} · {formatMomentTime(p.happenedAt, new Date().getTimezoneOffset())}
-          </Text>
+          <View key={p.momentId} style={styles.item}>
+            <Icon name="map-pin" size={t.fontSupport} />
+            <Text style={styles.itemText}>
+              {p.placeName ?? `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`} · {formatMomentTime(p.happenedAt, new Date().getTimezoneOffset())}
+            </Text>
+          </View>
         ))}
       </View>
     </View>
@@ -58,6 +62,7 @@ const createStyles = (t: Theme) =>
     // 320pt 是组件视口尺寸（非布局间距档位），同 web 端 h-80 先例（P4 S9）
     map: { height: 320, borderRadius: t.radiusMd },
     list: { gap: t.space1 },
-    item: { fontSize: t.fontSupport, color: t.ink },
+    item: { flexDirection: 'row', alignItems: 'center', gap: t.space1 },
+    itemText: { flex: 1, fontSize: t.fontSupport, color: t.ink },
     empty: { color: t.muted, fontSize: t.fontSupport, textAlign: 'center', padding: t.space8 },
   });

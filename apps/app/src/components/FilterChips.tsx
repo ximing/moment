@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Theme } from '../theme/theme';
 import { useTheme } from '../theme/use-theme';
+import { Icon } from './Icon';
 
 /** 列表顶清除 chip（spec §7.1）。app 无 before 日历，不渲染「回到今天」（偏差 13）。 */
 export function FilterChips({
@@ -41,7 +42,8 @@ export function FilterChips({
           onPress={onClearPlace}
           style={styles.chip}
         >
-          <Text style={styles.chipText}>📍 {place} ×</Text>
+          <Icon name="map-pin" size={t.fontSupport} color={t.ink} />
+          <Text style={styles.chipText}>{place} ×</Text>
         </Pressable>
       ) : null}
     </View>
@@ -58,6 +60,9 @@ const createStyles = (t: Theme) =>
       paddingVertical: t.space2,
     },
     chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space1,
       paddingHorizontal: t.space3,
       minHeight: t.touchMin,
       justifyContent: 'center',

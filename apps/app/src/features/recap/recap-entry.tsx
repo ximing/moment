@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
+import { Icon } from '../../components/Icon';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { RecapEntryService } from './recap-entry.service';
@@ -43,7 +44,8 @@ const RecapEntryBarContent = observer(function RecapEntryBarContent({
         })
       }
     >
-      <Text style={styles.barText}>📅 {periodLabel(latest.period)}</Text>
+      <Icon name="calendar" size={t.fontLabel} />
+      <Text style={styles.barText}>{periodLabel(latest.period)}</Text>
       {degraded ? <Text style={styles.barTag}>（简版）</Text> : null}
       <Text style={styles.barArrow}>→</Text>
     </Pressable>
@@ -69,7 +71,7 @@ const createStyles = (t: Theme) =>
       borderColor: t.line,
       minHeight: t.touchMin,
     },
-    barText: { flex: 1, fontSize: t.fontLabel, color: t.ink },
+    barText: { flex: 1, fontSize: t.fontLabel, color: t.ink, marginLeft: t.space1 },
     barTag: { fontSize: t.fontCaption, color: t.muted, marginLeft: t.space1 },
     barArrow: { fontSize: t.fontLabel, color: t.muted, marginLeft: t.space2 },
   });

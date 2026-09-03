@@ -1,9 +1,11 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { Icon, type AppLineIconName } from '../../src/components/Icon';
 import { RequireAuth } from '../../src/components/RequireAuth';
+import { useTheme } from '../../src/theme/use-theme';
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  return <Text style={[styles.icon, focused && styles.iconActive]}>{label}</Text>;
+function TabIcon({ name, focused }: { name: AppLineIconName; focused: boolean }) {
+  const t = useTheme();
+  return <Icon name={name} size={22} color={focused ? t.ink : t.muted} />;
 }
 
 export default function TabsLayout() {
@@ -12,26 +14,21 @@ export default function TabsLayout() {
       <Tabs screenOptions={{ headerShown: true, tabBarLabelStyle: { fontSize: 11 } }}>
         <Tabs.Screen
           name="index"
-          options={{ title: '时刻流', tabBarIcon: ({ focused }) => <TabIcon label="🏠" focused={focused} /> }}
+          options={{ title: '时刻流', tabBarIcon: ({ focused }) => <TabIcon name="house" focused={focused} /> }}
         />
         <Tabs.Screen
           name="chains"
-          options={{ title: '我的链', tabBarIcon: ({ focused }) => <TabIcon label="⛓️" focused={focused} /> }}
+          options={{ title: '我的链', tabBarIcon: ({ focused }) => <TabIcon name="link-2" focused={focused} /> }}
         />
         <Tabs.Screen
           name="notifications"
-          options={{ title: '通知', tabBarIcon: ({ focused }) => <TabIcon label="🔔" focused={focused} /> }}
+          options={{ title: '通知', tabBarIcon: ({ focused }) => <TabIcon name="bell" focused={focused} /> }}
         />
         <Tabs.Screen
           name="me"
-          options={{ title: '我', tabBarIcon: ({ focused }) => <TabIcon label="👤" focused={focused} /> }}
+          options={{ title: '我', tabBarIcon: ({ focused }) => <TabIcon name="user" focused={focused} /> }}
         />
       </Tabs>
     </RequireAuth>
   );
 }
-
-const styles = StyleSheet.create({
-  icon: { fontSize: 18, opacity: 0.4 },
-  iconActive: { opacity: 1 },
-});

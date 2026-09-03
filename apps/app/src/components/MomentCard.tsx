@@ -6,6 +6,7 @@ import { resolveMomentSummary } from '../lib/template';
 import type { Theme } from '../theme/theme';
 import { useTheme } from '../theme/use-theme';
 import { AppIcon } from './AppIcon';
+import { Icon } from './Icon';
 import { AudioBar } from './AudioBar';
 import { MediaGrid } from './MediaGrid';
 
@@ -72,7 +73,12 @@ export function MomentCard({
       ) : null}
       {(() => {
         const geo = moment.payload?.geo as { place_name?: string } | undefined;
-        return geo?.place_name ? <Text style={styles.tplLine}>📍 {geo.place_name}</Text> : null;
+        return geo?.place_name ? (
+          <View style={styles.tplIconRow}>
+            <Icon name="map-pin" size={t.fontSupport} />
+            <Text style={[styles.tplLine, styles.flushTop]}>{geo.place_name}</Text>
+          </View>
+        ) : null;
       })()}
       {/* 人物与地点（spec fused-retrieval §7.1）：时间线传入回调则内层 Pressable 可点过滤；
           往年今日/不传回调保持 P6 只读 View。AI 角标保留。name 为 null 的地点仍不渲染。 */}
@@ -112,10 +118,16 @@ export function MomentCard({
             onPress={() => onPlaceFilter(moment.place!.name!)}
             style={styles.placePressable}
           >
-            <Text style={styles.tplLine}>📍 {moment.place.name}</Text>
+            <View style={styles.tplIconRow}>
+              <Icon name="map-pin" size={t.fontSupport} />
+              <Text style={[styles.tplLine, styles.flushTop]}>{moment.place.name}</Text>
+            </View>
           </Pressable>
         ) : (
-          <Text style={styles.tplLine}>📍 {moment.place.name}</Text>
+          <View style={styles.tplIconRow}>
+            <Icon name="map-pin" size={t.fontSupport} />
+            <Text style={[styles.tplLine, styles.flushTop]}>{moment.place.name}</Text>
+          </View>
         )
       ) : null}
       <View style={styles.footer}>
@@ -124,9 +136,12 @@ export function MomentCard({
             #{tag.name}
           </Text>
         ))}
-        <Text style={styles.counts}>
-          💬 {moment.commentCount} · {moment.reactions.reduce((sum, r) => sum + r.count, 0)} 个表情
-        </Text>
+        <View style={styles.counts}>
+          <Icon name="message-circle" size={t.fontSupport} />
+          <Text style={styles.countsText}>
+            {moment.commentCount} · {moment.reactions.reduce((sum, r) => sum + r.count, 0)} 个表情
+          </Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -161,5 +176,6 @@ const createStyles = (t: Theme) =>
     personChipText: { fontSize: t.fontSupport, color: t.ink },
     personAi: { color: t.muted, fontSize: t.fontCaption },
     tag: { color: t.tag, fontSize: t.fontSupport },
-    counts: { color: t.muted, fontSize: t.fontSupport, marginLeft: 'auto' },
+    counts: { flexDirection: 'row', alignItems: 'center', gap: t.space1, marginLeft: 'auto' },
+    countsText: { color: t.muted, fontSize: t.fontSupport },
   });

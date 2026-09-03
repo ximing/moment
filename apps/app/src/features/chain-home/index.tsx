@@ -56,7 +56,7 @@ const Content = observer(function Content() {
           {service.canCompose ? (
             <Button onPress={() => router.push({ pathname: '/compose', params: { chainId: service.chainId } })}>＋ 发布时刻</Button>
           ) : null}
-          <Button variant="quiet" onPress={() => router.push(`/chains/${service.chainId}/settings`)}>⚙️ 设置</Button>
+          <Button variant="quiet" onPress={() => router.push(`/chains/${service.chainId}/settings`)}>设置</Button>
         </View>
       </View>
       <RecapEntryBar chainId={service.chainId} />

@@ -4,6 +4,7 @@ import { observer } from '@rabjs/react';
 import type { ChainMemberDto, PersonResponse } from '@moment/dto';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
+import { Icon } from '../../components/Icon';
 import { humanError } from '../../lib/errors';
 import { useTheme } from '../../theme/use-theme';
 import type { Theme } from '../../theme/theme';
@@ -81,7 +82,8 @@ export const PersonPicker = observer(function PersonPicker({ service }: { servic
       {service.placeCoords ? (
         <View style={styles.exifRow}>
           <View style={styles.exifChip}>
-            <Text style={styles.exifChipText}>📍 已从照片读取位置</Text>
+            <Icon name="map-pin" size={t.fontSupport} />
+            <Text style={styles.exifChipText}>已从照片读取位置</Text>
           </View>
           <Button variant="quiet" onPress={() => service.removePlaceCoords()}>
             移除
@@ -140,6 +142,6 @@ const createStyles = (t: Theme) =>
     chipTextActive: { color: t.bg, fontWeight: '600' },
     aiBadge: { color: t.muted, fontSize: t.fontCaption },
     exifRow: { flexDirection: 'row', alignItems: 'center', gap: t.space2 },
-    exifChip: { paddingHorizontal: t.space3, paddingVertical: t.space2, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
+    exifChip: { flexDirection: 'row', alignItems: 'center', gap: t.space1, paddingHorizontal: t.space3, paddingVertical: t.space2, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
     exifChipText: { fontSize: t.fontSupport, color: t.ink },
   });

@@ -7,6 +7,7 @@ import { REACTION_EMOJIS, type MomentMedia } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { formatMomentTime, formatRelative } from '../../lib/format';
 import { AppIcon } from '../../components/AppIcon';
+import { Icon } from '../../components/Icon';
 import { AudioBar } from '../../components/AudioBar';
 import { Loading } from '../../components/Loading';
 import { Button } from '../../components/Button';
@@ -157,7 +158,12 @@ const MomentContent = observer(function MomentContent() {
             ))}
           </View>
         ) : null}
-        {m.place?.name ? <Text style={styles.placeLine}>📍 {m.place.name}</Text> : null}
+        {m.place?.name ? (
+          <View style={styles.placeRow}>
+            <Icon name="map-pin" size={t.fontSupport} />
+            <Text style={styles.placeLine}>{m.place.name}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.reactionRow}>
           {REACTION_EMOJIS.map((emoji) => {
@@ -249,6 +255,7 @@ const createStyles = (t: Theme) =>
     personChip: { paddingHorizontal: t.space3, paddingVertical: t.space1, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
     personChipText: { fontSize: t.fontSupport, color: t.ink },
     personAi: { color: t.muted, fontSize: t.fontCaption },
+    placeRow: { flexDirection: 'row', alignItems: 'center', gap: t.space1 },
     placeLine: { color: t.muted, fontSize: t.fontSupport },
     reactionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     reaction: { flexDirection: 'row', alignItems: 'center', gap: t.space1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },

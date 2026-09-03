@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
+import { Icon } from '../../components/Icon';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import type { Theme } from '../../theme/theme';
@@ -32,7 +33,8 @@ export const MemoriesEntryBar = bindServices(
         style={styles.bar}
         onPress={() => router.push({ pathname: '/memories/today', params: { date: service.date } })}
       >
-        <Text style={styles.barText}>📅 {memoriesBarText(summary)}</Text>
+        <Icon name="calendar" size={t.fontLabel} />
+        <Text style={styles.barText}>{memoriesBarText(summary)}</Text>
         <Text style={styles.barArrow}>→</Text>
       </Pressable>
     );
@@ -125,7 +127,7 @@ const createStyles = (t: Theme) =>
       borderWidth: 1,
       borderColor: t.line,
     },
-    barText: { flex: 1, fontSize: t.fontLabel, color: t.ink },
+    barText: { flex: 1, fontSize: t.fontLabel, color: t.ink, marginLeft: t.space1 },
     barArrow: { fontSize: t.fontLabel, color: t.muted, marginLeft: t.space2 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.space8, gap: t.space3 },
     errorText: { color: t.danger, fontSize: t.fontLabel },
