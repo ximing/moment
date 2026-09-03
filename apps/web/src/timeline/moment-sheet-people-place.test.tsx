@@ -12,7 +12,7 @@ import { MomentSheetService } from './moment-sheet.service';
 
 // 纸边人物/地点（spec sticky-note-album §3.3 / §3.4）：
 // - 人物最多 3 名以「 · 」连接，无「AI」角标；
-// - 无面子图时地点走纸边「📍 name」；exif name:null 不渲染；
+// - 无面子图时地点走纸边（MapPin 单色图标 + name）；exif name:null 不渲染；
 // - 公开分享形态（无 persons/place 键）两者都不渲染；
 // - 传入 onPersonFilter / onPlaceFilter 时人物/地点是 button。
 
@@ -68,7 +68,7 @@ function renderSheet(ui: ReactElement) {
 }
 
 describe('moment-sheet 人物/地点展示（spec people-place §7）', () => {
-  it('纯文字 + 人物 + 地点：纸边「爸爸 · 外婆」，无 AI，📍 在纸边（无面子图）', () => {
+  it('纯文字 + 人物 + 地点：纸边「爸爸 · 外婆」，无 AI，地点图标在纸边（无面子图）', () => {
     renderSheet(
       <MomentSheetContent
         readOnly
@@ -84,8 +84,11 @@ describe('moment-sheet 人物/地点展示（spec people-place §7）', () => {
     const group = screen.getByLabelText('和谁在一起');
     expect(group).toHaveTextContent('爸爸 · 外婆');
     expect(screen.queryByText('AI')).toBeNull();
-    expect(screen.getByText('📍 外婆家')).toBeInTheDocument();
-    expect(screen.getByText('📍 外婆家').closest('.note-face')).toBeNull();
+    const place = screen.getByText('外婆家');
+    expect(place.closest('.note-face')).toBeNull();
+    // spec 2026-09-03-svg-icon-system §4.4：📍 前缀是写死装饰字符，换 lucide MapPin
+    expect(screen.queryByText(/📍/)).toBeNull();
+    expect(place.querySelector('svg.lucide-map-pin')).not.toBeNull();
   });
 
   it('exif 坐标待回填（name:null）→ 不显示地点行（偏差 9）', () => {

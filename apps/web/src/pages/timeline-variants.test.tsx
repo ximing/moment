@@ -480,7 +480,8 @@ describe('时刻详情', () => {
     expect(asideBody).not.toHaveClass('text-meta');
     expect(asideBody).toHaveTextContent('周末去看了海');
     expect(within(slot as HTMLElement).getByLabelText('和谁在一起')).toHaveTextContent('乔乔');
-    expect(slot).toHaveTextContent('📍 海边');
+    expect(slot).toHaveTextContent('海边');
+    expect(slot).not.toHaveTextContent('📍');
   });
 
   it('纯文字详情书写区仍在时刻里，评论栏没有旁路书写', () => {

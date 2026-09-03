@@ -9,13 +9,14 @@ import {
   type PublicShareMoment,
 } from '@moment/dto';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, MapPin } from 'lucide-react';
 import { AuthService } from '@/services/auth.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import type { ChainAppearanceColor, ChainIcon, ChainImageFocus, TemplateManifest } from '@moment/dto';
 import { ChainMark } from '@/chain/ChainMark';
 import { Avatar } from '@/ui/Avatar';
 import { AppIcon } from '@/ui/AppIcon';
+import { Icon } from '@/ui/Icon';
 import { cardDisplayUrl, posterDisplayUrl } from '@/lib/media-src';
 import { formatHappenedClock } from '@/lib/time';
 import { resolveMilestoneLabel, summarizePayload } from '@/lib/template';
@@ -157,7 +158,14 @@ export const MomentSheetContent = observer(function MomentSheetContent({
     const className = overlay
       ? `${overlayClass} pointer-events-auto focus-visible:outline-none focus-visible:ring-focus`
       : 'pointer-events-auto border-0 bg-transparent p-0 text-left text-meta text-muted focus-visible:outline-none focus-visible:ring-focus';
-    const label = `📍 ${placeName}`;
+    // spec 2026-09-03-svg-icon-system §4.4：地点前缀是写死装饰字符，换 lucide MapPin；
+    // size 与 text-meta（13px）视觉等效，mr-1 ≈ 原空格宽度
+    const label = (
+      <>
+        <Icon icon={MapPin} size={13} className="mr-1 align-middle" />
+        {placeName}
+      </>
+    );
     if (onPlaceFilter) {
       return (
         <button

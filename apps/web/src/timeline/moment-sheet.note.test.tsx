@@ -123,7 +123,7 @@ describe('moment-sheet 便利贴纸面', () => {
     expect(screen.getByLabelText('和谁在一起')).toHaveTextContent('朵朵 · 妈妈 · 爸爸…');
   });
 
-  it('有图时地点叠在面子上、纸边 meta 不再重复 📍', () => {
+  it('有图时地点叠在面子上、纸边 meta 不再重复地点行', () => {
     renderSheet(
       moment({
         type: 'media',
@@ -131,9 +131,12 @@ describe('moment-sheet 便利贴纸面', () => {
         place: { lat: 1, lng: 1, name: '厨房', source: 'manual' },
       }),
     );
-    expect(screen.getByText('📍 厨房').closest('.note-face')).not.toBeNull();
-    expect(screen.getAllByText('📍 厨房')).toHaveLength(1);
-    expect(screen.getByText('📍 厨房')).not.toHaveClass('moment-note-place-after-play');
+    expect(screen.getByText('厨房').closest('.note-face')).not.toBeNull();
+    expect(screen.getAllByText('厨房')).toHaveLength(1);
+    expect(screen.getByText('厨房')).not.toHaveClass('moment-note-place-after-play');
+    // spec 2026-09-03-svg-icon-system §4.4：📍 前缀换 lucide MapPin 单色图标
+    expect(screen.queryByText(/📍/)).toBeNull();
+    expect(screen.getByText('厨房').querySelector('svg.lucide-map-pin')).not.toBeNull();
   });
 
   it('有图 + onPlaceFilter：地点叠面子且不嵌在详情链接内，点击仍筛选', async () => {
@@ -185,7 +188,7 @@ describe('moment-sheet 便利贴纸面', () => {
         place: { lat: 1, lng: 1, name: '厨房', source: 'manual' },
       }),
     );
-    const place = screen.getByText('📍 厨房');
+    const place = screen.getByText('厨房');
     expect(place.closest('.note-face')).not.toBeNull();
     expect(place).toHaveClass('moment-note-place-after-play');
     expect(screen.queryByText('过')).toBeNull();

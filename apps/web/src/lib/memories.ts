@@ -22,7 +22,7 @@ export function summarizeMemories(years: MemoriesYearGroup[], today: string): Me
   return { yearsAgo: todayYear - nearest.year, count };
 }
 
-/** 入口条文案（spec §4：「{N} 年前的今天 · 共 {count} 条」；📅 由组件作装饰单独渲染）。 */
+/** 入口条文案（spec §4：「{N} 年前的今天 · 共 {count} 条」；日历图标由组件作装饰单独渲染）。 */
 export function memoriesBarText(summary: MemoriesSummary): string {
   return `${summary.yearsAgo} 年前的今天 · 共 ${summary.count} 条`;
 }

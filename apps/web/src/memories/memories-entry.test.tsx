@@ -142,6 +142,9 @@ describe('那年今日入口条', () => {
 
     const bar = screen.getByRole('button', { name: '1 年前的今天 · 共 3 条' });
     expect(bar).toHaveAttribute('aria-expanded', 'false');
+    // spec 2026-09-03-svg-icon-system §4.4：📅 是写死装饰字符，换 lucide Calendar 单色图标
+    expect(bar).not.toHaveTextContent('📅');
+    expect(bar.querySelector('svg.lucide-calendar')).not.toBeNull();
     expect(screen.queryByText('初雪')).toBeNull(); // 面板未展开
   });
 

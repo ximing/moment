@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Calendar } from 'lucide-react';
+import { Icon } from '@/ui/Icon';
 import { RecapEntryService } from './recap-entry.service';
 
 // recap 入口条（spec §7）：与那年今日入口条同视觉模式——
@@ -38,9 +39,7 @@ export const RecapEntryContent = observer(function RecapEntryContent({
         onClick={() => navigate(`/chains/${chainId}/recaps/${latest.period}`)}
         className="flex w-full items-center gap-3 rounded-surface-lg bg-surface px-4 py-4 text-left transition-colors duration-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_4%,var(--surface))] focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-offset-focus focus-visible:ring-offset-bg"
       >
-        <span aria-hidden className="text-body">
-          📅
-        </span>
+        <Icon icon={Calendar} size={16} className="shrink-0 text-muted" />
         <span className="min-w-0 flex-1 text-body text-ink">
           {periodLabel(latest.period)}
           {degraded && <span className="ml-2 text-meta text-muted">（简版）</span>}

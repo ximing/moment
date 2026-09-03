@@ -1,5 +1,5 @@
 import { bindServices, observer, useService } from '@rabjs/react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import type { ChainLook } from '@/chain/ChainMark';
 import { memoriesBarText } from '@/lib/memories';
 import { MomentSheet } from '@/timeline/moment-sheet';
@@ -32,9 +32,7 @@ export const MemoriesEntryContent = observer(function MemoriesEntryContent({
         onClick={() => service.toggle()}
         className="flex w-full items-center gap-3 bg-bg px-4 py-4 text-left transition-colors duration-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_4%,var(--bg))] focus-visible:outline-none focus-visible:ring-focus"
       >
-        <span aria-hidden className="text-body">
-          📅
-        </span>
+        <Icon icon={Calendar} size={16} className="shrink-0 text-muted" />
         <span className="min-w-0 flex-1 text-body text-ink">{memoriesBarText(summary)}</span>
         <Icon icon={service.open ? ChevronUp : ChevronDown} size={16} className="shrink-0 text-muted" />
       </button>

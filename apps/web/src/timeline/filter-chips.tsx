@@ -1,5 +1,6 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, MapPin } from 'lucide-react';
 import { Button } from '@/ui/button/index';
+import { Icon } from '@/ui/Icon';
 import type { RailFilter } from './timeline-rail';
 
 const chip =
@@ -53,7 +54,10 @@ export function FilterChips({
           onClick={onClearPlace}
           className={chip}
         >
-          📍 {filter.place} ×
+          <span className="inline-flex items-center gap-1">
+            <Icon icon={MapPin} size={12} />
+            {filter.place} ×
+          </span>
         </button>
       ) : null}
     </div>
