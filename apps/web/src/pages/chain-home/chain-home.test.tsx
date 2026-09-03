@@ -352,7 +352,9 @@ describe('链主页时间线', () => {
     const note = container.querySelector('[data-skeleton-note]');
     expect(note).not.toBeNull();
     const padded = note!.closest('.px-5');
-    expect(padded?.className.split(/\s+/)).toEqual(expect.arrayContaining(['px-5', 'pt-6', 'min-[900px]:px-8']));
+    expect(padded?.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['px-5', 'pt-6', 'min-[900px]:px-8', 'min-[1400px]:pr-[calc(var(--rail)+var(--space-8))]']),
+    );
   });
 
   it('时间索引按年分组：历史年份折叠为一行，点击只展开该年', async () => {
@@ -411,6 +413,24 @@ describe('链首页封面', () => {
     const rail = container.querySelector('aside.w-rail');
     expect(rail?.className.split(/\s+/)).toContain('top-[30vh]');
     expect(rail?.className.split(/\s+/)).not.toContain('inset-y-0');
+  });
+
+  it('搜索与设置给时间索引让出右垫，封面仍通栏', () => {
+    seedChainHome([TEXT_MOMENT], COVERED_CHAIN);
+    const { container } = renderChainHome();
+
+    const pad = 'min-[1400px]:pr-[calc(var(--rail)+var(--space-8))]';
+    const search = screen.getByLabelText('搜索时刻');
+    const settings = screen.getByRole('button', { name: '设置' });
+    const searchCol = search.closest('.px-5');
+    const settingsCol = settings.closest('.px-5');
+    expect(searchCol).toHaveClass(pad);
+    expect(settingsCol).toHaveClass(pad);
+    expect(searchCol).toBe(settingsCol);
+
+    const cover = container.querySelector('img')?.closest('[aria-hidden]');
+    expect(cover).toBeTruthy();
+    expect(searchCol!.contains(cover!)).toBe(false);
   });
 
   it('封面加载失败当次隐藏，页面回普通页眉', () => {

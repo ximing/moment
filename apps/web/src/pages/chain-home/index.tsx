@@ -27,6 +27,9 @@ import { ChainHomeService } from './chain-home.service';
 // 链主页（C 端总规范 §4.2 + chain-audience-header 规范 §3）：页眉 = 链色点与
 // 链名同一行 + 成员头像簇与可见性（贴链名右侧）+ 最右设置图标；简介在下一行、
 // 左缘与链名对齐。链名是动态文案，用系统字（spec §2.2）。设置入口成员即可见。
+// 封面通栏（Shell 不预留 rail）；内容列 ≥1400px 自行让出 --rail + 档位，避免搜索/设置叠进时间索引。
+const CHAIN_BODY_PAD =
+  'w-full px-5 pt-6 min-[900px]:px-8 min-[1400px]:pr-[calc(var(--rail)+var(--space-8))]';
 
 // 具名导出是测试 seam：bindServices 的私有容器实例在渲染前无法播种，
 // 测试在全局容器注册同名 Service 后直接渲染本组件（chain-home.test.tsx）。
@@ -57,7 +60,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
   const chainErr = service.$model.loadChain.error;
   if (!service.chain && (service.$model.loadChain.loading || !chainErr)) {
     return (
-      <div className="w-full px-5 pt-6 min-[900px]:px-8">
+      <div className={CHAIN_BODY_PAD}>
         <AlbumSkeleton />
       </div>
     );
@@ -94,7 +97,7 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
             onError={() => setFailedCoverId(chain.coverMediaId)}
           />
         ))}
-      <div className="w-full px-5 pt-6 min-[900px]:px-8">
+      <div className={CHAIN_BODY_PAD}>
       {service.coverError ? (
         <div className="mb-4">
           <Banner tone="error">{service.coverError}</Banner>
