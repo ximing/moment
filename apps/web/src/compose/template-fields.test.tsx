@@ -80,6 +80,45 @@ describe('TemplateFields emoji-picker', () => {
   });
 });
 
+describe('TemplateFields rating emoji-picker（reading 模板 rating-* key 选项）', () => {
+  const manifest = {
+    version: 1,
+    momentFields: [
+      { key: 'book', type: 'text', label: '在读的书' },
+      {
+        key: 'rating',
+        type: 'emoji-picker',
+        label: '推荐度',
+        options: ['rating-love', 'rating-good', 'rating-ok', 'rating-pass'],
+      },
+    ],
+  } as unknown as TemplateManifest;
+
+  it('rating-* key 选项经 AppIcon 命中注册表出 SVG：rating-love 渲染 aria-label="超爱"', () => {
+    render(<TemplateFields service={seed({ manifest })} edit={false} />);
+
+    const group = screen.getByRole('group', { name: '推荐度' });
+    const loveOption = within(group).getByRole('button', { name: '超爱' });
+    const icon = within(loveOption).getByRole('img', { name: '超爱' });
+    expect(icon.tagName).toBe('svg');
+    // key 原文不得泄漏为文本节点
+    expect(loveOption).not.toHaveTextContent('rating-love');
+    // 词表其余三项同样命中（推荐/一般/不推荐）
+    expect(within(group).getByRole('button', { name: '推荐' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: '一般' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: '不推荐' })).toBeInTheDocument();
+  });
+
+  it('点选写回草稿的仍是 rating-* key 原文（值契约不变）', async () => {
+    const user = userEvent.setup();
+    const service = seed({ manifest });
+    render(<TemplateFields service={service} edit={false} />);
+
+    await user.click(screen.getByRole('button', { name: '超爱' }));
+    expect(service.payloadDraft.rating).toBe('rating-love');
+  });
+});
+
 describe('TemplateFields 里程碑目录 chips', () => {
   const manifest = {
     version: 1,
