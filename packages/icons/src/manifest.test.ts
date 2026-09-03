@@ -16,6 +16,10 @@ test('每个注册表项的 file 指向的 svg 文件存在（别名形态允许
   }
 });
 
+test('注册表全集 40 枚（spec §7：P5 随 career 画稿交付时加入）', () => {
+  assert.equal(Object.keys(ICON_MANIFEST).length, 40);
+});
+
 test('hasIconKey 命中与拒绝', () => {
   assert.equal(hasIconKey('mood-joy'), true);
   assert.equal(hasIconKey('reaction-sweet'), true);

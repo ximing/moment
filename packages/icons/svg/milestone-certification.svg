@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>职业认证</title>
+  <defs>
+    <linearGradient id="mcf-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7FD9A0"/>
+      <stop offset="1" stop-color="#3FAF73"/>
+    </linearGradient>
+    <linearGradient id="mcf-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A9E8C3"/>
+      <stop offset="1" stop-color="#66C98F"/>
+    </linearGradient>
+  </defs>
+  <path d="M12.5 16.5L9.5 27L13.2 24.6L15.4 27.6L16.6 18.5Z" fill="url(#mcf-b)"/>
+  <path d="M19.5 16.5L22.5 27L18.8 24.6L16.6 27.6L15.4 18.5Z" fill="url(#mcf-b)"/>
+  <circle cx="16" cy="11.5" r="8.5" fill="url(#mcf-b)"/>
+  <circle cx="16" cy="11.5" r="6.5" fill="url(#mcf-a)"/>
+  <path d="M12.6 10.8L14.9 13.2L19.2 8.6L20.3 9.8L14.9 15.6L11.5 12Z" fill="#FFFFFF"/>
+</svg>

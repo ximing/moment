@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>离职</title>
+  <defs>
+    <linearGradient id="mlv-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#D9E1E8"/>
+    </linearGradient>
+    <linearGradient id="mlv-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A9CBE8"/>
+      <stop offset="1" stop-color="#4E93DE"/>
+    </linearGradient>
+  </defs>
+  <rect x="7" y="4" width="12" height="24" rx="3" fill="url(#mlv-a)"/>
+  <path d="M9.5 6.5L16 8.8L16 23.2L9.5 25.5Z" fill="url(#mlv-b)"/>
+  <rect x="17" y="14.6" width="8" height="2.8" rx="1.4" fill="url(#mlv-b)"/>
+  <path d="M28 16L22 12.2L22 19.8Z" fill="url(#mlv-b)"/>
+</svg>

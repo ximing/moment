@@ -25,6 +25,14 @@ import MilestoneFirstStand from '@moment/icons/svg/milestone-first-stand.svg?rea
 import MilestoneFirstSteps from '@moment/icons/svg/milestone-first-steps.svg?react';
 import MilestoneFirstWord from '@moment/icons/svg/milestone-first-word.svg?react';
 import MilestoneFirstTooth from '@moment/icons/svg/milestone-first-tooth.svg?react';
+import MilestoneJoin from '@moment/icons/svg/milestone-join.svg?react';
+import MilestonePromotion from '@moment/icons/svg/milestone-promotion.svg?react';
+import MilestoneTransfer from '@moment/icons/svg/milestone-transfer.svg?react';
+import MilestoneJobHop from '@moment/icons/svg/milestone-job-hop.svg?react';
+import MilestoneLeave from '@moment/icons/svg/milestone-leave.svg?react';
+import MilestoneAward from '@moment/icons/svg/milestone-award.svg?react';
+import MilestoneMajorProject from '@moment/icons/svg/milestone-major-project.svg?react';
+import MilestoneCertification from '@moment/icons/svg/milestone-certification.svg?react';
 import TplBaby from '@moment/icons/svg/tpl-baby.svg?react';
 import TplTravel from '@moment/icons/svg/tpl-travel.svg?react';
 import TplDaily from '@moment/icons/svg/tpl-daily.svg?react';
@@ -66,6 +74,14 @@ export const APP_ICON_COMPONENTS: Record<IconKey, SvgComponent> = {
   'milestone-first-steps': MilestoneFirstSteps,
   'milestone-first-word': MilestoneFirstWord,
   'milestone-first-tooth': MilestoneFirstTooth,
+  'milestone-join': MilestoneJoin,
+  'milestone-promotion': MilestonePromotion,
+  'milestone-transfer': MilestoneTransfer,
+  'milestone-job-hop': MilestoneJobHop,
+  'milestone-leave': MilestoneLeave,
+  'milestone-award': MilestoneAward,
+  'milestone-major-project': MilestoneMajorProject,
+  'milestone-certification': MilestoneCertification,
   'tpl-baby': TplBaby,
   'tpl-travel': TplTravel,
   'tpl-daily': TplDaily,

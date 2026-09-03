@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>重大项目</title>
+  <defs>
+    <linearGradient id="mmp-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FC4F5"/>
+      <stop offset="1" stop-color="#4E93DE"/>
+    </linearGradient>
+    <linearGradient id="mmp-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B8DBF9"/>
+      <stop offset="1" stop-color="#7CB3E8"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="4" width="2.6" height="24" rx="1.3" fill="url(#mmp-a)"/>
+  <circle cx="9.3" cy="4.6" r="2" fill="url(#mmp-a)"/>
+  <path d="M10.6 5.5C14 3.5 18 4.5 21 3.8C24 3.1 26 4.2 26 4.2L26 13.5C26 13.5 23.5 12.4 20.5 13.1C17 13.9 13.5 13 10.6 14.8Z" fill="url(#mmp-b)"/>
+  <rect x="5.3" y="25.5" width="8" height="2.5" rx="1.25" fill="url(#mmp-a)"/>
+</svg>
