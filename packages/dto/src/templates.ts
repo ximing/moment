@@ -118,7 +118,7 @@ export type TemplateManifest = FromSchema<typeof manifestJsonSchema>;
 // ---------- 官方模板（spec §4；server P2 迁移 seed 的唯一数据源） ----------
 
 export interface OfficialTemplate {
-  key: 'baby' | 'travel' | 'daily';
+  key: 'baby' | 'travel' | 'daily' | 'reading' | 'career';
   name: string;
   description: string;
   icon: string;
@@ -240,6 +240,79 @@ export const OFFICIAL_TEMPLATES: readonly OfficialTemplate[] = [
       views: [{ type: 'moodline', label: '心情曲线', source: { field: 'mood' } }],
     },
   },
+  {
+    key: 'reading',
+    name: '读书笔记',
+    description: '记录在读的书与读后心得，给每本书一个推荐度',
+    icon: 'tpl-reading',
+    manifest: {
+      version: 1,
+      momentFields: [
+        { key: 'book', type: 'text', label: '在读的书' },
+        {
+          key: 'rating',
+          type: 'emoji-picker',
+          label: '推荐度',
+          options: ['rating-love', 'rating-good', 'rating-ok', 'rating-pass'],
+        },
+      ],
+      // 无 kinds、无 views、无 chainPayloadSchema
+    },
+  },
+  {
+    key: 'career',
+    name: '职业生涯',
+    description: '职业事件轨迹与阶段性思考，见证职业成长',
+    icon: 'tpl-career',
+    manifest: {
+      version: 1,
+      kinds: [
+        {
+          key: 'career-event',
+          label: '职业事件',
+          payloadSchema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              catalog_key: { type: 'string', pattern: '^[a-z][a-z0-9-]{0,49}$' },
+              custom_label: { type: 'string', minLength: 1, maxLength: 50 },
+              note: { type: 'string', maxLength: 500 },
+            },
+            anyOf: [{ required: ['catalog_key'] }, { required: ['custom_label'] }],
+          },
+          publisher: { entry: 'button', label: '记一个职业事件' },
+        },
+        {
+          key: 'reflection',
+          label: '思考',
+          payloadSchema: {
+            type: 'object',
+            required: ['topic'],
+            additionalProperties: false,
+            properties: {
+              topic: { type: 'string', minLength: 1, maxLength: 50 },
+              decision: { type: 'string', maxLength: 500 },
+              next_step: { type: 'string', maxLength: 500 },
+            },
+          },
+          publisher: { entry: 'button', label: '记一条思考' },
+        },
+      ],
+      views: [
+        { type: 'milestone-axis', label: '职业轨迹', source: { kind: 'career-event' } },
+      ],
+      milestoneCatalog: [
+        { key: 'join', label: '入职', icon: 'milestone-join' },
+        { key: 'promotion', label: '晋升', icon: 'milestone-promotion' },
+        { key: 'transfer', label: '转岗', icon: 'milestone-transfer' },
+        { key: 'job-hop', label: '跳槽', icon: 'milestone-job-hop' },
+        { key: 'leave', label: '离职', icon: 'milestone-leave' },
+        { key: 'award', label: '获奖', icon: 'milestone-award' },
+        { key: 'major-project', label: '重大项目', icon: 'milestone-major-project' },
+        { key: 'certification', label: '职业认证', icon: 'milestone-certification' },
+      ],
+    },
+  },
 ];
 
 // ---------- 模板 CRUD 契约（spec §3.1） ----------
@@ -263,6 +336,7 @@ export const updateTemplateInputSchema = z
   .object({
     name: z.string().trim().min(1).max(50).optional(),
     description: z.string().trim().max(500).nullable().optional(),
+    /** icon key（词表注册表 key），禁止 URL；同 createTemplateInputSchema */
     icon: z.string().min(1).max(50).optional(),
     manifest: z.record(z.unknown()).optional(),
   })
@@ -273,7 +347,7 @@ export type UpdateTemplateInput = z.infer<typeof updateTemplateInputSchema>;
 
 export interface TemplateDto {
   id: string;
-  /** official：保留 slug（baby/travel/daily）；user：server 分配 `u_` + 21 位十六进制随机 */
+  /** official：保留 slug（baby/travel/daily/reading/career）；user：server 分配 `u_` + 21 位十六进制随机 */
   key: string;
   scope: TemplateScope;
   /** user 模板创建者；official 为 null */

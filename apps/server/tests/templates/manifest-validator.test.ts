@@ -9,7 +9,7 @@ import {
 const valid = () => ({ version: 1 }) as const;
 
 describe('validateManifest', () => {
-  it('最小 manifest 与三份 official manifest 全部通过', () => {
+  it('最小 manifest 与五份 official manifest 全部通过', () => {
     expect(validateManifest(valid())).toEqual({ version: 1 });
     for (const t of OFFICIAL_TEMPLATES) {
       expect(() => validateManifest(t.manifest)).not.toThrow();

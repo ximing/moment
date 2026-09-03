@@ -49,11 +49,55 @@ test('meta-schema：version 必填且为 >=1 整数', () => {
   assert.equal(validateManifest({ version: 1.5 }), false);
 });
 
-test('parity：三份官方 manifest 全部通过 meta-schema 自校验', () => {
-  assert.equal(OFFICIAL_TEMPLATES.length, 3);
+test('parity：五份官方 manifest 全部通过 meta-schema 自校验', () => {
+  assert.equal(OFFICIAL_TEMPLATES.length, 5);
   for (const t of OFFICIAL_TEMPLATES) {
     assert.equal(validateManifest(t.manifest), true, `${t.key}: ${JSON.stringify(validateManifest.errors)}`);
   }
+});
+
+test('官方模板共 5 份且全部过 manifestJsonSchema', () => {
+  assert.deepEqual(
+    OFFICIAL_TEMPLATES.map((t) => t.key),
+    ['baby', 'travel', 'daily', 'reading', 'career'],
+  );
+  for (const t of OFFICIAL_TEMPLATES) {
+    assert.equal(validateManifest(t.manifest), true, `${t.key}: ${JSON.stringify(validateManifest.errors)}`);
+  }
+});
+
+test('reading rating 字段：icon key 选项经 momentFieldPayloadJsonSchema 派生 enum 校验', () => {
+  const reading = OFFICIAL_TEMPLATES.find((t) => t.key === 'reading')!;
+  const ratingField = reading.manifest.momentFields!.find((f) => f.key === 'rating')!;
+  assert.equal(ratingField.type, 'emoji-picker');
+  const validate = ajv.compile(momentFieldPayloadJsonSchema(ratingField));
+  assert.equal(validate('rating-love'), true);
+  assert.equal(validate('rating-pass'), true);
+  assert.equal(validate('❤️'), false);
+  assert.equal(validate('rating-nope'), false);
+});
+
+test('career-event payloadSchema 与 baby milestone 同构：catalog_key/custom_label 二选一', () => {
+  const career = OFFICIAL_TEMPLATES.find((t) => t.key === 'career')!;
+  const careerEvent = career.manifest.kinds!.find((k) => k.key === 'career-event')!;
+  const validate = ajv.compile(careerEvent.payloadSchema);
+  assert.equal(validate({ catalog_key: 'promotion' }), true);
+  assert.equal(validate({ catalog_key: 'promotion', note: '带组 8 人' }), true);
+  assert.equal(validate({ custom_label: '内部转组' }), true);
+  assert.equal(validate({}), false, JSON.stringify(validate.errors));
+  assert.equal(validate({ catalog_key: 'PROMOTION' }), false); // pattern 拒大写
+  assert.equal(validate({ catalog_key: 'promotion', hacker: 1 }), false); // additionalProperties
+});
+
+test('reflection payloadSchema：topic 必填 1-50，decision/next_step 可选 ≤500', () => {
+  const career = OFFICIAL_TEMPLATES.find((t) => t.key === 'career')!;
+  const reflection = career.manifest.kinds!.find((k) => k.key === 'reflection')!;
+  const validate = ajv.compile(reflection.payloadSchema);
+  assert.equal(validate({ topic: '要不要接这个新机会' }), true);
+  assert.equal(validate({ topic: 't', decision: 'd', next_step: 'n' }), true);
+  assert.equal(validate({}), false);
+  assert.equal(validate({ topic: '' }), false);
+  assert.equal(validate({ topic: 'x'.repeat(51) }), false);
 });
 
 test('baby：里程碑/成长记录 kinds + 目录 + 两视图', () => {
@@ -137,11 +181,13 @@ test('派生表：enum/emoji-picker 收敛到 options；缺 options 抛错', () 
   assert.throws(() => momentFieldPayloadJsonSchema({ key: 'e', type: 'enum', label: 'E' }));
 });
 
-test('官方三模板 icon 为 tpl-* key，baby catalog icon 为 milestone-first-* key', () => {
+test('官方五模板 icon 为 tpl-* key，baby catalog icon 为 milestone-first-* key', () => {
   const byKey = new Map(OFFICIAL_TEMPLATES.map((t) => [t.key, t]));
   assert.equal(byKey.get('baby')!.icon, 'tpl-baby');
   assert.equal(byKey.get('travel')!.icon, 'tpl-travel');
   assert.equal(byKey.get('daily')!.icon, 'tpl-daily');
+  assert.equal(byKey.get('reading')!.icon, 'tpl-reading');
+  assert.equal(byKey.get('career')!.icon, 'tpl-career');
   const babyCatalog = byKey.get('baby')!.manifest.milestoneCatalog!;
   assert.deepEqual(
     babyCatalog.map((c) => c.icon),

@@ -8,9 +8,9 @@ import { closeDb, resetDb } from '../helpers/db.js';
 afterAll(closeDb);
 
 describe('official templates seed', () => {
-  it('migrate 后三份 official 模板已入库，内容与 dto 常量一致', async () => {
+  it('migrate 后五份 official 模板已入库，内容与 dto 常量一致', async () => {
     const rows = await db.select().from(templates).where(eq(templates.scope, 'official'));
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(5);
     const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
     for (const t of OFFICIAL_TEMPLATES) {
       const row = byKey[t.key];
@@ -28,10 +28,10 @@ describe('official templates seed', () => {
     await seedOfficialTemplates();
     await seedOfficialTemplates();
     const rows = await db.select().from(templates).where(eq(templates.scope, 'official'));
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(5);
 
     await resetDb();
     const after = await db.select().from(templates).where(eq(templates.scope, 'official'));
-    expect(after).toHaveLength(3);
+    expect(after).toHaveLength(5);
   });
 });

@@ -59,19 +59,25 @@ describe('GET /api/templates', () => {
     const res = await request(app).get('/api/templates').set('Authorization', auth(alice));
     expect(res.status).toBe(200);
     const list = res.body as TemplateDto[];
-    expect(list.filter((t) => t.scope === 'official')).toHaveLength(3);
+    expect(list.filter((t) => t.scope === 'official')).toHaveLength(5);
     const userOnes = list.filter((t) => t.scope === 'user');
     expect(userOnes).toHaveLength(1);
     expect(userOnes[0].key).toBe(mine.key);
   });
 
-  it('?scope=official 只返回三份官方模板；?scope=user 只返回我的', async () => {
+  it('?scope=official 只返回五份官方模板；?scope=user 只返回我的', async () => {
     await createTemplate(alice);
     const official = await request(app)
       .get('/api/templates')
       .query({ scope: 'official' })
       .set('Authorization', auth(alice));
-    expect((official.body as TemplateDto[]).map((t) => t.key).sort()).toEqual(['baby', 'daily', 'travel']);
+    expect((official.body as TemplateDto[]).map((t) => t.key).sort()).toEqual([
+      'baby',
+      'career',
+      'daily',
+      'reading',
+      'travel',
+    ]);
     const mine = await request(app).get('/api/templates').query({ scope: 'user' }).set('Authorization', auth(alice));
     expect((mine.body as TemplateDto[]).every((t) => t.ownerId === alice.id)).toBe(true);
   });
