@@ -62,6 +62,26 @@ describe('P3-2 替换点数据值 → AppIcon 解析', () => {
     }
   });
 
+  // P5-5 Step 1：reading 模板 rating 字段 options 是 rating-* key，发布器 emoji-picker
+  // 选项经 <AppIcon value> 渲染（template-fields.tsx），命中注册表即出 SVG。
+  it('reading 模板 rating 4 值全部命中 rating-*，rating-love 念「超爱」', () => {
+    const reading = OFFICIAL_TEMPLATES.find((t) => t.key === 'reading')!.manifest;
+    const ratingField = (reading.momentFields ?? []).find((f) => f.key === 'rating')!;
+    assert.equal(ratingField.type, 'emoji-picker');
+    const expected: Record<string, string> = {
+      'rating-love': '超爱',
+      'rating-good': '推荐',
+      'rating-ok': '一般',
+      'rating-pass': '不推荐',
+    };
+    assert.deepEqual(ratingField.options, Object.keys(expected));
+    for (const opt of ratingField.options ?? []) {
+      const hit = resolveAppIcon(opt);
+      assert.equal(hit?.key, opt, `${opt} 应直接命中注册表`);
+      assert.equal(hit?.label, expected[opt], `${opt} 应念「${expected[opt]}」`);
+    }
+  });
+
   it('里程碑目录 icon（key 形态与存量 emoji 形态）全部命中注册表', () => {
     const baby = OFFICIAL_TEMPLATES.find((t) => t.key === 'baby')!.manifest;
     for (const c of baby.milestoneCatalog ?? []) {
