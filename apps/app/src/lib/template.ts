@@ -90,10 +90,12 @@ export const METRIC_LABELS: Record<string, string> = { height: '身高', weight:
  * - 含 catalog_key / custom_label → 里程碑目录解析（milestone 与 career-event 同路径）
  * - 含 topic → 主题摘要（reflection）
  * - metric 分支与未知 payload 返回 '' 的兜底不变
+ *
+ * `kind` 形参保留以稳住既有调用点签名（泛化后不再参与分派，故 `_kind`）。
  */
 export function summarizePayload(
   manifest: TemplateManifest,
-  kind: string,
+  _kind: string,
   payload: Record<string, unknown> | null,
 ): string {
   if (!payload) return '';
