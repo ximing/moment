@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>难过</title>
+  <defs>
+    <linearGradient id="mcry-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A9D9FF"/>
+      <stop offset="1" stop-color="#5FA8E8"/>
+    </linearGradient>
+    <linearGradient id="mcry-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#DFF0FF"/>
+      <stop offset="1" stop-color="#8CCBFF"/>
+    </linearGradient>
+  </defs>
+  <circle cx="16" cy="16" r="13" fill="url(#mcry-a)"/>
+  <path d="M8.4 13.2C9.5 14.7 12.5 14.7 13.6 13.2C12.3 14 9.7 14 8.4 13.2Z" fill="#3D5A75"/>
+  <path d="M18.4 13.2C19.5 14.7 22.5 14.7 23.6 13.2C22.3 14 19.7 14 18.4 13.2Z" fill="#3D5A75"/>
+  <path d="M8.2 15.3C6.9 17.2 6.2 18.7 6.2 20.2C6.2 21.9 7.3 23 8.6 23C9.9 23 11 21.9 11 20.2C11 18.7 10.3 17.2 9 15.3Z" fill="url(#mcry-b)"/>
+  <path d="M23 15.3C21.7 17.2 21 18.7 21 20.2C21 21.9 22.1 23 23.4 23C24.7 23 25.8 21.9 25.8 20.2C25.8 18.7 25.1 17.2 23.8 15.3Z" fill="url(#mcry-b)"/>
+  <path d="M12 20.6C12 18.8 13.8 17.7 16 17.7C18.2 17.7 20 18.8 20 20.6C20 22.4 18.2 23.6 16 23.6C13.8 23.6 12 22.4 12 20.6Z" fill="#3D5A75"/>
+  <path d="M13.9 22.3C14.6 21.2 17.4 21.2 18.1 22.3C17.2 23.1 14.8 23.1 13.9 22.3Z" fill="#F2766B"/>
+</svg>

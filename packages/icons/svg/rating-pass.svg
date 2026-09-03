@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>不推荐</title>
+  <defs>
+    <linearGradient id="rapa-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C3D8EA"/>
+      <stop offset="1" stop-color="#8FB2CE"/>
+    </linearGradient>
+  </defs>
+  <path fill-rule="evenodd" d="M16 27.8C8.6 22.4 3.2 17.4 3.2 11.6C3.2 7.6 6.2 4.6 10 4.6C12.6 4.6 14.9 6.2 16 8.6C17.1 6.2 19.4 4.6 22 4.6C25.8 4.6 28.8 7.6 28.8 11.6C28.8 17.4 23.4 22.4 16 27.8Z M16 25.2C9.8 20.6 5.4 16.2 5.4 11.4C5.4 8.2 7.8 6 10.8 6C13 6 15 7.4 16 9.6C17 7.4 19 6 21.2 6C24.2 6 26.6 8.2 26.6 11.4C26.6 16.2 22.2 20.6 16 25.2Z" fill="url(#rapa-a)"/>
+</svg>

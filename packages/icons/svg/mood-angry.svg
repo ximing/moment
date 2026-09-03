@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>烦躁</title>
+  <defs>
+    <linearGradient id="mang-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFB09A"/>
+      <stop offset="1" stop-color="#EE6A4E"/>
+    </linearGradient>
+  </defs>
+  <circle cx="16" cy="16" r="13" fill="url(#mang-a)"/>
+  <rect x="7.3" y="10.6" width="6.2" height="2.1" rx="1.05" fill="#6B2F26" transform="rotate(20 10.4 11.65)"/>
+  <rect x="18.5" y="10.6" width="6.2" height="2.1" rx="1.05" fill="#6B2F26" transform="rotate(-20 21.6 11.65)"/>
+  <circle cx="11" cy="15.2" r="1.35" fill="#6B2F26"/>
+  <circle cx="21" cy="15.2" r="1.35" fill="#6B2F26"/>
+  <path d="M11.8 22.6Q16 19.4 20.2 22.6Q16 20.9 11.8 22.6Z" fill="#6B2F26"/>
+  <circle cx="6.8" cy="19.8" r="2.1" fill="#FFF7F2" opacity="0.95"/>
+  <circle cx="5.4" cy="22.1" r="1.5" fill="#FFF7F2" opacity="0.95"/>
+  <circle cx="25.2" cy="19.8" r="2.1" fill="#FFF7F2" opacity="0.95"/>
+  <circle cx="26.6" cy="22.1" r="1.5" fill="#FFF7F2" opacity="0.95"/>
+</svg>

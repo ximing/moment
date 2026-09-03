@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>第一次爬</title>
+  <defs>
+    <linearGradient id="mcr-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7FD9A0"/>
+      <stop offset="1" stop-color="#3FAF73"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="8" cy="13.8" rx="2.3" ry="3" fill="url(#mcr-a)" transform="rotate(-20 8 13.8)"/>
+  <ellipse cx="12.8" cy="9.6" rx="2.3" ry="3.1" fill="url(#mcr-a)" transform="rotate(-7 12.8 9.6)"/>
+  <ellipse cx="19.2" cy="9.6" rx="2.3" ry="3.1" fill="url(#mcr-a)" transform="rotate(7 19.2 9.6)"/>
+  <ellipse cx="24" cy="13.8" rx="2.3" ry="3" fill="url(#mcr-a)" transform="rotate(20 24 13.8)"/>
+  <path d="M16 17.5C12.2 17.5 9.6 20.2 9.6 23C9.6 25.7 12 27.6 16 27.6C20 27.6 22.4 25.7 22.4 23C22.4 20.2 19.8 17.5 16 17.5Z" fill="url(#mcr-a)"/>
+</svg>

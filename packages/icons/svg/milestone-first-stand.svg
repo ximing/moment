@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>第一次站立</title>
+  <defs>
+    <linearGradient id="mst-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C9AEF7"/>
+      <stop offset="1" stop-color="#8D63E0"/>
+    </linearGradient>
+  </defs>
+  <circle cx="16" cy="7" r="3.4" fill="url(#mst-a)"/>
+  <rect x="9.8" y="11.5" width="2.5" height="8.5" rx="1.25" fill="url(#mst-a)" transform="rotate(7 11 15.75)"/>
+  <rect x="19.7" y="11.5" width="2.5" height="8.5" rx="1.25" fill="url(#mst-a)" transform="rotate(-7 21 15.75)"/>
+  <rect x="13" y="11" width="6" height="9.5" rx="3" fill="url(#mst-a)"/>
+  <rect x="13.1" y="19.8" width="2.7" height="7.7" rx="1.35" fill="url(#mst-a)"/>
+  <rect x="16.2" y="19.8" width="2.7" height="7.7" rx="1.35" fill="url(#mst-a)"/>
+</svg>

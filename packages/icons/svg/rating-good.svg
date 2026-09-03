@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>推荐</title>
+  <defs>
+    <linearGradient id="rago-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FCE9C4"/>
+      <stop offset="1" stop-color="#F9D79A"/>
+    </linearGradient>
+    <linearGradient id="rago-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC53D"/>
+      <stop offset="1" stop-color="#F2994A"/>
+    </linearGradient>
+    <clipPath id="rago-c">
+      <path d="M16 27.8C8.6 22.4 3.2 17.4 3.2 11.6C3.2 7.6 6.2 4.6 10 4.6C12.6 4.6 14.9 6.2 16 8.6C17.1 6.2 19.4 4.6 22 4.6C25.8 4.6 28.8 7.6 28.8 11.6C28.8 17.4 23.4 22.4 16 27.8Z"/>
+    </clipPath>
+  </defs>
+  <path d="M16 27.8C8.6 22.4 3.2 17.4 3.2 11.6C3.2 7.6 6.2 4.6 10 4.6C12.6 4.6 14.9 6.2 16 8.6C17.1 6.2 19.4 4.6 22 4.6C25.8 4.6 28.8 7.6 28.8 11.6C28.8 17.4 23.4 22.4 16 27.8Z" fill="url(#rago-a)"/>
+  <g clip-path="url(#rago-c)">
+    <rect x="2" y="12.5" width="28" height="17" fill="url(#rago-b)"/>
+  </g>
+</svg>

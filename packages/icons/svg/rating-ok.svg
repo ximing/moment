@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>一般</title>
+  <defs>
+    <linearGradient id="rok-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EEF1F4"/>
+      <stop offset="1" stop-color="#DCE2E7"/>
+    </linearGradient>
+    <linearGradient id="rok-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C4CDD5"/>
+      <stop offset="1" stop-color="#9AA7B1"/>
+    </linearGradient>
+    <clipPath id="rok-c">
+      <path d="M16 27.8C8.6 22.4 3.2 17.4 3.2 11.6C3.2 7.6 6.2 4.6 10 4.6C12.6 4.6 14.9 6.2 16 8.6C17.1 6.2 19.4 4.6 22 4.6C25.8 4.6 28.8 7.6 28.8 11.6C28.8 17.4 23.4 22.4 16 27.8Z"/>
+    </clipPath>
+  </defs>
+  <path d="M16 27.8C8.6 22.4 3.2 17.4 3.2 11.6C3.2 7.6 6.2 4.6 10 4.6C12.6 4.6 14.9 6.2 16 8.6C17.1 6.2 19.4 4.6 22 4.6C25.8 4.6 28.8 7.6 28.8 11.6C28.8 17.4 23.4 22.4 16 27.8Z" fill="url(#rok-a)"/>
+  <g clip-path="url(#rok-c)">
+    <rect x="2" y="19.5" width="28" height="11" fill="url(#rok-b)"/>
+  </g>
+</svg>

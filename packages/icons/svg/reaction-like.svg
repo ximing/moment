@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>点赞</title>
+  <defs>
+    <linearGradient id="rlike-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FC4F5"/>
+      <stop offset="1" stop-color="#4E93DE"/>
+    </linearGradient>
+    <linearGradient id="rlike-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6FA9E8"/>
+      <stop offset="1" stop-color="#3D7CC4"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="15.5" width="5.5" height="10.8" rx="2.4" fill="url(#rlike-b)"/>
+  <path d="M11.5 25.8V16.2C11.5 15.4 11.9 14.7 12.6 14.1C14.7 12.3 16.2 9.9 16.6 6.9C16.8 5.6 17.9 4.7 19.1 5.1C20.3 5.5 20.8 6.8 20.4 8.2C19.9 10.1 19.2 11.9 18.1 13.5H24.6C26.4 13.5 27.8 14.9 27.8 16.6C27.8 17.4 27.5 18.1 27 18.7C27.4 19.2 27.6 19.9 27.6 20.6C27.6 22.3 26.4 23.6 24.9 23.9C24.9 25.4 23.7 26.5 22.2 26.5H13.6C12.4 26.5 11.5 26.3 11.5 25.8Z" fill="url(#rlike-a)"/>
+  <ellipse cx="18.4" cy="7.6" rx="1.5" ry="2.2" fill="#FFFFFF" opacity="0.3" transform="rotate(12 18.4 7.6)"/>
+</svg>

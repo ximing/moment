@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>第一次走路</title>
+  <defs>
+    <linearGradient id="mste-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC53D"/>
+      <stop offset="1" stop-color="#F2994A"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="11" cy="18.5" rx="4" ry="5.5" fill="url(#mste-a)" transform="rotate(-14 11 18.5)"/>
+  <circle cx="14.6" cy="11.6" r="1.6" fill="url(#mste-a)"/>
+  <circle cx="11.8" cy="10.3" r="1.25" fill="url(#mste-a)"/>
+  <circle cx="9.4" cy="10.5" r="1.1" fill="url(#mste-a)"/>
+  <circle cx="7.3" cy="11.7" r="1" fill="url(#mste-a)"/>
+  <ellipse cx="21.5" cy="13.5" rx="4" ry="5.5" fill="url(#mste-a)" transform="rotate(14 21.5 13.5)"/>
+  <circle cx="18" cy="6.6" r="1.6" fill="url(#mste-a)"/>
+  <circle cx="20.8" cy="5.3" r="1.25" fill="url(#mste-a)"/>
+  <circle cx="23.2" cy="5.5" r="1.1" fill="url(#mste-a)"/>
+  <circle cx="25.3" cy="6.7" r="1" fill="url(#mste-a)"/>
+</svg>

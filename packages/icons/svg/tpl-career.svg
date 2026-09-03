@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>职业生涯</title>
+  <defs>
+    <linearGradient id="tca-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C9AEF7"/>
+      <stop offset="1" stop-color="#8D63E0"/>
+    </linearGradient>
+    <linearGradient id="tca-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2ECFF"/>
+      <stop offset="1" stop-color="#DCCFFB"/>
+    </linearGradient>
+    <linearGradient id="tca-c" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF8FA3"/>
+      <stop offset="1" stop-color="#E85D75"/>
+    </linearGradient>
+  </defs>
+  <circle cx="16" cy="16" r="11.5" fill="url(#tca-a)"/>
+  <circle cx="16" cy="16" r="8.6" fill="url(#tca-b)"/>
+  <path d="M16 9.6L18.2 16L13.8 16Z" fill="url(#tca-c)"/>
+  <path d="M16 22.4L18.2 16L13.8 16Z" fill="#B7A6E8"/>
+  <circle cx="16" cy="16" r="1.2" fill="#FFFFFF"/>
+</svg>

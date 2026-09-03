@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>读书笔记</title>
+  <defs>
+    <linearGradient id="tre-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7FD9A0"/>
+      <stop offset="1" stop-color="#3FAF73"/>
+    </linearGradient>
+    <linearGradient id="tre-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6FBF3"/>
+      <stop offset="1" stop-color="#E2F0DC"/>
+    </linearGradient>
+  </defs>
+  <rect x="3.4" y="5.6" width="13" height="21" rx="2" fill="url(#tre-a)" transform="rotate(-4 9.9 16.1)"/>
+  <rect x="15.6" y="5.6" width="13" height="21" rx="2" fill="url(#tre-a)" transform="rotate(4 22.1 16.1)"/>
+  <path d="M16 8.2C13.6 6.6 10.2 5.9 6 6.5C5.4 6.6 5 7.1 5 7.7V23.6C5 24.3 5.5 24.8 6.2 24.7C10.3 24.2 13.7 24.9 16 26.6Z" fill="url(#tre-b)"/>
+  <path d="M16 8.2C18.4 6.6 21.8 5.9 26 6.5C26.6 6.6 27 7.1 27 7.7V23.6C27 24.3 26.5 24.8 25.8 24.7C21.7 24.2 18.3 24.9 16 26.6Z" fill="url(#tre-b)"/>
+  <rect x="7.2" y="11" width="6.4" height="1.1" rx="0.55" fill="#BCDDB0"/>
+  <rect x="7.2" y="14" width="6.4" height="1.1" rx="0.55" fill="#BCDDB0"/>
+  <rect x="18.4" y="11" width="6.4" height="1.1" rx="0.55" fill="#BCDDB0"/>
+  <rect x="18.4" y="14" width="6.4" height="1.1" rx="0.55" fill="#BCDDB0"/>
+  <rect x="15.4" y="8" width="1.2" height="18.6" rx="0.6" fill="#3FAF73" opacity="0.5"/>
+</svg>

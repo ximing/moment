@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>旅行</title>
+  <defs>
+    <linearGradient id="ttr-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FC4F5"/>
+      <stop offset="1" stop-color="#4E93DE"/>
+    </linearGradient>
+    <linearGradient id="ttr-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B9DBF9"/>
+      <stop offset="1" stop-color="#7FB6EF"/>
+    </linearGradient>
+  </defs>
+  <rect x="7.5" y="13.8" width="17" height="4.4" rx="2.2" fill="url(#ttr-b)" transform="rotate(-45 16 16)"/>
+  <rect x="12" y="21" width="8.5" height="3" rx="1.5" fill="url(#ttr-b)" transform="rotate(-45 16 16)"/>
+  <rect x="14.2" y="2.8" width="3.6" height="26" rx="1.8" fill="url(#ttr-a)" transform="rotate(-45 16 16)"/>
+</svg>

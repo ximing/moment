@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>第一次独坐</title>
+  <defs>
+    <linearGradient id="msit-a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FC4F5"/>
+      <stop offset="1" stop-color="#4E93DE"/>
+    </linearGradient>
+    <linearGradient id="msit-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6FA9E8"/>
+      <stop offset="1" stop-color="#3D7CC4"/>
+    </linearGradient>
+  </defs>
+  <rect x="9" y="20" width="3.4" height="7" rx="1.7" fill="url(#msit-b)"/>
+  <rect x="19.6" y="20" width="3.4" height="7" rx="1.7" fill="url(#msit-b)"/>
+  <rect x="9" y="4.5" width="14" height="10" rx="4.5" fill="url(#msit-a)"/>
+  <rect x="6.5" y="14.5" width="19" height="6" rx="3" fill="url(#msit-b)"/>
+  <ellipse cx="16" cy="14.6" rx="6.5" ry="1.5" fill="#B9DBF9"/>
+</svg>
