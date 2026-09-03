@@ -37,7 +37,7 @@ export function ReactionBar({
           >
             {/* 数据值 emoji 走 AppIcon（spec §4.2）；size 与 text-meta(13px) 字号视觉等效 */}
             <AppIcon value={emoji} size={13} className="mr-0.5 align-middle" />
-            {count > 0 ? ` ${count}` : ''}
+            {count > 0 ? `${count}` : ''}
           </button>
         );
       })}
