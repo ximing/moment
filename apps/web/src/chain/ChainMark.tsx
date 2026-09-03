@@ -3,6 +3,7 @@ import type { ChainAppearanceColor, ChainIcon, ChainImageFocus } from '@moment/d
 import { CENTER_FOCUS, focusObjectPosition } from '@/chain/appearance-model';
 import { chainColorCss, resolveChainAppearanceColor } from '@/lib/chain-color';
 import { useMediaObjectUrl } from '@/media/useMediaObjectUrl';
+import { AppIcon } from '@/ui/AppIcon';
 
 /** 链标识透传视图（chainLookById 的 value）：不含 cover——侧栏/时间线/那年今日只用头像。 */
 export interface ChainLook {
@@ -59,13 +60,15 @@ export function ChainMark({
     );
   }
   if (icon) {
+    // icon 位包 AppIcon（spec §4.2 末条）：命中注册表/映射表的值出 SVG，
+    // 自由 emoji 走兜底原文（size×0.58 与原 fontSize 一致，视觉不变）。
     return (
       <span
         aria-hidden
         className="inline-flex shrink-0 items-center justify-center rounded-full"
-        style={{ width: size, height: size, background: 'var(--surface)', fontSize: size * 0.58, lineHeight: 1 }}
+        style={{ width: size, height: size, background: 'var(--surface)' }}
       >
-        {icon}
+        <AppIcon value={icon} size={size * 0.58} />
       </span>
     );
   }

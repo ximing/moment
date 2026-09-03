@@ -1,6 +1,7 @@
 import { observer } from '@rabjs/react';
 import { MapPin } from 'lucide-react';
 import type { TemplateManifest, TemplateMomentField } from '@moment/dto';
+import { AppIcon } from '@/ui/AppIcon';
 import { Button } from '@/ui/button/index';
 import { Field, Input } from '@/ui/field/index';
 import type { ComposePanelService } from './compose-panel/compose-panel.service';
@@ -49,7 +50,13 @@ const MomentFieldControl = observer(function MomentFieldControl({
             onClick={() => service.setFieldValue(field.key, value === opt ? undefined : opt)}
             className={`${CHIP_BASE} ${value === opt ? CHIP_ON : CHIP_OFF}`}
           >
-            {field.type === 'emoji-picker' ? opt : (ENUM_LABELS[opt] ?? opt)}
+            {/* emoji-picker 的选项值是数据词表（mood/rating），走 AppIcon（spec §4.2）；
+                size 与 chip 的 text-caption(12px) 字号视觉等效 */}
+            {field.type === 'emoji-picker' ? (
+              <AppIcon value={opt} size={12} className="align-middle" />
+            ) : (
+              (ENUM_LABELS[opt] ?? opt)
+            )}
           </button>
         ))}
       </div>
@@ -175,7 +182,11 @@ const KindPayloadForm = observer(function KindPayloadForm({
               }
               className={`${CHIP_BASE} ${service.payloadDraft.catalog_key === c.key ? CHIP_ON : CHIP_OFF}`}
             >
-              {c.icon} {c.label}
+              {/* 目录 icon 是数据值（milestone-* key 或存量 emoji），走 AppIcon（spec §4.2） */}
+              <span className="inline-flex items-center gap-1">
+                {c.icon ? <AppIcon value={c.icon} size={12} /> : null}
+                {c.label}
+              </span>
             </button>
           ))}
         </div>

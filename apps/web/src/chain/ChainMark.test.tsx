@@ -9,6 +9,10 @@ import { ChainMark } from './ChainMark';
 // - emoji 背景固定 var(--surface)，不叠加自定义纯色；自定义 hex 原样渲染，预设色走 token 映射；
 // - 登录态经 useMediaObjectUrl 认证 blob（这里桩成确定性 URL）；avatarSrc（公开分享
 //   的 tokenized 稳定 URL）在场时绝不进 blob 通道（hook 收 null，不发 fetch）。
+//
+// P3-1 起 icon 位包 AppIcon（spec 2026-09-03-svg-icon-system §4.2 末条）：
+// 命中注册表/映射表的值（如旧官方模板 👶）渲染 SVG；自由 emoji（含 ZWJ 组合
+// 👨‍👩‍👧）落第 3 分支原文兜底，视觉与现状一致。
 
 vi.mock('@/media/useMediaObjectUrl', () => ({
   useMediaObjectUrl: vi.fn((mediaId: string | null) => (mediaId ? `blob:mock-${mediaId}` : null)),
@@ -53,18 +57,18 @@ describe('ChainMark 图片模式', () => {
 
   it('blob URL 未就绪（loading）时先按 emoji/color 兜底', () => {
     hook.mockReturnValue(null);
-    const { root } = renderMark({ chainId: 'c1', avatarMediaId: 'm-1', icon: '👶' });
+    const { root } = renderMark({ chainId: 'c1', avatarMediaId: 'm-1', icon: '👨‍👩‍👧' });
     expect(root.tagName).toBe('SPAN');
-    expect(root).toHaveTextContent('👶');
+    expect(root).toHaveTextContent('👨‍👩‍👧');
   });
 
   it('图片 onError 当次回退到 emoji/color 兜底，不无限重试', () => {
-    const { container } = renderMark({ chainId: 'c1', avatarSrc: '/api/media/m-1?st=tok', icon: '👶', size: 24 });
+    const { container } = renderMark({ chainId: 'c1', avatarSrc: '/api/media/m-1?st=tok', icon: '👨‍👩‍👧', size: 24 });
     const img = container.querySelector('img')!;
     fireEvent.error(img);
     // 同 src 不再重试渲染 img；兜底为 emoji
     expect(container.querySelector('img')).toBeNull();
-    expect(container.firstElementChild).toHaveTextContent('👶');
+    expect(container.firstElementChild).toHaveTextContent('👨‍👩‍👧');
   });
 
   it('onError 后 src 变化重置 broken 态，重新渲染新图', () => {
@@ -83,10 +87,23 @@ describe('ChainMark 图片模式', () => {
 
 describe('ChainMark emoji 模式', () => {
   it('emoji 背景固定 var(--surface)，不叠加自定义纯色', () => {
-    const { root } = renderMark({ chainId: 'c1', icon: '👶', color: '#A1B2C3' });
-    expect(root).toHaveTextContent('👶');
+    const { root } = renderMark({ chainId: 'c1', icon: '👨‍👩‍👧', color: '#A1B2C3' });
+    expect(root).toHaveTextContent('👨‍👩‍👧');
     expect(root).toHaveStyle({ background: 'var(--surface)' });
     expect(root.style.background).not.toContain('#A1B2C3');
+  });
+
+  it('自由 emoji（含 ZWJ 组合）仍渲染原文本节点（AppIcon 兜底回归）', () => {
+    const { root } = renderMark({ chainId: 'c1', icon: '👨‍👩‍👧', size: 24 });
+    expect(root.querySelector('svg')).toBeNull();
+    expect(root).toHaveTextContent('👨‍👩‍👧');
+  });
+
+  it('命中映射表的存量 emoji（👶→tpl-baby）改渲染注册表 SVG', () => {
+    const { root } = renderMark({ chainId: 'c1', icon: '👶', size: 24 });
+    // 节点位 aria-hidden，SVG 只能在 DOM 层断言
+    expect(root.querySelector('svg')).not.toBeNull();
+    expect(root).not.toHaveTextContent('👶');
   });
 });
 

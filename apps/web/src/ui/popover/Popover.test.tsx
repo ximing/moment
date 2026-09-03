@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Plus } from 'lucide-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +10,11 @@ import { MemberPopover, Popover, ReactionPopover } from './index';
 // 二维方向键、Enter 选择后立即关闭并复焦入口）；MemberPopover 桌面
 // hover/focus 300ms 打开、指针跨入浮面保持、点击/触摸立即打开、
 // 焦点留在 Trigger 上并以描述关系对读屏可达、外部/Escape 关闭。
+//
+// P3-1 起选项渲染切换 AppIcon（spec 2026-09-03-svg-icon-system §4.2）：
+// 选项按钮无障碍名 = 注册表 label（👍→点赞、🥰→幸福——mood-love 别名决策 §3.1），
+// 按钮内容是 role="img" 的 SVG 而非 emoji 文本节点；onChange 回传值仍是 emoji 原文
+// （REACTION_EMOJIS 契约零改动，P3-3 验证）。
 
 describe('ReactionPopover', () => {
   function Harness({
@@ -38,8 +43,20 @@ describe('ReactionPopover', () => {
     ).toBeInTheDocument();
     expect(screen.getAllByRole('gridcell')).toHaveLength(10);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '😂' })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: '笑哭' })).toHaveFocus(),
     );
+  });
+
+  it('选项渲染为注册表 SVG（role="img" + label），不再是 emoji 文本节点', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: '加个表情' }));
+    await screen.findByRole('grid', { name: '选择表情' });
+
+    const likeButton = screen.getByRole('button', { name: '点赞' });
+    const icon = within(likeButton).getByRole('img', { name: '点赞' });
+    expect(icon.tagName).toBe('svg');
+    expect(likeButton).not.toHaveTextContent('👍');
   });
 
   it('表情按钮声明触控最小点击区类（spec §8.2：≥44px）', async () => {
@@ -48,7 +65,7 @@ describe('ReactionPopover', () => {
     await user.click(screen.getByRole('button', { name: '加个表情' }));
     await screen.findByRole('grid', { name: '选择表情' });
 
-    const emojiButton = screen.getByRole('button', { name: '👍' });
+    const emojiButton = screen.getByRole('button', { name: '点赞' });
     expect(emojiButton.className).toContain('min-h-touch-control');
     expect(emojiButton.className).toContain('min-w-[var(--touch-control-min)]');
   });
@@ -60,7 +77,7 @@ describe('ReactionPopover', () => {
     await screen.findByRole('grid', { name: '选择表情' });
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '👍' })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: '点赞' })).toHaveFocus(),
     );
   });
 
@@ -70,27 +87,27 @@ describe('ReactionPopover', () => {
     await user.click(screen.getByRole('button', { name: '加个表情' }));
     await screen.findByRole('grid', { name: '选择表情' });
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '👍' })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: '点赞' })).toHaveFocus(),
     );
 
-    // 网格 5 列：👍 ❤️ 😂 😮 😢 / 🎉 🥰 👏 💪 🙏
+    // 网格 5 列：👍 ❤️ 😂 😮 😢 / 🎉 🥰 👏 💪 🙏（无障碍名取注册表 label）
     await user.keyboard('{ArrowRight}');
-    expect(screen.getByRole('button', { name: '❤️' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '爱心' })).toHaveFocus();
     await user.keyboard('{ArrowDown}');
-    expect(screen.getByRole('button', { name: '🥰' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '幸福' })).toHaveFocus();
     await user.keyboard('{ArrowUp}');
-    expect(screen.getByRole('button', { name: '❤️' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '爱心' })).toHaveFocus();
     await user.keyboard('{ArrowLeft}');
-    expect(screen.getByRole('button', { name: '👍' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '点赞' })).toHaveFocus();
     // 边界不越界
     await user.keyboard('{ArrowUp}');
-    expect(screen.getByRole('button', { name: '👍' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '点赞' })).toHaveFocus();
     await user.keyboard('{End}');
-    expect(screen.getByRole('button', { name: '🙏' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '感谢' })).toHaveFocus();
     await user.keyboard('{ArrowDown}');
-    expect(screen.getByRole('button', { name: '🙏' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '感谢' })).toHaveFocus();
     await user.keyboard('{Home}');
-    expect(screen.getByRole('button', { name: '👍' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '点赞' })).toHaveFocus();
   });
 
   it('Enter 选择后立即关闭并将焦点返回表情入口', async () => {
@@ -101,7 +118,7 @@ describe('ReactionPopover', () => {
     await user.click(trigger);
     await screen.findByRole('grid', { name: '选择表情' });
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '😂' })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: '笑哭' })).toHaveFocus(),
     );
 
     await user.keyboard('{ArrowRight}');
@@ -120,7 +137,7 @@ describe('ReactionPopover', () => {
     await user.click(screen.getByRole('button', { name: '加个表情' }));
     await screen.findByRole('grid', { name: '选择表情' });
 
-    await user.click(screen.getByRole('button', { name: '🎉' }));
+    await user.click(screen.getByRole('button', { name: '庆祝' }));
     expect(onChange).toHaveBeenCalledWith('🎉');
     await waitFor(() =>
       expect(screen.queryByRole('grid')).not.toBeInTheDocument(),

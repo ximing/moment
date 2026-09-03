@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react';
 import { REACTION_EMOJIS, type PublicShareMoment } from '@moment/dto';
+import { AppIcon } from '@/ui/AppIcon';
 import { Icon } from '@/ui/Icon';
 import { ReactionPopover } from '@/ui/popover/index';
 
@@ -34,7 +35,8 @@ export function ReactionBar({
               mine ? 'bg-select text-select-fg' : 'text-muted hover:bg-floating-hover hover:text-ink'
             }`}
           >
-            {emoji}
+            {/* 数据值 emoji 走 AppIcon（spec §4.2）；size 与 text-meta(13px) 字号视觉等效 */}
+            <AppIcon value={emoji} size={13} className="mr-0.5 align-middle" />
             {count > 0 ? ` ${count}` : ''}
           </button>
         );

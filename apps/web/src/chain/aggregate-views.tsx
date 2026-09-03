@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { AggregateResponse, PublicShareMoment } from '@moment/dto';
 import { METRIC_LABELS, groupMomentsByTrips, type Trip } from '@/lib/template';
 import { formatHappenedClock } from '@/lib/time';
+import { AppIcon } from '@/ui/AppIcon';
 import { Banner, EmptyState } from '@/ui/feedback/index';
 
 // 聚合视图词表渲染器（spec §5）：curve / milestone-axis / moodline / timeline(trips)。
@@ -72,7 +73,10 @@ function MilestoneAxisView({ aggregate }: { aggregate: Extract<AggregateResponse
     <ol className="flex flex-col gap-3">
       {aggregate.items.map((item) => (
         <li key={item.momentId} className="flex items-baseline gap-3">
-          <span aria-hidden className="text-body">{item.icon ?? '·'}</span>
+          {/* 目录 icon 是数据值，走 AppIcon（spec §4.2）；size 与 text-body(16px) 视觉等效 */}
+          <span aria-hidden className="inline-flex items-center text-body">
+            {item.icon ? <AppIcon value={item.icon} size={16} /> : '·'}
+          </span>
           <span className="font-semibold text-ink">{item.label}</span>
           <span className="text-meta text-muted">{formatHappenedClock(item.happenedAt, viewerTz)}</span>
           {item.note && <span className="text-meta text-muted">{item.note}</span>}
@@ -93,9 +97,10 @@ function MoodlineView({ aggregate }: { aggregate: Extract<AggregateResponse, { v
       {days.map((d) => (
         <li key={`${d.date}-${d.mood}`} className="flex items-center gap-3 text-body">
           <span className="w-24 shrink-0 text-meta text-muted">{d.date.slice(5)}</span>
-          <span aria-label={`心情 ${d.mood}，${d.count} 次`}>
+          <span aria-label={`心情 ${d.mood}，${d.count} 次`} className="inline-flex items-center gap-0.5">
+            {/* mood 是数据值（daily 模板 5 项词表），走 AppIcon（spec §4.2）；size 与 text-body(16px) 视觉等效 */}
             {Array.from({ length: Math.min(d.count, 10) }, (_, i) => (
-              <span key={i}>{d.mood}</span>
+              <AppIcon key={i} value={d.mood} size={16} />
             ))}
             {d.count > 10 && <span className="text-meta text-muted"> ×{d.count}</span>}
           </span>

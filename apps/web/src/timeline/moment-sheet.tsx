@@ -15,6 +15,7 @@ import { ComposeSessionService } from '@/services/compose-session.service';
 import type { ChainAppearanceColor, ChainIcon, ChainImageFocus, TemplateManifest } from '@moment/dto';
 import { ChainMark } from '@/chain/ChainMark';
 import { Avatar } from '@/ui/Avatar';
+import { AppIcon } from '@/ui/AppIcon';
 import { cardDisplayUrl, posterDisplayUrl } from '@/lib/media-src';
 import { formatHappenedClock } from '@/lib/time';
 import { resolveMilestoneLabel, summarizePayload } from '@/lib/template';
@@ -135,7 +136,14 @@ export const MomentSheetContent = observer(function MomentSheetContent({
     const summaryText = summarizePayload(templateManifest, moment.kind, payload);
     if (summaryText && moment.content.trim() !== summaryText) {
       const { icon } = resolveMilestoneLabel(templateManifest, payload);
-      kindSummary = <span className="text-muted">{icon ? `${icon} ${summaryText}` : summaryText}</span>;
+      // 目录 icon 是数据值（milestone-* key 或存量 emoji），走 AppIcon（spec §4.2）；
+      // size 与正文字号（16px）视觉等效，mr-1 ≈ 原空格宽度
+      kindSummary = (
+        <span className="text-muted">
+          {icon ? <AppIcon value={icon} size={16} className="mr-1 align-middle" /> : null}
+          {summaryText}
+        </span>
+      );
     }
   }
 

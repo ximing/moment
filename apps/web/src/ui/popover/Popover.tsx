@@ -1,6 +1,7 @@
 import { REACTION_EMOJIS } from '@moment/dto';
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { cloneElement, useEffect, useId, useRef, useState } from 'react';
+import { AppIcon, resolveAppIcon } from '../AppIcon';
 import { FloatingLayer } from '../floating/FloatingLayer';
 
 // Popover 家族（规范：docs/superpowers/specs/2026-08-18-web-menu-popover-tooltip-design.md §8）
@@ -204,12 +205,14 @@ export function ReactionPopover({
                     <button
                       type="button"
                       tabIndex={index === activeIndex ? 0 : -1}
-                      aria-label={emoji}
+                      // 无障碍名取注册表 label（spec §4.2；🥰 经映射落 mood-love「幸福」，§3.1 别名决策）
+                      aria-label={resolveAppIcon(emoji)?.label ?? emoji}
                       aria-pressed={value === emoji}
                       onClick={() => select(emoji)}
-                      className="flex h-icon-button w-icon-button min-h-touch-control min-w-[var(--touch-control-min)] items-center justify-center rounded-menu-item text-lg outline-none hover:bg-floating-hover focus-visible:bg-floating-hover focus-visible:ring-focus"
+                      className="flex h-icon-button w-icon-button min-h-touch-control min-w-[var(--touch-control-min)] items-center justify-center rounded-menu-item outline-none hover:bg-floating-hover focus-visible:bg-floating-hover focus-visible:ring-focus"
                     >
-                      {emoji}
+                      {/* size 与原 text-lg(18px) 字号视觉等效 */}
+                      <AppIcon value={emoji} size={18} />
                     </button>
                   </div>
                 );

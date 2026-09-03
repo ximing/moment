@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { RSRoot, register, resolve } from '@rabjs/react';
-import type { MomentMedia } from '@moment/dto';
+import type { MomentMedia, TemplateManifest } from '@moment/dto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '@/services/auth.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
@@ -85,6 +85,7 @@ function renderSheet(
     readOnly?: boolean;
     variant?: 'album' | 'single';
     onPlaceFilter?: (place: string) => void;
+    templateManifest?: TemplateManifest | null;
   } = {},
 ) {
   return render(
@@ -95,6 +96,7 @@ function renderSheet(
           readOnly={props.readOnly}
           variant={props.variant}
           onPlaceFilter={props.onPlaceFilter}
+          templateManifest={props.templateManifest}
         />
       </RSRoot>
     </MemoryRouter>,
@@ -193,6 +195,35 @@ describe('moment-sheet 便利贴纸面', () => {
   it('data-span 来自 noteColSpan', () => {
     renderSheet(moment());
     expect(screen.getByRole('article')).toHaveAttribute('data-span', '1');
+  });
+
+  it('里程碑摘要 icon 位经 AppIcon 渲染注册表 SVG（存量 emoji 数据经映射命中）', () => {
+    // spec 2026-09-03-svg-icon-system §4.2：时刻摘要的目录 icon 是数据值；
+    // 😊 是旧数据形态，经 EMOJI_TO_ICON 命中 milestone-first-smile
+    const manifest = {
+      version: 1,
+      kinds: [
+        {
+          key: 'milestone',
+          label: '里程碑',
+          payloadSchema: { type: 'object', properties: { catalog_key: { type: 'string' } } },
+        },
+      ],
+      milestoneCatalog: [{ key: 'first-smile', label: '第一次微笑', icon: '😊' }],
+    } as unknown as TemplateManifest;
+    renderSheet(
+      moment({
+        kind: 'milestone',
+        content: '今天冲着奶奶笑了一下',
+        payload: { catalog_key: 'first-smile' },
+      }),
+      { templateManifest: manifest },
+    );
+
+    // svg 画稿内嵌 <title> 同名文本，用 selector 锁定摘要 span 本身
+    const summary = screen.getByText('第一次微笑', { selector: 'span' });
+    expect(summary.querySelector('svg')).not.toBeNull();
+    expect(summary).not.toHaveTextContent('😊');
   });
 
   it('纸面直角、无描边，靠阴影和色面', () => {
