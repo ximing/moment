@@ -13,6 +13,7 @@
 - **存量数据零迁移**：已入库的封闭 emoji 词表值（mood 5、reaction 10）继续以 emoji 存储与传输，只在渲染层经映射表换成 SVG；reaction 的通知去重键、计数分组、worker 推送文案逻辑一律不碰。
 - **链图标与用户头像的自由 emoji 输入保持不变**：`ChainIcon` 允许任意单个 emoji（含 ZWJ/肤色序列），这是用户表达自由，不属于「UI chrome 的 emoji」，渲染走 AppIcon 的文本兜底分支，天然不受影响。
 - **装饰性 emoji 换单色线性图标**：📍📅💬⚙️ 等 UI 装饰与 RN Tab 栏图标不属于彩色面性体系，web 用既有 lucide 封装，app 用 lucide path + react-native-svg 自绘单色。
+- **通知链路保留 emoji 字符**：app 通知中心（`apps/app/src/features/notifications/index.tsx`）直接渲染通知 payload 的 body 文本（worker 生成的推送文案），其中的 reaction emoji 以系统字体显示——刻意保留，不改。理由：通知文案是纯文本（系统推送与通知中心共用同一份 worker 文案），拆出结构化 reaction 字段需要改通知 payload 契约、worker 文案模板与去重键序列化，收益仅是通知列表里一颗小图标；且把 emoji 换成 icon key 原文（如「点赞了你的时刻 rating-love」）反而更难读。重启条件：通知中心改版为富文本/结构化渲染时，reaction 位再接入 AppIcon。
 
 ## 1. 术语表
 
@@ -61,9 +62,16 @@ export type IconKey = keyof typeof ICON_MANIFEST;
 export function hasIconKey(value: string): value is IconKey;
 ```
 
-- **web 消费**：Vite 构建期用 SVGR 把 `svg/` 生成 React 组件，web 侧生成（或手写维护）`key → 组件` 索引，`AppIcon` 按 key 取组件。
-- **app 消费**：metro 配置 `react-native-svg-transformer`（`react-native-svg@15.12.1` 已是既有依赖），`import MoodJoy from '@moment/icons/svg/mood-joy.svg'` 直接得到组件，无需另存画稿。
+- **web 消费**：构建期用 `vite-plugin-svgr`（SVGR 的 Vite 集成）把 `svg/` import 为 React 组件，web 侧生成（或手写维护）`key → 组件` 索引，`AppIcon` 按 key 取组件；类型用 `vite-plugin-svgr/client`。
+- **app 消费**：metro 配置 `react-native-svg-transformer`（`react-native-svg@15.12.1` 已是既有依赖），`import MoodJoy from '@moment/icons/svg/mood-joy.svg'` 直接得到组件，无需另存画稿；app 需手写 `*.svg` 模块的 TS 声明（`declarations.d.ts`）。
 - 依赖方向：`@moment/icons` 不依赖任何端；parity 测试需要读 dto 的 `EMOJI_TO_ICON`，`@moment/icons` 以 devDependency 引 `@moment/dto`（dto 不反向依赖 icons，无环）。
+
+**构建接入四个实施要点（P1 一次做对）：**
+
+1. `@moment/icons` 的 package.json `exports` 必须包含 `./svg/*` 子路径（或干脆不声明 `exports`），否则双端无法 import svg 文件——app 侧已开启 `unstable_enablePackageExports`，exports 缺子路径会直接解析失败。
+2. app 的 `metro.config.js` **是在既有自定义配置上叠加**（该文件已有 monorepo watchFolders / package exports / react 钉版逻辑）：追加 `transformer.babelTransformerPath = require.resolve('react-native-svg-transformer')`、`resolver.assetExts` 移除 `'svg'`、`resolver.sourceExts` 增加 `'svg'`，不得整体重写。
+3. TS 声明分工：app 手写 `declare module '*.svg'`（组件类型为 `React.ComponentType<SvgProps>`）；web 在 `vite-env.d.ts` 引 `vite-plugin-svgr/client`。
+4. web/app 各自 package.json 显式声明 `"@moment/icons": "workspace:*"` 依赖，使 icons 进入 pnpm build / turbo 拓扑（先构建依赖包再起 dev 的既有约定自动覆盖）。
 
 ### 2.2 画稿规范
 
@@ -167,7 +175,7 @@ export const EMOJI_TO_ICON: Readonly<Record<string, string>> = {
 零迁移、零校验破坏的边界：
 
 - mood 值仍散在 `moments.payload` JSON 里以 emoji 存储，server 校验逻辑（`momentFieldPayloadJsonSchema` 的 enum）不变。
-- reaction 值仍按 `REACTION_EMOJIS` 白名单入库（`reactions.emoji` varchar(16)）；它同时是通知去重键与计数分组键，**不新增 key 形态、不改 worker 推送文案**。推送通知文本中继续显示 emoji 字符（系统通知无法渲染自定义 SVG），这是刻意保留。
+- reaction 值仍按 `REACTION_EMOJIS` 白名单入库（`reactions.emoji` varchar(16)）；它同时是通知去重键与计数分组键，**不新增 key 形态、不改 worker 推送文案**。推送通知与 app 通知中心的文本中继续显示 emoji 字符（系统通知无法渲染自定义 SVG），这是刻意保留，取舍理由与重启条件见 §0。
 - baby 里程碑 icon 本就不落库（moment 只存 `catalog_key`，渲染时从模板 manifest 解析 icon），seed 改写 manifest 后历史时刻渲染自动跟随，见 §3.3。
 
 ### 3.2 新值直接写 icon key
@@ -202,6 +210,15 @@ export const EMOJI_TO_ICON: Readonly<Record<string, string>> = {
 | worker / notifications | **不改**：reaction 推送文案继续显示 emoji 字符 |
 | 聚合端点 | **不改契约**：`AggregateMilestoneItem.icon` 类型已是 `string \| null`；值形态从 emoji 变为 icon key 由渲染层 AppIcon 吸收 |
 
+**配套实现改动（非 API 契约，但属本 spec 范围，随 P5 交付）：**
+
+| 文件 | 改什么 |
+|---|---|
+| `apps/web/src/lib/template.ts` | `summarizePayload` 泛化（§5 设计要点）：分派条件从 `kind === 'milestone'` 改为按 payload 形态——含 `catalog_key`/`custom_label` 走 `resolveMilestoneLabel`；含 `topic` 走主题摘要 |
+| `apps/app/src/lib/template.ts` | 同上，与 web 保持同一规则 |
+| `apps/server/src/llm/recap/input.ts` | recap 的 `summarizePayload` 同步泛化：payload 含 `catalog_key`/`custom_label` 的 kind 一律走目录解析（前缀取该 kind 在 manifest 中的 label，career-event → 【职业事件】，milestone → 【里程碑】保持现状）；新增 `reflection` 摘要分支（【思考】+ topic） |
+| `apps/web/src/compose/compose-panel/compose-panel.service.ts`、`apps/app/src/features/compose/compose.service.ts` | **不改代码**：无正文 kind moment 的 content 兜底调用点不变，泛化在 lib 内生效 |
+
 ### 3.5 兼容性小结
 
 - 服务端旧数据（mood emoji、reaction emoji、user 模板 emoji icon）全部原样可用，渲染经映射或兜底。
@@ -229,7 +246,7 @@ AppIcon(value, size):
   - 模板选择器：`shell/create-chain-dialog`（模板卡片 icon）
   - 发布器：`compose/template-fields.tsx`（mood emoji-picker 选项、里程碑目录 chips、reading 的 rating 选项）
   - 聚合视图：`chain/aggregate-views.tsx`（moodline 心情点、milestone-axis 节点 icon）
-  - 表情：`timeline/reaction-bar.tsx`
+  - 表情：`timeline/reaction-bar.tsx`（表情条）与 `ui/popover/Popover.tsx` 的 `ReactionPopover`（十格选择面板）
   - 时刻摘要：`timeline/moment-sheet.tsx`（mood/里程碑摘要位）
   - 分享页：`pages/share-album` 等只读渲染复用上述组件的自动跟随；个别直接渲染 emoji 文本的散点逐一改走 AppIcon
 - `ChainMark.tsx`、`Avatar.tsx` 包一层 AppIcon 调用（自由 emoji 走兜底，视觉不变，但此后若链图标词表扩展可无缝升级）。
@@ -329,7 +346,9 @@ AppIcon(value, size):
 
 设计要点：
 
-- `career-event` 的 payloadSchema 与 baby `milestone` 完全同构（`catalog_key`/`custom_label` 二选一 + `note` ≤ 500），复用既有校验与渲染路径，双端发布器零新代码。
+- `career-event` 的 payloadSchema 与 baby `milestone` 完全同构（`catalog_key`/`custom_label` 二选一 + `note` ≤ 500），payload 校验路径零新代码；但**摘要路径需要泛化，不是零改动**：
+  - 现状：`summarizePayload` 硬编码 `kind === 'milestone'` 才走里程碑目录解析——`apps/web/src/lib/template.ts`、`apps/app/src/lib/template.ts`、`apps/server/src/llm/recap/input.ts` 三处各自实现。kind moment 无正文时的发布链路依赖它兜底填 `content`（web `compose-panel.service.ts`、app `compose.service.ts`：text 类型 `content` 空且 kind 非 standard 时以摘要作正文），而 dto 对 text moment 强制 `content` 非空（`CONTENT_REQUIRED`）。career-event 的 payload 含 `catalog_key` 但 kind 不是 `milestone`，摘要落兜底返回 `''`，无正文的职业事件会被「选一项或写一句，再发布」/ server `CONTENT_REQUIRED` 拦截。
+  - 修法：`summarizePayload` 三端同步泛化，分派条件从 kind 名改为 payload 形态——**payload 含 `catalog_key` 或 `custom_label` 的 kind 一律走里程碑目录解析**（career-event 与 milestone 同路径）；**payload 含 `topic` 走主题摘要**（reflection 摘要 = topic，它同样是必填字段，可无正文发布）。server recap 版的前缀取该 kind 在 manifest 中的 label（milestone → 【里程碑】保持现状，career-event → 【职业事件】，reflection → 【思考】）。metric 分支与未知 payload 返回 `''` 的兜底不变。
 - `reflection` 只有 `topic` 必填（1–50 字），`decision`（决策/结论）与 `next_step`（下一步行动）可选（≤500）；不出现在任何聚合视图，按普通结构化时刻在时间线展示。
 - reading 无聚合视图：读书是低频记录，「推荐度分布」之类投影价值不抵复杂度；重启条件：出现「我的书架/年度读书统计」的真实诉求。
 - 里程碑 icon 不落库：career 里程碑 moment 只存 `catalog_key`，渲染时从 manifest 解析 icon key，经 AppIcon 命中注册表出 SVG。
@@ -338,19 +357,20 @@ AppIcon(value, size):
 
 | 期 | 范围 | 出口标准 |
 |---|---|---|
-| P1 | `packages/icons` 基建（包、注册表、SVGR/transformer 接入）+ 首批画稿 32 枚（mood 5 + reaction 10 + rating 4 + tpl 5 + baby 里程碑 8）+ 双端 AppIcon 组件 + dto `EMOJI_TO_ICON` | 注册表/svg parity 与 EMOJI_TO_ICON parity 测试通过；双端 AppIcon 三分支单测通过 |
+| P1 | `packages/icons` 基建（包、注册表、SVGR/transformer 接入，含 §2.1 四个实施要点）+ 首批画稿 32 枚（mood 5 + reaction 10 + rating 4 + tpl 5 + baby 里程碑 8）+ 双端 AppIcon 组件 + dto `EMOJI_TO_ICON` | 注册表项 ↔ svg 目录 parity（每个注册表项的 `file` 指向的文件存在）与 EMOJI_TO_ICON parity 测试通过；双端 AppIcon 三分支单测通过 |
 | P2 | 官方三模板图标化：`OFFICIAL_TEMPLATES` 的 icon 与 baby catalog icon 换 key + `templates.icon` 列宽迁移 + dto 三处 maxLength 放宽 | 迁移与代码同批部署；migrate 后 DB 中三模板 icon 为 `tpl-*`；模板选择器渲染 SVG；存量链/时刻渲染回归通过 |
-| P3 | reaction / mood 渲染切换：reaction-bar、moodline、mood 选择器、moment 摘要改走 AppIcon（双端） | 契约零改动（`comments.ts` diff 为空）；reaction 去重键/分组/推送既有测试不改动全部通过 |
+| P3 | reaction / mood 渲染切换：reaction-bar、ReactionPopover、moodline、mood 选择器、moment 摘要改走 AppIcon（双端） | 契约零改动（`comments.ts` diff 为空）；reaction 去重键/分组/推送既有测试不改动全部通过 |
 | P4 | 装饰 emoji 清扫：web 换 lucide 封装，app 新建单色 Icon 组件并替换 Tab 栏 | 双端源码中 UI chrome 不再含装饰 emoji（数据默认值与测试夹具除外） |
-| P5 | 新增 reading / career 模板：dto 常量 + `OfficialTemplate.key` 联合扩展 + career 里程碑画稿 8 枚 + 双端渲染验证 | 模板列表出现 5 个官方模板；建链→发 career-event/reflection/带 rating 的读书笔记→「职业轨迹」轴渲染 SVG |
+| P5 | 新增 reading / career 模板：dto 常量 + `OfficialTemplate.key` 联合扩展 + career 里程碑画稿 8 枚 + **`summarizePayload` 三端泛化（§5，含 reflection 摘要分支）** + 双端渲染验证 + dto 注释同步清扫（`TemplateDto.key` 注释的官方 slug 列举补 reading/career、`createTemplateInputSchema` icon 注释语义从「单个 emoji/短符号」更新为含 icon key） | 模板列表出现 5 个官方模板；建链→发 career-event/reflection（含无正文、摘要兜底场景）/带 rating 的读书笔记→「职业轨迹」轴渲染 SVG；注册表全集 40 枚计数断言通过 |
 
 P1→P2→P3 顺序固定（P2 依赖注册表与列宽，P3 依赖 AppIcon）；P4 与 P3 可并行；P5 依赖 P1（rating 画稿）与 P2（列宽）。
 
 ## 7. 测试策略
 
-- `packages/icons`：注册表每个 key 存在同名 svg 文件（parity）；`EMOJI_TO_ICON` 全部值 ∈ 注册表（parity）；40 枚全集齐全（防漏画）。
+- `packages/icons`：每个注册表项的 `file` 指向的 svg 文件存在（parity；**不要求 key 与文件一一对应**，兼容 `reaction-sweet` 共用 `mood-love.svg` 的别名形态）；`EMOJI_TO_ICON` 全部值 ∈ 注册表（parity）；40 枚全集计数断言在 P5 随 career 画稿交付时加入（P1 只跑前两项）。
 - dto：`templates.test.ts` 更新——5 份官方 manifest 过 `manifestJsonSchema`；icon maxLength 50 边界（51 拒收）；rating 字段经 `momentFieldPayloadJsonSchema` 派生 enum 校验。
 - server：迁移后 `templates.icon` 列宽 50；seed 幂等且把旧 emoji icon 改写为 key；带 icon key 的 user 模板可建（>8 字符不再 400）。
+- 摘要泛化（P5）：三端 `summarizePayload` 单测——career-event 含 catalog_key/custom_label 出目录 label、reflection 出 topic、baby milestone 摘要回归不变、metric 分支不变；发布链路回归——无正文 career-event/reflection 以摘要兜底通过 `CONTENT_REQUIRED`（正反例）；server recap input 对 career-event/reflection 出【职业事件】/【思考】前缀。
 - 回归：reaction 全流程（入库/去重/分组/推送文案）既有测试零改动通过；含 emoji mood 的存量 moment 校验与渲染不变。
 - web/app：AppIcon 三分支单测（命中注册表 / 命中映射 / 原文兜底含 ZWJ 自由 emoji）；替换点快照或组件测试更新。
 
@@ -359,7 +379,7 @@ P1→P2→P3 顺序固定（P2 依赖注册表与列宽，P3 依赖 AppIcon）�
 1. 双端时间线、聚合视图、reaction 条、模板选择器中不再出现系统字体渲染的词表 emoji，全部为彩色面性 SVG；视觉双端一致。
 2. 链图标/用户头像的自由 emoji（含 ZWJ/肤色序列）输入与渲染与现状完全一致。
 3. 数据库中 mood/reaction 值与既有行零变更；通知去重、计数分组、推送文案行为不变。
-4. 官方模板 5 个：baby/travel/daily 图标化无损迁移，reading/career 可按 §5 manifest 全流程使用（建链、发布、聚合、分享页只读）。
+4. 官方模板 5 个：baby/travel/daily 图标化无损迁移，reading/career 可按 §5 manifest 全流程使用（建链、发布——含无正文 career-event/reflection 以摘要兜底发布、聚合、分享页只读）。
 5. `pnpm build` / `pnpm test` / `pnpm lint` 全绿。
 
 ## 9. 演进路径
