@@ -74,6 +74,11 @@ export const METRIC_LABELS: Record<string, string> = { height: '身高', weight:
 /**
  * kind moment 的正文兜底摘要（Global Constraints：text 类型 content 必填，
  * 用户只填结构化字段时用它兜底）。standard / 无法摘要时返回 ''（调用方不兜底）。
+ *
+ * 分派按 payload 形态而非 kind 名（spec §5）：
+ * - 含 catalog_key / custom_label → 里程碑目录解析（milestone 与 career-event 同路径）
+ * - 含 topic → 主题摘要（reflection）
+ * - metric 分支与未知 payload 返回 '' 的兜底不变
  */
 export function summarizePayload(
   manifest: TemplateManifest,
@@ -81,7 +86,10 @@ export function summarizePayload(
   payload: Record<string, unknown> | null,
 ): string {
   if (!payload) return '';
-  if (kind === 'milestone') return resolveMilestoneLabel(manifest, payload).label;
+  if (typeof payload.catalog_key === 'string' || typeof payload.custom_label === 'string') {
+    return resolveMilestoneLabel(manifest, payload).label;
+  }
+  if (typeof payload.topic === 'string') return payload.topic;
   const metric = typeof payload.metric === 'string' ? payload.metric : undefined;
   if (metric !== undefined && typeof payload.value === 'number') {
     const unit = typeof payload.unit === 'string' ? payload.unit : '';

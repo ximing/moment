@@ -3,6 +3,7 @@ import { OFFICIAL_TEMPLATES, type MomentResponse } from '@moment/dto';
 import { babyAgeLabel, groupMomentsByTrips, resolveMilestoneLabel, summarizePayload } from './template';
 
 const baby = OFFICIAL_TEMPLATES.find((t) => t.key === 'baby')!.manifest;
+const career = OFFICIAL_TEMPLATES.find((t) => t.key === 'career')!.manifest;
 
 function momentAt(id: string, iso: string, tz = -480): MomentResponse {
   return { id, happenedAt: iso, happenedTzOffset: tz, transcript: null, transcriptionStatus: null } as MomentResponse;
@@ -62,5 +63,27 @@ describe('resolveMilestoneLabel / summarizePayload', () => {
     expect(summarizePayload(baby, 'metric', { metric: 'height', value: 62, unit: 'cm' })).toBe('身高 62cm');
     expect(summarizePayload(baby, 'metric', { metric: 'weight', value: 7.5, unit: 'kg' })).toBe('体重 7.5kg');
     expect(summarizePayload(baby, 'standard', { mood: '😄' })).toBe('');
+  });
+});
+
+describe('summarizePayload 泛化（spec §5）', () => {
+  it('career-event 含 catalog_key 出目录 label', () => {
+    expect(summarizePayload(career, 'career-event', { catalog_key: 'promotion' })).toBe('晋升');
+  });
+  it('career-event 含 custom_label 出原文', () => {
+    expect(summarizePayload(career, 'career-event', { custom_label: '内部转组' })).toBe('内部转组');
+  });
+  it('reflection 出 topic', () => {
+    expect(summarizePayload(career, 'reflection', { topic: '要不要接这个机会' })).toBe('要不要接这个机会');
+  });
+  it('baby milestone 摘要回归不变', () => {
+    expect(summarizePayload(baby, 'milestone', { catalog_key: 'first-steps' })).toBe('第一次走路');
+  });
+  it('metric 分支不变', () => {
+    expect(summarizePayload(baby, 'metric', { metric: 'height', value: 52, unit: 'cm' })).toBe('身高 52cm');
+  });
+  it('未知 payload 返回空串兜底不变', () => {
+    expect(summarizePayload(career, 'whatever', { foo: 1 })).toBe('');
+    expect(summarizePayload(career, 'standard', null)).toBe('');
   });
 });
