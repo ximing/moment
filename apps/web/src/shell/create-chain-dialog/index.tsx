@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { ChainAppearanceEditor, type ChainAppearanceActions } from '@/chain/ChainAppearanceEditor';
 import { humanError } from '@/lib/errors';
+import { AppIcon } from '@/ui/AppIcon';
 // 必须显式指向 barrel：src/ui/ 下遗留 Button.tsx / Field.tsx / Banner.tsx
 // 会截获裸目录导入（见 ui/menu/index.ts 注释）
 import { Banner } from '@/ui/feedback/index';
@@ -87,8 +88,11 @@ const CreateChainDialogContent = observer(function CreateChainDialogContent({ on
                       : 'border-line bg-surface hover:bg-floating-hover'
                   }`}
                 >
-                  <span className="text-body">
-                    {t.icon} {t.name}
+                  {/* icon 走 AppIcon：tpl-* 词表 key 渲染 svg，自由 emoji 原文兜底；
+                      size 与 text-body（16px）字号对齐，维持原视觉 */}
+                  <span className="flex items-center gap-1 text-body">
+                    <AppIcon value={t.icon} size={16} />
+                    {t.name}
                   </span>
                   {t.description && <span className="text-caption text-muted">{t.description}</span>}
                 </button>
