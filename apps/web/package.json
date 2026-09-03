@@ -17,6 +17,7 @@
     "@internationalized/date": "^3.12.3",
     "@moment/api-client": "workspace:*",
     "@moment/dto": "workspace:*",
+    "@moment/icons": "workspace:*",
     "@rabjs/react": "^9.2.0",
     "exifreader": "^4.44.0",
     "frimousse": "0.3.0",
@@ -55,6 +56,7 @@
     "typescript-eslint": "^8.22.0",
     "vite": "^7.3.1",
     "vite-plugin-static-copy": "4.1.1",
+    "vite-plugin-svgr": "^5.2.0",
     "vitest": "^4.1.11"
   }
 }

@@ -1,4 +1,5 @@
 import react from '@vitejs/plugin-react';
+import svgr from 'vite-plugin-svgr';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +14,8 @@ const reactRoot = path.dirname(require.resolve('react/package.json'));
 const reactDomRoot = path.dirname(require.resolve('react-dom/package.json'));
 
 export default defineConfig({
-  plugins: [react()],
+  // svgr：AppIcon.test.tsx 需解析 @moment/icons 的 *.svg?react 导入
+  plugins: [react(), svgr()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

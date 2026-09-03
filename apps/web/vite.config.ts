@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import svgr from 'vite-plugin-svgr';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -26,6 +27,8 @@ const emojibaseRoot = path.relative(
 export default defineConfig({
   plugins: [
     react(),
+    // @moment/icons 画稿 svg → React 组件（?react 后缀导入），AppIcon 消费
+    svgr(),
     // 离线 Emoji 数据（spec §7.2）：Emojibase 中文数据与许可证随构建产物同源部署，
     // frimousse 运行时只请求 /vendor/emojibase/**，不触碰公共 CDN。
     viteStaticCopy({
