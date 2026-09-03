@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { createChainInputSchema } from '@moment/dto';
 import { humanError } from '../../lib/errors';
+import { AppIcon } from '../../components/AppIcon';
 import { Screen } from '../../components/Screen';
 import { Field } from '../../components/Field';
 import { Button } from '../../components/Button';
@@ -53,9 +54,12 @@ const Content = observer(function Content() {
               style={[styles.tplCard, service.template === tpl.key && styles.tplCardActive]}
               onPress={() => (service.template = tpl.key)}
             >
-              <Text style={styles.tplName}>
-                {tpl.icon} {tpl.name}
-              </Text>
+              {/* icon 走 AppIcon：tpl-* 词表 key 渲染 svg，自由 emoji 原文兜底；
+                  size 与 tplName 字号（fontBody）对齐，维持原视觉 */}
+              <View style={styles.tplNameRow}>
+                <AppIcon value={tpl.icon} size={t.fontBody} />
+                <Text style={styles.tplName}>{tpl.name}</Text>
+              </View>
               {tpl.description ? <Text style={styles.tplDesc}>{tpl.description}</Text> : null}
             </Pressable>
           ))}
@@ -88,6 +92,7 @@ const createStyles = (t: Theme) =>
     tplHint: { fontSize: t.fontCaption, color: t.muted },
     tplCard: { backgroundColor: t.surface, borderRadius: t.radiusMd, borderWidth: 2, borderColor: t.line, padding: t.space3, gap: t.space1, minHeight: t.touchMin },
     tplCardActive: { borderColor: t.action },
+    tplNameRow: { flexDirection: 'row', alignItems: 'center', gap: t.space1 },
     tplName: { fontSize: t.fontBody, color: t.ink, fontWeight: '600' },
     tplDesc: { fontSize: t.fontSupport, color: t.muted },
   });
