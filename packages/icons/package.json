@@ -1,0 +1,29 @@
+{
+  "name": "@moment/icons",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/manifest.js",
+  "types": "./dist/manifest.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/manifest.d.ts",
+      "default": "./dist/manifest.js"
+    },
+    "./svg/*": "./svg/*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test src/*.test.ts",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@moment/dto": "workspace:*",
+    "@moment/eslint-config": "workspace:*",
+    "@moment/typescript-config": "workspace:*",
+    "eslint": "^9.19.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
