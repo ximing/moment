@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { EMOJI_TO_ICON } from '@moment/dto';
 import { ICON_MANIFEST, hasIconKey } from './manifest.js';
 
 const svgDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'svg');
@@ -20,4 +21,10 @@ test('hasIconKey 命中与拒绝', () => {
   assert.equal(hasIconKey('reaction-sweet'), true);
   assert.equal(hasIconKey('😄'), false);
   assert.equal(hasIconKey('not-a-key'), false);
+});
+
+test('EMOJI_TO_ICON 全部值 ∈ 注册表', () => {
+  for (const [emoji, key] of Object.entries(EMOJI_TO_ICON)) {
+    assert.ok(hasIconKey(key), `EMOJI_TO_ICON['${emoji}'] = '${key}' 不在注册表`);
+  }
 });
