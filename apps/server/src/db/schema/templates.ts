@@ -14,8 +14,8 @@ export const templates = mysqlTable('templates', {
   ownerId: char('owner_id', { length: 36 }).references(() => users.id),
   name: varchar('name', { length: 50 }).notNull(),
   description: varchar('description', { length: 500 }),
-  /** 单个 emoji/短符号（dto 层 1–8 字符，spec §2.1「禁 URL」的最小实现） */
-  icon: varchar('icon', { length: 8 }).notNull(),
+  /** icon key（词表注册表 key，如 tpl-baby）或单个 emoji；dto 层 1–50 字符（spec §2.1「禁 URL」） */
+  icon: varchar('icon', { length: 50 }).notNull(),
   /** 纯数据 DSL manifest（spec §1.3），写入前已过 validateManifest（Task 3） */
   manifest: json('manifest').$type<TemplateManifest>().notNull(),
   /** manifest 版本：仅 manifest 变更时 +1（spec §3.4）；name/description/icon 变更不 bump */

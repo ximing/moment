@@ -127,6 +127,13 @@
       "when": 1787961451936,
       "tag": "0017_nosy_roland_deschain",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1788452017873,
+      "tag": "0018_military_terror",
+      "breakpoints": true
     }
   ]
 }

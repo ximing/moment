@@ -60,7 +60,7 @@ describe('baby 链：milestone + metric → milestone-axis / curve 投影', () =
       .set('Authorization', auth(alice));
     expect(axis.status).toBe(200);
     expect(axis.body.items).toHaveLength(1);
-    expect(axis.body.items[0]).toMatchObject({ label: '第一次微笑', icon: '😊' });
+    expect(axis.body.items[0]).toMatchObject({ label: '第一次微笑', icon: 'milestone-first-smile' });
 
     // curve：携带 metric 字段供前端拆双线（P3 决策 2）
     const curve = await request(app)

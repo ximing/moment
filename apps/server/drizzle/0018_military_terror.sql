@@ -1,0 +1,1 @@
+ALTER TABLE `templates` MODIFY COLUMN `icon` varchar(50) NOT NULL;

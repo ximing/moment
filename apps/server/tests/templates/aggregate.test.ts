@@ -63,7 +63,7 @@ describe('GET /api/chains/:chainId/aggregate（spec §3.2）', () => {
       .set('Authorization', auth(owner));
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(2);
-    expect(res.body.items[0]).toMatchObject({ label: '第一次微笑', icon: '😊', note: '笑了' });
+    expect(res.body.items[0]).toMatchObject({ label: '第一次微笑', icon: 'milestone-first-smile', note: '笑了' });
     expect(res.body.items[1]).toMatchObject({ label: '第一次叫妈妈', icon: null, note: null });
   });
 
