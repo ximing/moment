@@ -4,6 +4,7 @@ import { observer } from '@rabjs/react';
 import type { TemplateManifest, TemplateMomentField } from '@moment/dto';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
+import { AppIcon } from '../../components/AppIcon';
 import { useTheme } from '../../theme/use-theme';
 import type { ComposeService } from './compose.service';
 
@@ -36,6 +37,7 @@ function useChipStyles() {
         chipActive: { backgroundColor: t.ink },
         chipText: { fontSize: t.fontSupport, color: t.muted },
         chipTextActive: { color: t.bg, fontWeight: '600' as const },
+        chipInner: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space1 },
         label: { fontSize: t.fontLabel, color: t.ink, marginBottom: t.space1 },
         geoText: { fontSize: t.fontSupport, color: t.muted },
         section: { gap: t.space2, marginBottom: t.space3 },
@@ -53,6 +55,7 @@ const MomentFieldControl = observer(function MomentFieldControl({
   field: TemplateMomentField;
 }) {
   const styles = useChipStyles();
+  const t = useTheme();
   const value = service.payloadDraft[field.key];
 
   if (field.type === 'emoji-picker' || field.type === 'enum') {
@@ -64,9 +67,14 @@ const MomentFieldControl = observer(function MomentFieldControl({
             style={[styles.chip, value === opt && styles.chipActive]}
             onPress={() => service.setFieldValue(field.key, value === opt ? undefined : opt)}
           >
-            <Text style={[styles.chipText, value === opt && styles.chipTextActive]}>
-              {field.type === 'emoji-picker' ? opt : (ENUM_LABELS[opt] ?? opt)}
-            </Text>
+            {/* emoji-picker 的数据值走 AppIcon（P3-2）；写回草稿的仍是 emoji 原文 */}
+            {field.type === 'emoji-picker' ? (
+              <AppIcon value={opt} size={t.fontSupport} />
+            ) : (
+              <Text style={[styles.chipText, value === opt && styles.chipTextActive]}>
+                {ENUM_LABELS[opt] ?? opt}
+              </Text>
+            )}
           </Pressable>
         ))}
       </View>
@@ -174,6 +182,7 @@ const KindPayloadForm = observer(function KindPayloadForm({
   kindKey: string;
 }) {
   const styles = useChipStyles();
+  const t = useTheme();
   const kindDef = (manifest.kinds ?? []).find((k) => k.key === kindKey);
   if (!kindDef) return null;
   const schema = kindDef.payloadSchema as {
@@ -194,9 +203,13 @@ const KindPayloadForm = observer(function KindPayloadForm({
                 service.setFieldValue('catalog_key', service.payloadDraft.catalog_key === c.key ? undefined : c.key)
               }
             >
-              <Text style={[styles.chipText, service.payloadDraft.catalog_key === c.key && styles.chipTextActive]}>
-                {c.icon} {c.label}
-              </Text>
+              {/* 目录 icon 是数据值（key / 存量 emoji 两种形态），走 AppIcon（P3-2）；写回仍是 catalog key */}
+              <View style={styles.chipInner}>
+                {c.icon ? <AppIcon value={c.icon} size={t.fontSupport} /> : null}
+                <Text style={[styles.chipText, service.payloadDraft.catalog_key === c.key && styles.chipTextActive]}>
+                  {c.label}
+                </Text>
+              </View>
             </Pressable>
           ))}
         </View>

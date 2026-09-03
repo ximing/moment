@@ -100,3 +100,21 @@ export function summarizePayload(
   }
   return '';
 }
+
+/**
+ * 链主页时刻卡的结构化摘要行（P3-2 从 MomentCard 内联 IIFE 抽出为纯函数，便于 node vitest 钉住）：
+ * 与发布兜底同一函数判重——summary 与 content 逐字相同（trim 后）不重复显示；
+ * icon 取自里程碑目录（key / 存量 emoji 两种形态都可能出现，渲染层统一走 AppIcon）；
+ * standard 与无法摘要的 kind 返回 null。
+ */
+export function resolveMomentSummary(
+  manifest: TemplateManifest,
+  moment: Pick<MomentResponse, 'kind' | 'content' | 'payload'>,
+): { icon: string | null; text: string } | null {
+  if (moment.kind === 'standard') return null;
+  const payload = moment.payload ?? {};
+  const text = summarizePayload(manifest, moment.kind, payload);
+  if (!text || moment.content.trim() === text) return null;
+  const { icon } = resolveMilestoneLabel(manifest, payload); // metric 无 catalog_key → icon 恒 null
+  return { icon, text };
+}

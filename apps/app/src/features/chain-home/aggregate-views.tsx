@@ -4,6 +4,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import type { AggregateResponse, MomentResponse } from '@moment/dto';
 import { METRIC_LABELS, groupMomentsByTrips, type Trip } from '../../lib/template';
 import { formatMomentTime } from '../../lib/format';
+import { AppIcon } from '../../components/AppIcon';
 import { Button } from '../../components/Button';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -77,7 +78,8 @@ function MilestoneAxisView({ aggregate }: { aggregate: Extract<AggregateResponse
     <View style={styles.section}>
       {aggregate.items.map((item) => (
         <View key={item.momentId} style={styles.axisRow}>
-          <Text style={styles.body}>{item.icon ?? '·'}</Text>
+          {/* 目录 icon 是数据值（key / 存量 emoji），走 AppIcon（P3-2）；缺省仍是 · 占位 */}
+          {item.icon ? <AppIcon value={item.icon} size={t.fontBody} /> : <Text style={styles.body}>·</Text>}
           <Text style={styles.axisLabel}>{item.label}</Text>
           <Text style={styles.muted}>{formatMomentTime(item.happenedAt, viewerTz)}</Text>
           {item.note ? <Text style={styles.muted}>{item.note}</Text> : null}
@@ -100,10 +102,13 @@ function MoodlineView({ aggregate }: { aggregate: Extract<AggregateResponse, { v
       {days.map((d) => (
         <View key={`${d.date}-${d.mood}`} style={styles.moodRow}>
           <Text style={styles.moodDate}>{d.date.slice(5)}</Text>
-          <Text style={styles.body} accessibilityLabel={`心情 ${d.mood}，${d.count} 次`}>
-            {Array.from({ length: Math.min(d.count, 10) }, () => d.mood).join('')}
-            {d.count > 10 ? ` ×${d.count}` : ''}
-          </Text>
+          {/* 数据值走 AppIcon（P3-2）：词表 mood emoji 渲染 svg；读屏文案保留原值（web 对称口径） */}
+          <View style={styles.moodIcons} accessibilityLabel={`心情 ${d.mood}，${d.count} 次`}>
+            {Array.from({ length: Math.min(d.count, 10) }, (_, i) => (
+              <AppIcon key={i} value={d.mood} size={t.fontBody} />
+            ))}
+            {d.count > 10 ? <Text style={styles.body}> ×{d.count}</Text> : null}
+          </View>
         </View>
       ))}
     </View>
@@ -209,6 +214,8 @@ const createStyles = (t: Theme) =>
     axisRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.space2, backgroundColor: t.surface, borderRadius: t.radiusMd, padding: t.space3 },
     axisLabel: { fontSize: t.fontBody, color: t.ink, fontWeight: '600' },
     moodRow: { flexDirection: 'row', alignItems: 'center', gap: t.space3 },
+    // 心情点平铺无间距（对齐原 join('') 视觉），尺寸档归 AppIcon size
+    moodIcons: { flexDirection: 'row', alignItems: 'center' },
     // 日期列不定宽：MM-DD 等长格式自然对齐，避免一次性尺寸（评审 H1）
     moodDate: { flexShrink: 0, fontSize: t.fontSupport, color: t.muted },
     tripCard: { backgroundColor: t.surface, borderRadius: t.radiusMd, padding: t.space3, gap: t.space1 },

@@ -2,9 +2,10 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MomentResponse, TemplateManifest } from '@moment/dto';
 import { formatMomentTime } from '../lib/format';
-import { resolveMilestoneLabel, summarizePayload } from '../lib/template';
+import { resolveMomentSummary } from '../lib/template';
 import type { Theme } from '../theme/theme';
 import { useTheme } from '../theme/use-theme';
+import { AppIcon } from './AppIcon';
 import { AudioBar } from './AudioBar';
 import { MediaGrid } from './MediaGrid';
 
@@ -50,18 +51,24 @@ export function MomentCard({
       ) : null}
       {moment.content.length > 0 ? <Text style={styles.content}>{moment.content}</Text> : null}
       <MediaGrid media={gridMedia} />
-      {moment.kind !== 'standard' && templateManifest
+      {templateManifest
         ? (() => {
-            const p = moment.payload ?? {};
-            // 与发布兜底同一函数：判重基准与兜底 content 逐字同源，不重复显示
-            const summaryText = summarizePayload(templateManifest, moment.kind, p);
-            if (!summaryText || moment.content.trim() === summaryText) return null;
-            const { icon } = resolveMilestoneLabel(templateManifest, p); // metric 无 catalog_key → icon 恒 null
-            return <Text style={styles.tplLine}>{icon ? `${icon} ${summaryText}` : summaryText}</Text>;
+            // 判重基准与兜底 content 逐字同源（resolveMomentSummary 内部完成），不重复显示
+            const summary = resolveMomentSummary(templateManifest, moment);
+            if (!summary) return null;
+            // 数据值 icon 走 AppIcon：词表 key / 存量 emoji 渲染 svg，其余原文兜底（P3-2）
+            return (
+              <View style={styles.tplIconRow}>
+                {summary.icon ? <AppIcon value={summary.icon} size={t.fontSupport} /> : null}
+                <Text style={[styles.tplLine, styles.flushTop]}>{summary.text}</Text>
+              </View>
+            );
           })()
         : null}
       {moment.kind === 'standard' && typeof moment.payload?.mood === 'string' ? (
-        <Text style={styles.tplLine} accessibilityLabel="心情">{moment.payload.mood}</Text>
+        <View style={styles.tplIconRow} accessibilityLabel="心情">
+          <AppIcon value={moment.payload.mood} size={t.fontSupport} />
+        </View>
       ) : null}
       {(() => {
         const geo = moment.payload?.geo as { place_name?: string } | undefined;
@@ -135,6 +142,8 @@ const createStyles = (t: Theme) =>
     content: { fontSize: t.fontBody, lineHeight: 22, color: t.ink },
     footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.space2, marginTop: t.space2 },
     tplLine: { color: t.muted, fontSize: t.fontSupport, marginTop: t.space1 },
+    tplIconRow: { flexDirection: 'row', alignItems: 'center', gap: t.space1, marginTop: t.space1 },
+    flushTop: { marginTop: 0 },
     personRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2, marginTop: t.space1 },
     personChip: { paddingHorizontal: t.space3, paddingVertical: t.space1, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
     personChipPressable: {

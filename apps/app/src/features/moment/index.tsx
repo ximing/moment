@@ -6,6 +6,7 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import { REACTION_EMOJIS, type MomentMedia } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { formatMomentTime, formatRelative } from '../../lib/format';
+import { AppIcon } from '../../components/AppIcon';
 import { AudioBar } from '../../components/AudioBar';
 import { Loading } from '../../components/Loading';
 import { Button } from '../../components/Button';
@@ -164,10 +165,11 @@ const MomentContent = observer(function MomentContent() {
             const active = myEmoji === emoji;
             return (
               <Pressable key={emoji} style={[styles.reaction, active && styles.reactionActive]} onPress={() => onEmoji(emoji)}>
-                <Text style={[styles.reactionText, active && styles.reactionTextActive]}>
-                  {emoji}
-                  {summary && summary.count > 0 ? ` ${summary.count}` : ''}
-                </Text>
+                {/* 数据值走 AppIcon：白名单 emoji 渲染 svg（P3-2）；值契约不变，onEmoji 仍回传 emoji 原文 */}
+                <AppIcon value={emoji} size={t.fontLabel} />
+                {summary && summary.count > 0 ? (
+                  <Text style={[styles.reactionText, active && styles.reactionTextActive]}>{summary.count}</Text>
+                ) : null}
               </Pressable>
             );
           })}
@@ -249,7 +251,7 @@ const createStyles = (t: Theme) =>
     personAi: { color: t.muted, fontSize: t.fontCaption },
     placeLine: { color: t.muted, fontSize: t.fontSupport },
     reactionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    reaction: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },
+    reaction: { flexDirection: 'row', alignItems: 'center', gap: t.space1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },
     reactionActive: { backgroundColor: t.select },
     reactionText: { fontSize: t.fontLabel, color: t.ink },
     reactionTextActive: { color: t.selectFg },
