@@ -13,7 +13,7 @@
 - **存量数据零迁移**：已入库的封闭 emoji 词表值（mood 5、reaction 10）继续以 emoji 存储与传输，只在渲染层经映射表换成 SVG；reaction 的通知去重键、计数分组、worker 推送文案逻辑一律不碰。
 - **链图标与用户头像的自由 emoji 输入保持不变**：`ChainIcon` 允许任意单个 emoji（含 ZWJ/肤色序列），这是用户表达自由，不属于「UI chrome 的 emoji」，渲染走 AppIcon 的文本兜底分支，天然不受影响。
 - **装饰性 emoji 换单色线性图标**：📍📅💬⚙️ 等 UI 装饰与 RN Tab 栏图标不属于彩色面性体系，web 用既有 lucide 封装，app 用 lucide path + react-native-svg 自绘单色。
-- **通知链路保留 emoji 字符**：app 通知中心（`apps/app/src/features/notifications/index.tsx`）直接渲染通知 payload 的 body 文本（worker 生成的推送文案），其中的 reaction emoji 以系统字体显示——刻意保留，不改。理由：通知文案是纯文本（系统推送与通知中心共用同一份 worker 文案），拆出结构化 reaction 字段需要改通知 payload 契约、worker 文案模板与去重键序列化，收益仅是通知列表里一颗小图标；且把 emoji 换成 icon key 原文（如「点赞了你的时刻 rating-love」）反而更难读。重启条件：通知中心改版为富文本/结构化渲染时，reaction 位再接入 AppIcon。
+- **通知链路保留 emoji 字符**：app 通知中心（`apps/app/src/features/notifications/index.tsx`）直接渲染通知 payload 的 body 文本（worker 生成的推送文案），其中的 reaction emoji 以系统字体显示——刻意保留，不改。理由：通知文案是纯文本（系统推送与通知中心共用同一份 worker 文案），拆出结构化 reaction 字段需要改通知 payload 契约与 worker 文案模板，收益仅是通知列表里一颗小图标；且把 emoji 换成 icon key 原文（如「给你的时刻点了 reaction-like」）反而更难读。重启条件：通知中心改版为富文本/结构化渲染时，reaction 位再接入 AppIcon。
 
 ## 1. 术语表
 
@@ -70,7 +70,7 @@ export function hasIconKey(value: string): value is IconKey;
 
 1. `@moment/icons` 的 package.json `exports` 必须包含 `./svg/*` 子路径（或干脆不声明 `exports`），否则双端无法 import svg 文件——app 侧已开启 `unstable_enablePackageExports`，exports 缺子路径会直接解析失败。
 2. app 的 `metro.config.js` **是在既有自定义配置上叠加**（该文件已有 monorepo watchFolders / package exports / react 钉版逻辑）：追加 `transformer.babelTransformerPath = require.resolve('react-native-svg-transformer')`、`resolver.assetExts` 移除 `'svg'`、`resolver.sourceExts` 增加 `'svg'`，不得整体重写。
-3. TS 声明分工：app 手写 `declare module '*.svg'`（组件类型为 `React.ComponentType<SvgProps>`）；web 在 `vite-env.d.ts` 引 `vite-plugin-svgr/client`。
+3. TS 声明分工：app 手写 `declare module '*.svg'`（组件类型为 `React.ComponentType<SvgProps>`）；web 在既有 `apps/web/src/env.d.ts` 追加 `vite-plugin-svgr/client` 引用。
 4. web/app 各自 package.json 显式声明 `"@moment/icons": "workspace:*"` 依赖，使 icons 进入 pnpm build / turbo 拓扑（先构建依赖包再起 dev 的既有约定自动覆盖）。
 
 ### 2.2 画稿规范
@@ -175,7 +175,7 @@ export const EMOJI_TO_ICON: Readonly<Record<string, string>> = {
 零迁移、零校验破坏的边界：
 
 - mood 值仍散在 `moments.payload` JSON 里以 emoji 存储，server 校验逻辑（`momentFieldPayloadJsonSchema` 的 enum）不变。
-- reaction 值仍按 `REACTION_EMOJIS` 白名单入库（`reactions.emoji` varchar(16)）；它同时是通知去重键与计数分组键，**不新增 key 形态、不改 worker 推送文案**。推送通知与 app 通知中心的文本中继续显示 emoji 字符（系统通知无法渲染自定义 SVG），这是刻意保留，取舍理由与重启条件见 §0。
+- reaction 值仍按 `REACTION_EMOJIS` 白名单入库（`reactions.emoji` varchar(16)）；它同时进入应用层通知去重键（`notification.service` 按 payload.emoji 判重）与计数分组键，**不新增 key 形态、不改 worker 推送文案**。推送通知与 app 通知中心的文本中继续显示 emoji 字符（系统通知无法渲染自定义 SVG），这是刻意保留，取舍理由与重启条件见 §0。
 - baby 里程碑 icon 本就不落库（moment 只存 `catalog_key`，渲染时从模板 manifest 解析 icon），seed 改写 manifest 后历史时刻渲染自动跟随，见 §3.3。
 
 ### 3.2 新值直接写 icon key
