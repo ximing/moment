@@ -105,7 +105,7 @@ export const manifestJsonSchema = {
         properties: {
           key: { type: 'string', pattern: TEMPLATE_KEY_PATTERN },
           label: { type: 'string', minLength: 1, maxLength: 50 },
-          icon: { type: 'string', minLength: 1, maxLength: 8 },
+          icon: { type: 'string', minLength: 1, maxLength: 50 },
         },
       },
     },
@@ -132,7 +132,7 @@ export const OFFICIAL_TEMPLATES: readonly OfficialTemplate[] = [
     key: 'baby',
     name: '宝宝成长',
     description: '里程碑时间轴与身高体重曲线，记录宝宝每一步',
-    icon: '👶',
+    icon: 'tpl-baby',
     manifest: {
       version: 1,
       chainPayloadSchema: {
@@ -181,14 +181,14 @@ export const OFFICIAL_TEMPLATES: readonly OfficialTemplate[] = [
         { type: 'curve', label: '成长曲线', source: { kind: 'metric' } },
       ],
       milestoneCatalog: [
-        { key: 'first-smile', label: '第一次微笑', icon: '😊' },
-        { key: 'first-roll', label: '第一次翻身', icon: '🔄' },
-        { key: 'first-sit', label: '第一次独坐', icon: '🪑' },
-        { key: 'first-crawl', label: '第一次爬', icon: '🐾' },
-        { key: 'first-stand', label: '第一次站立', icon: '🧍' },
-        { key: 'first-steps', label: '第一次走路', icon: '👣' },
-        { key: 'first-word', label: '第一次开口', icon: '💬' },
-        { key: 'first-tooth', label: '第一颗牙', icon: '🦷' },
+        { key: 'first-smile', label: '第一次微笑', icon: 'milestone-first-smile' },
+        { key: 'first-roll', label: '第一次翻身', icon: 'milestone-first-roll' },
+        { key: 'first-sit', label: '第一次独坐', icon: 'milestone-first-sit' },
+        { key: 'first-crawl', label: '第一次爬', icon: 'milestone-first-crawl' },
+        { key: 'first-stand', label: '第一次站立', icon: 'milestone-first-stand' },
+        { key: 'first-steps', label: '第一次走路', icon: 'milestone-first-steps' },
+        { key: 'first-word', label: '第一次开口', icon: 'milestone-first-word' },
+        { key: 'first-tooth', label: '第一颗牙', icon: 'milestone-first-tooth' },
       ],
     },
   },
@@ -196,7 +196,7 @@ export const OFFICIAL_TEMPLATES: readonly OfficialTemplate[] = [
     key: 'travel',
     name: '旅行',
     description: '地图足迹与按行程分章节的旅行相册',
-    icon: '✈️',
+    icon: 'tpl-travel',
     manifest: {
       version: 1,
       chainPayloadSchema: {
@@ -231,7 +231,7 @@ export const OFFICIAL_TEMPLATES: readonly OfficialTemplate[] = [
     key: 'daily',
     name: '日常生活',
     description: '记录日常，标一抹心情',
-    icon: '🏠',
+    icon: 'tpl-daily',
     manifest: {
       version: 1,
       momentFields: [
@@ -252,8 +252,8 @@ export const OFFICIAL_TEMPLATES: readonly OfficialTemplate[] = [
 export const createTemplateInputSchema = z.object({
   name: z.string().trim().min(1).max(50),
   description: z.string().trim().max(500).nullish(),
-  /** 单个 emoji（或短符号），禁止 URL；spec §2.1「icon 从词表选」的最小实现 */
-  icon: z.string().min(1).max(8),
+  /** icon key（词表注册表 key），禁止 URL；spec §2.1「icon 从词表选」的最小实现 */
+  icon: z.string().min(1).max(50),
   /** 必填的对象（z.record 要求 object 且缺 key 会抛错）；结构化校验在 server 侧 */
   manifest: z.record(z.unknown()),
 });
@@ -263,7 +263,7 @@ export const updateTemplateInputSchema = z
   .object({
     name: z.string().trim().min(1).max(50).optional(),
     description: z.string().trim().max(500).nullable().optional(),
-    icon: z.string().min(1).max(8).optional(),
+    icon: z.string().min(1).max(50).optional(),
     manifest: z.record(z.unknown()).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {

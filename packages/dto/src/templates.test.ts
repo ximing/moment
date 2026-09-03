@@ -137,6 +137,48 @@ test('派生表：enum/emoji-picker 收敛到 options；缺 options 抛错', () 
   assert.throws(() => momentFieldPayloadJsonSchema({ key: 'e', type: 'enum', label: 'E' }));
 });
 
+test('官方三模板 icon 为 tpl-* key，baby catalog icon 为 milestone-first-* key', () => {
+  const byKey = new Map(OFFICIAL_TEMPLATES.map((t) => [t.key, t]));
+  assert.equal(byKey.get('baby')!.icon, 'tpl-baby');
+  assert.equal(byKey.get('travel')!.icon, 'tpl-travel');
+  assert.equal(byKey.get('daily')!.icon, 'tpl-daily');
+  const babyCatalog = byKey.get('baby')!.manifest.milestoneCatalog!;
+  assert.deepEqual(
+    babyCatalog.map((c) => c.icon),
+    [
+      'milestone-first-smile',
+      'milestone-first-roll',
+      'milestone-first-sit',
+      'milestone-first-crawl',
+      'milestone-first-stand',
+      'milestone-first-steps',
+      'milestone-first-word',
+      'milestone-first-tooth',
+    ],
+  );
+});
+
+test('createTemplateInputSchema icon 50 收 51 拒', () => {
+  const base = { name: 'x', manifest: { version: 1 } };
+  assert.ok(createTemplateInputSchema.safeParse({ ...base, icon: 'a'.repeat(50) }).success);
+  assert.ok(!createTemplateInputSchema.safeParse({ ...base, icon: 'a'.repeat(51) }).success);
+});
+
+test('updateTemplateInputSchema icon 50 收 51 拒', () => {
+  assert.ok(updateTemplateInputSchema.safeParse({ icon: 'a'.repeat(50) }).success);
+  assert.ok(!updateTemplateInputSchema.safeParse({ icon: 'a'.repeat(51) }).success);
+});
+
+test('manifest milestoneCatalog icon 50 收 51 拒（ajv 直测，同既有 meta-schema 用例写法）', () => {
+  const catalog = (icon: string) => [{ key: 'first-smile', label: '第一次微笑', icon }];
+  assert.equal(
+    validateManifest({ version: 1, milestoneCatalog: catalog('a'.repeat(50)) }),
+    true,
+    JSON.stringify(validateManifest.errors),
+  );
+  assert.equal(validateManifest({ version: 1, milestoneCatalog: catalog('a'.repeat(51)) }), false);
+});
+
 test('aggregateQuerySchema：view 词表校验，kind/field 可选', () => {
   assert.equal(aggregateQuerySchema.parse({ view: 'curve' }).view, 'curve');
   assert.equal(aggregateQuerySchema.parse({ view: 'map', field: 'geo' }).field, 'geo');
