@@ -18,6 +18,7 @@
 - 不改动：`packages/dto/src/comments.ts`（REACTION_EMOJIS / 入库值 / 去重键 / 分组）、`packages/dto/src/chains.ts`（ChainIcon 自由 emoji）、worker 推送文案与通知 payload（spec §3.4）。
 - 测试只打 `.env` 指向的测试库；server 触库测试 `afterAll(closeDb)`、`--runInBand`；禁止两个 jest 会话并行。
 - web 改动遵守 `apps/web/CLAUDE.md` 与 `.claude/rules/web-ui.md`（Token、不另建样式约定）；server 迁移遵守 `apps/server/CLAUDE.md`（drizzle-kit generate，不手写 SQL 改表）。
+- app 新代码禁止字面量 hex/rgba：`pnpm --filter @moment/app lint:tokens` 用 grep 拦截 `src/` 下的 `#xxx`/`rgba(` 字面量，唯一豁免 `src/theme/tokens.ts`；颜色一律从 `src/theme/tokens.ts` 语义 token 引（经 `useTheme()`）。
 - 判定口径：渲染「用户数据里的字符串」用 AppIcon；渲染「代码里写死的装饰字符」用单色 Icon（web = 既有 lucide 封装，app = 本计划新建）。两者不混用（spec §4.4）。
 - 每 Task 一个 commit，conventional commits（`feat(icons):` / `feat(dto):` / `feat(server):` / `feat(web):` / `feat(app):`）。
 - 期序：P1→P2→P3 固定；P4 可与 P3 并行；P5 依赖 P1（rating 画稿）与 P2（列宽）。
@@ -83,7 +84,11 @@ tpl-baby  tpl-travel  tpl-daily  tpl-reading  tpl-career
 Run: `ls packages/icons/svg/*.svg | wc -l`（期望 31）；`find packages/icons/svg -name '*.svg' -size +8k`（期望无输出）；`grep -l 'stroke=' packages/icons/svg/*.svg`（期望无输出）；`du -ck packages/icons/svg/*.svg | tail -1`（期望 total < 320）。
 Expected: 全部满足；不满足的回到 Step 1 修正。
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: 画稿人工走查（DoD）**
+
+拼一张 contact sheet（如临时 HTML 一页平铺 31 枚，或在浏览器/Finder 逐枚浏览），逐项确认：① 同词表成组（reaction 9 枚构图重心/主色明度一致；mood 5 枚同一脸型语言；rating 4 枚心形档位递减可辨）；② 风格统一为彩色面性（柔和渐变、圆润、无描边、无文字），无混入线性/扁平单色风格的漂移稿；③ 每枚 tone 与 spec §2.3 词表一致。走查不通过的回 Step 1 重画。**机器校验（Step 2）不能替代本步。**
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add packages/icons/svg/
@@ -356,6 +361,7 @@ git commit -m "feat(dto): 新增 EMOJI_TO_ICON 存量封闭词表→icon key 映
 **Files:**
 - Modify: `apps/web/package.json`（加 `vite-plugin-svgr` devDependency、`@moment/icons` dependency）
 - Modify: `apps/web/vite.config.ts`（plugins 加 svgr——实施时验证既有 plugins 数组形态后追加，不重写配置）
+- Modify: `apps/web/vitest.config.ts`（**独立配置，不继承 vite.config.ts**——plugins 现仅 `react()`；必须同步加 `svgr()`，否则 `AppIcon.test.tsx` 解析不了 `*.svg?react`。保留既有 react/react-dom 钉版 alias、`resolve.dedupe` 与 `deps.optimizer.client` 段，只在 plugins 数组追加一项）
 - Modify: `apps/web/src/env.d.ts`（追加 `/// <reference types="vite-plugin-svgr/client" />`）
 - Create: `apps/web/src/ui/app-icon-components.ts`
 - Create: `apps/web/src/ui/AppIcon.tsx`
@@ -368,13 +374,14 @@ git commit -m "feat(dto): 新增 EMOJI_TO_ICON 存量封闭词表→icon key 映
 ```ts
 // apps/web/src/ui/AppIcon.tsx
 export function resolveAppIcon(value: string): { key: IconKey; label: string } | null;
-export function AppIcon(props: { value: string; size?: number; className?: string }): JSX.Element;
+export function AppIcon(props: { value: string; size?: number; className?: string }): ReactElement;
 ```
 
 - [ ] **Step 1: 构建接入（spec §2.1 要点 1/3/4）**
 
 - `pnpm --filter @moment/web add -D vite-plugin-svgr` 并 `pnpm --filter @moment/web add @moment/icons@workspace:*`（实施时验证 web 包名）。
 - `apps/web/vite.config.ts` 的 plugins 数组追加 `svgr()`（从 `vite-plugin-svgr` 导入）。
+- `apps/web/vitest.config.ts` 的 plugins 数组同样追加 `svgr()`——该文件是独立 vitest 配置（defineConfig from 'vitest/config'，plugins 现仅 `[react()]`），不继承 vite.config.ts；其 react/react-dom alias、`dedupe`、`deps.optimizer.client.include` 段（双 React 实例修复）一字不动。
 - `apps/web/src/env.d.ts` 顶部追加 `/// <reference types="vite-plugin-svgr/client" />`。
 
 - [ ] **Step 2: 写失败测试（三分支）**
@@ -542,7 +549,7 @@ Expected: 全绿。
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/web/package.json apps/web/vite.config.ts apps/web/src/env.d.ts apps/web/src/ui/app-icon-components.ts apps/web/src/ui/AppIcon.tsx apps/web/src/ui/AppIcon.test.tsx pnpm-lock.yaml
+git add apps/web/package.json apps/web/vite.config.ts apps/web/vitest.config.ts apps/web/src/env.d.ts apps/web/src/ui/app-icon-components.ts apps/web/src/ui/AppIcon.tsx apps/web/src/ui/AppIcon.test.tsx pnpm-lock.yaml
 git commit -m "feat(web): 接入 SVGR 并新增 AppIcon 三级解析组件"
 ```
 
@@ -552,18 +559,21 @@ git commit -m "feat(web): 接入 SVGR 并新增 AppIcon 三级解析组件"
 - Modify: `apps/app/package.json`（加 `react-native-svg-transformer` devDependency、`@moment/icons` dependency；`react-native-svg@15.12.1` 已是既有依赖）
 - Modify: `apps/app/metro.config.js`（**在既有自定义配置上叠加**，不得整体重写，spec §2.1 要点 2）
 - Create: `apps/app/src/types/svg.d.ts`（`declare module '*.svg'`，要点 3；实施时验证 `src/types/` 是否已有声明文件可合并）
+- Create: `apps/app/src/components/app-icon-resolve.ts`（**纯模块**：只依赖 `@moment/dto` + `@moment/icons`，不 import react-native / svg——app 无 vitest 配置、纯 node 环境跑测试，import 任何 `.tsx` 或 `.svg` 都会炸）
 - Create: `apps/app/src/components/app-icon-components.ts`
-- Create: `apps/app/src/components/AppIcon.tsx`
-- Test: `apps/app/src/components/AppIcon.test.ts`
+- Create: `apps/app/src/components/AppIcon.tsx`（re-export `resolveAppIcon`）
+- Test: `apps/app/src/components/app-icon-resolve.test.ts`（**只 import 纯模块**，与既有 `src/lib/*.test.ts` 同为纯逻辑 vitest）
 
 **Interfaces:**
 - Consumes: 同 P1-4。
 - Produces（P2/P3/P4 app 侧消费）：
 
 ```ts
-// apps/app/src/components/AppIcon.tsx
+// apps/app/src/components/app-icon-resolve.ts（纯模块，测试与组件共用）
 export function resolveAppIcon(value: string): { key: IconKey; label: string } | null;
-export function AppIcon(props: { value: string; size?: number }): JSX.Element;
+// apps/app/src/components/AppIcon.tsx
+export { resolveAppIcon } from './app-icon-resolve.js';
+export function AppIcon(props: { value: string; size?: number }): ReactElement;
 ```
 
 - [ ] **Step 1: 构建接入（spec §2.1 要点 2/3/4）**
@@ -600,12 +610,12 @@ declare module '*.svg' {
 
 - [ ] **Step 2: 写失败测试（三分支）**
 
-`apps/app/src/components/AppIcon.test.ts`（app 侧组件渲染不做 snapshot，只测纯解析函数 `resolveAppIcon`——RN 渲染进 vitest 成本高，三分支语义由该函数完全决定；与既有 `apps/app/src/lib/*.test.ts` 同为 vitest 风格）：
+`apps/app/src/components/app-icon-resolve.test.ts`（只测纯解析函数 `resolveAppIcon`——三分支语义由该函数完全决定；**严禁 import `AppIcon.tsx`**，它会拉入 react-native 与 31 个 `.svg`，node vitest 无法加载）：
 
 ```ts
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { resolveAppIcon } from './AppIcon.js';
+import { resolveAppIcon } from './app-icon-resolve.js';
 
 describe('resolveAppIcon 三级解析', () => {
   it('命中注册表', () => {
@@ -627,34 +637,16 @@ describe('resolveAppIcon 三级解析', () => {
 
 - [ ] **Step 3: 运行确认失败**
 
-Run: `pnpm --filter @moment/app test -- AppIcon`
+Run: `pnpm --filter @moment/app test -- app-icon-resolve`
 Expected: FAIL——模块不存在。
 
-- [ ] **Step 4: 实现 key→组件索引与 AppIcon**
+- [ ] **Step 4: 实现纯解析模块、key→组件索引与 AppIcon**
 
-`apps/app/src/components/app-icon-components.ts`——与 P1-4 web 版同结构，import 不带 `?react`（transformer 直接返回组件），`reaction-sweet` 同样复用 `MoodLove`：
+`apps/app/src/components/app-icon-resolve.ts`（纯模块，不 import react/react-native/svg）：
 
 ```ts
-import type { ComponentType } from 'react';
-import type { SvgProps } from 'react-native-svg';
-import type { IconKey } from '@moment/icons';
-import MoodJoy from '@moment/icons/svg/mood-joy.svg';
-// ……同 P1-4 清单共 31 个 import（文件名逐一相同，略去重复列表——执行时把 P1-4 的 31 行 import 逐行复制并去掉 '?react' 后缀）
-
-type SvgComponent = ComponentType<SvgProps>;
-
-export const APP_ICON_COMPONENTS: Record<IconKey, SvgComponent> = {
-  // 与 P1-4 web 版完全相同的全 32 key 映射，'reaction-sweet': MoodLove
-};
-```
-
-`apps/app/src/components/AppIcon.tsx`：
-
-```tsx
-import { Text } from 'react-native';
 import { EMOJI_TO_ICON } from '@moment/dto';
 import { ICON_MANIFEST, hasIconKey, type IconKey } from '@moment/icons';
-import { APP_ICON_COMPONENTS } from './app-icon-components.js';
 
 /** 三级解析（spec §4.1）：注册表 → EMOJI_TO_ICON 映射 → null（调用方原文兜底）。 */
 export function resolveAppIcon(value: string): { key: IconKey; label: string } | null {
@@ -663,6 +655,94 @@ export function resolveAppIcon(value: string): { key: IconKey; label: string } |
   if (mapped && hasIconKey(mapped)) return { key: mapped, label: ICON_MANIFEST[mapped].label };
   return null;
 }
+```
+
+`apps/app/src/components/app-icon-components.ts`——与 P1-4 web 版同结构，import 不带 `?react`（transformer 直接返回组件），`reaction-sweet` 同样复用 `MoodLove`（31 个 import 全量列出，不得省略）：
+
+```ts
+import type { ComponentType } from 'react';
+import type { SvgProps } from 'react-native-svg';
+import type { IconKey } from '@moment/icons';
+import MoodJoy from '@moment/icons/svg/mood-joy.svg';
+import MoodLove from '@moment/icons/svg/mood-love.svg';
+import MoodCry from '@moment/icons/svg/mood-cry.svg';
+import MoodAngry from '@moment/icons/svg/mood-angry.svg';
+import MoodSleepy from '@moment/icons/svg/mood-sleepy.svg';
+import ReactionLike from '@moment/icons/svg/reaction-like.svg';
+import ReactionLove from '@moment/icons/svg/reaction-love.svg';
+import ReactionLaugh from '@moment/icons/svg/reaction-laugh.svg';
+import ReactionWow from '@moment/icons/svg/reaction-wow.svg';
+import ReactionSad from '@moment/icons/svg/reaction-sad.svg';
+import ReactionCelebrate from '@moment/icons/svg/reaction-celebrate.svg';
+import ReactionClap from '@moment/icons/svg/reaction-clap.svg';
+import ReactionStrong from '@moment/icons/svg/reaction-strong.svg';
+import ReactionThanks from '@moment/icons/svg/reaction-thanks.svg';
+import RatingLove from '@moment/icons/svg/rating-love.svg';
+import RatingGood from '@moment/icons/svg/rating-good.svg';
+import RatingOk from '@moment/icons/svg/rating-ok.svg';
+import RatingPass from '@moment/icons/svg/rating-pass.svg';
+import MilestoneFirstSmile from '@moment/icons/svg/milestone-first-smile.svg';
+import MilestoneFirstRoll from '@moment/icons/svg/milestone-first-roll.svg';
+import MilestoneFirstSit from '@moment/icons/svg/milestone-first-sit.svg';
+import MilestoneFirstCrawl from '@moment/icons/svg/milestone-first-crawl.svg';
+import MilestoneFirstStand from '@moment/icons/svg/milestone-first-stand.svg';
+import MilestoneFirstSteps from '@moment/icons/svg/milestone-first-steps.svg';
+import MilestoneFirstWord from '@moment/icons/svg/milestone-first-word.svg';
+import MilestoneFirstTooth from '@moment/icons/svg/milestone-first-tooth.svg';
+import TplBaby from '@moment/icons/svg/tpl-baby.svg';
+import TplTravel from '@moment/icons/svg/tpl-travel.svg';
+import TplDaily from '@moment/icons/svg/tpl-daily.svg';
+import TplReading from '@moment/icons/svg/tpl-reading.svg';
+import TplCareer from '@moment/icons/svg/tpl-career.svg';
+
+type SvgComponent = ComponentType<SvgProps>;
+
+export const APP_ICON_COMPONENTS: Record<IconKey, SvgComponent> = {
+  'mood-joy': MoodJoy,
+  'mood-love': MoodLove,
+  'mood-cry': MoodCry,
+  'mood-angry': MoodAngry,
+  'mood-sleepy': MoodSleepy,
+  'reaction-like': ReactionLike,
+  'reaction-love': ReactionLove,
+  'reaction-laugh': ReactionLaugh,
+  'reaction-wow': ReactionWow,
+  'reaction-sad': ReactionSad,
+  'reaction-celebrate': ReactionCelebrate,
+  'reaction-sweet': MoodLove, // 别名（spec §3.1）
+  'reaction-clap': ReactionClap,
+  'reaction-strong': ReactionStrong,
+  'reaction-thanks': ReactionThanks,
+  'rating-love': RatingLove,
+  'rating-good': RatingGood,
+  'rating-ok': RatingOk,
+  'rating-pass': RatingPass,
+  'milestone-first-smile': MilestoneFirstSmile,
+  'milestone-first-roll': MilestoneFirstRoll,
+  'milestone-first-sit': MilestoneFirstSit,
+  'milestone-first-crawl': MilestoneFirstCrawl,
+  'milestone-first-stand': MilestoneFirstStand,
+  'milestone-first-steps': MilestoneFirstSteps,
+  'milestone-first-word': MilestoneFirstWord,
+  'milestone-first-tooth': MilestoneFirstTooth,
+  'tpl-baby': TplBaby,
+  'tpl-travel': TplTravel,
+  'tpl-daily': TplDaily,
+  'tpl-reading': TplReading,
+  'tpl-career': TplCareer,
+};
+```
+
+注：Record<IconKey, …> 会让 P5-1 扩展注册表后此处类型报错——刻意为之，强制索引同步（P5-1 会补 8 个 import）。
+
+`apps/app/src/components/AppIcon.tsx`：
+
+```tsx
+import { Text } from 'react-native';
+import { resolveAppIcon } from './app-icon-resolve.js';
+import { APP_ICON_COMPONENTS } from './app-icon-components.js';
+
+export { resolveAppIcon } from './app-icon-resolve.js';
 
 /** 渲染一个字符串值：词表 icon key / 存量 emoji → 彩色面性 SVG；其余 <Text> 原文兜底。 */
 export function AppIcon({ value, size = 20 }: { value: string; size?: number }) {
@@ -677,14 +757,14 @@ export function AppIcon({ value, size = 20 }: { value: string; size?: number }) 
 
 - [ ] **Step 5: 运行确认通过 + 真机构建验证**
 
-Run: `pnpm --filter @moment/app test -- AppIcon && pnpm --filter @moment/app typecheck && pnpm --filter @moment/app lint`
+Run: `pnpm --filter @moment/app test -- app-icon-resolve && pnpm --filter @moment/app typecheck && pnpm --filter @moment/app lint`
 Expected: 全绿。
 另手动验证：`pnpm --filter @moment/app start` 后 metro bundle 不因 svg import 报错（实施时验证一次冷启动 bundle）。
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/app/package.json apps/app/metro.config.js apps/app/src/types/ apps/app/src/components/app-icon-components.ts apps/app/src/components/AppIcon.tsx apps/app/src/components/AppIcon.test.ts pnpm-lock.yaml
+git add apps/app/package.json apps/app/metro.config.js apps/app/src/types/ apps/app/src/components/app-icon-resolve.ts apps/app/src/components/app-icon-components.ts apps/app/src/components/AppIcon.tsx apps/app/src/components/app-icon-resolve.test.ts pnpm-lock.yaml
 git commit -m "feat(app): 接入 react-native-svg-transformer 并新增 AppIcon 三级解析组件"
 ```
 
@@ -709,7 +789,8 @@ git commit -m "feat(app): 接入 react-native-svg-transformer 并新增 AppIcon 
 `packages/dto/src/templates.test.ts` 追加（既有断言风格实施时验证后对齐）：
 
 ```ts
-// 三官方模板 icon 为注册表 key 形态
+// 三官方模板 icon 为注册表 key 形态（OFFICIAL_TEMPLATES / validateManifest / createTemplateInputSchema
+// 已在既有测试文件 import，直接复用其夹具）
 test('官方三模板 icon 为 tpl-* key，baby catalog icon 为 milestone-first-* key', () => {
   const byKey = new Map(OFFICIAL_TEMPLATES.map((t) => [t.key, t]));
   assert.equal(byKey.get('baby')!.icon, 'tpl-baby');
@@ -725,7 +806,7 @@ test('官方三模板 icon 为 tpl-* key，baby catalog icon 为 milestone-first
 
 // icon maxLength 50 边界
 test('createTemplateInputSchema icon 50 收 51 拒', () => {
-  const base = { name: 'x', icon: '', manifest: { version: 1 } };
+  const base = { name: 'x', manifest: { version: 1 } };
   assert.ok(createTemplateInputSchema.safeParse({ ...base, icon: 'a'.repeat(50) }).success);
   assert.ok(!createTemplateInputSchema.safeParse({ ...base, icon: 'a'.repeat(51) }).success);
 });
@@ -733,12 +814,18 @@ test('updateTemplateInputSchema icon 50 收 51 拒', () => {
   assert.ok(updateTemplateInputSchema.safeParse({ icon: 'a'.repeat(50) }).success);
   assert.ok(!updateTemplateInputSchema.safeParse({ icon: 'a'.repeat(51) }).success);
 });
-test('manifest milestoneCatalog icon 50 收 51 拒', () => {
-  // 实施时验证：对齐既有 manifestJsonSchema 直测写法
+test('manifest milestoneCatalog icon 50 收 51 拒（ajv 直测，同既有 meta-schema 用例写法）', () => {
+  const catalog = (icon: string) => [{ key: 'first-smile', label: '第一次微笑', icon }];
+  assert.equal(
+    validateManifest({ version: 1, milestoneCatalog: catalog('a'.repeat(50)) }),
+    true,
+    JSON.stringify(validateManifest.errors),
+  );
+  assert.equal(validateManifest({ version: 1, milestoneCatalog: catalog('a'.repeat(51)) }), false);
 });
 ```
 
-（实施时验证：既有测试里 `OFFICIAL_TEMPLATES` / `createTemplateInputSchema` 的导入名与 `manifest` 最小合法结构，照搬既有用例的夹具。）
+（`validateManifest` = 既有测试文件顶部的 `ajv.compile(manifestJsonSchema)`；`OFFICIAL_TEMPLATES[].manifest` 的类型字段名实施时验证，按 `OfficialTemplate` 接口现状取。）
 
 - [ ] **Step 2: 运行确认失败**
 
@@ -779,37 +866,79 @@ git commit -m "feat(dto): 官方三模板 icon 与 baby 里程碑目录换 icon 
 
 - [ ] **Step 1: 写失败测试**
 
-`apps/server/tests/templates-icon.test.ts`（触库，`afterAll(closeDb)`；`resetDb()` 不需要——本表不在既有 resetDb 范围则按既有 templates 测试的清理方式，实施时验证）：
+`apps/server/tests/templates-icon.test.ts`（触库，`afterAll(closeDb)`；`resetDb()` 走既有约定。`templates` 表 schema 导出名、`seedOfficialTemplates` 无参幂等——均已确认：`apps/server/src/templates/official-templates.seed.ts` 导出 `seedOfficialTemplates(): Promise<void>`）：
 
 ```ts
-import assert from 'node:assert/strict';
-import { sql } from 'drizzle-orm';
-import { afterAll, describe, expect, it } from '@jest/globals';
-// 实施时验证：对齐既有 templates 触库测试的 import 与夹具（db、closeDb、建链/建模板 helper）
+import { eq, inArray } from 'drizzle-orm';
+import request from 'supertest';
+import { createApp } from '../src/app.js';
+import { db, pool } from '../src/db/index.js';
+import { templates } from '../src/db/schema/templates.js';
+import { seedOfficialTemplates } from '../src/templates/official-templates.seed.js';
+import { auth, createUser, type TestUser } from './helpers/auth.js';
+import { closeDb, resetDb } from './helpers/db.js';
+import { listenLocal } from './helpers/http-server.js';
+
+const app = listenLocal(createApp());
+
+let alice: TestUser;
+
+beforeEach(async () => {
+  await resetDb();
+  alice = await createUser(app, 'alice');
+});
+afterAll(closeDb);
 
 describe('templates.icon 列宽与 seed 图标化', () => {
   it('information_schema 中 templates.icon 为 varchar(50)', async () => {
-    const rows = await db.execute(sql`
-      SELECT CHARACTER_MAXIMUM_LENGTH AS len
-      FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'templates' AND COLUMN_NAME = 'icon'
-    `);
-    // 实施时验证 drizzle execute 返回行形态后取数
-    expect(Number((rows as any)[0][0].len ?? (rows as any)[0].len)).toBe(50);
+    const [rows] = await pool.query(
+      `SELECT CHARACTER_MAXIMUM_LENGTH AS len FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'templates' AND COLUMN_NAME = 'icon'`,
+    );
+    expect(Number((rows as Array<{ len: number }>)[0].len)).toBe(50);
   });
 
   it('seed 幂等且把三官方模板 icon 改写为 tpl-* key', async () => {
-    // 实施时验证 seed 触发方式（migrate 钩子 / resetDb / 直接 import seed 函数）后：
-    // ① 手动把 DB 行 icon 改回 '👶' 模拟旧数据 → 跑 seed → 断言变回 'tpl-baby'
-    // ② 再跑一次 seed，断言行数不变（幂等）
+    // 模拟旧数据：把 baby icon 改回 emoji，跑 seed 应被 upsert 回 key
+    await db.update(templates).set({ icon: '👶' }).where(eq(templates.key, 'baby'));
+    await seedOfficialTemplates();
+    const rows = await db
+      .select({ key: templates.key, icon: templates.icon })
+      .from(templates)
+      .where(inArray(templates.key, ['baby', 'travel', 'daily']));
+    const byKey = new Map(rows.map((r) => [r.key, r.icon]));
+    expect(byKey.get('baby')).toBe('tpl-baby');
+    expect(byKey.get('travel')).toBe('tpl-travel');
+    expect(byKey.get('daily')).toBe('tpl-daily');
+
+    // 幂等：再跑一次，官方行数不变
+    const countBefore = rows.length;
+    await seedOfficialTemplates();
+    const rowsAfter = await db
+      .select({ key: templates.key })
+      .from(templates)
+      .where(inArray(templates.key, ['baby', 'travel', 'daily']));
+    expect(rowsAfter.length).toBe(countBefore);
   });
 
-  it('带 icon key（>8 字符）的 user 模板可建，51 字符 400', async () => {
-    // POST /api/templates，icon 用 'tpl-reading'（>8 字符）→ 201
-    // icon 用 'a'.repeat(51) → 400
+  it('带 icon key（>8 字符）的 user 模板可建 201，51 字符 400', async () => {
+    const ok = await request(app)
+      .post('/api/templates')
+      .set('Authorization', auth(alice))
+      .send({ name: '读书', icon: 'tpl-reading', manifest: { version: 1 } });
+    expect(ok.status).toBe(201);
+    expect(ok.body.icon).toBe('tpl-reading');
+
+    const tooLong = await request(app)
+      .post('/api/templates')
+      .set('Authorization', auth(alice))
+      .send({ name: 'x', icon: 'a'.repeat(51), manifest: { version: 1 } });
+    expect(tooLong.status).toBe(400);
   });
 });
 ```
+
+（`listenLocal` / `auth` / `createUser` 用法照搬 `tests/templates/templates.crud.test.ts`；`pool` 自 `src/db/index.ts` 导出，见 CONVENTIONS §1。）
 
 - [ ] **Step 2: 运行确认失败**
 
@@ -1045,21 +1174,22 @@ git commit -m "feat(web): 装饰 emoji 清扫为 lucide 单色图标"
 ### Task P4-2: app 新建单色 Icon 组件 + 装饰 emoji 清扫 + Tab 栏
 
 **Files:**
-- Create: `apps/app/src/components/Icon.tsx`（lucide 24×24 path 数据内联常量 + react-native-svg 渲染，不引入运行时图标库，spec §4.4）
-- Create: `apps/app/src/components/Icon.test.ts`（词表完整性单测）
+- Create: `apps/app/src/components/app-line-icons.ts`（**纯数据模块**：lucide 24×24 path 数据内联常量，不 import react/react-native-svg——app 纯 node vitest 才能加载它做测试）
+- Create: `apps/app/src/components/Icon.tsx`（只做渲染，import 上面的纯模块 + react-native-svg + `useTheme`，不引入运行时图标库，spec §4.4）
+- Test: `apps/app/src/components/app-line-icons.test.ts`（只 import 纯数据模块）
 - Modify: `apps/app/app/(tabs)/_layout.tsx`（Tab 栏 emoji 文本图标替换）
 - Modify: 其余含装饰 emoji 的 app 源文件（扫描定位）
-- Test: 受影响处既有测试同步更新
 
 **Interfaces:**
-- Consumes: 既有 `react-native-svg`。
+- Consumes: 既有 `react-native-svg`、`src/theme/use-theme.ts` 的 `useTheme()`。
 - Produces（app 后续 UI 通用）：
 
 ```ts
-// apps/app/src/components/Icon.tsx
+// apps/app/src/components/app-line-icons.ts（纯数据）
 export const APP_LINE_ICONS = { 'map-pin': …, calendar: …, 'message-circle': …, settings: …, … } as const;
 export type AppLineIconName = keyof typeof APP_LINE_ICONS;
-export function Icon(props: { name: AppLineIconName; size?: number; color?: string }): JSX.Element;
+// apps/app/src/components/Icon.tsx
+export function Icon(props: { name: AppLineIconName; size?: number; color?: string }): ReactElement;
 ```
 
 - [ ] **Step 1: 扫描定位 + 确定词表**
@@ -1070,10 +1200,10 @@ Run: `grep -rnoP '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}]' apps/
 - [ ] **Step 2: 写失败测试**
 
 ```ts
-// apps/app/src/components/Icon.test.ts
+// apps/app/src/components/app-line-icons.test.ts
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { APP_LINE_ICONS } from './Icon.js';
+import { APP_LINE_ICONS } from './app-line-icons.js';
 
 describe('APP_LINE_ICONS 词表', () => {
   it('覆盖装饰 emoji 清扫所需全部名字', () => {
@@ -1087,17 +1217,15 @@ describe('APP_LINE_ICONS 词表', () => {
 
 - [ ] **Step 3: 运行确认失败**
 
-Run: `pnpm --filter @moment/app test -- Icon`
+Run: `pnpm --filter @moment/app test -- app-line-icons`
 Expected: FAIL——模块不存在。
 
 - [ ] **Step 4: 实现 Icon 组件并替换**
 
-`apps/app/src/components/Icon.tsx`：
+`apps/app/src/components/app-line-icons.ts`（纯数据，无 JSX、无 react-native 依赖）：
 
-```tsx
-import { Path, Svg } from 'react-native-svg';
-
-/** lucide 单色线性图标（24×24 path 数据内联，不引入运行时图标库；spec §4.4）。词表只增不减。 */
+```ts
+/** lucide 单色线性图标 path 数据（24×24，内联常量，不引入运行时图标库；spec §4.4）。词表只增不减。 */
 export const APP_LINE_ICONS = {
   // path d 数据逐枚从 lucide 对应图标复制（实施时验证 lucide 官网/既有 web ui/Icon.tsx 引用的 lucide 包版本，取同源 path）
   'map-pin': 'M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
@@ -1105,29 +1233,44 @@ export const APP_LINE_ICONS = {
 } as const;
 
 export type AppLineIconName = keyof typeof APP_LINE_ICONS;
+```
 
-export function Icon({ name, size = 24, color = '#000' }: { name: AppLineIconName; size?: number; color?: string }) {
+`apps/app/src/components/Icon.tsx`（只做渲染；**颜色默认取主题 token**——`lint:tokens` 拦 hex/rgba 字面量，唯一豁免 `src/theme/tokens.ts`，见 Global Constraints）：
+
+```tsx
+import { Path, Svg } from 'react-native-svg';
+import { useTheme } from '../theme/use-theme.js';
+import { APP_LINE_ICONS, type AppLineIconName } from './app-line-icons.js';
+
+export type { AppLineIconName } from './app-line-icons.js';
+
+/** 单色线性图标。缺省色 = 次级文字 token（装饰图标语义）；调用方可显式覆盖（值同样须来自 token）。 */
+export function Icon({ name, size = 24, color }: { name: AppLineIconName; size?: number; color?: string }) {
+  const theme = useTheme();
+  const strokeColor = color ?? theme.colors.muted;
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <Path d={APP_LINE_ICONS[name]} />
     </Svg>
   );
 }
 ```
 
+（`useTheme(): Theme` 已确认存在（`src/theme/use-theme.ts`，跟随系统外观的纯函数）；`theme.colors.muted` 字段名实施时对 `ColorTokens` 接口验证后取用，次级语义不符则换 `ink`。）
+
 注：多图元 lucide 图标（如 map-pin 的圆心）单条 path 无法表达时，把 value 改为 `string[]` 逐条渲染，或拆 `<Circle>`——实施时按实际图标定，保持词表签名稳定。
 
-逐处替换装饰 emoji（含 `app/(tabs)/_layout.tsx` Tab 栏）为 `<Icon name="…" />`。
+逐处替换装饰 emoji（含 `app/(tabs)/_layout.tsx` Tab 栏）为 `<Icon name="…" />`；替换处需要强调色时传 `color={theme.colors.xxx}` 而非字面量。
 
 - [ ] **Step 5: 运行确认通过 + 清扫复查**
 
-Run: `pnpm --filter @moment/app test && pnpm --filter @moment/app lint && pnpm --filter @moment/app typecheck`，再跑 Step 1 grep 确认无残留（除豁免项）。
+Run: `pnpm --filter @moment/app test && pnpm --filter @moment/app lint && pnpm --filter @moment/app typecheck`（`lint` 内含 `lint:tokens`，hex/rgba 字面量会被拦），再跑 Step 1 grep 确认无残留（除豁免项）。
 Expected: 全绿。
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/app/src/components/Icon.tsx apps/app/src/components/Icon.test.ts "apps/app/app/(tabs)/_layout.tsx" apps/app/src/
+git add apps/app/src/components/app-line-icons.ts apps/app/src/components/Icon.tsx apps/app/src/components/app-line-icons.test.ts "apps/app/app/(tabs)/_layout.tsx" apps/app/src/
 git commit -m "feat(app): 新建单色 Icon 组件，装饰 emoji 与 Tab 栏图标清扫"
 ```
 
@@ -1152,7 +1295,11 @@ git commit -m "feat(app): 新建单色 Icon 组件，装饰 emoji 与 Tab 栏图
 - [ ] **Step 1: 画稿 8 枚**
 
 口径同 P1-1（viewBox `0 0 32 32`、留白 2px、彩色面性、无描边、`<title>` 写 label、单文件 < 8KB）；label/tone 逐字取 spec §2.3：入职 green / 晋升 rose / 转岗 sky / 跳槽 purple / 离职 neutral / 获奖 amber / 重大项目 sky / 职业认证 green。8 枚与 baby 里程碑 8 枚视觉成组（构图重心、主色明度一致）。
-校验同 P1-1 Step 2（此时 svg 总数 39、注册表 40 key）。
+校验同 P1-1 Step 2，并补总量断言：`ls packages/icons/svg/*.svg | wc -l`（期望 39）、`du -ck packages/icons/svg/*.svg | tail -1`（**40 枚注册表 / 39 文件总量仍 < 320KB**，spec §2.2 全包预算）。
+
+- [ ] **Step 1.5: 画稿人工走查（DoD，同 P1-1 Step 3）**
+
+contact sheet 或逐枚浏览：career 8 枚与 baby 8 枚同组风格不漂移；16 枚 milestone 一起过目，构图重心与主色明度一致；每枚 label/tone 与 spec §2.3 一致。不通过回 Step 1 重画。
 
 - [ ] **Step 2: 写失败测试（计数断言 + parity 自动覆盖新文件）**
 
@@ -1219,24 +1366,46 @@ test('官方模板共 5 份且全部过 manifestJsonSchema', () => {
     ['baby', 'travel', 'daily', 'reading', 'career'], // 实施时验证既有顺序约定后对齐
   );
   for (const t of OFFICIAL_TEMPLATES) {
-    assert.ok(manifestJsonSchema.safeParse(t.manifest).success, `${t.key} manifest 非法`);
+    assert.equal(validateManifest(t.manifest), true, `${t.key}: ${JSON.stringify(validateManifest.errors)}`);
   }
 });
 
 test('reading rating 字段：icon key 选项经 momentFieldPayloadJsonSchema 派生 enum 校验', () => {
-  // 实施时验证既有派生函数（templates.ts 内 emoji-picker case）的既有测试写法后写：
-  // rating 字段接受 'rating-love'，拒绝 '❤️' 与 'rating-nope'
+  const reading = OFFICIAL_TEMPLATES.find((t) => t.key === 'reading')!;
+  const ratingField = reading.manifest.momentFields!.find((f) => f.key === 'rating')!;
+  assert.equal(ratingField.type, 'emoji-picker');
+  const validate = ajv.compile(momentFieldPayloadJsonSchema(ratingField));
+  assert.equal(validate('rating-love'), true);
+  assert.equal(validate('rating-pass'), true);
+  assert.equal(validate('❤️'), false);
+  assert.equal(validate('rating-nope'), false);
 });
 
 test('career-event payloadSchema 与 baby milestone 同构：catalog_key/custom_label 二选一', () => {
-  // 用 career manifest 的 kinds[0].payloadSchema 经既有校验路径（实施时验证校验入口函数名）：
-  // {catalog_key:'promotion'} 通过；{custom_label:'内部转组'} 通过；{} 拒绝；{catalog_key:'PROMOTION'} 拒绝（pattern）
+  const career = OFFICIAL_TEMPLATES.find((t) => t.key === 'career')!;
+  const careerEvent = career.manifest.kinds!.find((k) => k.key === 'career-event')!;
+  const validate = ajv.compile(careerEvent.payloadSchema);
+  assert.equal(validate({ catalog_key: 'promotion' }), true);
+  assert.equal(validate({ catalog_key: 'promotion', note: '带组 8 人' }), true);
+  assert.equal(validate({ custom_label: '内部转组' }), true);
+  assert.equal(validate({}), false, JSON.stringify(validate.errors));
+  assert.equal(validate({ catalog_key: 'PROMOTION' }), false); // pattern 拒大写
+  assert.equal(validate({ catalog_key: 'promotion', hacker: 1 }), false); // additionalProperties
 });
 
 test('reflection payloadSchema：topic 必填 1-50，decision/next_step 可选 ≤500', () => {
-  // {topic:'要不要接这个新机会'} 通过；{} 拒绝；{topic:''} 拒绝
+  const career = OFFICIAL_TEMPLATES.find((t) => t.key === 'career')!;
+  const reflection = career.manifest.kinds!.find((k) => k.key === 'reflection')!;
+  const validate = ajv.compile(reflection.payloadSchema);
+  assert.equal(validate({ topic: '要不要接这个新机会' }), true);
+  assert.equal(validate({ topic: 't', decision: 'd', next_step: 'n' }), true);
+  assert.equal(validate({}), false);
+  assert.equal(validate({ topic: '' }), false);
+  assert.equal(validate({ topic: 'x'.repeat(51) }), false);
 });
 ```
+
+（`ajv` / `validateManifest` / `momentFieldPayloadJsonSchema` 均已在 `templates.test.ts` 顶部就绪；`OfficialTemplate.manifest.kinds[].payloadSchema` 的字段类型实施时对 `OfficialTemplate` 接口验证——若为 `Record<string, unknown>`，`ajv.compile` 直接收。）
 
 - [ ] **Step 2: 运行确认失败**
 
@@ -1364,7 +1533,7 @@ git commit -m "feat(web): summarizePayload 按 payload 形态分派泛化"
 
 **Files:**
 - Modify: `apps/server/src/llm/recap/input.ts`（`summarizePayload` 第 105–137 行区域 + 调用点第 217 行 + `meta` 组装处补 `kindLabels`）
-- Test:  recap input 的既有测试文件（实施时 `ls apps/server/tests/ | grep -i recap` 定位）
+- Test: `apps/server/tests/recaps/recap-summarize.test.ts`（新建；经公开入口 `buildRecapInput` 黑盒断言，`summarizePayload` 保持模块私有不导出）
 
 **Interfaces:**
 - Consumes: manifest.kinds 的 label（career-event → 「职业事件」、milestone → 「里程碑」、reflection → 「思考」）。
@@ -1372,24 +1541,95 @@ git commit -m "feat(web): summarizePayload 按 payload 形态分派泛化"
 
 - [ ] **Step 1: 写失败测试**
 
+`summarizePayload` 是模块内私有函数，经公开入口 `buildRecapInput(chainId, period)` 黑盒断言序列化行——新建 `apps/server/tests/recaps/recap-summarize.test.ts`（夹具完全照搬 `recap-degraded-e2e.test.ts` 的 helper 组合）：
+
 ```ts
-describe('recap summarizePayload 泛化', () => {
-  it('career-event 出【职业事件】前缀 + 目录 label', () => {
-    // career-event payload {catalog_key:'promotion'} → '【职业事件】晋升'
+import { createApp } from '../../src/app.js';
+import { buildRecapInput } from '../../src/llm/recap/input.js';
+import { seedOfficialTemplates } from '../../src/templates/official-templates.seed.js';
+import { createUser, type TestUser } from '../helpers/auth.js';
+import { createChain } from '../helpers/chains.js';
+import { closeDb, resetDb } from '../helpers/db.js';
+import { insertMoment } from '../helpers/fixtures.js';
+import { listenLocal } from '../helpers/http-server.js';
+
+const app = listenLocal(createApp());
+
+let owner: TestUser;
+
+beforeEach(async () => {
+  await resetDb(); // resetDb 只清 user scope 模板，官方模板保留；幂等 seed 兜底确保 career 行就位
+  await seedOfficialTemplates();
+  owner = await createUser(app, 'owner');
+});
+afterAll(closeDb);
+
+describe('recap summarizePayload 泛化（spec 2026-09-03 §5）', () => {
+  it('career-event 出【职业事件】前缀 + 目录 label', async () => {
+    const chain = await createChain(app, owner, '职业', 'career');
+    await insertMoment({
+      chainId: chain.id,
+      authorId: owner.id,
+      happenedAt: new Date('2026-08-05T01:00:00Z'),
+      kind: 'career-event',
+      payload: { catalog_key: 'promotion' },
+    });
+    const input = await buildRecapInput(chain.id, '2026-08');
+    expect(input.moments).toHaveLength(1);
+    expect(input.moments[0].line).toContain('【职业事件】晋升');
   });
-  it('reflection 出【思考】+ topic', () => {
-    // {topic:'…'} → '【思考】…'
+
+  it('reflection 出【思考】+ topic', async () => {
+    const chain = await createChain(app, owner, '职业', 'career');
+    await insertMoment({
+      chainId: chain.id,
+      authorId: owner.id,
+      happenedAt: new Date('2026-08-05T01:00:00Z'),
+      kind: 'reflection',
+      payload: { topic: '要不要接这个机会' },
+    });
+    const input = await buildRecapInput(chain.id, '2026-08');
+    expect(input.moments[0].line).toContain('【思考】要不要接这个机会');
   });
-  it('milestone 前缀保持【里程碑】回归', () => {
-    // baby milestone {catalog_key:'first-steps'} → '【里程碑】第一次走路'
+
+  it('milestone 前缀保持【里程碑】回归', async () => {
+    const chain = await createChain(app, owner, '宝宝', 'baby');
+    await insertMoment({
+      chainId: chain.id,
+      authorId: owner.id,
+      happenedAt: new Date('2026-08-05T01:00:00Z'),
+      kind: 'milestone',
+      payload: { catalog_key: 'first-steps' },
+    });
+    const input = await buildRecapInput(chain.id, '2026-08');
+    expect(input.moments[0].line).toContain('【里程碑】第一次走路');
   });
-  it('metric/standard 分支不变', () => {
-    // 既有行为断言
+
+  it('metric/standard 分支不变', async () => {
+    const chain = await createChain(app, owner, '宝宝', 'baby');
+    await insertMoment({
+      chainId: chain.id,
+      authorId: owner.id,
+      happenedAt: new Date('2026-08-05T01:00:00Z'),
+      kind: 'metric',
+      payload: { metric: 'height', value: 52, unit: 'cm' },
+    });
+    const daily = await createChain(app, owner, '日常', 'daily');
+    await insertMoment({
+      chainId: daily.id,
+      authorId: owner.id,
+      happenedAt: new Date('2026-08-05T01:00:00Z'),
+      payload: { mood: '😄' },
+    });
+    const babyInput = await buildRecapInput(chain.id, '2026-08');
+    expect(babyInput.moments[0].line).toContain('【记录】height 52cm');
+    const dailyInput = await buildRecapInput(daily.id, '2026-08');
+    expect(dailyInput.moments[0].line).toContain('【心情】😄');
   });
 });
 ```
 
-（实施时验证既有 recap 测试如何构造 meta/milestoneCatalog 夹具，照搬。）
+（`createChain(app, owner, name, templateKey)` 返回 `{id}`、`insertMoment` content 缺省 '内容'、`buildRecapInput(chainId, 'YYYY-MM')`——均已对照 `tests/helpers/chains.js`、`tests/helpers/fixtures.ts`、`src/llm/recap/input.ts` 确认。）
 
 - [ ] **Step 2: 运行确认失败**
 
@@ -1493,10 +1733,7 @@ Expected: 全绿（spec §8.5）。server 测试勿与其他 jest 会话并行�
 
 - [ ] **Step 4: Commit（仅当有修补改动）**
 
-```bash
-git add -A
-git commit -m "feat(web): rating 选项渲染验证与 P5 验收修补"
-```
+按实际改动分包 scope 提交（示例）：web 修补 `feat(web): rating 选项渲染与 P5 验收修补`；app 修补 `feat(app): …`；server/dto 修补同理。不混包一把 `git add -A`。
 （无改动则跳过 commit，在任务记录中注明。）
 
 ---
@@ -1505,4 +1742,13 @@ git commit -m "feat(web): rating 选项渲染验证与 P5 验收修补"
 
 - **Spec 覆盖**：§2 包与画稿 → P1-1/P1-2/P1-5、P5-1；§3.1 EMOJI_TO_ICON → P1-3；§3.3 DB 变更与 meta-schema 放宽 → P2-1/P2-2；§3.4 逐条清单 → P1/P2/P5 各 Task（comments.ts / chains.ts / worker 不改由 P3-3 与 Global Constraints 双重把守）；§4 渲染层 → P1-4/P1-5（AppIcon）+ P2-3/P3（替换点）+ P4（装饰清扫）；§5 新模板与 summarizePayload 泛化 → P5-2/P5-3/P5-4；§6 分期与期序 → 本计划 P1–P5 与依赖注记一致；§7 测试策略 → parity（P1-2/P1-3/P5-1）、dto（P2-1/P5-2）、server（P2-2/P5-4）、摘要泛化（P5-3/P5-4）、reaction 回归（P3-3）、AppIcon 三分支（P1-4/P1-5）全覆盖；§8 验收 → P5-5。
 - **占位符扫描**：除明确标注「实施时验证」（行号、既有测试夹具形态、metro 既有配置细节）外无 TBD/TODO；所有接口签名与关键代码块完整。
-- **跨 Task 类型一致性**：`ICON_MANIFEST/IconKey/hasIconKey`（P1-2 定义 → P1-3/P1-4/P1-5/P5-1 消费）、`EMOJI_TO_ICON`（P1-3 定义 → P1-4/P1-5 消费）、`resolveAppIcon/AppIcon`（P1-4/P1-5 定义，两端同签名 → P2-3/P3/P5-5 消费）、`resolveMilestoneLabel`/`summarizePayload`（签名不变，P5-3 改语义、P5-4 server 版加参数）、`APP_LINE_ICONS/Icon`（P4-2 定义）——名称与签名前后一致。
+- **跨 Task 类型一致性**：`ICON_MANIFEST/IconKey/hasIconKey`（P1-2 定义 → P1-3/P1-4/P1-5/P5-1 消费）、`EMOJI_TO_ICON`（P1-3 定义 → P1-4/P1-5 消费）、`resolveAppIcon`（web 在 `AppIcon.tsx`、app 在纯模块 `app-icon-resolve.ts` 并由 `AppIcon.tsx` re-export，两端同签名 → P2-3/P3/P5-5 消费）、`resolveMilestoneLabel`/`summarizePayload`（签名不变，P5-3 改语义、P5-4 server 版加 `kindLabels` 参数）、`APP_LINE_ICONS`（P4-2 定义于纯数据模块 `app-line-icons.ts`，`Icon.tsx` 只渲染）——名称与签名前后一致。
+
+## 修订记录（评审后 v2）
+
+- **P1-4**：`apps/web/vitest.config.ts` 加入 Files 与 Step 1——独立 vitest 配置（plugins 仅 `react()`），必须与 vite.config.ts 同步加 `svgr()`，否则 `*.svg?react` 在测试中解析失败；既有 react/react-dom 钉版 alias 与 `deps.optimizer.client` 段不动。
+- **P1-5**：`resolveAppIcon` 抽到纯模块 `app-icon-resolve.ts`（只依赖 dto/icons manifest），测试改 `app-icon-resolve.test.ts` 只 import 纯模块——app 纯 node vitest 加载不了 `.tsx`/`.svg`；`AppIcon.tsx` re-export 保持消费方签名不变；`app-icon-components.ts` 31 个 import 全量列出，消除「略去重复列表」占位。
+- **P4-2**：`APP_LINE_ICONS` path 数据拆到纯数据模块 `app-line-icons.ts`（同理由），测试随之改名；`Icon.tsx` 颜色默认取 `useTheme()` 语义 token（`theme.colors.muted`），不再出现 `'#000'` 字面量；Global Constraints 新增「app 新代码禁止字面量 hex/rgba（lint:tokens grep 拦截，唯一豁免 theme/tokens.ts）」。
+- **测试补全**：P2-1（milestoneCatalog icon 边界 ajv 用例）、P2-2（整文件：information_schema 列宽走 `pool.query`、seed 改写+幂等、>8 字符 icon 建模板 201/51 字符 400）、P5-2（rating 派生 enum / career-event 二选一 / reflection 必填边界，全部经既有 ajv 实例直测）、P5-4（新建 `tests/recaps/recap-summarize.test.ts`，经 `buildRecapInput` 黑盒断言四条分支，夹具照搬 recap-degraded-e2e 的 helper 组合）。
+- **画稿 DoD**：P1-1 Step 3 / P5-1 Step 1.5 增加人工走查（contact sheet 或逐枚浏览，同词表成组 + 风格不漂移）；P5-1 Step 1 补 40 枚总量 < 320KB 断言（`du -ck`）。
+- **杂项**：Interfaces 返回值类型 `JSX.Element` → `ReactElement`；P5-5 修补 commit 按实际改动分包 scope。
