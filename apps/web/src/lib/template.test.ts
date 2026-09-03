@@ -49,7 +49,10 @@ describe('groupMomentsByTrips', () => {
 
 describe('resolveMilestoneLabel / summarizePayload', () => {
   it('catalog_key 命中目录给 label+icon；custom_label 回退；未知 key 用原文', () => {
-    expect(resolveMilestoneLabel(baby, { catalog_key: 'first-smile' })).toEqual({ label: '第一次微笑', icon: '😊' });
+    expect(resolveMilestoneLabel(baby, { catalog_key: 'first-smile' })).toEqual({
+      label: '第一次微笑',
+      icon: 'milestone-first-smile',
+    });
     expect(resolveMilestoneLabel(baby, { custom_label: '第一次叫妈妈' })).toEqual({ label: '第一次叫妈妈', icon: null });
     expect(resolveMilestoneLabel(baby, { catalog_key: 'not-in-catalog' })).toEqual({ label: 'not-in-catalog', icon: null });
   });
