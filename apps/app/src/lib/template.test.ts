@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { OFFICIAL_TEMPLATES } from '@moment/dto';
-import { resolveMomentSummary } from './template';
+import { resolveMomentSummary, summarizePayload } from './template';
 import { resolveAppIcon } from '../components/app-icon-resolve';
 
 // resolveMomentSummary（P3-2 从 MomentCard 内联 IIFE 抽出的纯函数）：
@@ -10,6 +10,29 @@ import { resolveAppIcon } from '../components/app-icon-resolve';
 // app 测试基建是纯 node vitest，组件树断言不可行，这里钉住抽出的纯逻辑与解析层。
 
 const baby = OFFICIAL_TEMPLATES.find((t) => t.key === 'baby')!.manifest;
+const career = OFFICIAL_TEMPLATES.find((t) => t.key === 'career')!.manifest;
+
+describe('summarizePayload 泛化（spec §5）', () => {
+  it('career-event 含 catalog_key 出目录 label', () => {
+    assert.equal(summarizePayload(career, 'career-event', { catalog_key: 'promotion' }), '晋升');
+  });
+  it('career-event 含 custom_label 出原文', () => {
+    assert.equal(summarizePayload(career, 'career-event', { custom_label: '内部转组' }), '内部转组');
+  });
+  it('reflection 出 topic', () => {
+    assert.equal(summarizePayload(career, 'reflection', { topic: '要不要接这个机会' }), '要不要接这个机会');
+  });
+  it('baby milestone 摘要回归不变', () => {
+    assert.equal(summarizePayload(baby, 'milestone', { catalog_key: 'first-steps' }), '第一次走路');
+  });
+  it('metric 分支不变', () => {
+    assert.equal(summarizePayload(baby, 'metric', { metric: 'height', value: 52, unit: 'cm' }), '身高 52cm');
+  });
+  it('未知 payload 返回空串兜底不变', () => {
+    assert.equal(summarizePayload(career, 'whatever', { foo: 1 }), '');
+    assert.equal(summarizePayload(career, 'standard', null), '');
+  });
+});
 
 describe('resolveMomentSummary 时刻卡结构化摘要', () => {
   it('standard 时刻无摘要', () => {
