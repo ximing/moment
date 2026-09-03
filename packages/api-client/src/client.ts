@@ -86,7 +86,7 @@ export interface MomentClient {
   listChains(): Promise<ChainDto[]>;
   /** P3 起链详情内嵌 templateManifest（ChainDetailDto ⊃ ChainDto，向后兼容） */
   getChain(chainId: string): Promise<ChainDetailDto>;
-  /** 模板列表（scope=official 取官方三模板；不传 = official 全部 + 我的 user 模板） */
+  /** 模板列表（scope=official 取官方模板；不传 = official 全部 + 我的 user 模板） */
   listTemplates(scope?: TemplateScope): Promise<TemplateDto[]>;
   /** 聚合视图投影（spec §3.2）；timeline 不走端点（前端分章），请求会得 INVALID_AGGREGATE_VIEW */
   getAggregate(chainId: string, query: AggregateQuery): Promise<AggregateResponse>;
