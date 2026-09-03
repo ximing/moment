@@ -18,6 +18,7 @@
   "dependencies": {
     "@moment/api-client": "workspace:*",
     "@moment/dto": "workspace:*",
+    "@moment/icons": "workspace:*",
     "@rabjs/react": "^9.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
     "@shopify/flash-list": "2.0.2",
@@ -45,6 +46,7 @@
     "@moment/eslint-config": "workspace:*",
     "@moment/typescript-config": "workspace:*",
     "@types/react": "~19.1.0",
+    "react-native-svg-transformer": "^1.5.3",
     "typescript": "^5.7.3",
     "vitest": "^4.1.11"
   }

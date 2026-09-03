@@ -19,4 +19,14 @@ config.resolver.nodeModulesPaths = [
 config.resolver.extraNodeModules = {
   react: rootReact,
 };
+// react-native-svg-transformer：.svg 交给 transformer 转组件，不再当静态资源
+config.transformer = {
+  ...config.transformer,
+  babelTransformerPath: require.resolve('react-native-svg-transformer'),
+};
+config.resolver = {
+  ...config.resolver,
+  assetExts: config.resolver.assetExts.filter((ext) => ext !== 'svg'),
+  sourceExts: [...config.resolver.sourceExts, 'svg'],
+};
 module.exports = config;
