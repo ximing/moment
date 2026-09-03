@@ -31,12 +31,13 @@ export interface RecapInput {
   truncated: { moments: boolean; chars: boolean; count: number };
 }
 
-/** 载入链信息 + 模板 manifest（milestoneCatalog 用于 milestone 摘要 label 解析） */
+/** 载入链信息 + 模板 manifest（milestoneCatalog 用于摘要目录 label 解析；kindLabels 用于摘要 kind 前缀） */
 async function loadChainMeta(chainId: string): Promise<{
   chainName: string;
   chainPayload: Record<string, unknown> | null;
   templateKey: string;
   milestoneCatalog: Map<string, { label: string; icon: string | null }>;
+  kindLabels: Map<string, string>;
 }> {
   const [chain] = await db
     .select({ name: chains.name, payload: chains.payload, template: chains.template })
@@ -48,11 +49,13 @@ async function loadChainMeta(chainId: string): Promise<{
   const catalog = new Map(
     (manifest.milestoneCatalog ?? []).map((c) => [c.key, { label: c.label, icon: c.icon ?? null }]),
   );
+  const kindLabels = new Map((manifest.kinds ?? []).map((k) => [k.key, k.label]));
   return {
     chainName: chain.name,
     chainPayload: chain.payload ?? null,
     templateKey: chain.template,
     milestoneCatalog: catalog,
+    kindLabels,
   };
 }
 
@@ -101,20 +104,26 @@ async function loadTopComments(momentIds: string[]): Promise<Map<string, string[
   return map;
 }
 
-/** payload 摘要（spec §4.2，对齐 aggregate.service 的字段读取）。 */
+/** payload 摘要（spec §4.2 + 2026-09-03 §5 泛化：按 payload 形态分派，前缀取 kind 在 manifest 中的 label）。 */
 function summarizePayload(
   kind: string,
   payload: Record<string, unknown> | null,
   milestoneCatalog: Map<string, { label: string; icon: string | null }>,
+  kindLabels: Map<string, string>,
 ): string {
   if (!payload) return '';
+  // 含 catalog_key / custom_label → 目录解析（milestone →【里程碑】、career-event →【职业事件】）
+  if (typeof payload.catalog_key === 'string' || typeof payload.custom_label === 'string') {
+    const catalogKey = payload.catalog_key as string | undefined;
+    const hit = catalogKey ? milestoneCatalog.get(catalogKey) : undefined;
+    const label = hit?.label ?? (payload.custom_label as string | undefined) ?? catalogKey ?? '';
+    return `【${kindLabels.get(kind) ?? kind}】${label}`;
+  }
+  // 含 topic → 主题摘要（reflection →【思考】）
+  if (typeof payload.topic === 'string') {
+    return `【${kindLabels.get(kind) ?? kind}】${payload.topic}`;
+  }
   switch (kind) {
-    case 'milestone': {
-      const catalogKey = payload.catalog_key as string | undefined;
-      const hit = catalogKey ? milestoneCatalog.get(catalogKey) : undefined;
-      const label = hit?.label ?? (payload.custom_label as string | undefined) ?? catalogKey ?? '';
-      return `【里程碑】${label}`;
-    }
     case 'metric': {
       const metric = String(payload.metric ?? '');
       const value = payload.value;
@@ -214,7 +223,7 @@ export async function buildRecapInput(
   // 序列化每条 moment（含 payload 摘要 + 评论）
   const serialized: Array<SerializedMoment & { hasPayload: boolean; commentCount: number; happenedAt: Date }> =
     rows.map((r) => {
-      const payloadSummary = summarizePayload(r.kind, r.payload, meta.milestoneCatalog);
+      const payloadSummary = summarizePayload(r.kind, r.payload, meta.milestoneCatalog, meta.kindLabels);
       const nickname = nicknameMap.get(r.authorId) ?? '';
       const cms = commentMap.get(r.id) ?? [];
       return {
