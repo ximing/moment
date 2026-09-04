@@ -51,6 +51,13 @@ describe('Dockerfile bookworm-slim（spec §0 / §11 P4）', () => {
     expect(df).toMatch(/pnpm install --frozen-lockfile --filter=@moment\/web\.\.\./);
     expect(df).not.toMatch(/^RUN pnpm install --frozen-lockfile\s*$/m);
   });
+
+  it('web Dockerfile copies and builds @moment/icons', () => {
+    const df = readFileSync(path.join(REPO_ROOT, 'apps/web/Dockerfile'), 'utf8');
+    expect(df).toMatch(/COPY packages\/icons\/package\.json packages\/icons\//);
+    expect(df).toMatch(/COPY packages\/icons packages\/icons/);
+    expect(df).toMatch(/pnpm --filter @moment\/icons build/);
+  });
 });
 
 describe('compose Lance volume 只挂 server（spec §1）', () => {
