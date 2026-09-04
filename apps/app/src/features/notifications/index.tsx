@@ -7,6 +7,7 @@ import type { NotificationDto } from '@moment/dto';
 import { NotificationService } from '../../services/notification.service';
 import { formatRelative } from '../../lib/format';
 import { Button } from '../../components/Button';
+import { EmptyState } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 
@@ -69,7 +70,11 @@ export const NotificationsPage = observer(function NotificationsPage() {
         data={service.items}
         keyExtractor={(item) => item.id}
         refreshControl={
-          <RefreshControl refreshing={service.$model.loadFirst.loading} onRefresh={() => void service.loadFirst().catch(() => undefined)} />
+          <RefreshControl
+            tintColor={t.action}
+            refreshing={service.$model.loadFirst.loading}
+            onRefresh={() => void service.loadFirst().catch(() => undefined)}
+          />
         }
         contentContainerStyle={styles.list}
         onEndReachedThreshold={0.4}
@@ -86,7 +91,12 @@ export const NotificationsPage = observer(function NotificationsPage() {
         }}
         ListEmptyComponent={
           !service.$model.loadFirst.loading ? (
-            <View style={styles.empty}><Text style={styles.emptyText}>暂无通知</Text></View>
+            <EmptyState
+              variant="plain"
+              scope="page"
+              title="还没有新消息"
+              description="记下一条，家里人就会在这儿看见。"
+            />
           ) : null
         }
         ListFooterComponent={service.$model.loadMore.loading ? <Text style={styles.loadingMore}>加载中…</Text> : null}
@@ -101,11 +111,9 @@ const createStyles = (t: Theme) =>
     markAll: { alignSelf: 'center', marginVertical: t.space2 },
     list: { padding: t.space3 },
     loadingMore: { textAlign: 'center', color: t.muted, padding: t.space3 },
-    item: { padding: t.space3, borderRadius: 8, backgroundColor: t.surface, marginBottom: t.space2 },
+    item: { padding: t.space3, borderRadius: t.radiusMd, backgroundColor: t.surface, marginBottom: t.space2 },
     unread: { backgroundColor: t.hoverSoft },
     title: { fontWeight: '600', fontSize: t.fontBody, color: t.ink },
-    body: { color: t.ink, fontSize: t.fontLabel, marginTop: 2 },
+    body: { color: t.ink, fontSize: t.fontLabel, marginTop: t.space1 },
     time: { color: t.muted, fontSize: t.fontCaption, marginTop: t.space1 },
-    empty: { padding: t.space8, alignItems: 'center' },
-    emptyText: { color: t.muted },
   });

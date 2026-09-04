@@ -4,6 +4,7 @@ import MapView, { Circle } from 'react-native-maps';
 import type { AggregateResponse } from '@moment/dto';
 import { formatMomentTime } from '../../lib/format';
 import { Icon } from '../../components/Icon';
+import { EmptyState } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 
@@ -18,7 +19,14 @@ export function FootprintMap({ aggregate }: { aggregate: Extract<AggregateRespon
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   if (aggregate.points.length === 0) {
-    return <Text style={styles.empty}>还没有足迹，发时刻时添加位置。</Text>;
+    return (
+      <EmptyState
+        variant="plain"
+        scope="section"
+        title="还没有足迹"
+        description="发时刻时添加位置，足迹会一个个落在这张地图上。"
+      />
+    );
   }
   const first = aggregate.points[0]!;
   return (
@@ -64,5 +72,4 @@ const createStyles = (t: Theme) =>
     list: { gap: t.space1 },
     item: { flexDirection: 'row', alignItems: 'center', gap: t.space1 },
     itemText: { flex: 1, fontSize: t.fontSupport, color: t.ink },
-    empty: { color: t.muted, fontSize: t.fontSupport, textAlign: 'center', padding: t.space8 },
   });

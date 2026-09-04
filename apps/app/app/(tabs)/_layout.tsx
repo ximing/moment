@@ -9,9 +9,25 @@ function TabIcon({ name, focused }: { name: AppLineIconName; focused: boolean })
 }
 
 export default function TabsLayout() {
+  const t = useTheme();
   return (
     <RequireAuth>
-      <Tabs screenOptions={{ headerShown: true, tabBarLabelStyle: { fontSize: 11 } }}>
+      <Tabs
+        screenOptions={{
+          headerShown: true,
+          headerStyle: { backgroundColor: t.bg },
+          headerTintColor: t.ink,
+          headerShadowVisible: false,
+          headerTitleStyle: { color: t.ink, fontWeight: '600' },
+          tabBarStyle: {
+            backgroundColor: t.surface,
+            borderTopColor: t.line,
+          },
+          tabBarActiveTintColor: t.ink,
+          tabBarInactiveTintColor: t.muted,
+          tabBarLabelStyle: { fontSize: t.fontCaption },
+        }}
+      >
         <Tabs.Screen
           name="index"
           options={{ title: '时刻流', tabBarIcon: ({ focused }) => <TabIcon name="house" focused={focused} /> }}

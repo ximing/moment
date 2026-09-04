@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { observer, useService } from '@rabjs/react';
-import { ErrorText } from '../../components/ErrorText';
+import { Banner, EmptyState } from '../../components/feedback';
 import { humanError } from '../../lib/errors';
 import { JOBS_POLL_MS, jobStatusLabel, jobTypeLabel } from '../../lib/job-labels';
 import type { Theme } from '../../theme/theme';
@@ -31,9 +31,16 @@ export const JobsSection = observer(function JobsSection() {
     <View style={styles.block}>
       <Text style={styles.sectionTitle}>处理中</Text>
       <Text style={styles.hint}>压缩图和检索索引的后台任务，只有创建者看得到。</Text>
-      {error ? <ErrorText message={humanError(error)} /> : null}
+      {error ? <Banner tone="error">{humanError(error)}</Banner> : null}
       {service.jobs.length === 0 ? (
-        <Text style={styles.empty}>没有处理中的任务</Text>
+        error ? null : (
+          <EmptyState
+            variant="plain"
+            scope="section"
+            title="没有处理中的任务"
+            description="发布新照片后，压缩和索引会排在这里。"
+          />
+        )
       ) : (
         service.jobs.map((job) => (
           <View key={job.id} style={styles.row} accessibilityLabel={`${jobTypeLabel(job.type)} ${jobStatusLabel(job.status)}`}>
@@ -55,7 +62,6 @@ const createStyles = (t: Theme) =>
     block: { gap: t.space2, marginTop: t.space3 },
     sectionTitle: { fontWeight: '600', fontSize: t.fontBody, color: t.ink },
     hint: { fontSize: t.fontCaption, color: t.muted },
-    empty: { fontSize: t.fontSupport, color: t.muted, paddingVertical: t.space2 },
     row: {
       backgroundColor: t.surface,
       borderRadius: t.radiusMd,

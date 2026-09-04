@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -11,13 +11,14 @@ import {
 import { File } from 'expo-file-system';
 import { MAX_AUDIO_DURATION_SECONDS } from '@moment/dto';
 import { Button } from '../../components/Button';
+import { toast } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import type { VoiceDraft } from './compose.service';
 
 // 语音录制（spec voice-moment §6）：expo-audio useAudioRecorder（HIGH_QUALITY 预设 m4a/AAC，
 // audio/mp4 在 dto 白名单内）；300s 自动停止；回听用 useAudioPlayer 播录音本地 uri。
-// 权限拒绝走 Alert，不阻塞其他类型发布。
+// 权限拒绝走 Toast，不阻塞其他类型发布。
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -116,7 +117,7 @@ export function VoiceRecorder({
     const perm = await requestRecordingPermissionsAsync();
     if (!isMountedRef.current) return;
     if (!perm.granted) {
-      Alert.alert('无法录音', '麦克风权限被拒绝，请在系统设置中开启后再试');
+      toast.show({ key: 'voice', message: '麦克风权限被拒绝，请在系统设置中开启后再试' });
       return;
     }
     setBusy(true);
@@ -131,7 +132,7 @@ export function VoiceRecorder({
       isStoppingRef.current = false;
     } catch {
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
-      if (isMountedRef.current) Alert.alert('无法录音', '录音启动失败，请重试');
+      if (isMountedRef.current) toast.show({ key: 'voice', message: '录音启动失败，请重试' });
     } finally {
       if (isMountedRef.current) setBusy(false);
     }

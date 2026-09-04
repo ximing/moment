@@ -1,16 +1,16 @@
 import { useEffect, useMemo } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useLocalSearchParams, router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { REACTION_EMOJIS, type MomentMedia } from '@moment/dto';
-import { humanError } from '../../lib/errors';
 import { formatMomentTime, formatRelative } from '../../lib/format';
 import { AppIcon } from '../../components/AppIcon';
 import { Icon } from '../../components/Icon';
 import { AudioBar } from '../../components/AudioBar';
 import { Loading } from '../../components/Loading';
 import { Button } from '../../components/Button';
+import { EmptyState, confirm, toast } from '../../components/feedback';
 import { isHttpUrl, originalDisplayUrl } from '../../lib/media-src';
 import { useMediaUri } from '../../lib/use-media-uri';
 import { AuthService } from '../../services/auth.service';
@@ -61,14 +61,20 @@ const MomentContent = observer(function MomentContent() {
   }, [service, id]);
 
   function onError(err: unknown, action: string): void {
-    Alert.alert('失败', `${action}：${humanError(err)}`);
+    toast.error(err, action);
   }
 
   if (!service.moment && service.$model.loadMoment.loading) return <Loading />;
   if (service.deleted || (!service.moment && service.$model.loadMoment.error)) {
     return (
       <View style={styles.center}>
-        <Text style={styles.deleted}>该时刻可能已被删除</Text>
+        <EmptyState
+          variant="plain"
+          scope="page"
+          title="该时刻可能已被删除"
+          description="它不在这条时间线上了。"
+          action={{ label: '返回', emphasis: 'quiet', onPress: () => router.back() }}
+        />
       </View>
     );
   }
@@ -90,19 +96,18 @@ const MomentContent = observer(function MomentContent() {
   }
 
   function onDelete(): void {
-    Alert.alert('删除这条时刻？', '删除后不可恢复', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () => {
-          void service
-            .deleteMoment()
-            .then(() => router.back()) // 刚删的是本页目标，回退比停留占位更顺（spec §3）
-            .catch((err) => onError(err, '删除失败'));
-        },
-      },
-    ]);
+    void confirm({
+      title: '删除这条时刻？',
+      body: '删除后不可恢复',
+      confirmLabel: '删除',
+      danger: true,
+    }).then((ok) => {
+      if (!ok) return;
+      void service
+        .deleteMoment()
+        .then(() => router.back()) // 刚删的是本页目标，回退比停留占位更顺（spec §3）
+        .catch((err) => onError(err, '删除失败'));
+    });
   }
 
   return (
@@ -188,7 +193,17 @@ const MomentContent = observer(function MomentContent() {
               <Text style={styles.commentAuthor}>{c.author.nickname}</Text>
               <Text style={styles.commentTime}>{formatRelative(c.createdAt)}</Text>
               <Pressable
-                onPress={() => void service.deleteComment(c.id).catch((err) => onError(err, '删除失败'))}
+                onPress={() =>
+                  void confirm({
+                    title: '删除这条评论？',
+                    body: '删除后不可恢复',
+                    confirmLabel: '删除',
+                    danger: true,
+                  }).then((ok) => {
+                    if (!ok) return;
+                    void service.deleteComment(c.id).catch((err) => onError(err, '删除失败'));
+                  })
+                }
               >
                 <Text style={styles.commentDelete}>删除</Text>
               </Pressable>
@@ -196,7 +211,9 @@ const MomentContent = observer(function MomentContent() {
             <Text style={styles.commentBody}>{c.content}</Text>
           </View>
         ))}
-        {service.comments.length === 0 ? <Text style={styles.noComment}>还没有评论</Text> : null}
+        {service.comments.length === 0 ? (
+          <EmptyState variant="plain" scope="section" title="还没有评论" description="写下第一句回应。" />
+        ) : null}
         {service.hasMore ? (
           <Button
             variant="secondary"
@@ -237,7 +254,6 @@ const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.space8 },
-    deleted: { color: t.muted },
     body: { padding: t.space4, gap: t.space3 },
     head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     author: { fontWeight: '600', fontSize: t.fontInput, color: t.ink },
@@ -247,8 +263,8 @@ const createStyles = (t: Theme) =>
     actionDelete: { color: t.danger, fontSize: t.fontLabel },
     transcribing: { color: t.muted, fontSize: t.fontCaption, marginTop: t.space1 },
     content: { fontSize: t.fontInput, lineHeight: 24, color: t.ink },
-    image: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8, backgroundColor: t.feedbackSkeleton },
-    video: { width: '100%', aspectRatio: 16 / 9, borderRadius: 8, backgroundColor: t.ink },
+    image: { width: '100%', aspectRatio: 4 / 3, borderRadius: t.radiusMd, backgroundColor: t.feedbackSkeleton },
+    video: { width: '100%', aspectRatio: 16 / 9, borderRadius: t.radiusMd, backgroundColor: t.ink },
     tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
     tag: { color: t.tag, fontSize: t.fontSupport },
     personRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
@@ -263,13 +279,12 @@ const createStyles = (t: Theme) =>
     reactionText: { fontSize: t.fontLabel, color: t.ink },
     reactionTextActive: { color: t.selectFg },
     sectionTitle: { fontWeight: '600', fontSize: t.fontBody, color: t.ink, marginTop: t.space2 },
-    comment: { backgroundColor: t.surface, borderRadius: 8, padding: 10 },
+    comment: { backgroundColor: t.surface, borderRadius: t.radiusMd, padding: t.space3 },
     commentHead: { flexDirection: 'row', alignItems: 'center', gap: t.space2 },
     commentAuthor: { fontWeight: '600', fontSize: t.fontSupport, color: t.ink },
     commentTime: { color: t.muted, fontSize: t.fontCaption, flex: 1 },
     commentDelete: { color: t.danger, fontSize: t.fontCaption },
     commentBody: { fontSize: t.fontLabel, marginTop: t.space1, lineHeight: 20, color: t.ink },
-    noComment: { color: t.muted, fontSize: t.fontSupport },
     composer: { flexDirection: 'row', alignItems: 'flex-end', gap: t.space2, padding: t.space3, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line },
-    input: { flex: 1, borderWidth: 1, borderColor: t.line, borderRadius: 8, paddingHorizontal: 10, paddingTop: t.space2, paddingBottom: t.space2, maxHeight: 100, color: t.ink },
+    input: { flex: 1, borderWidth: 1, borderColor: t.line, borderRadius: t.fieldRadius, paddingHorizontal: t.space3, paddingTop: t.space2, paddingBottom: t.space2, maxHeight: 100, color: t.ink },
   });

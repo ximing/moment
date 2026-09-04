@@ -220,6 +220,14 @@ export class ChainHomeService extends Service {
     void this.loadFirst().catch(() => undefined);
   }
 
+  /** 空状态「清除筛选」：去掉人物/地点。 */
+  clearFilters(): void {
+    this.personId = undefined;
+    this.personName = undefined;
+    this.place = undefined;
+    void this.loadFirst().catch(() => undefined);
+  }
+
   async submitSearch(q: string): Promise<void> {
     const trimmed = q.trim();
     if (!trimmed) return;

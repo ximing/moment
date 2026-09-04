@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { observer } from '@rabjs/react';
 import type { TemplateManifest, TemplateMomentField } from '@moment/dto';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
 import { AppIcon } from '../../components/AppIcon';
+import { toast } from '../../components/feedback';
 import { useTheme } from '../../theme/use-theme';
 import type { ComposeService } from './compose.service';
 
@@ -89,10 +90,10 @@ const MomentFieldControl = observer(function MomentFieldControl({
           <Button
             variant="secondary"
             loading={service.geoBusy}
-            // pickGeo 返回问题文案（null=成功），照 compose/index.tsx onPickVideo 模式接住并 Alert（评审 B1）
+            // pickGeo 返回问题文案（null=成功），照 compose/index.tsx onPickVideo 模式接住（评审 B1）
             onPress={() =>
               void service.pickGeo(field.key).then((problem) => {
-                if (problem) Alert.alert('提示', problem);
+                if (problem) toast.show({ key: 'compose-hint', message: problem });
               })
             }
           >

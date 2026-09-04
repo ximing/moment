@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { Alert, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
@@ -12,6 +12,7 @@ import { Loading } from '../../components/Loading';
 import { MediaGrid } from '../../components/MediaGrid';
 import { AudioBar } from '../../components/AudioBar';
 import { Button } from '../../components/Button';
+import { toast } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { ComposeService, editImageCap, editOccupied } from './compose.service';
@@ -47,28 +48,33 @@ const ComposeContent = observer(function ComposeContent() {
     try {
       const rejected = await service.pickMoreImages();
       if (rejected > 0) {
-        Alert.alert('提示', `${rejected} 张图片压缩后仍超限，已跳过`);
+        toast.show({ key: 'compose-hint', message: `${rejected} 张图片压缩后仍超限，已跳过` });
       }
     } catch (err) {
       // Service 前置校验（满 9 张等 Error 中文 message）直接展示
-      Alert.alert('提示', err instanceof Error ? err.message : '网络错误，请重试');
+      toast.show({
+        key: 'compose-hint',
+        message: err instanceof Error ? err.message : '网络错误，请重试',
+      });
     }
   }
 
   async function onPickVideo(): Promise<void> {
     const problem = await service.chooseVideo().catch(() => null);
-    if (problem) Alert.alert('无法上传', problem);
+    if (problem) toast.show({ key: 'compose-hint', message: problem });
   }
 
   async function onSubmit(): Promise<void> {
     const isEdit = service.isEdit;
     try {
       await service.submit();
-      Alert.alert(isEdit ? '已保存' : '已发布', isEdit ? '' : '可在时刻流中查看');
+      toast.show({
+        key: 'compose',
+        message: isEdit ? '已保存' : '已发布',
+      });
       router.back();
     } catch (err) {
-      // 前置校验（Error 中文 message）直接展示；API 错误走 humanError
-      Alert.alert(isEdit ? '保存失败' : '发布失败', err instanceof Error && !(err instanceof ApiError) ? err.message : humanError(err));
+      toast.error(err, isEdit ? '保存失败' : '发布失败');
     }
   }
 
@@ -272,7 +278,7 @@ const createStyles = (t: Theme) =>
     chipActive: { backgroundColor: t.ink },
     chipText: { fontSize: t.fontSupport, color: t.muted },
     chipTextActive: { color: t.bg },
-    content: { minHeight: 100, borderWidth: 1, borderColor: t.line, borderRadius: 8, padding: t.space3, fontSize: t.fontBody, color: t.ink, textAlignVertical: 'top' },
+    content: { minHeight: 100, borderWidth: 1, borderColor: t.line, borderRadius: t.fieldRadius, padding: t.space3, fontSize: t.fontBody, color: t.ink, textAlignVertical: 'top', backgroundColor: t.fieldBg },
     mediaBar: { flexDirection: 'row', gap: t.space3 },
     mediaHint: { color: t.muted, fontSize: t.fontCaption },
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space1, marginTop: t.space2 },
@@ -290,9 +296,9 @@ const createStyles = (t: Theme) =>
       borderRadius: t.radiusMd,
     },
     removeBtnText: { color: t.bg, fontSize: t.fontCaption },
-    dateBtn: { padding: t.space3, borderRadius: 8, backgroundColor: t.fieldBg },
+    dateBtn: { padding: t.space3, borderRadius: t.fieldRadius, backgroundColor: t.fieldBg },
     dateText: { fontSize: t.fontLabel, color: t.ink },
     progress: { color: t.action, textAlign: 'center' },
-    centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.space3, paddingVertical: 48 },
+    centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.space3, paddingVertical: t.space8 + t.space4 },
     errorText: { fontSize: t.fontLabel, color: t.muted },
   });

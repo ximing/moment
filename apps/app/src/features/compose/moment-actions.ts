@@ -2,8 +2,8 @@ import { ActionSheetIOS, Alert, Platform } from 'react-native';
 import { ApiError } from '@moment/api-client';
 import { EventSystem } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
+import { confirm, toast } from '../../components/feedback';
 import { client } from '../../lib/api';
-import { humanError } from '../../lib/errors';
 import type { MomentChangedPayload } from '../../lib/events';
 
 /**
@@ -26,16 +26,15 @@ export async function deleteMoment(moment: MomentResponse): Promise<void> {
 }
 
 function confirmDelete(moment: MomentResponse): void {
-  Alert.alert('删除这条时刻？', '删除后不可恢复', [
-    { text: '取消', style: 'cancel' },
-    {
-      text: '删除',
-      style: 'destructive',
-      onPress: () => {
-        void deleteMoment(moment).catch((err) => Alert.alert('删除失败', humanError(err)));
-      },
-    },
-  ]);
+  void confirm({
+    title: '删除这条时刻？',
+    body: '删除后不可恢复',
+    confirmLabel: '删除',
+    danger: true,
+  }).then((ok) => {
+    if (!ok) return;
+    void deleteMoment(moment).catch((err) => toast.error(err, '删除失败'));
+  });
 }
 
 /**

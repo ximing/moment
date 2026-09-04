@@ -5,7 +5,7 @@ import type { AggregateResponse, MomentResponse } from '@moment/dto';
 import { METRIC_LABELS, groupMomentsByTrips, type Trip } from '../../lib/template';
 import { formatMomentTime } from '../../lib/format';
 import { AppIcon } from '../../components/AppIcon';
-import { Button } from '../../components/Button';
+import { Banner, EmptyState } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 
@@ -27,7 +27,14 @@ function CurveView({ aggregate }: { aggregate: Extract<AggregateResponse, { view
   }
   const metrics = [...byMetric.entries()];
   if (metrics.length === 0) {
-    return <Text style={styles.empty}>还没有成长记录，记下第一次身高体重后曲线会在这里长出来。</Text>;
+    return (
+      <EmptyState
+        variant="plain"
+        scope="section"
+        title="还没有成长记录"
+        description="记下第一次身高体重后，曲线会在这里长出来。"
+      />
+    );
   }
   const W = 320;
   const H = 160;
@@ -72,7 +79,14 @@ function MilestoneAxisView({ aggregate }: { aggregate: Extract<AggregateResponse
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   if (aggregate.items.length === 0) {
-    return <Text style={styles.empty}>还没有里程碑，第一次微笑、第一次走路……都值得在这里留个位置。</Text>;
+    return (
+      <EmptyState
+        variant="plain"
+        scope="section"
+        title="还没有里程碑"
+        description="第一次微笑、第一次走路……都值得在这里留个位置。"
+      />
+    );
   }
   return (
     <View style={styles.section}>
@@ -94,7 +108,14 @@ function MoodlineView({ aggregate }: { aggregate: Extract<AggregateResponse, { v
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   if (aggregate.days.length === 0) {
-    return <Text style={styles.empty}>还没有心情记录，发时刻时选一抹心情。</Text>;
+    return (
+      <EmptyState
+        variant="plain"
+        scope="section"
+        title="还没有心情记录"
+        description="发时刻时选一抹心情，这里会画出这些日子的情绪。"
+      />
+    );
   }
   const days = [...aggregate.days].sort((a, b) => (a.date < b.date ? 1 : -1));
   return (
@@ -122,7 +143,14 @@ function TripsView({ moments, chainPayload, hasMore }: { moments: MomentResponse
   const styles = useMemo(() => createStyles(t), [t]);
   const trips = (chainPayload?.trips ?? []) as Trip[];
   if (trips.length === 0) {
-    return <Text style={styles.empty}>还没有行程，在链设置里补一段行程（名称与起止日期），时刻会按行程归章。</Text>;
+    return (
+      <EmptyState
+        variant="plain"
+        scope="section"
+        title="还没有行程"
+        description="在链设置里补一段行程（名称与起止日期），时刻会按行程归章。"
+      />
+    );
   }
   const { sections, outside } = groupMomentsByTrips(moments, trips);
   return (
@@ -186,8 +214,9 @@ export function AggregateView({
   if (error && !aggregate) {
     return (
       <View style={styles.section}>
-        <Text style={styles.empty}>{error}</Text>
-        <Button variant="secondary" onPress={onRetry}>重试</Button>
+        <Banner tone="error" action={{ label: '重试', onPress: onRetry }}>
+          {error}
+        </Banner>
       </View>
     );
   }

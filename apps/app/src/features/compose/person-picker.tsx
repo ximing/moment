@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { observer } from '@rabjs/react';
 import type { ChainMemberDto, PersonResponse } from '@moment/dto';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
 import { Icon } from '../../components/Icon';
-import { humanError } from '../../lib/errors';
+import { toast } from '../../components/feedback';
 import { useTheme } from '../../theme/use-theme';
 import type { Theme } from '../../theme/theme';
 import type { ComposeService } from './compose.service';
@@ -18,10 +18,10 @@ import type { ComposeService } from './compose.service';
 // 编辑回读的坐标 chip 文案与 EXIF 相同（P5 偏差 11）。
 // 样式纪律（app design tokens spec）：全部上 token 档，chip 范式逐字镜像 template-fields.tsx
 // （hoverSoft 底 / 选中 ink 色面 + bg 文字，primary 只留给发布/保存）。
-// toggleMember/submitPersonQuery 的 POST 失败由这里 Alert（app 既有错误通道，对齐 onSubmit 范式）。
+// toggleMember/submitPersonQuery 的 POST 失败走 toast.error（对齐 compose 发布失败通道）。
 
 function personPickerOnPressError(err: unknown): void {
-  Alert.alert('失败', humanError(err));
+  toast.error(err);
 }
 
 export const PersonPicker = observer(function PersonPicker({ service }: { service: ComposeService }) {

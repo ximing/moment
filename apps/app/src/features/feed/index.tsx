@@ -5,14 +5,16 @@ import { Link, router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { Button } from '../../components/Button';
-import { ErrorText } from '../../components/ErrorText';
+import { Icon } from '../../components/Icon';
 import { FilterChips } from '../../components/FilterChips';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { TimelineSearchField } from '../../components/TimelineSearchField';
+import { Banner, EmptyState } from '../../components/feedback';
 import { humanError } from '../../lib/errors';
 import { formatSearchParsed } from '../../lib/search-summary';
 import { AuthService } from '../../services/auth.service';
+import { ChainListService } from '../../services/chain-list.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { showMomentActions } from '../compose/moment-actions';
@@ -22,9 +24,11 @@ import { FeedService } from './feed.service';
 const FeedContent = observer(function FeedContent() {
   const service = useService(FeedService);
   const auth = useService(AuthService);
+  const chainList = useService(ChainListService);
   const myId = auth.user?.id; // 在 observer 渲染内取值，renderItem 闭包复用（禁解构 observable）
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const noChains = chainList.chains.length === 0 && !chainList.$model.load.loading;
 
   if (service.moments.length === 0 && service.$model.loadFirst.loading) return <Loading />;
 
@@ -66,7 +70,7 @@ const FeedContent = observer(function FeedContent() {
       />
       {service.searchError ? (
         <View style={styles.searchBanner}>
-          <ErrorText message={humanError(service.searchError)} />
+          <Banner tone="error">{humanError(service.searchError)}</Banner>
         </View>
       ) : null}
       {service.searching && service.searchParsed && !service.searchError ? (
@@ -77,13 +81,21 @@ const FeedContent = observer(function FeedContent() {
           </Button>
         </View>
       ) : null}
-      {service.$model.loadFirst.error ? <Text style={styles.errorBanner}>加载失败，下拉重试</Text> : null}
+      {service.$model.loadFirst.error ? (
+        <View style={styles.searchBanner}>
+          <Banner tone="error">加载失败，下拉重试</Banner>
+        </View>
+      ) : null}
       <FlashList
         data={service.moments}
         keyExtractor={(m) => m.id}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={service.$model.loadFirst.loading} onRefresh={() => void service.loadFirst().catch(() => undefined)} />
+          <RefreshControl
+            tintColor={t.action}
+            refreshing={service.$model.loadFirst.loading}
+            onRefresh={() => void service.loadFirst().catch(() => undefined)}
+          />
         }
         onEndReachedThreshold={0.4}
         onEndReached={() => void service.loadMore().catch(() => undefined)}
@@ -105,28 +117,62 @@ const FeedContent = observer(function FeedContent() {
           />
         )}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>
-              {service.searching
-                ? '没有找到相关时刻'
-                : service.personId || service.place || service.tagId
-                  ? '没有符合条件的时刻'
-                  : '还没有时刻，发布第一条吧'}
-            </Text>
-            {service.searching ? (
-              <Button variant="quiet" onPress={() => void service.exitSearch()}>
-                退出搜索
-              </Button>
-            ) : null}
-          </View>
+          noChains ? (
+            <EmptyState
+              variant="timeline"
+              scope="section"
+              title="建第一条时光链，比如「宝宝成长」"
+              description="到「我的链」开一条就可以。"
+              action={{
+                label: '开一条新的链',
+                emphasis: 'primary',
+                onPress: () => router.push('/chains-new'),
+              }}
+            />
+          ) : service.searching ? (
+            <EmptyState
+              variant="timeline"
+              scope="section"
+              title="没有找到相关时刻"
+              description="换个说法，或关掉搜索回到时间线。"
+              action={{ label: '退出搜索', emphasis: 'quiet', onPress: () => void service.exitSearch() }}
+            />
+          ) : service.personId || service.place || service.tagId || service.chainId ? (
+            <EmptyState
+              variant="timeline"
+              scope="section"
+              title="没有符合条件的时刻"
+              description="换个标签或筛选再看看。"
+              action={{ label: '清除筛选', emphasis: 'quiet', onPress: () => service.clearFilters() }}
+            />
+          ) : (
+            <EmptyState
+              variant="timeline"
+              scope="section"
+              title="还没有记下任何一刻"
+              description="这一刻，等你来写下。"
+              action={{
+                label: '记下此刻',
+                emphasis: 'primary',
+                onPress: () => router.push('/compose'),
+              }}
+            />
+          )
         }
         ListFooterComponent={service.$model.loadMore.loading ? <Text style={styles.loadingMore}>加载中…</Text> : null}
       />
-      <Link href={{ pathname: '/compose' }} asChild>
-        <Pressable style={styles.fab} onPress={() => undefined}>
-          <Text style={styles.fabText}>＋</Text>
-        </Pressable>
-      </Link>
+      {noChains ? null : (
+        <Link href={{ pathname: '/compose' }} asChild>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="记下此刻"
+            style={styles.fab}
+            onPress={() => undefined}
+          >
+            <Icon name="plus" size={t.space6} color={t.actionFg} />
+          </Pressable>
+        </Link>
+      )}
     </View>
   );
 });
@@ -164,21 +210,17 @@ const createStyles = (t: Theme) =>
       paddingVertical: t.space2,
     },
     summaryText: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
-    empty: { padding: 48, alignItems: 'center', gap: t.space2 },
-    emptyText: { color: t.muted },
     loadingMore: { textAlign: 'center', color: t.muted, padding: t.space3 },
     fab: {
       position: 'absolute',
-      right: 20,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
+      right: t.space5,
+      bottom: t.space6,
+      width: t.controlHProminent + t.space3,
+      height: t.controlHProminent + t.space3,
+      borderRadius: (t.controlHProminent + t.space3) / 2,
       backgroundColor: t.action,
       alignItems: 'center',
       justifyContent: 'center',
-      elevation: 4,
+      elevation: t.space1,
     },
-    fabText: { color: t.actionFg, fontSize: 28, lineHeight: 32 },
-    errorBanner: { color: t.danger, textAlign: 'center', padding: t.space2 },
   });

@@ -107,6 +107,17 @@ export class FeedService extends Service {
     void this.loadFirst().catch(() => undefined);
   }
 
+  /** 空状态「清除筛选」：去掉链/标签/人物/地点，保留排序。 */
+  clearFilters(): void {
+    this.chainId = undefined;
+    this.tagId = undefined;
+    this.personId = undefined;
+    this.personName = undefined;
+    this.place = undefined;
+    void this.loadFirst().catch(() => undefined);
+    void this.loadTags().catch(() => undefined);
+  }
+
   async submitSearch(q: string): Promise<void> {
     const trimmed = q.trim();
     if (!trimmed) return;

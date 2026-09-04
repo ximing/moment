@@ -25,3 +25,5 @@
 - **禁 hex / rgba**：`src/theme/tokens.ts` 是全仓唯一允许出现颜色字面量的文件。门禁挂在 `pnpm lint`（`lint:tokens` 脚本：grep `src/` 下 hex/rgba 零命中，tokens.ts 豁免）；`app/` 薄壳同样禁止（约定约束，门禁只扫 `src/`）。
 - 尺寸纪律：间距只用 `space1..space8` 档，字号只用 `fontCaption..fontInput`，可交互元素命中区 ≥ `touchMin`（44pt，不足时用 `hitSlop` 纵向补齐，不动视觉 padding）；禁止新增不进 token 表的一次性尺寸。迁移前的非档位旧值按「平移原则」原样保留（换值不换结构），不在本轮收敛；新写样式一律上档。
 - Button 族纪律（`src/components/Button.tsx`）：按钮一律走 Button（variant: primary/secondary/quiet/danger），一个操作组最多一个实心高强调；删除入口用危险色文字/quiet，最终确认才用 danger 实心；`style` 只承担宽度与外部对齐，不传 padding/色彩/形状。页面级纯文字入口（无 Button 包裹的 Pressable + Text）参照同一命中区纪律，disabled/loading 时降 `disabledOpacity` 灰化。
+- 主题三档：`src/theme/preference.ts`（跟随系统 / 浅 / 深），持久化 SecureStore `moment.theme.choice`，经 `Appearance.setColorScheme` 驱动既有 `useTheme()`；「我」页 `ThemeToggle` 是唯一设置入口。不要另起 ThemeProvider。
+- 反馈族（`src/components/feedback/`，对齐 web feedback / AlertDialog）：短暂成功与轻量失败走 `toast.show` / `toast.error`；持续问题走 `Banner`；空列表走 `EmptyState`；不可逆确认走 `confirm()`。不要用 `Alert.alert` 承载产品反馈（iOS 长按菜单 / 多选项角色切换仍可用 ActionSheetIOS / Alert）。`FeedbackHost` 挂在 `app/_layout.tsx`。

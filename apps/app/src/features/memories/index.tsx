@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
+import { Button } from '../../components/Button';
 import { Icon } from '../../components/Icon';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
+import { Banner, EmptyState } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { MemoriesService } from './memories.service';
@@ -35,7 +37,7 @@ export const MemoriesEntryBar = bindServices(
       >
         <Icon name="calendar" size={t.fontLabel} />
         <Text style={styles.barText}>{memoriesBarText(summary)}</Text>
-        <Text style={styles.barArrow}>→</Text>
+        <Icon name="chevron-right" size={t.fontLabel} />
       </Pressable>
     );
   }),
@@ -72,13 +74,15 @@ const MemoriesContent = observer(function MemoriesContent() {
       <View style={styles.flex}>
         <Stack.Screen options={{ title: '往年今日' }} />
         <View style={styles.center}>
-          <Text style={styles.errorText}>加载失败</Text>
-          <Pressable onPress={() => void service.load(date).catch(() => undefined)}>
-            <Text style={styles.action}>重试</Text>
-          </Pressable>
-          <Pressable onPress={() => router.back()}>
-            <Text style={styles.action}>返回</Text>
-          </Pressable>
+          <Banner
+            tone="error"
+            action={{ label: '重试', onPress: () => void service.load(date).catch(() => undefined) }}
+          >
+            加载失败
+          </Banner>
+          <Button variant="quiet" onPress={() => router.back()}>
+            返回
+          </Button>
         </View>
       </View>
     );
@@ -88,9 +92,12 @@ const MemoriesContent = observer(function MemoriesContent() {
     <View style={styles.flex}>
       <Stack.Screen options={{ title: '往年今日' }} />
       {service.years.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.empty}>往年的今天还没有时刻</Text>
-        </View>
+        <EmptyState
+          variant="timeline"
+          scope="page"
+          title="往年的今天还没有时刻"
+          description="记下此刻，明年就会在这儿遇见。"
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
           {service.years.map((g) => (
@@ -121,20 +128,16 @@ const createStyles = (t: Theme) =>
       marginTop: t.space2,
       marginBottom: 2,
       paddingHorizontal: t.space3,
-      paddingVertical: 10,
-      borderRadius: 10,
+      paddingVertical: t.space3,
+      borderRadius: t.radiusMd,
       backgroundColor: t.surface,
       borderWidth: 1,
       borderColor: t.line,
     },
     barText: { flex: 1, fontSize: t.fontLabel, color: t.ink, marginLeft: t.space1 },
-    barArrow: { fontSize: t.fontLabel, color: t.muted, marginLeft: t.space2 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.space8, gap: t.space3 },
-    errorText: { color: t.danger, fontSize: t.fontLabel },
-    action: { color: t.action, fontSize: t.fontBody, paddingVertical: t.space1 },
-    empty: { color: t.muted },
     list: { paddingBottom: t.space6 },
     group: { marginTop: t.space3 },
-    groupHead: { paddingHorizontal: t.space4, paddingVertical: 6, fontSize: t.fontLabel, fontWeight: '600', color: t.ink },
+    groupHead: { paddingHorizontal: t.space4, paddingVertical: t.space2, fontSize: t.fontLabel, fontWeight: '600', color: t.ink },
     groupBody: { backgroundColor: t.surface },
   });

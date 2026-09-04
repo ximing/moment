@@ -40,7 +40,10 @@ export interface ColorTokens {
   dangerSoft: string; // danger 7%（深色 10%）
   // ---- 反馈 ----
   feedbackErrorBg: string; // danger 10% mix surface（实算值，见注释）
+  feedbackWarningBg: string; // select 18% mix surface
+  feedbackInfoBg: string; // ink 5% mix surface
   feedbackSkeleton: string; // ink 7%
+  toastShadowColor: string; // Toast 浮层阴影色（opacity 由组件按 scheme 取 0.18 / 0.42）
 }
 
 export const lightColors: ColorTokens = {
@@ -72,7 +75,12 @@ export const lightColors: ColorTokens = {
   dangerSoft: 'rgba(184, 58, 48, 0.07)',
   // color-mix(in srgb, #b83a30 10%, #fffdfb) 实算
   feedbackErrorBg: '#f8eae7',
+  // color-mix(in srgb, #f2b84b 18%, #fffdfb) 实算
+  feedbackWarningBg: '#fdf1db',
+  // color-mix(in srgb, #2b201c 5%, #fffdfb) 实算
+  feedbackInfoBg: '#f4f2f0',
   feedbackSkeleton: 'rgba(43, 32, 28, 0.07)',
+  toastShadowColor: '#2b201c',
 };
 
 export const darkColors: ColorTokens = {
@@ -104,7 +112,12 @@ export const darkColors: ColorTokens = {
   dangerSoft: 'rgba(255, 138, 114, 0.1)',
   // color-mix(in srgb, #ff8a72 10%, #26211e) 实算
   feedbackErrorBg: '#3c2c26',
+  // color-mix(in srgb, #f2b84b 18%, #26211e) 实算
+  feedbackWarningBg: '#4b3c26',
+  // color-mix(in srgb, #f7efe9 5%, #26211e) 实算
+  feedbackInfoBg: '#302b28',
   feedbackSkeleton: 'rgba(247, 239, 233, 0.07)',
+  toastShadowColor: '#000000',
 };
 
 /** 间距 / 圆角 / 控件几何 / 字号 / 动效（两主题共享） */

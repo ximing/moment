@@ -4,12 +4,12 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { CHAIN_COLORS, CHAIN_ICONS } from '@moment/dto';
 import { webUrl } from '../../lib/api';
-import { humanError } from '../../lib/errors';
 import { AuthService } from '../../services/auth.service';
 import { formatRelative } from '../../lib/format';
 import { Loading } from '../../components/Loading';
 import { RequireAuth } from '../../components/RequireAuth';
 import { Button } from '../../components/Button';
+import { confirm, toast } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { ChainSettingsService } from './chain-settings.service';
@@ -36,7 +36,7 @@ const Content = observer(function Content() {
   }, [service, chainId]);
 
   function onError(err: unknown, action: string): void {
-    Alert.alert('失败', `${action}：${humanError(err)}`);
+    toast.error(err, action);
   }
 
   if (!service.chain && service.$model.loadChain.loading) return <Loading />;
@@ -90,29 +90,30 @@ const Content = observer(function Content() {
   }
 
   function onTransfer(userId: string, nickname: string): void {
-    Alert.alert('转让链', `把主理人转让给 ${nickname}？转让后你变为编辑`, [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '转让',
-        style: 'destructive',
-        onPress: () => void service.transferChain(userId).catch((err) => onError(err, '转让失败')),
-      },
-    ]);
+    void confirm({
+      title: '转让链',
+      body: `把主理人转让给 ${nickname}？转让后你变为编辑`,
+      confirmLabel: '转让',
+      danger: true,
+    }).then((ok) => {
+      if (!ok) return;
+      void service.transferChain(userId).catch((err) => onError(err, '转让失败'));
+    });
   }
 
   function onDeleteChain(): void {
-    Alert.alert('删除链', '删除后所有成员都无法访问这条链，确认？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () =>
-          void service
-            .deleteChain()
-            .then(() => router.replace('/chains'))
-            .catch((err) => onError(err, '删除失败')),
-      },
-    ]);
+    void confirm({
+      title: '删除链',
+      body: '删除后所有成员都无法访问这条链，确认？',
+      confirmLabel: '删除',
+      danger: true,
+    }).then((ok) => {
+      if (!ok) return;
+      void service
+        .deleteChain()
+        .then(() => router.replace('/chains'))
+        .catch((err) => onError(err, '删除失败'));
+    });
   }
 
   /** url 是完整地址：分享链接走 `${webUrl}/share/${token}`（浏览器打开），邀请走 `moment://invites/${token}`。 */
@@ -157,7 +158,24 @@ const Content = observer(function Content() {
           <Text style={styles.row}>{service.chain.name}</Text>
           {service.chain.description ? <Text style={styles.muted}>{service.chain.description}</Text> : null}
           {myUserId ? (
-            <Pressable style={styles.textBtn} hitSlop={textBtnHitSlop} onPress={() => void service.leaveChain(myUserId).then(() => router.back()).catch((err) => onError(err, '退出失败'))}>
+            <Pressable
+              style={styles.textBtn}
+              hitSlop={textBtnHitSlop}
+              onPress={() =>
+                void confirm({
+                  title: '退出这条链',
+                  body: '退出后将无法继续查看或记录，除非再次被邀请。',
+                  confirmLabel: '退出',
+                  danger: true,
+                }).then((ok) => {
+                  if (!ok) return;
+                  void service
+                    .leaveChain(myUserId)
+                    .then(() => router.back())
+                    .catch((err) => onError(err, '退出失败'));
+                })
+              }
+            >
               <Text style={styles.danger}>退出这条链</Text>
             </Pressable>
           ) : null}
@@ -282,17 +300,17 @@ export function ChainSettingsPage() {
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
-    body: { padding: t.space4, gap: 10 },
+    body: { padding: t.space4, gap: t.space3 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: t.bg, padding: t.space8, gap: t.space3 },
     centerBtn: { alignSelf: 'center' },
     sectionTitle: { fontWeight: '600', fontSize: t.fontBody, color: t.ink, marginTop: t.space3 },
-    input: { borderWidth: 1, borderColor: t.line, borderRadius: 8, paddingHorizontal: t.space3, paddingVertical: t.space2, backgroundColor: t.surface, color: t.ink },
+    input: { borderWidth: 1, borderColor: t.line, borderRadius: t.fieldRadius, paddingHorizontal: t.space3, paddingVertical: t.space2, backgroundColor: t.surface, color: t.ink },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     chip: { paddingHorizontal: t.space3, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },
     chipActive: { backgroundColor: t.ink },
     chipText: { fontSize: t.fontSupport, color: t.muted },
     chipTextActive: { color: t.bg },
-    rowBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: t.surface, borderRadius: 8, padding: 14 },
+    rowBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: t.surface, borderRadius: t.radiusMd, padding: t.space3 },
     rowMain: { flex: 1 },
     rowSide: { flexDirection: 'row', alignItems: 'center', gap: t.space3 },
     row: { fontSize: t.fontBody, color: t.ink },

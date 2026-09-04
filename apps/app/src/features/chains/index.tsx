@@ -7,6 +7,7 @@ import type { ChainDto } from '@moment/dto';
 import { ChainListService } from '../../services/chain-list.service';
 import { Loading } from '../../components/Loading';
 import { Button } from '../../components/Button';
+import { EmptyState } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 
@@ -26,7 +27,11 @@ export const ChainsPage = observer(function ChainsPage() {
         keyExtractor={(c) => c.id}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={chainList.$model.load.loading} onRefresh={() => void chainList.load().catch(() => undefined)} />
+          <RefreshControl
+            tintColor={t.action}
+            refreshing={chainList.$model.load.loading}
+            onRefresh={() => void chainList.load().catch(() => undefined)}
+          />
         }
         renderItem={({ item }: { item: ChainDto }) => (
           <Pressable style={styles.item} onPress={() => router.push(`/chains/${item.id}`)}>
@@ -38,13 +43,16 @@ export const ChainsPage = observer(function ChainsPage() {
           </Pressable>
         )}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>还没有链，新建一条或等好友邀请</Text>
-          </View>
+          <EmptyState
+            variant="plain"
+            scope="page"
+            title="还没有时光链"
+            description="点上方开一条，或等家人发来邀请。"
+          />
         }
         ListHeaderComponent={
           <Link href="/chains-new" asChild>
-            <Button style={styles.newBtn}>＋ 新建链</Button>
+            <Button style={styles.newBtn}>开一条新的链</Button>
           </Link>
         }
       />
@@ -56,12 +64,17 @@ const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
     list: { padding: t.space3 },
-    item: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.surface, borderRadius: 8, padding: 14, marginBottom: t.space2 },
-    itemMain: { flex: 1 },
+    item: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: t.surface,
+      borderRadius: t.radiusMd,
+      padding: t.space3,
+      marginBottom: t.space2,
+    },
+    itemMain: { flex: 1, minWidth: 0 },
     name: { fontSize: t.fontInput, fontWeight: '600', color: t.ink },
-    desc: { color: t.muted, fontSize: t.fontSupport, marginTop: 2 },
+    desc: { color: t.muted, fontSize: t.fontSupport, marginTop: t.space1 },
     role: { color: t.tag, fontSize: t.fontSupport },
-    empty: { padding: t.space8, alignItems: 'center' },
-    emptyText: { color: t.muted },
     newBtn: { alignSelf: 'stretch', marginBottom: t.space3 },
   });

@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { babyAgeLabel } from '../../lib/template';
-import { ErrorText } from '../../components/ErrorText';
 import { FilterChips } from '../../components/FilterChips';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { SegmentBar } from '../../components/SegmentBar';
 import { Button } from '../../components/Button';
 import { TimelineSearchField } from '../../components/TimelineSearchField';
+import { Banner, EmptyState, confirm, toast } from '../../components/feedback';
 import { formatSearchParsed } from '../../lib/search-summary';
 import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
@@ -54,7 +54,9 @@ const Content = observer(function Content() {
         {service.chain?.description ? <Text style={styles.desc}>{service.chain.description}</Text> : null}
         <View style={styles.headActions}>
           {service.canCompose ? (
-            <Button onPress={() => router.push({ pathname: '/compose', params: { chainId: service.chainId } })}>＋ 发布时刻</Button>
+            <Button onPress={() => router.push({ pathname: '/compose', params: { chainId: service.chainId } })}>
+              记下此刻
+            </Button>
           ) : null}
           <Button variant="quiet" onPress={() => router.push(`/chains/${service.chainId}/settings`)}>设置</Button>
         </View>
@@ -80,7 +82,7 @@ const Content = observer(function Content() {
           />
           {service.searchError ? (
             <View style={styles.searchBanner}>
-              <ErrorText message={humanError(service.searchError)} />
+              <Banner tone="error">{humanError(service.searchError)}</Banner>
             </View>
           ) : null}
           {service.searching && service.searchParsed && !service.searchError ? (
@@ -128,20 +130,40 @@ const Content = observer(function Content() {
               />
             )}
             ListEmptyComponent={
-              <View style={styles.emptyWrap}>
-                <Text style={styles.empty}>
-                  {service.searching
-                    ? '没有找到相关时刻'
-                    : service.personId || service.place
-                      ? '没有符合条件的时刻'
-                      : '还没有时刻'}
-                </Text>
-                {service.searching ? (
-                  <Button variant="quiet" onPress={() => void service.exitSearch()}>
-                    退出搜索
-                  </Button>
-                ) : null}
-              </View>
+              service.searching ? (
+                <EmptyState
+                  variant="timeline"
+                  scope="section"
+                  title="没有找到相关时刻"
+                  description="换个说法，或关掉搜索回到时间线。"
+                  action={{ label: '退出搜索', emphasis: 'quiet', onPress: () => void service.exitSearch() }}
+                />
+              ) : service.personId || service.place ? (
+                <EmptyState
+                  variant="timeline"
+                  scope="section"
+                  title="没有符合条件的时刻"
+                  description="换个标签或筛选再看看。"
+                  action={{ label: '清除筛选', emphasis: 'quiet', onPress: () => service.clearFilters() }}
+                />
+              ) : (
+                <EmptyState
+                  variant="timeline"
+                  scope="section"
+                  title="还没有记下任何一刻"
+                  description="这条链的第一刻，等你来写下。"
+                  action={
+                    service.canCompose
+                      ? {
+                          label: '记下此刻',
+                          emphasis: 'primary',
+                          onPress: () =>
+                            router.push({ pathname: '/compose', params: { chainId: service.chainId } }),
+                        }
+                      : undefined
+                  }
+                />
+              )
             }
           />
         </View>
@@ -176,15 +198,15 @@ const TagsSection = observer(function TagsSection({ service }: { service: ChainH
   const styles = useMemo(() => createStyles(t), [t]);
 
   function onDelete(tagId: string, tagName: string): void {
-    Alert.alert('删除标签', `删除「${tagName}」将从相关时刻上移除`, [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () =>
-          void service.deleteTag(tagId).catch((err) => Alert.alert('失败', humanError(err))),
-      },
-    ]);
+    void confirm({
+      title: '删除标签',
+      body: `删除「${tagName}」将从相关时刻上移除`,
+      confirmLabel: '删除',
+      danger: true,
+    }).then((ok) => {
+      if (!ok) return;
+      void service.deleteTag(tagId).catch((err) => toast.error(err));
+    });
   }
 
   return (
@@ -203,7 +225,7 @@ const TagsSection = observer(function TagsSection({ service }: { service: ChainH
             void service
               .addTag(name)
               .then(() => setName(''))
-              .catch((err) => Alert.alert('失败', humanError(err)))
+              .catch((err) => toast.error(err))
           }
         >
           添加
@@ -226,7 +248,7 @@ export const ChainHomePage = bindServices(Content, [ChainHomeService]);
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
-    head: { padding: t.space4, backgroundColor: t.surface, gap: 6 },
+    head: { padding: t.space4, backgroundColor: t.surface, gap: t.space2 },
     name: { fontSize: 20, fontWeight: '700', color: t.ink },
     desc: { color: t.muted, fontSize: t.fontLabel },
     headActions: { flexDirection: 'row', alignItems: 'center', gap: t.space3 },
@@ -242,12 +264,17 @@ const createStyles = (t: Theme) =>
       paddingVertical: t.space2,
     },
     summaryText: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
-    emptyWrap: { padding: t.space8, alignItems: 'center', gap: t.space2 },
-    empty: { color: t.muted, textAlign: 'center' },
-    section: { padding: t.space4, gap: 10 },
-    row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: t.surface, borderRadius: 8, padding: 14 },
+    section: { padding: t.space4, gap: t.space3 },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: t.surface,
+      borderRadius: t.radiusMd,
+      padding: t.space3,
+    },
     rowMain: { flex: 1, fontSize: t.fontBody, color: t.ink },
     tagCreate: { flexDirection: 'row', gap: t.space2, alignItems: 'center' },
-    tagInput: { flex: 1, borderWidth: 1, borderColor: t.line, borderRadius: 8, paddingHorizontal: t.space3, paddingVertical: t.space2, backgroundColor: t.surface, color: t.ink },
+    tagInput: { flex: 1, borderWidth: 1, borderColor: t.line, borderRadius: t.fieldRadius, paddingHorizontal: t.space3, paddingVertical: t.space2, backgroundColor: t.surface, color: t.ink },
     danger: { color: t.danger, fontSize: t.fontSupport },
   });

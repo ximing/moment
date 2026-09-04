@@ -69,6 +69,11 @@ export const APP_LINE_ICONS = {
       },
     ],
   ],
+  plus: [
+    ['path', { d: 'M5 12h14' }],
+    ['path', { d: 'M12 5v14' }],
+  ],
+  'chevron-right': [['path', { d: 'm9 18 6-6-6-6' }]],
 } as const satisfies Record<string, readonly AppLineIconNode[]>;
 
 export type AppLineIconName = keyof typeof APP_LINE_ICONS;

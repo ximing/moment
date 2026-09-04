@@ -1,14 +1,14 @@
 import { useEffect, useMemo } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { createChainInputSchema } from '@moment/dto';
-import { humanError } from '../../lib/errors';
 import { AppIcon } from '../../components/AppIcon';
 import { Screen } from '../../components/Screen';
 import { Field } from '../../components/Field';
 import { Button } from '../../components/Button';
 import { RequireAuth } from '../../components/RequireAuth';
+import { toast } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { ChainsNewService } from './chains-new.service';
@@ -30,13 +30,16 @@ const Content = observer(function Content() {
       template: service.template,
     });
     if (!parsed.success) {
-      Alert.alert('提示', parsed.error.issues[0]?.message ?? '名称需 1–100 字');
+      toast.show({ key: 'chain-new', message: parsed.error.issues[0]?.message ?? '名称需 1–100 字' });
       return;
     }
     void service
       .submit()
-      .then(() => router.back())
-      .catch((err) => Alert.alert('失败', humanError(err)));
+      .then(() => {
+        toast.show({ key: 'chain-new', message: '已开一条新的链' });
+        router.back();
+      })
+      .catch((err) => toast.error(err));
   }
 
   return (
