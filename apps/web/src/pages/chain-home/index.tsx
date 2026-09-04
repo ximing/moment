@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { Settings } from 'lucide-react';
+import { Search, Settings } from 'lucide-react';
 import { AddCoverButton, EditableChainCover } from '@/chain/chain-cover-controls';
 import { ChainCover } from '@/chain/ChainCover';
 import { ChainMark } from '@/chain/ChainMark';
@@ -18,15 +18,15 @@ import { FilterChips } from '@/timeline/filter-chips';
 import { TimelineSearchField } from '@/timeline/search-field';
 import { Timeline } from '@/timeline/timeline';
 import { TimelineRail } from '@/timeline/timeline-rail';
-import { IconButton } from '@/ui/button/index';
+import { Button, IconButton } from '@/ui/button/index';
 import { Banner, EmptyState } from '@/ui/feedback/index';
 import { Tooltip } from '@/ui/tooltip/index';
 import { ChainAudience } from './chain-audience';
 import { ChainHomeService } from './chain-home.service';
 
 // 链主页（C 端总规范 §4.2 + chain-audience-header 规范 §3）：页眉 = 链色点与
-// 链名同一行 + 成员头像簇与可见性（贴链名右侧）+ 最右设置图标；简介在下一行、
-// 左缘与链名对齐。链名是动态文案，用系统字（spec §2.2）。设置入口成员即可见。
+// 链名同一行 + 成员头像簇与可见性（贴链名右侧）+ 有权则「记下此刻」+ 搜索图标 + 最右设置图标；
+// 简介在下一行、左缘与链名对齐。搜索默认收成图标，点开在页眉下展开 Field。
 // 封面通栏（Shell 不预留 rail）；内容列 ≥1400px 自行让出 --rail + 档位，避免搜索/设置叠进时间索引。
 const CHAIN_BODY_PAD =
   'w-full px-5 pt-6 min-[900px]:px-8 min-[1400px]:pr-[calc(var(--rail)+var(--space-8))]';
@@ -40,9 +40,11 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
   const composeSession = useService(ComposeSessionService);
   // 封面加载失败当次隐藏（按 coverMediaId 记忆，换链/换封面自然重置），不无限重试
   const [failedCoverId, setFailedCoverId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     service.hydrate(chainId);
+    setSearchOpen(false);
   }, [service, chainId]);
 
   useLayoutEffect(() => {
@@ -78,6 +80,17 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
   const chain = service.chain;
   // 大封面只属于链首页与公开分享页（spec §7.5）；服务端 ready 门闸保证 mediaId/URL/focus 三元组同非空
   const showCover = chain.coverMediaId !== null && chain.coverUrl !== null && failedCoverId !== chain.coverMediaId;
+  const showSearch = searchOpen || service.searching;
+
+  function toggleSearch(): void {
+    if (showSearch) {
+      setSearchOpen(false);
+      if (service.searching) void service.exitSearch();
+      return;
+    }
+    setSearchOpen(true);
+    if (service.activeView !== 'timeline') service.setActiveView('timeline');
+  }
 
   return (
     <div>
@@ -117,7 +130,21 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           />
           <h1 className="min-w-0 truncate text-page-title font-semibold text-ink">{chain.name}</h1>
           <ChainAudience chain={chain} />
-          <div className="ml-auto shrink-0">
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            {canCompose(chain) ? (
+              <Button onClick={() => composeSession.openCompose({ chainId: chain.id })}>
+                记下此刻
+              </Button>
+            ) : null}
+            <Tooltip label="搜索">
+              <IconButton
+                icon={Search}
+                label="搜索"
+                aria-expanded={showSearch}
+                variant={showSearch ? 'secondary' : 'quiet'}
+                onClick={toggleSearch}
+              />
+            </Tooltip>
             <Tooltip label="设置">
               <IconButton
                 icon={Settings}
@@ -128,6 +155,16 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           </div>
         </div>
         {chain.description && <p className="mt-1 text-meta text-muted">{chain.description}</p>}
+        {showSearch ? (
+          <TimelineSearchField
+            autoFocus={searchOpen}
+            compact
+            onSubmit={(q) => void service.submitSearch(q)}
+            onClear={() => {
+              if (service.searching) void service.exitSearch();
+            }}
+          />
+        ) : null}
       </header>
 
       <RecapEntry chainId={chain.id} />
@@ -162,15 +199,6 @@ export const ChainHomeContent = observer(function ChainHomeContent() {
           </nav>
         );
       })()}
-
-      {service.activeView === 'timeline' ? (
-        <TimelineSearchField
-          onSubmit={(q) => void service.submitSearch(q)}
-          onClear={() => {
-            if (service.searching) void service.exitSearch();
-          }}
-        />
-      ) : null}
 
       <TimelineRail
         fixedChainId={chain.id}

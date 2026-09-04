@@ -393,6 +393,57 @@ describe('链主页时间线', () => {
   });
 });
 
+describe('链页发布入口', () => {
+  it('有时刻时页眉仍有「记下此刻」，点击打开当前链的 compose 会话', async () => {
+    const user = userEvent.setup();
+    seedChainHome([TEXT_MOMENT]);
+    renderChainHome();
+
+    await user.click(screen.getByRole('button', { name: '记下此刻' }));
+    expect(resolve(ComposeSessionService).request).toEqual({ chainId: 'chain-1' });
+  });
+
+  it('editor 页眉同样有「记下此刻」', () => {
+    seedChainHome([TEXT_MOMENT], { ...CHAIN, myRole: 'editor' });
+    renderChainHome();
+
+    expect(screen.getByRole('button', { name: '记下此刻' })).toBeInTheDocument();
+  });
+
+  it('viewer 页眉没有「记下此刻」', () => {
+    seedChainHome([TEXT_MOMENT], { ...CHAIN, myRole: 'viewer' });
+    renderChainHome();
+
+    expect(screen.queryByRole('button', { name: '记下此刻' })).toBeNull();
+  });
+});
+
+describe('链页搜索入口', () => {
+  it('页眉是搜索图标，默认不占一行输入框', () => {
+    seedChainHome([TEXT_MOMENT]);
+    renderChainHome();
+
+    const trigger = screen.getByRole('button', { name: '搜索' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByPlaceholderText('搜索时刻，例如 去年今天和外婆')).toBeNull();
+  });
+
+  it('点搜索图标在页眉下展开输入，再点收起', async () => {
+    const user = userEvent.setup();
+    seedChainHome([TEXT_MOMENT]);
+    renderChainHome();
+
+    const trigger = screen.getByRole('button', { name: '搜索' });
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText('搜索时刻')).toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('搜索时刻')).toBeNull();
+  });
+});
+
 describe('链首页封面', () => {
   it('链有封面时标题上方渲染宽幅封面：blob 通道 + 焦点 object-position', () => {
     seedChainHome([TEXT_MOMENT], COVERED_CHAIN);
@@ -420,7 +471,7 @@ describe('链首页封面', () => {
     const { container } = renderChainHome();
 
     const pad = 'min-[1400px]:pr-[calc(var(--rail)+var(--space-8))]';
-    const search = screen.getByLabelText('搜索时刻');
+    const search = screen.getByRole('button', { name: '搜索' });
     const settings = screen.getByRole('button', { name: '设置' });
     const searchCol = search.closest('.px-5');
     const settingsCol = settings.closest('.px-5');

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { INTENT_MAX_QUERY_CHARS } from '@moment/dto';
 import { TextField } from '@/ui/field/index';
 
@@ -6,11 +6,21 @@ import { TextField } from '@/ui/field/index';
 export function TimelineSearchField({
   onSubmit,
   onClear,
+  autoFocus = false,
+  compact = false,
 }: {
   onSubmit: (q: string) => void;
   onClear: () => void;
+  autoFocus?: boolean;
+  /** 链眉展开：无可见 Label 行、无表单下边距（读屏仍用 Label）。 */
+  compact?: boolean;
 }) {
   const [q, setQ] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -20,8 +30,9 @@ export function TimelineSearchField({
   }
 
   return (
-    <form className="mb-4" onSubmit={handleSubmit}>
+    <form className={compact ? 'mt-3' : 'mb-4'} onSubmit={handleSubmit}>
       <TextField
+        ref={inputRef}
         label="搜索时刻"
         name="timeline-search"
         type="search"
@@ -33,6 +44,7 @@ export function TimelineSearchField({
           setQ(next);
           if (next === '') onClear();
         }}
+        className={compact ? '[&>span:first-child]:sr-only' : undefined}
       />
     </form>
   );
