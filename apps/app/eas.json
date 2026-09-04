@@ -8,17 +8,11 @@
     },
     "preview": {
       "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://moment.aimo.plus",
-        "EXPO_PUBLIC_WEB_URL": "https://moment.aimo.plus"
-      }
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.example.com" }
     },
     "production": {
       "autoIncrement": true,
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://moment.aimo.plus",
-        "EXPO_PUBLIC_WEB_URL": "https://moment.aimo.plus"
-      }
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.example.com" }
     }
   },
   "submit": { "production": {} }

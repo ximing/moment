@@ -75,6 +75,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
         run: |
           keystore="$RUNNER_TEMP/release.keystore"
           printf '%s' "$ANDROID_KEYSTORE" | base64 -d > "$keystore"
@@ -83,8 +84,7 @@ jobs:
             echo "RELEASE_STORE_STORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
             echo "RELEASE_KEY_ALIAS=$ANDROID_KEY_ALIAS"
             echo "RELEASE_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
-            echo "EXPO_PUBLIC_API_URL=https://moment.aimo.plus"
-            echo "EXPO_PUBLIC_WEB_URL=https://moment.aimo.plus"
+            echo "EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL"
           } >> "$GITHUB_ENV"
 
       - name: Expo prebuild (android)
