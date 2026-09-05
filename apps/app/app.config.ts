@@ -2,8 +2,8 @@ import type { ExpoConfig } from 'expo/config';
 import { type ConfigPlugin, withAppBuildGradle } from '@expo/config-plugins';
 
 // CI 从 release tag 派生版本（见 .github/workflows/android-release.yml）；本地缺省回退。
-const version = process.env.APP_VERSION_NAME ?? '0.3.1';
-const versionCode = Number(process.env.APP_VERSION_CODE ?? 301);
+const version = process.env.APP_VERSION_NAME ?? '0.3.2';
+const versionCode = Number(process.env.APP_VERSION_CODE ?? 302);
 
 /**
  * 向生成的 android/app/build.gradle 注入 release 签名配置。
@@ -59,7 +59,7 @@ const config: ExpoConfig = {
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
-    backgroundColor: '#c94a3a',
+    backgroundColor: '#ff6b35',
   },
   ios: { bundleIdentifier: 'com.moment.app', supportsTablet: false },
   android: {
@@ -67,7 +67,7 @@ const config: ExpoConfig = {
     versionCode,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#c94a3a',
+      backgroundColor: '#ff6b35',
     },
   },
   plugins: [

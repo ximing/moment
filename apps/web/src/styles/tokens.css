@@ -11,48 +11,48 @@
    ========================================================================== */
 
 :root {
-  /* ---- 基础色彩（C 端总规范 §2.1，浅色） ---- */
-  --bg: #f6f1ec; /* 页面底，像自然光下的相纸 */
-  --surface: #fffdfb; /* 输入、文字内容、面板 */
-  --ink: #2b201c; /* 主文字 */
-  --muted: #6f5d54; /* 时间、说明、次级动作；普通小字满足 AA */
-  --line: #d8c9c0; /* 必要边界；禁止当分割线滥用 */
-  --stroke: #b79989; /* 日子线、圆环等时间结构 */
-  --action: #c94a3a; /* 记下、FAB、未读、主动作 */
-  --action-fg: #fffdfb; /* 动作色上的文字 */
-  --select: #f2b84b; /* 选中月份、当前链的轻强调来源色 */
-  --select-fg: #2b201c; /* 选中色上的文字 */
-  --date: #ded4ff; /* 日期结、轻情绪入口 */
-  --tag: #4b7562; /* 正文内 Tag；两主题普通文字均满足 AA */
-  --focus: #7656d8; /* 键盘焦点环；与页面底对比度不低于 4.5 */
-  --danger: #b83a30; /* 删除、退出等危险动作 */
-  --danger-fg: #fffdfb; /* 最终危险操作实心按钮前景 */
+  /* ---- 基础色彩（浅色：暖白底 + 珊瑚橙主色） ---- */
+  --bg: #fff9f2; /* 主背景 · 暖白 */
+  --surface: #ffffff; /* 卡片、输入、面板 */
+  --ink: #232323; /* 主文字 */
+  --muted: #6b635c; /* 时间、说明、次级动作 */
+  --line: #e8d5c4; /* 必要边界；禁止当分割线滥用 */
+  --stroke: #c4a48a; /* 日子线、圆环等时间结构 */
+  --action: #ff6b35; /* 记下、FAB、未读、主动作 · 珊瑚橙 */
+  --action-fg: #ffffff; /* 动作色上的文字 */
+  --select: #ffc93c; /* 选中轻强调 · 星光黄 */
+  --select-fg: #232323; /* 选中色上的文字 */
+  --date: #f3edfb; /* 日期结 · 丁香紫 */
+  --tag: #1f9d8a; /* 正文内 Tag · 森林绿 */
+  --focus: #8b5fc7; /* 键盘焦点环 · 紫罗兰 */
+  --danger: #e8507a; /* 删除、退出等危险动作 · 玫红 */
+  --danger-fg: #ffffff; /* 最终危险操作实心按钮前景 */
 
-  /* ---- 链身份四色点（确定性四色盘，只表达链身份） ---- */
-  --dot-pink: #ff7aa2;
-  --dot-blue: #5aa7d6;
-  --dot-mint: #4cbe8a;
-  --dot-purple: #9b8fd0;
+  /* ---- 链身份四色点 ---- */
+  --dot-pink: #e8507a;
+  --dot-blue: #2ec4b6;
+  --dot-mint: #1f9d8a;
+  --dot-purple: #8b5fc7;
 
   /* ---- Field 色彩（Field 规范 §4.1） ---- */
-  --field-bg: #f0e9e4;
-  --field-bg-hover: #ebe2dc;
-  --field-bg-disabled: #f3eeea;
+  --field-bg: #fff6ee;
+  --field-bg-hover: #f6eee6;
+  --field-bg-disabled: #fff9f2;
   --field-placeholder: var(--muted);
   --field-focus: var(--focus);
   --field-danger: var(--danger);
 
   /* ---- Overlay / Floating 色彩（Modal §6、Menu §5.1 / §9） ---- */
-  --scrim: rgb(43 32 28 / 36%);
-  --scrim-nested: rgb(43 32 28 / 22%);
-  --overlay-shadow: 0 24px 64px rgb(43 32 28 / 24%);
+  --scrim: rgb(35 35 35 / 36%);
+  --scrim-nested: rgb(35 35 35 / 22%);
+  --overlay-shadow: 0 24px 64px rgb(35 35 35 / 24%);
   --floating-bg: var(--surface);
   --floating-hover: color-mix(in srgb, var(--ink) 6%, transparent);
   --floating-pressed: color-mix(in srgb, var(--ink) 9%, transparent);
   --floating-danger-soft: color-mix(in srgb, var(--danger) 7%, transparent);
   --floating-edge: transparent; /* 浅色浮层默认无描边 */
-  --floating-shadow: 0 18px 48px rgb(43 32 28 / 18%);
-  --action-sheet-shadow: 0 -18px 48px rgb(43 32 28 / 18%);
+  --floating-shadow: 0 18px 48px rgb(35 35 35 / 18%);
+  --action-sheet-shadow: 0 -18px 48px rgb(35 35 35 / 18%);
   --tooltip-bg: var(--ink);
   --tooltip-fg: var(--bg);
 
@@ -62,7 +62,7 @@
   --feedback-info-bg: color-mix(in srgb, var(--ink) 5%, var(--surface));
   --feedback-skeleton: color-mix(in srgb, var(--ink) 7%, transparent);
   --feedback-toast-bg: var(--surface);
-  --feedback-toast-shadow: 0 16px 40px rgb(43 32 28 / 18%);
+  --feedback-toast-shadow: 0 16px 40px rgb(35 35 35 / 18%);
   --feedback-toast-shadow-dark: 0 16px 40px rgb(0 0 0 / 42%);
 
   /* ---- 页面网格与壳层（C 端总规范 §2.3、§3.1） ---- */
@@ -192,7 +192,7 @@
   --z-lightbox: 80;
 
   /* ---- 过渡 alias：仅服务既有调用方，Task 13 统一清理，禁止新增调用 ---- */
-  --shadow: rgb(43 32 28 / 24%);
+  --shadow: rgb(35 35 35 / 24%);
   --elev: var(--overlay-shadow);
   --elev-sm: var(--floating-shadow);
   --today: var(--action);
@@ -219,33 +219,33 @@
 :root[data-theme='dark'] {
   /* 暖夜灯：炭灰底 + 灯下抬起的面，保持与浅色相同的层级关系 */
 
-  /* ---- 基础色彩（C 端总规范 §2.1，深色） ---- */
-  --bg: #171412;
-  --surface: #26211e;
-  --ink: #f7efe9;
-  --muted: #c3b5ad;
-  --line: #463c37;
-  --stroke: #76675f;
-  --action: #ff755e;
-  --action-fg: #241714;
-  --select: #f2b84b;
-  --select-fg: #2b201c;
-  --date: #433b5e;
-  --tag: #87c2a5;
-  --focus: #b59cff;
-  --danger: #ff8a72;
-  --danger-fg: #2b201c;
+  /* ---- 基础色彩（深色：近黑底 + 同款珊瑚橙） ---- */
+  --bg: #232323;
+  --surface: #2e2e2e;
+  --ink: #fff9f2;
+  --muted: #c4b8ae;
+  --line: #3d3d3d;
+  --stroke: #8a827a;
+  --action: #ff6b35;
+  --action-fg: #ffffff;
+  --select: #ffc93c;
+  --select-fg: #232323;
+  --date: #3f3a4a;
+  --tag: #2ec4b6;
+  --focus: #b89ae0;
+  --danger: #ff7a9a;
+  --danger-fg: #232323;
 
   /* ---- 链身份四色点（深色） ---- */
-  --dot-pink: #ff9bb8;
-  --dot-blue: #86c4e4;
-  --dot-mint: #78d4a8;
-  --dot-purple: #c0b0e8;
+  --dot-pink: #ff7a9a;
+  --dot-blue: #5ed9cd;
+  --dot-mint: #3ec4b0;
+  --dot-purple: #b08bdd;
 
   /* ---- Field 色彩（深色） ---- */
-  --field-bg: #1f1a17;
-  --field-bg-hover: #231d1a;
-  --field-bg-disabled: #201c19;
+  --field-bg: #1c1c1c;
+  --field-bg-hover: #252525;
+  --field-bg-disabled: #1a1a1a;
   --field-placeholder: var(--muted);
   --field-focus: var(--focus);
   --field-danger: var(--danger);

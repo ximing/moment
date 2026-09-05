@@ -18,12 +18,12 @@ ROOT = Path(__file__).resolve().parents[1]
 FONT_WOFF = ROOT / "public/fonts/smiley-sans-subset.woff2"
 PUBLIC = ROOT / "public"
 
-ACTION = (201, 74, 58, 255)  # --action light #c94a3a
-ACTION_FG = (255, 253, 251, 255)  # --action-fg #fffdfb
-ACTION_HEX = "#c94a3a"
-ACTION_FG_HEX = "#fffdfb"
-ACTION_DARK_HEX = "#ff755e"
-ACTION_FG_DARK_HEX = "#241714"
+ACTION = (255, 107, 53, 255)  # --action #ff6b35
+ACTION_FG = (255, 255, 255, 255)  # --action-fg #ffffff
+ACTION_HEX = "#ff6b35"
+ACTION_FG_HEX = "#ffffff"
+ACTION_DARK_HEX = "#ff6b35"
+ACTION_FG_DARK_HEX = "#fff9f2"
 
 
 def ttf_bytes() -> bytes:

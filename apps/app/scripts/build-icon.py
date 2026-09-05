@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FONT_WOFF = ROOT.parent / "web" / "public" / "fonts" / "smiley-sans-subset.woff2"
 ASSETS = ROOT / "assets"
 
-ACTION = (201, 74, 58, 255)  # --action light #c94a3a
-ACTION_FG = (255, 253, 251, 255)  # --action-fg #fffdfb
+ACTION = (255, 107, 53, 255)  # --action #ff6b35
+ACTION_FG = (255, 255, 255, 255)  # --action-fg #ffffff
 SIZE = 1024
 
 
