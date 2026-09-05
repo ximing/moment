@@ -5,10 +5,10 @@ import { TIMELINE_PAGE_SIZE, buildChainMomentsQuery, buildSearchInput } from '..
 import { ChainListService } from '../../services/chain-list.service';
 import type { ChainChangedPayload, CommentChangedPayload, MomentChangedPayload } from '../../lib/events';
 
-/** 链首页段：'timeline' 主时间线 / 'tags' 标签 / 'trips' 行程分章 / 其余为 manifest.views 声明的视图 type */
+/** 链首页段：'timeline' 主时间线 / 'trips' 行程分章 / 其余为 manifest.views 声明的视图 type */
 export type ChainSegment = string;
 
-/** 链首页（时间线 + 标签两段；成员/邀请/设置已挪进设置页 Task 9）。 */
+/** 链首页（时间线 + 模板视图；这条链能力走右上角 sheet → 设置分区）。 */
 export class ChainHomeService extends Service {
   chainId = '';
   chain: ChainDetailDto | null = null;
@@ -40,7 +40,7 @@ export class ChainHomeService extends Service {
           return;
         }
         void this.loadFirst().catch(() => undefined);
-        if (this.activeView !== 'timeline' && this.activeView !== 'tags' && this.activeView !== 'trips') {
+        if (this.activeView !== 'timeline' && this.activeView !== 'trips') {
           void this.loadAggregate().catch(() => undefined);
         }
       },
@@ -96,10 +96,7 @@ export class ChainHomeService extends Service {
 
   async loadChain(): Promise<void> {
     this.chain = await client.getChain(this.chainId);
-    if (!this.sectionsLoaded) {
-      this.sectionsLoaded = true;
-      void this.loadTags().catch(() => undefined);
-    }
+    this.sectionsLoaded = true;
   }
 
   async refreshListedMoment(momentId: string): Promise<void> {
@@ -271,7 +268,7 @@ export class ChainHomeService extends Service {
   setActiveView(view: string): void {
     this.activeView = view;
     this.aggregate = null;
-    if (view !== 'timeline' && view !== 'tags' && view !== 'trips') {
+    if (view !== 'timeline' && view !== 'trips') {
       void this.loadAggregate().catch(() => undefined);
     }
   }

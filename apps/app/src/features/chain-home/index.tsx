@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActionSheetIOS, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
@@ -7,56 +7,22 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { babyAgeLabel } from '../../lib/template';
+import { ActionSheet, ActionSheetItem } from '../../components/ActionSheet';
 import { FilterChips } from '../../components/FilterChips';
 import { Icon } from '../../components/Icon';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
-import { Button } from '../../components/Button';
-import { EmptyState, confirm, toast } from '../../components/feedback';
+import { SegmentBar } from '../../components/SegmentBar';
+import { EmptyState } from '../../components/feedback';
 import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { showMomentActions } from '../compose/moment-actions';
 import { RecapEntryBar } from '../recap/recap-entry';
 import { AggregateView } from './aggregate-views';
+import { chainSheetItems } from './chain-sheet';
 import { FootprintMap } from './map-view';
 import { ChainHomeService, type ChainSegment } from './chain-home.service';
-
-function showChainMenu({
-  views,
-  onView,
-  onSettings,
-}: {
-  views: { value: string; label: string }[];
-  onView: (v: string) => void;
-  onSettings: () => void;
-}): void {
-  const items = [{ value: 'timeline', label: '时间线' }, ...views, { value: 'tags', label: '标签' }];
-  const labels = items.map((i) => i.label);
-  if (Platform.OS === 'ios') {
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        options: [...labels, '设置', '取消'],
-        cancelButtonIndex: labels.length + 1,
-      },
-      (index) => {
-        if (index === undefined || index === labels.length + 1) return;
-        if (index === labels.length) {
-          onSettings();
-          return;
-        }
-        const item = items[index];
-        if (item) onView(item.value);
-      },
-    );
-    return;
-  }
-  Alert.alert('这条链', undefined, [
-    ...items.map((item) => ({ text: item.label, onPress: () => onView(item.value) })),
-    { text: '设置', onPress: onSettings },
-    { text: '取消', style: 'cancel' as const },
-  ]);
-}
 
 const Content = observer(function Content() {
   const { chainId } = useLocalSearchParams<{ chainId: string }>();
@@ -64,9 +30,11 @@ const Content = observer(function Content() {
   const auth = useService(AuthService);
   const myId = auth.user?.id; // 在 observer 渲染内取值，renderItem 闭包复用（禁解构 observable）
   const [segment, setSegment] = useState<ChainSegment>('timeline');
+  const [moreOpen, setMoreOpen] = useState(false);
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const insets = useSafeAreaInsets();
+  const moreItems = chainSheetItems(service.chain?.myRole);
 
   function onSegment(v: ChainSegment): void {
     setSegment(v);
@@ -76,13 +44,6 @@ const Content = observer(function Content() {
   const viewTabs = (service.chain?.templateManifest?.views ?? [])
     .filter((v) => v.type !== 'timeline' || v.groupBy === 'trips')
     .map((v) => ({ value: v.type === 'timeline' ? ('trips' as const) : v.type, label: v.label }));
-
-  const currentViewLabel =
-    segment === 'timeline'
-      ? '时间线'
-      : segment === 'tags'
-        ? '标签'
-        : (viewTabs.find((v) => v.value === segment)?.label ?? segment);
 
   useEffect(() => {
     const id = Array.isArray(chainId) ? chainId[0] : chainId;
@@ -106,13 +67,7 @@ const Content = observer(function Content() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="更多"
-              onPress={() =>
-                showChainMenu({
-                  views: viewTabs,
-                  onView: onSegment,
-                  onSettings: () => router.push(`/chains/${service.chainId}/settings`),
-                })
-              }
+              onPress={() => setMoreOpen(true)}
               style={styles.headerBtn}
             >
               <Icon name="ellipsis" size={t.fontInput} color={t.ink} />
@@ -135,16 +90,12 @@ const Content = observer(function Content() {
   return (
     <View style={styles.flex}>
       {header}
-      {segment !== 'timeline' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`返回时间线，当前 ${currentViewLabel}`}
-          onPress={() => onSegment('timeline')}
-          style={styles.contextBar}
-        >
-          <Text style={styles.contextText}>{currentViewLabel}</Text>
-          <Text style={styles.contextBack}>返回时间线</Text>
-        </Pressable>
+      {viewTabs.length > 0 ? (
+        <SegmentBar
+          options={[{ value: 'timeline', label: '时间线' }, ...viewTabs]}
+          value={segment}
+          onChange={onSegment}
+        />
       ) : null}
 
       {segment === 'timeline' ? (
@@ -228,9 +179,7 @@ const Content = observer(function Content() {
         </View>
       ) : null}
 
-      {segment === 'tags' ? <TagsSection service={service} /> : null}
-
-      {segment !== 'timeline' && segment !== 'tags' ? (
+      {segment !== 'timeline' ? (
         <ScrollView>
           <AggregateView
             view={segment}
@@ -245,59 +194,22 @@ const Content = observer(function Content() {
           />
         </ScrollView>
       ) : null}
-    </View>
-  );
-});
 
-/** 标签段需要本地输入框 state，拆成子组件——service 经 props 传入（同一 bindServices 实例，
- *  与 web chain-settings 的 sections.tsx 同款；子块自身只 observer，不再 useService）。 */
-const TagsSection = observer(function TagsSection({ service }: { service: ChainHomeService }) {
-  const [name, setName] = useState('');
-  const t = useTheme();
-  const styles = useMemo(() => createStyles(t), [t]);
-
-  function onDelete(tagId: string, tagName: string): void {
-    void confirm({
-      title: '删除标签',
-      body: `删除「${tagName}」将从相关时刻上移除`,
-      confirmLabel: '删除',
-      danger: true,
-    }).then((ok) => {
-      if (!ok) return;
-      void service.deleteTag(tagId).catch((err) => toast.error(err));
-    });
-  }
-
-  return (
-    <View style={styles.section}>
-      <View style={styles.tagCreate}>
-        <TextInput
-          style={styles.tagInput}
-          value={name}
-          onChangeText={setName}
-          placeholder="新标签名（链内唯一，上限 100 个）"
-          placeholderTextColor={t.muted}
-        />
-        <Button
-          variant="secondary"
-          onPress={() =>
-            void service
-              .addTag(name)
-              .then(() => setName(''))
-              .catch((err) => toast.error(err))
-          }
-        >
-          添加
-        </Button>
-      </View>
-      {service.tags.map((tag) => (
-        <View key={tag.id} style={styles.row}>
-          <Text style={styles.rowMain}>#{tag.name}（{tag.momentCount} 条）</Text>
-          <Pressable onPress={() => onDelete(tag.id, tag.name)}>
-            <Text style={styles.danger}>删除</Text>
-          </Pressable>
-        </View>
-      ))}
+      <ActionSheet visible={moreOpen} title="这条链" onClose={() => setMoreOpen(false)}>
+        {moreItems.map((item) => (
+          <ActionSheetItem
+            key={item.key}
+            label={item.label}
+            onPress={() => {
+              setMoreOpen(false);
+              router.push({
+                pathname: '/chains/[chainId]/settings',
+                params: { chainId: service.chainId, section: item.key },
+              });
+            }}
+          />
+        ))}
+      </ActionSheet>
     </View>
   );
 });
@@ -309,41 +221,9 @@ const createStyles = (t: Theme) =>
     flex: { flex: 1, backgroundColor: t.bg },
     headerActions: { flexDirection: 'row', alignItems: 'center' },
     headerBtn: { width: t.touchMin, height: t.touchMin, alignItems: 'center', justifyContent: 'center' },
-    contextBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      minHeight: t.touchMin,
-      paddingHorizontal: t.space4,
-      backgroundColor: t.surface,
-      gap: t.space2,
-    },
-    contextText: { flex: 1, minWidth: 0, fontSize: t.fontBody, color: t.ink, fontWeight: '600' },
-    contextBack: { fontSize: t.fontSupport, color: t.muted },
     list: { paddingHorizontal: t.space3, paddingTop: t.space2, paddingBottom: t.space8 },
     timelinePane: { flex: 1 },
     timelineList: { flex: 1 },
-    section: { padding: t.space4, gap: t.space3 },
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: t.surface,
-      borderRadius: t.radiusMd,
-      padding: t.space3,
-    },
-    rowMain: { flex: 1, fontSize: t.fontBody, color: t.ink },
-    tagCreate: { flexDirection: 'row', gap: t.space2, alignItems: 'center' },
-    tagInput: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: t.line,
-      borderRadius: t.fieldRadius,
-      paddingHorizontal: t.space3,
-      paddingVertical: t.space2,
-      backgroundColor: t.surface,
-      color: t.ink,
-    },
-    danger: { color: t.danger, fontSize: t.fontSupport },
     fab: {
       position: 'absolute',
       right: t.space5,

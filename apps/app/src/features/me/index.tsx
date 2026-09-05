@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { observer, useService } from '@rabjs/react';
 import { Icon } from '../../components/Icon';
 import { Button } from '../../components/Button';
-import { confirm } from '../../components/feedback';
+import { confirm, toast } from '../../components/feedback';
+import { apkSizeLabel } from '../../lib/app-update';
+import { AppUpdateService } from '../../services/app-update.service';
 import { AuthService } from '../../services/auth.service';
 import {
   THEME_CHOICE_OPTIONS,
@@ -17,12 +19,41 @@ import { useTheme } from '../../theme/use-theme';
 
 export const MePage = observer(function MePage() {
   const auth = useService(AuthService);
+  const update = useService(AppUpdateService);
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const insets = useSafeAreaInsets();
   const [themeChoice, setThemeChoice] = useState(getThemeChoice);
 
   useEffect(() => subscribeThemeChoice(setThemeChoice), []);
+
+  function onCheckUpdate(): void {
+    if (Platform.OS !== 'android' || __DEV__) {
+      toast.show(`当前 ${update.currentVersion}`);
+      return;
+    }
+    if (update.status === 'downloading' || update.status === 'installing') {
+      toast.show('正在下载新版本…');
+      return;
+    }
+    void update
+      .check({ ignoreSkip: true })
+      .then((remote) => {
+        if (!remote) {
+          toast.show(`已是最新版本 ${update.currentVersion}`);
+          return;
+        }
+        const size = apkSizeLabel(remote.apkBytes);
+        return confirm({
+          title: `有新版本 ${remote.versionName}`,
+          body: size
+            ? `下载（${size}）完成后会打开系统安装。现在升级？`
+            : '下载完成后会打开系统安装。现在升级？',
+          confirmLabel: '升级',
+        }).then((ok) => (ok ? update.downloadAndInstall() : undefined));
+      })
+      .catch((err) => toast.error(err, '检查更新失败'));
+  }
 
   function onLogout(): void {
     void confirm({
@@ -65,6 +96,17 @@ export const MePage = observer(function MePage() {
       <SettingsRow label="资料" onPress={() => router.push('/settings/profile')} />
       <SettingsRow label="主题" value={themeLabel} onPress={() => router.push('/settings/theme')} />
       <SettingsRow label="修改密码" onPress={() => router.push('/settings/password')} />
+      <SettingsRow
+        label="检查更新"
+        value={
+          update.status === 'downloading'
+            ? '下载中…'
+            : update.status === 'available' && update.remote
+              ? `有 ${update.remote.versionName}`
+              : update.currentVersion
+        }
+        onPress={onCheckUpdate}
+      />
 
       <View style={styles.spacer} />
       <Button variant="quiet" style={styles.centerOnly} onPress={onLogout}>

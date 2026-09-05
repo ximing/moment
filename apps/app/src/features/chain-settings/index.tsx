@@ -9,11 +9,15 @@ import { formatRelative } from '../../lib/format';
 import { Loading } from '../../components/Loading';
 import { RequireAuth } from '../../components/RequireAuth';
 import { Button } from '../../components/Button';
+import { Field } from '../../components/Field';
 import { confirm, toast } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
+import { chainSheetItems, chainSheetTitle, type ChainSheetSection } from '../chain-home/chain-sheet';
 import { ChainSettingsService } from './chain-settings.service';
 import { JobsSection } from './jobs-section';
+import { PeopleSection } from './people-section';
+import { TagsSection } from './tags-section';
 
 const ROLE_LABEL: Record<string, string> = { owner: '主理人', editor: '编辑', viewer: '只读' };
 
@@ -24,8 +28,14 @@ const ROLE_LABEL: Record<string, string> = { owner: '主理人', editor: '编辑
  */
 const textBtnHitSlop = { top: 10, bottom: 10 } as const;
 
+function resolveSection(raw: string | undefined, role: string | undefined): ChainSheetSection {
+  const allowed = chainSheetItems(role).map((i) => i.key);
+  if (raw && allowed.includes(raw as ChainSheetSection)) return raw as ChainSheetSection;
+  return role === 'owner' ? 'share' : 'members';
+}
+
 const Content = observer(function Content() {
-  const { chainId } = useLocalSearchParams<{ chainId: string }>();
+  const { chainId, section: sectionParam } = useLocalSearchParams<{ chainId: string; section?: string }>();
   const service = useService(ChainSettingsService);
   const auth = useService(AuthService);
   const t = useTheme();
@@ -125,10 +135,14 @@ const Content = observer(function Content() {
     }
   }
 
+  const section = resolveSection(Array.isArray(sectionParam) ? sectionParam[0] : sectionParam, service.myRole);
+
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.body}>
-      <Stack.Screen options={{ title: '链设置' }} />
+      <Stack.Screen options={{ title: chainSheetTitle(section) }} />
 
+      {section === 'profile' ? (
+      <>
       <Text style={styles.sectionTitle}>资料{isOwner ? '' : '（仅主理人可修改）'}</Text>
       {isOwner ? (
         <>
@@ -181,7 +195,19 @@ const Content = observer(function Content() {
           ) : null}
         </>
       )}
+      {isOwner ? (
+        <>
+          <Text style={styles.sectionTitle}>危险区</Text>
+          <Button variant="danger" loading={service.$model.deleteChain.loading} onPress={onDeleteChain}>
+            删除这条链
+          </Button>
+        </>
+      ) : null}
+      </>
+      ) : null}
 
+      {section === 'members' ? (
+      <>
       <Text style={styles.sectionTitle}>成员（{service.members.length}）</Text>
       {service.members.map((m) => (
         <Pressable key={m.userId} style={styles.rowBox} onPress={() => onRolePress(m.userId, m.nickname, m.role)}>
@@ -199,28 +225,43 @@ const Content = observer(function Content() {
 
       {canInvite ? (
         <>
-          <Text style={styles.sectionTitle}>邀请</Text>
+          <Text style={styles.sectionTitle}>邀请家人</Text>
+          <Text style={styles.muted}>填对方注册邮箱，对方会在通知里看到邀请；也可以只生成链接。</Text>
+          <Field
+            label="邮箱"
+            value={service.inviteEmail}
+            onChangeText={(v) => (service.inviteEmail = v)}
+            placeholder="邮箱（可空，只生成链接）"
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
           <Button
             variant="secondary"
             loading={service.$model.createInvite.loading}
-            onPress={() =>
+            onPress={() => {
+              const emailed = service.inviteEmail.trim().length > 0;
               void service
                 .createInvite()
-                .then((token) => onShare(`邀请你加入「${service.chain?.name ?? ''}」时光链：moment://invites/${token}`))
-                .catch((err) => onError(err, '生成邀请失败'))
-            }
+                .then((token) => {
+                  if (emailed) {
+                    toast.show('已发出邀请。对方若已注册，会在通知里看到。');
+                    return;
+                  }
+                  return onShare(`邀请你加入「${service.chain?.name ?? ''}」时光链：${webUrl}/invites/${token}`);
+                })
+                .catch((err) => onError(err, '生成邀请失败'));
+            }}
           >
-            生成邀请链接（编辑）
+            {service.inviteEmail.trim() ? '发出邀请' : '生成邀请链接'}
           </Button>
         </>
       ) : null}
 
-      {isOwner ? (
-        <>
-          {service.invites.map((i) => (
+      {isOwner
+        ? service.invites.map((i) => (
             <View key={i.id} style={styles.rowBox}>
               <View style={styles.rowMain}>
-                <Text style={styles.row}>{ROLE_LABEL[i.role] ?? i.role}邀请 · {formatRelative(i.createdAt)}</Text>
+                <Text style={styles.row}>{i.email ?? '链接邀请'} · {ROLE_LABEL[i.role] ?? i.role} · {formatRelative(i.createdAt)}</Text>
                 <Text style={styles.muted}>
                   {i.acceptedAt ? '已接受' : i.expiresAt < new Date().toISOString() ? '已过期' : '待接受'}
                 </Text>
@@ -231,9 +272,17 @@ const Content = observer(function Content() {
                 </Pressable>
               )}
             </View>
-          ))}
+          ))
+        : null}
+      </>
+      ) : null}
 
-          <Text style={styles.sectionTitle}>分享链接（给长辈看这条链）</Text>
+      {section === 'people' ? <PeopleSection /> : null}
+      {section === 'tags' ? <TagsSection /> : null}
+
+      {section === 'share' && isOwner ? (
+      <>
+          <Text style={styles.sectionTitle}>给长辈看这条链</Text>
           <View style={styles.chipRow}>
             <Pressable style={[styles.chip, service.shareExpire === 'never' && styles.chipActive]} onPress={() => (service.shareExpire = 'never')}>
               <Text style={[styles.chipText, service.shareExpire === 'never' && styles.chipTextActive]}>永不过期</Text>
@@ -273,16 +322,10 @@ const Content = observer(function Content() {
               )}
             </View>
           ))}
-
-          <JobsSection />
-
-          <Text style={styles.sectionTitle}>危险区</Text>
-          <Button variant="danger" loading={service.$model.deleteChain.loading} onPress={onDeleteChain}>
-            删除这条链
-          </Button>
-        </>
+      </>
       ) : null}
-      <View />
+
+      {section === 'jobs' && isOwner ? <JobsSection /> : null}
     </ScrollView>
   );
 });

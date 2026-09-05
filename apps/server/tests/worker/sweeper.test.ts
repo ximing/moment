@@ -359,7 +359,7 @@ describe('handleMomentDeleted（outbox moment.deleted → 标记 orphaned，幂�
     expect(handlers['moment.transcribe']).toBe(handleMomentTranscribe);
     expect(handlers['moment.compress']).toBe(handleMomentCompress);
     expect(handlers['moment.embed']).toBe(handleMomentEmbed);
-    expect(Object.keys(handlers)).toHaveLength(10);
+    expect(Object.keys(handlers)).toHaveLength(11);
   });
 });
 

@@ -287,10 +287,10 @@ const LIGHT_BASE_VALUES: Record<string, string> = {
 // 深色：近黑底 + 同款珊瑚橙
 const DARK_BASE_VALUES: Record<string, string> = {
   '--bg': '#232323',
-  '--surface': '#2e2e2e',
+  '--surface': '#3f3933',
   '--ink': '#fff9f2',
   '--muted': '#c4b8ae',
-  '--line': '#3d3d3d',
+  '--line': '#5a5048',
   '--stroke': '#8a827a',
   '--action': '#ff6b35',
   '--action-fg': '#ffffff',
@@ -313,9 +313,9 @@ const LIGHT_STATE_VALUES: Record<string, string> = {
 };
 
 const DARK_STATE_VALUES: Record<string, string> = {
-  '--field-bg': '#1c1c1c',
-  '--field-bg-hover': '#252525',
-  '--field-bg-disabled': '#1a1a1a',
+  '--field-bg': '#3a342f',
+  '--field-bg-hover': '#433c36',
+  '--field-bg-disabled': '#322c28',
   '--scrim': 'rgb(0 0 0 / 58%)',
   '--scrim-nested': 'rgb(0 0 0 / 36%)',
   '--overlay-shadow': '0 24px 64px rgb(0 0 0 / 48%)',

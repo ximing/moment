@@ -25,7 +25,8 @@ import { chainInvites, chainMembers, chains, comments, media, momentPersons, mom
 import { ChainPolicy, type ChainRole } from './chain-policy.js';
 import { deleteVectorsByChainId } from '../lancedb/repository.js';
 import { logger } from '../utils/logger.js';
-import type { DbTx } from '../outbox/outbox.js';
+import { emitOutbox, type DbTx } from '../outbox/outbox.js';
+import { OUTBOX_INVITE_CREATED } from '../outbox/types.js';
 import { TemplateService } from '../templates/template.service.js';
 import { validateChainPayload } from '../templates/payload-validator.js';
 import {
@@ -294,18 +295,39 @@ export class ChainService {
     return this.getById(actorId, chainId);
   }
 
-  /** editor+ 生成邀请：token 为 48 字节随机 base64url（64 字符，不可猜测），默认 INVITE_TTL_DAYS 天过期。 */
+  /** editor+ 生成邀请：token 为 48 字节随机 base64url（64 字符，不可猜测），默认 INVITE_TTL_DAYS 天过期。
+   *  若 email 命中已注册且尚未入链的用户，同事务写 invite.created outbox（spec §5.4 被邀请进链）。 */
   async createInvite(userId: string, chainId: string, input: CreateInviteInput): Promise<InviteDto> {
     await this.policy.require(userId, chainId, 'editor');
     const id = randomUUID();
-    await db.insert(chainInvites).values({
-      id,
-      chainId,
-      token: randomBytes(48).toString('base64url'),
-      email: input.email ?? null,
-      role: input.role,
-      createdBy: userId,
-      expiresAt: new Date(Date.now() + config.INVITE_TTL_DAYS * 86_400_000),
+    const token = randomBytes(48).toString('base64url');
+    const email = input.email ?? null;
+    await db.transaction(async (tx) => {
+      await tx.insert(chainInvites).values({
+        id,
+        chainId,
+        token,
+        email,
+        role: input.role,
+        createdBy: userId,
+        expiresAt: new Date(Date.now() + config.INVITE_TTL_DAYS * 86_400_000),
+      });
+      if (!email) return;
+      const [target] = await tx.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+      if (!target || target.id === userId) return;
+      const [member] = await tx
+        .select({ userId: chainMembers.userId })
+        .from(chainMembers)
+        .where(and(eq(chainMembers.chainId, chainId), eq(chainMembers.userId, target.id)))
+        .limit(1);
+      if (member) return;
+      await emitOutbox(tx, OUTBOX_INVITE_CREATED, {
+        inviteId: id,
+        inviteToken: token,
+        chainId,
+        actorId: userId,
+        inviteeId: target.id,
+      });
     });
     const [invite] = await db.select().from(chainInvites).where(eq(chainInvites.id, id)).limit(1);
     return this.toInviteDto(invite);

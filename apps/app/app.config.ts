@@ -2,8 +2,8 @@ import type { ExpoConfig } from 'expo/config';
 import { type ConfigPlugin, withAppBuildGradle } from '@expo/config-plugins';
 
 // CI 从 release tag 派生版本（见 .github/workflows/android-release.yml）；本地缺省回退。
-const version = process.env.APP_VERSION_NAME ?? '0.3.2';
-const versionCode = Number(process.env.APP_VERSION_CODE ?? 302);
+const version = process.env.APP_VERSION_NAME ?? '0.3.3';
+const versionCode = Number(process.env.APP_VERSION_CODE ?? 303);
 
 /**
  * 向生成的 android/app/build.gradle 注入 release 签名配置。
@@ -65,6 +65,7 @@ const config: ExpoConfig = {
   android: {
     package: 'com.moment.app',
     versionCode,
+    permissions: ['android.permission.REQUEST_INSTALL_PACKAGES'],
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#ff6b35',

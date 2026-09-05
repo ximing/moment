@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../../src/db/index.js';
-import { chainMembers, comments, moments, notifications, pushTokens } from '../../src/db/schema.js';
+import { chainInvites, chainMembers, comments, moments, notifications, pushTokens } from '../../src/db/schema.js';
 import { wallDateOf } from '../../src/moments/wall-date.js';
 import { MockPushService } from '../../src/push/mock.js';
 import { handleMomentCompress } from '../../src/media/handle-moment-compress.js';
 import { handleMomentEmbed } from '../../src/embedding/handle-moment-embed.js';
 import {
   handleCommentCreated,
+  handleInviteCreated,
   handleMomentCreated,
   handleMomentDeleted,
   handleReactionCreated,
@@ -183,11 +184,45 @@ describe('handleCommentCreated / handleReactionCreated', () => {
   });
 });
 
+describe('handleInviteCreated（被邀请进链，spec §5.4）', () => {
+  it('给被邀请人插通知，payload 含 inviteToken，不通知邀请人', async () => {
+    const owner = await registerUser();
+    const invitee = await registerUser();
+    const chainId = await createChain(owner.id);
+    const inviteId = randomUUID();
+    const inviteToken = 'invite-token-for-notify'.padEnd(64, '0');
+    await db.insert(chainInvites).values({
+      id: inviteId,
+      chainId,
+      token: inviteToken,
+      email: 'invitee@test.com',
+      role: 'editor',
+      createdBy: owner.id,
+      expiresAt: new Date(Date.now() + 7 * 86_400_000),
+    });
+    const push = new MockPushService();
+    await handleInviteCreated(
+      { inviteId, inviteToken, chainId, actorId: owner.id, inviteeId: invitee.id },
+      { push },
+    );
+    const rows = await db.select().from(notifications);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].userId).toBe(invitee.id);
+    expect(rows[0].type).toBe('invite.created');
+    const payload = rows[0].payload as Record<string, unknown>;
+    expect(payload.inviteToken).toBe(inviteToken);
+    expect(payload.chainId).toBe(chainId);
+    expect(String(payload.title)).toContain('邀请你加入');
+    expect(push.sent).toHaveLength(0); // 无 push token 时不发，但 fanout 已走完
+  });
+});
+
 describe('handlers 注册表', () => {
-  it('十种事件均已注册（含 moment.embed）', () => {
+  it('十一种事件均已注册（含 invite.created）', () => {
     expect(handlers['moment.created']).toBe(handleMomentCreated);
     expect(handlers['comment.created']).toBe(handleCommentCreated);
     expect(handlers['reaction.created']).toBe(handleReactionCreated);
+    expect(handlers['invite.created']).toBe(handleInviteCreated);
     expect(handlers['moment.deleted']).toBe(handleMomentDeleted);
     expect(handlers['recap.generate']).toBe(handleRecapGenerate);
     expect(handlers['moment.transcribe']).toBe(handleMomentTranscribe);
@@ -195,7 +230,7 @@ describe('handlers 注册表', () => {
     expect(handlers['moment.extract']).toBe(handleMomentExtract);
     expect(handlers['moment.compress']).toBe(handleMomentCompress);
     expect(handlers['moment.embed']).toBe(handleMomentEmbed);
-    expect(Object.keys(handlers)).toHaveLength(10);
+    expect(Object.keys(handlers)).toHaveLength(11);
   });
 
   it('moment.deleted：无匹配 media 行时静默成功、不产生通知（Phase 8 已替换为 orphaned 标记实现）', async () => {

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
-import { chainInvites } from '../../src/db/schema.js';
+import { chainInvites, outbox } from '../../src/db/schema.js';
 import { auth, createUser, type TestUser } from '../helpers/auth.js';
 import { addMember, createChain } from '../helpers/chains.js';
 import { closeDb, resetDb } from '../helpers/db.js';
@@ -55,6 +55,24 @@ describe('POST /api/chains/:chainId/invites', () => {
 
     // 两次 token 不同（不可猜测随机）
     expect(byEditor.token).not.toBe(byOwner.token);
+  });
+
+  it('email 命中已注册非成员：同事务写 invite.created outbox；无 email / 已是成员不写', async () => {
+    const withUser = await createInvite(owner, chain.id, { email: 'invitee@example.com' });
+    const rows = await db.select().from(outbox).where(eq(outbox.type, 'invite.created'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].payload).toMatchObject({
+      inviteId: withUser.id,
+      inviteToken: withUser.token,
+      chainId: chain.id,
+      actorId: owner.id,
+      inviteeId: invitee.id,
+    });
+
+    await createInvite(owner, chain.id, {});
+    await createInvite(owner, chain.id, { email: 'editor@example.com' });
+    const again = await db.select().from(outbox).where(eq(outbox.type, 'invite.created'));
+    expect(again).toHaveLength(1);
   });
 
   it('viewer 创建 403；role=owner 400；非成员 404', async () => {

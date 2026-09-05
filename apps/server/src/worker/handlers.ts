@@ -2,7 +2,7 @@ import { MAX_AUDIO_BYTES } from '@moment/dto';
 import { and, eq, inArray, isNull, like } from 'drizzle-orm';
 import { Container } from 'typedi';
 import { db } from '../db/index.js';
-import { chainMembers, chains, comments, media, moments, recaps, users } from '../db/schema.js';
+import { chainInvites, chainMembers, chains, comments, media, moments, recaps, users } from '../db/schema.js';
 import { getASRProvider } from '../llm/asr/factory.js';
 import { NonRetryableLLMError } from '../llm/base.provider.js';
 import { getLLMProvider } from '../llm/factory.js';
@@ -15,6 +15,7 @@ import { maybeEmitMomentEmbed } from '../moments/embed-outbox.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import {
   NOTIFICATION_COMMENT_CREATED,
+  NOTIFICATION_INVITE_CREATED,
   NOTIFICATION_MOMENT_CREATED,
   NOTIFICATION_REACTION_CREATED,
   NOTIFICATION_RECAP_READY,
@@ -500,11 +501,43 @@ export const handleRecapGenerate: OutboxHandler = async (payload, deps) => {
   });
 };
 
+/** invite.created：被邀请且已注册的用户（spec §5.4 被邀请进链）。邀请已接受/已删则跳过。 */
+export const handleInviteCreated: OutboxHandler = async (payload, deps) => {
+  const inviteId = str(payload.inviteId);
+  const inviteToken = str(payload.inviteToken);
+  const chainId = str(payload.chainId);
+  const actorId = str(payload.actorId);
+  const inviteeId = str(payload.inviteeId);
+  if (!inviteId || !inviteToken || !chainId || !actorId || !inviteeId) return;
+
+  const [invite] = await db.select().from(chainInvites).where(eq(chainInvites.id, inviteId)).limit(1);
+  if (!invite || invite.acceptedAt) return;
+
+  const { chainName, nicknames } = await loadSnapshot(chainId, [actorId]);
+  const actorNickname = nicknames.get(actorId) ?? '';
+  await notificationService().fanoutNotifications(deps, {
+    userIds: [inviteeId],
+    type: NOTIFICATION_INVITE_CREATED,
+    payload: {
+      chainId,
+      inviteToken,
+      inviteId,
+      chainName,
+      actorNickname,
+      title: chainName ? `邀请你加入「${chainName}」` : '邀请你加入一条时光链',
+      body: actorNickname ? `${actorNickname} 邀请你一起记` : '有人邀请你加入一条时光链',
+      data: { chainId, inviteToken },
+    },
+    push: true,
+  });
+};
+
 /** 注册表：processor 按 outbox.type 分发。 */
 export const handlers: Record<string, OutboxHandler> = {
   'moment.created': handleMomentCreated,
   'comment.created': handleCommentCreated,
   'reaction.created': handleReactionCreated,
+  'invite.created': handleInviteCreated,
   'moment.deleted': handleMomentDeleted,
   'recap.generate': handleRecapGenerate,
   'moment.transcribe': handleMomentTranscribe,

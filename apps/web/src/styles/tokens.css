@@ -217,14 +217,14 @@
 }
 
 :root[data-theme='dark'] {
-  /* 暖夜灯：炭灰底 + 灯下抬起的面，保持与浅色相同的层级关系 */
+  /* 暖夜灯：炭灰底 + 灯下抬起的暖纸面。纸面必须浅于页底，避免便利贴沉成黑洞 */
 
   /* ---- 基础色彩（深色：近黑底 + 同款珊瑚橙） ---- */
   --bg: #232323;
-  --surface: #2e2e2e;
+  --surface: #3f3933;
   --ink: #fff9f2;
   --muted: #c4b8ae;
-  --line: #3d3d3d;
+  --line: #5a5048;
   --stroke: #8a827a;
   --action: #ff6b35;
   --action-fg: #ffffff;
@@ -242,10 +242,10 @@
   --dot-mint: #3ec4b0;
   --dot-purple: #b08bdd;
 
-  /* ---- Field 色彩（深色） ---- */
-  --field-bg: #1c1c1c;
-  --field-bg-hover: #252525;
-  --field-bg-disabled: #1a1a1a;
+  /* ---- Field 色彩（深色：纸面抬起，比 --bg 浅、比 --surface 略暖） ---- */
+  --field-bg: #3a342f;
+  --field-bg-hover: #433c36;
+  --field-bg-disabled: #322c28;
   --field-placeholder: var(--muted);
   --field-focus: var(--focus);
   --field-danger: var(--danger);

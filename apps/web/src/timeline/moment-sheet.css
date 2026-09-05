@@ -39,6 +39,9 @@
   background: none;
   font: inherit;
 }
+.moment-note-count {
+  color: var(--surface);
+}
 .moment-note-place-after-play {
   left: 48px;
   max-width: calc(100% - 56px);
@@ -116,6 +119,16 @@
 [data-moment-detail-writing] .moment-note-writing {
   padding: 0;
 }
+/* 深色 ink 是浅字，§3.1 的 ink 阴影会变成光晕；改用黑落影，纸面靠 token 抬起 */
+:root[data-theme='dark'] .moment-note:not(.moment-note-detail) {
+  box-shadow: 0 8px 22px rgb(0 0 0 / 42%);
+}
+:root[data-theme='dark'] .moment-note-place,
+:root[data-theme='dark'] .moment-note-count {
+  color: var(--ink);
+  text-shadow: 0 1px 6px rgb(0 0 0 / 70%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .moment-note {
     transition: none;

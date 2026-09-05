@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RSRoot } from '@rabjs/react';
 import { FeedbackHost } from '../src/components/feedback';
+import { AppUpdateHost } from '../src/features/app-update/AppUpdateHost';
 import { registerGlobals } from '../src/services/register';
 import { hydrateThemeChoice } from '../src/theme/preference';
 import { useTheme } from '../src/theme/use-theme';
@@ -38,6 +39,7 @@ export default function RootLayout() {
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
+        <AppUpdateHost />
         <FeedbackHost />
       </View>
       </SafeAreaProvider>

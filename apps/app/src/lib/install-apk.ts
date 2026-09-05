@@ -1,0 +1,12 @@
+import { Platform } from 'react-native';
+import * as IntentLauncher from 'expo-intent-launcher';
+
+/** Android 用 content:// 调起系统安装器（需 REQUEST_INSTALL_PACKAGES）。 */
+export async function installAndroidApk(contentUri: string): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+    data: contentUri,
+    flags: 1 | 268435456, // GRANT_READ_URI_PERMISSION | ACTIVITY_NEW_TASK
+    type: 'application/vnd.android.package-archive',
+  });
+}

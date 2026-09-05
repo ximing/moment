@@ -1,9 +1,17 @@
 import { Service } from '@rabjs/react';
-import type { ChainAppearanceColor, ChainDto, ChainIcon, ChainJobDto, ShareLinkDto } from '@moment/dto';
+import type {
+  ChainAppearanceColor,
+  ChainDto,
+  ChainIcon,
+  ChainJobDto,
+  PersonResponse,
+  ShareLinkDto,
+  TagResponse,
+} from '@moment/dto';
 import { client } from '../../lib/api';
 import type { ChainChangedPayload } from '../../lib/events';
 
-/** 设置页全部状态：链详情 + 资料/标签表单 + 成员 + 邀请 + 分享链接 + 危险区。 */
+/** 设置页全部状态：链详情 + 资料/人物/标签 + 成员 + 邀请 + 分享链接 + 危险区。 */
 export class ChainSettingsService extends Service {
   chainId = '';
   chain: ChainDto | null = null;
@@ -12,6 +20,11 @@ export class ChainSettingsService extends Service {
   invites: Awaited<ReturnType<typeof client.listInvites>> = [];
   shareLinks: ShareLinkDto[] = [];
   jobs: ChainJobDto[] = [];
+  tags: TagResponse[] = [];
+  persons: PersonResponse[] = [];
+  inviteEmail = '';
+  newPersonName = '';
+  newTagName = '';
 
   // 资料表单（name/description/color/icon；RN 不加图片/封面编辑——spec §1 非目标）
   formName = '';
@@ -43,7 +56,18 @@ export class ChainSettingsService extends Service {
   hydrate(chainId: string): void {
     if (this.chainId === chainId) return;
     this.chainId = chainId;
+    this.chain = null;
+    this.members = [];
+    this.invites = [];
+    this.shareLinks = [];
     this.jobs = [];
+    this.tags = [];
+    this.persons = [];
+    this.formHydrated = false;
+    this.sectionsLoaded = false;
+    this.inviteEmail = '';
+    this.newPersonName = '';
+    this.newTagName = '';
     void this.loadChain().catch(() => undefined);
   }
 
@@ -56,6 +80,8 @@ export class ChainSettingsService extends Service {
     if (!this.sectionsLoaded) {
       this.sectionsLoaded = true;
       void this.loadMembers().catch(() => undefined);
+      void this.loadTags().catch(() => undefined);
+      void this.loadPersons().catch(() => undefined);
       if (this.chain.myRole === 'owner') {
         void this.loadShareLinks().catch(() => undefined);
       }
@@ -89,6 +115,49 @@ export class ChainSettingsService extends Service {
     if (!this.chainId) return;
     const res = await client.listChainJobs(this.chainId);
     this.jobs = res.jobs;
+  }
+
+  async loadTags(): Promise<void> {
+    this.tags = (await client.listTags(this.chainId)).tags;
+  }
+
+  async loadPersons(): Promise<void> {
+    this.persons = (await client.listPersons(this.chainId)).persons;
+  }
+
+  async addPerson(): Promise<void> {
+    const name = this.newPersonName.trim();
+    if (!name) return;
+    await client.createPerson(this.chainId, { name });
+    this.newPersonName = '';
+    await this.loadPersons();
+  }
+
+  async renamePerson(personId: string, name: string): Promise<void> {
+    const next = name.trim();
+    if (!next) return;
+    const current = this.persons.find((p) => p.id === personId);
+    if (!current || current.name === next) return;
+    await client.renamePerson(this.chainId, personId, { name: next });
+    await this.loadPersons();
+  }
+
+  async removePerson(personId: string): Promise<void> {
+    await client.removePerson(this.chainId, personId);
+    await this.loadPersons();
+  }
+
+  async addTag(): Promise<void> {
+    const name = this.newTagName.trim();
+    if (!name) return;
+    await client.createTag(this.chainId, name);
+    this.newTagName = '';
+    await this.loadTags();
+  }
+
+  async deleteTag(id: string): Promise<void> {
+    await client.deleteTag(id);
+    await this.loadTags();
   }
 
   /** 选颜色：同时清 Emoji——新协议三模式互斥，显式表达「纯色」而不是把决定权推给服务端归一化。 */
@@ -151,7 +220,9 @@ export class ChainSettingsService extends Service {
   }
 
   async createInvite(): Promise<string> {
-    const invite = await client.createInvite(this.chainId, { role: 'editor' });
+    const email = this.inviteEmail.trim() || undefined;
+    const invite = await client.createInvite(this.chainId, { email, role: 'editor' });
+    this.inviteEmail = '';
     await this.loadMembers();
     return invite.token;
   }

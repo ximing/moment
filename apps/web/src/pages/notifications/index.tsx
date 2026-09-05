@@ -23,7 +23,15 @@ function payloadTitle(payload: Record<string, unknown>): string {
   return '';
 }
 
-function hrefOf(payload: Record<string, unknown>): string | null {
+function hrefOf(type: string, payload: Record<string, unknown>): string | null {
+  const data = payload.data && typeof payload.data === 'object' ? (payload.data as Record<string, unknown>) : undefined;
+  const inviteToken =
+    typeof payload.inviteToken === 'string'
+      ? payload.inviteToken
+      : typeof data?.inviteToken === 'string'
+        ? data.inviteToken
+        : undefined;
+  if (type === 'invite.created' && inviteToken) return `/invites/${inviteToken}`;
   const momentId = payload.momentId;
   const chainId = payload.chainId;
   if (typeof momentId === 'string') return `/moments/${momentId}`;
@@ -72,7 +80,7 @@ export const NotificationsHome = observer(function NotificationsHome() {
       )}
       <ul className="space-y-1">
         {items.map((n) => {
-          const href = hrefOf(n.payload);
+          const href = hrefOf(n.type, n.payload);
           const inner = (
             <>
               {n.readAt === null && <span className="h-2 w-2 shrink-0 rounded-full bg-action" aria-label="未读" />}

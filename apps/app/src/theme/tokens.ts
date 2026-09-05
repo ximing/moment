@@ -85,10 +85,10 @@ export const lightColors: ColorTokens = {
 
 export const darkColors: ColorTokens = {
   bg: '#232323',
-  surface: '#2e2e2e',
+  surface: '#3f3933',
   ink: '#fff9f2',
   muted: '#c4b8ae',
-  line: '#3d3d3d',
+  line: '#5a5048',
   stroke: '#8a827a',
   action: '#ff6b35',
   actionFg: '#ffffff',
@@ -103,19 +103,19 @@ export const darkColors: ColorTokens = {
   dotBlue: '#5ed9cd',
   dotMint: '#3ec4b0',
   dotPurple: '#b08bdd',
-  fieldBg: '#1c1c1c',
-  fieldBgDisabled: '#1a1a1a',
+  fieldBg: '#3a342f',
+  fieldBgDisabled: '#322c28',
   scrim: 'rgba(0, 0, 0, 0.58)',
   hoverSoft: 'rgba(255, 249, 242, 0.08)',
   pressedSoft: 'rgba(255, 249, 242, 0.12)',
   secondaryBg: 'rgba(255, 249, 242, 0.08)',
   dangerSoft: 'rgba(255, 122, 154, 0.1)',
-  // color-mix(in srgb, #ff7a9a 10%, #2e2e2e)
-  feedbackErrorBg: '#433639',
-  // color-mix(in srgb, #ffc93c 18%, #2e2e2e)
-  feedbackWarningBg: '#544a31',
-  // color-mix(in srgb, #fff9f2 5%, #2e2e2e)
-  feedbackInfoBg: '#383838',
+  // color-mix(in srgb, #ff7a9a 10%, #3f3933)
+  feedbackErrorBg: '#52403d',
+  // color-mix(in srgb, #ffc93c 18%, #3f3933)
+  feedbackWarningBg: '#625335',
+  // color-mix(in srgb, #fff9f2 5%, #3f3933)
+  feedbackInfoBg: '#49433d',
   feedbackSkeleton: 'rgba(255, 249, 242, 0.07)',
   toastShadowColor: '#000000',
 };

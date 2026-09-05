@@ -11,6 +11,7 @@ import { TabHeader } from '../../components/TabHeader';
 import { EmptyState } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
+import { notificationHref } from './notification-href';
 
 const TYPE_LABEL: Record<string, string> = {
   'moment.created': '新时刻',
@@ -20,19 +21,6 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 /** payload 顶层优先（web 同款），嵌套 data 兜底（Phase 5 推送 payload 契约）。 */
-function targetOf(n: NotificationDto): { momentId?: string; chainId?: string } {
-  const p = n.payload as {
-    momentId?: unknown;
-    chainId?: unknown;
-    data?: { momentId?: unknown; chainId?: unknown };
-  };
-  const momentId =
-    typeof p.momentId === 'string' ? p.momentId : typeof p.data?.momentId === 'string' ? p.data.momentId : undefined;
-  const chainId =
-    typeof p.chainId === 'string' ? p.chainId : typeof p.data?.chainId === 'string' ? p.data.chainId : undefined;
-  return { momentId, chainId };
-}
-
 function payloadTitle(n: NotificationDto): string {
   const p = n.payload as { title?: unknown; momentContent?: unknown; content?: unknown; chainName?: unknown };
   for (const key of ['title', 'momentContent', 'content', 'chainName'] as const) {
@@ -48,10 +36,9 @@ export const NotificationsPage = observer(function NotificationsPage() {
   const styles = useMemo(() => createStyles(t), [t]);
 
   function onOpen(n: NotificationDto): void {
-    const { momentId, chainId } = targetOf(n);
     if (n.readAt == null) void service.markOneRead(n.id).catch(() => undefined);
-    if (momentId) router.push(`/moments/${momentId}`);
-    else if (chainId) router.push(`/chains/${chainId}`);
+    const href = notificationHref(n);
+    if (href) router.push(href);
   }
 
   return (

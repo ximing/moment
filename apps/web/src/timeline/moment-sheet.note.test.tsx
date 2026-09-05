@@ -237,6 +237,12 @@ describe('moment-sheet 便利贴纸面', () => {
     expect(article.style.getPropertyValue('--tilt')).toBe('');
   });
 
+  it('多于一张图时右下角叠张数，走纸面计数色', () => {
+    renderSheet(moment({ type: 'media', media: [img('a'), img('b')] }));
+    const count = screen.getByRole('article').querySelector('.moment-note-count');
+    expect(count).toHaveTextContent('2');
+  });
+
   it('有图网格面子是详情链接，点击不打开灯箱', async () => {
     const user = userEvent.setup();
     renderSheet(moment({ type: 'media', media: [img()] }));

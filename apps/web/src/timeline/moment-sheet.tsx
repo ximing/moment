@@ -306,7 +306,7 @@ export const MomentSheetContent = observer(function MomentSheetContent({
         </span>
       )}
       {images.length > 1 && (
-        <span className="absolute bottom-2 right-2 text-caption text-surface">{images.length}</span>
+        <span className="moment-note-count absolute bottom-2 right-2 text-caption">{images.length}</span>
       )}
     </>
   );
