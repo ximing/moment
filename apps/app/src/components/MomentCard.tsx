@@ -56,7 +56,7 @@ export function MomentCard({
         </Text>
         {mood ? (
           <View accessibilityLabel="心情" style={styles.mood}>
-            <AppIcon value={mood} size={t.fontInput} />
+            <AppIcon value={mood} size={t.space5} />
           </View>
         ) : null}
         <Text style={styles.time} numberOfLines={1}>

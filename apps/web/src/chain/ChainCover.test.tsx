@@ -53,6 +53,17 @@ describe('ChainCover（登录版）', () => {
     const { container } = render(<ChainCover mediaId="cover-1" focus={null} onError={() => undefined} />);
     expect(container.querySelector('img')).toBeNull();
     expect(container.firstElementChild).not.toBeNull(); // token 容器在，等待图片
+    expect(container.querySelector('[data-media-skeleton]')).not.toBeNull();
+  });
+
+  it('有 src 时先盖骨架，img onLoad 后卸掉', () => {
+    const { container } = render(
+      <ChainCover mediaId="cover-1" src="https://s3.example/cover?X-Amz-Signature=abc" focus={null} />,
+    );
+    expect(container.querySelector('[data-media-skeleton]')).not.toBeNull();
+    const img = container.querySelector('img')!;
+    fireEvent.load(img);
+    expect(container.querySelector('[data-media-skeleton]')).toBeNull();
   });
 
   it('图片 onError 当次隐藏并回调，不无限重试', () => {

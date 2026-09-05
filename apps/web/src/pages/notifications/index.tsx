@@ -6,7 +6,7 @@ import { Button } from '@/ui/button/index';
 import { Banner, EmptyState, FeedSkeleton } from '@/ui/feedback/index';
 
 // 通知页（plan Task 12）：已读 / 分页 / 标记行为不变；行是安静文字流（无卡片阴影），
-// 未读点用行动色；加载 / 空 / 出错走结构化反馈基元。
+// 未读点用行动色；行高吃 touch-control，类型 + 标题分行；加载 / 空 / 出错走结构化反馈基元。
 
 const TYPE_LABEL: Record<string, string> = {
   'moment.created': '新时刻',
@@ -78,27 +78,33 @@ export const NotificationsHome = observer(function NotificationsHome() {
           description="记下一条，家里人就会在这儿看见。"
         />
       )}
-      <ul className="space-y-1">
+      <ul className="flex flex-col gap-2">
         {items.map((n) => {
           const href = hrefOf(n.type, n.payload);
+          const title = payloadTitle(n.payload);
           const inner = (
             <>
-              {n.readAt === null && <span className="h-2 w-2 shrink-0 rounded-full bg-action" aria-label="未读" />}
-              <span className="text-muted">{TYPE_LABEL[n.type] ?? n.type}</span>
-              <span className="ml-2">{payloadTitle(n.payload)}</span>
+              {n.readAt === null ? (
+                <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-action" aria-label="未读" />
+              ) : (
+                <span className="mt-2 h-2 w-2 shrink-0" aria-hidden />
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block text-meta text-muted">{TYPE_LABEL[n.type] ?? n.type}</span>
+                {title ? <span className="mt-1 block text-body text-ink">{title}</span> : null}
+              </span>
             </>
           );
+          const rowClass =
+            'flex min-h-touch-control items-start gap-3 rounded-surface-md px-3 py-3 focus-visible:outline-none focus-visible:ring-focus';
           return (
-            <li key={n.id} className="py-2 text-sm">
+            <li key={n.id}>
               {href ? (
-                <Link
-                  to={href}
-                  className="flex items-center gap-2 rounded-button hover:bg-floating-hover focus-visible:outline-none focus-visible:ring-focus"
-                >
+                <Link to={href} className={`${rowClass} hover:bg-floating-hover`}>
                   {inner}
                 </Link>
               ) : (
-                <div className="flex items-center gap-2">{inner}</div>
+                <div className={rowClass}>{inner}</div>
               )}
             </li>
           );

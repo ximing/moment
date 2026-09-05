@@ -41,15 +41,21 @@ export function ThemeToggle() {
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', gap: t.space1, flexWrap: 'wrap' },
-    option: {
-      paddingHorizontal: t.space3,
-      paddingVertical: t.space2,
-      borderRadius: t.controlHProminent,
-      minHeight: t.touchMin,
-      justifyContent: 'center',
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: t.fieldBg,
+      borderRadius: t.radiusMd,
+      padding: t.space1,
     },
-    optionActive: { backgroundColor: t.select },
+    option: {
+      flex: 1,
+      minHeight: t.touchMin,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: t.fieldRadius,
+    },
+    optionActive: { backgroundColor: t.surface },
     label: { fontSize: t.fontLabel, color: t.muted },
-    labelActive: { color: t.selectFg, fontWeight: '600' },
+    labelActive: { color: t.ink, fontWeight: '600' },
   });

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MomentMedia } from '@moment/dto';
 import { describe, expect, it, vi } from 'vitest';
@@ -134,6 +134,18 @@ describe('视频分支', () => {
     expect(container.querySelector('video')!.controls).toBe(true);
     expect(screen.queryByRole('button', { name: '播放视频' })).toBeNull();
     play.mockRestore();
+  });
+});
+
+describe('加载骨架', () => {
+  it('有 url 时先盖骨架，img onLoad 后卸掉', () => {
+    const { container } = render(<MediaBlock media={[image('media-1')]} />);
+    expect(container.querySelector('[data-media-skeleton]')).not.toBeNull();
+    const img = container.querySelector('img')!;
+    expect(img.className).toMatch(/opacity-0/);
+    fireEvent.load(img);
+    expect(container.querySelector('[data-media-skeleton]')).toBeNull();
+    expect(img.className).not.toMatch(/opacity-0/);
   });
 });
 

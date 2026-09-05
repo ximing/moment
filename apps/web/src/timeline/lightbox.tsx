@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { MomentMedia } from '@moment/dto';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { originalDisplayUrl } from '@/lib/media-src';
@@ -47,7 +47,7 @@ export function Lightbox({
       }}
     >
       <div className="max-h-[90vh] max-w-[90vw]">
-        <LightboxMedia media={current} shareToken={shareToken} />
+        <LightboxMedia key={current.id} media={current} shareToken={shareToken} />
       </div>
       <IconButton icon={X} label="关闭" className="absolute right-4 top-4" onClick={onClose} />
       {items.length > 1 && (
@@ -71,15 +71,16 @@ export function Lightbox({
 }
 
 function LightboxMedia({ media, shareToken }: { media: MomentMedia; shareToken?: string }) {
+  const [ready, setReady] = useState(false);
   const url = originalDisplayUrl(media, shareToken);
   if (!url) {
-    // 加载占位与 MediaBlock 同一呼吸动效（reduced-motion 静态化），保持骨架语言一致
     return (
       <>
         <MediaSkeletonStyles />
         <div
+          data-media-skeleton
           aria-hidden
-          className={`h-64 w-64 rounded-surface-md bg-[color:color-mix(in_srgb,var(--bg)_12%,transparent)] ${mediaSkeletonClass}`}
+          className={`h-64 w-64 rounded-surface-md bg-feedback-skeleton ${mediaSkeletonClass}`}
         />
       </>
     );
@@ -87,5 +88,23 @@ function LightboxMedia({ media, shareToken }: { media: MomentMedia; shareToken?:
   if (media.mime.startsWith('video/')) {
     return <video controls autoPlay src={url} className="max-h-[90vh] max-w-[90vw]" />;
   }
-  return <img src={url} alt="" className="max-h-[90vh] max-w-[90vw] object-contain" />;
+  return (
+    <div className="relative max-h-[90vh] max-w-[90vw]">
+      <MediaSkeletonStyles />
+      {!ready ? (
+        <div
+          data-media-skeleton
+          aria-hidden
+          className={`absolute inset-0 rounded-surface-md bg-feedback-skeleton ${mediaSkeletonClass}`}
+        />
+      ) : null}
+      <img
+        src={url}
+        alt=""
+        onLoad={() => setReady(true)}
+        onError={() => setReady(true)}
+        className={`max-h-[90vh] max-w-[90vw] object-contain ${ready ? '' : 'opacity-0'}`}
+      />
+    </div>
+  );
 }

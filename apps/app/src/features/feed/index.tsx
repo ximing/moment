@@ -5,6 +5,7 @@ import { Link, router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { Icon } from '../../components/Icon';
+import { CapsuleIconButton } from '../../components/OverlayNav';
 import { FilterChips } from '../../components/FilterChips';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
@@ -45,15 +46,7 @@ const FeedContent = observer(function FeedContent() {
           onSelect={(id) => service.setChainFilter(id)}
           onToggleOrder={() => service.toggleOrder()}
         />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="搜索时刻"
-          hitSlop={t.space2}
-          onPress={() => router.push('/search')}
-          style={styles.searchBtn}
-        >
-          <Icon name="search" size={t.fontInput} color={t.ink} />
-        </Pressable>
+        <CapsuleIconButton name="search" label="搜索时刻" onPress={() => router.push('/search')} />
       </TabHeader>
       {/* 那年今日入口条（spec memories-today §5）：筛选条之上，有内容才渲染 */}
       <MemoriesEntryBar />
@@ -177,7 +170,7 @@ export const FeedPage = bindServices(FeedContent, [FeedService]);
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
-    searchBtn: { width: t.touchMin, height: t.touchMin, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+
     filters: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2, paddingHorizontal: t.space3, paddingVertical: t.space1 },
     // 选中态对齐 SegmentBar：ink 色面 + bg 文字（中性、不抢 FAB 唯一实心高强调）
     chip: { paddingHorizontal: t.space3, paddingVertical: t.space1, borderRadius: t.controlHProminent, backgroundColor: t.surface, borderWidth: 1, borderColor: t.line, flexShrink: 0 },

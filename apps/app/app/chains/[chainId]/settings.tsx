@@ -1,5 +1,11 @@
+import { Stack } from 'expo-router';
 import { ChainSettingsPage } from '../../../src/features/chain-settings';
 
 export default function ChainSettingsScreen() {
-  return <ChainSettingsPage />;
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ChainSettingsPage />
+    </>
+  );
 }

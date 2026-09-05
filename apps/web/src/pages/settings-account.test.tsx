@@ -324,5 +324,7 @@ describe('通知行', () => {
     const row = dots[0]!.closest('li');
     expect(row).not.toBeNull();
     expect(row!.className).not.toMatch(/shadow/);
+    const hit = row!.querySelector('a, div');
+    expect(hit?.className ?? '').toMatch(/min-h-touch-control/);
   });
 });

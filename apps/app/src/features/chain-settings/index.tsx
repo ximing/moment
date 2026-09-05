@@ -10,6 +10,7 @@ import { Loading } from '../../components/Loading';
 import { RequireAuth } from '../../components/RequireAuth';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
+import { OverlayNav } from '../../components/OverlayNav';
 import { confirm, toast } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -49,14 +50,26 @@ const Content = observer(function Content() {
     toast.error(err, action);
   }
 
-  if (!service.chain && !service.$model.loadChain.error) return <Loading />;
+  if (!service.chain && !service.$model.loadChain.error) {
+    return (
+      <View style={styles.flex}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <OverlayNav title="这条链" />
+        <Loading />
+      </View>
+    );
+  }
   if (!service.chain) {
     return (
-      <View style={styles.center}>
+      <View style={styles.flex}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <OverlayNav title="这条链" />
+        <View style={styles.center}>
         <Text style={styles.muted}>链加载失败</Text>
         <Button variant="secondary" style={styles.centerBtn} onPress={() => void service.loadChain().catch(() => undefined)}>
           重试
         </Button>
+        </View>
       </View>
     );
   }
@@ -138,8 +151,10 @@ const Content = observer(function Content() {
   const section = resolveSection(Array.isArray(sectionParam) ? sectionParam[0] : sectionParam, service.myRole);
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.body}>
-      <Stack.Screen options={{ title: chainSheetTitle(section) }} />
+    <View style={styles.flex}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <OverlayNav title={chainSheetTitle(section)} />
+      <ScrollView style={styles.flex} contentContainerStyle={styles.body}>
 
       {section === 'profile' ? (
       <>
@@ -327,6 +342,7 @@ const Content = observer(function Content() {
 
       {section === 'jobs' && isOwner ? <JobsSection /> : null}
     </ScrollView>
+    </View>
   );
 });
 

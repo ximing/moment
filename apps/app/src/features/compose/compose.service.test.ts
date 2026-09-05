@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { register, resolve } from '@rabjs/react';
 import type { MomentMedia, MomentResponse } from '@moment/dto';
+import * as Location from 'expo-location';
 import { ComposeService } from './compose.service';
 import { ChainListService } from '../../services/chain-list.service';
 import { AuthService } from '../../services/auth.service';
@@ -95,6 +96,7 @@ beforeEach(() => {
   api.updateMoment.mockResolvedValue(moment());
   api.uploadMedia.mockResolvedValue({ mediaId: 'up-1', status: 'ready', mime: 'image/jpeg', size: 1 });
   api.reverseGeocode.mockResolvedValue({ name: null });
+  vi.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ status: 'denied' } as never);
   mediaLib.compressImage.mockImplementation(async (x: { uri: string }) => ({
     ...x, blob: new Blob(['x']), size: 1, mime: 'image/jpeg',
   }));
@@ -209,5 +211,54 @@ describe('ComposeService 编辑媒体（spec §7）', () => {
     s.mediaTouched = true;
     await expect(s.submit()).rejects.toThrow('录音不能换');
     expect(api.updateMoment).not.toHaveBeenCalled();
+  });
+});
+
+describe('设备定位预填地点', () => {
+  it('授权后写入坐标与逆地理名，不置 placeTouched', async () => {
+    vi.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ status: 'granted' } as never);
+    vi.mocked(Location.getCurrentPositionAsync).mockResolvedValue({
+      coords: { latitude: 39.9042, longitude: 116.4074 },
+    } as never);
+    api.reverseGeocode.mockResolvedValue({ name: '公园悦府公园' });
+    const s = svc();
+    s.edit = null;
+    s.placeName = '';
+    s.placeCoords = null;
+    s.placeTouched = false;
+    s.exifDismissed = false;
+    s.placeFromDevice = false;
+    expect(await s.prefillDevicePlace()).toBeNull();
+    expect(s.placeCoords).toEqual({ lat: 39.9042, lng: 116.4074 });
+    expect(s.placeName).toBe('公园悦府公园');
+    expect(s.placeFromDevice).toBe(true);
+    expect(s.placeTouched).toBe(false);
+  });
+
+  it('权限拒绝：不写草稿；force 返回文案', async () => {
+    const s = svc();
+    s.edit = null;
+    s.placeName = '';
+    s.placeCoords = null;
+    s.placeTouched = false;
+    expect(await s.prefillDevicePlace()).toBeNull();
+    expect(s.placeCoords).toBeNull();
+    expect(await s.prefillDevicePlace({ force: true })).toMatch(/权限/);
+  });
+
+  it('已有手改地点则跳过定位', async () => {
+    const s = svc();
+    s.edit = null;
+    s.setPlaceName('家里');
+    await s.prefillDevicePlace();
+    expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+    expect(s.placeName).toBe('家里');
+  });
+
+  it('编辑态不自动预填', async () => {
+    const s = svc();
+    s.edit = moment();
+    await s.prefillDevicePlace();
+    expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
   });
 });

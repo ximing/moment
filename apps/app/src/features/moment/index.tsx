@@ -8,6 +8,7 @@ import { REACTION_EMOJIS, type MomentMedia } from '@moment/dto';
 import { formatMomentTimeShort, formatRelative } from '../../lib/format';
 import { AppIcon } from '../../components/AppIcon';
 import { Icon } from '../../components/Icon';
+import { CapsuleIconButton, OverlayNav } from '../../components/OverlayNav';
 import { AudioBar } from '../../components/AudioBar';
 import { Loading } from '../../components/Loading';
 import { Button } from '../../components/Button';
@@ -18,17 +19,42 @@ import { useMediaUri } from '../../lib/use-media-uri';
 import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
+import { MediaLightbox } from './media-lightbox';
 import { MomentPageService } from './moment.service';
 
-function MomentImage({ media }: { media: MomentMedia }) {
-  // Lightbox 同构（spec §7.3）：详情大图/视频永远 original，即使行上 derivedUrl 非空
+function MomentImage({ media, onPress }: { media: MomentMedia; onPress: () => void }) {
+  // 详情原图铺开：按媒体声明宽高比通栏，点击进灯箱。
   const signed = originalDisplayUrl(media);
   const fetched = useMediaUri(isHttpUrl(signed) ? undefined : media.id);
   const uri = isHttpUrl(signed) ? signed : fetched;
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
-  if (!uri) return <View style={styles.image} />;
-  return <Image source={{ uri }} style={styles.image} resizeMode="contain" />;
+  const known =
+    media.width && media.height && media.width > 0 && media.height > 0
+      ? media.width / media.height
+      : null;
+  const [ratio, setRatio] = useState<number | null>(known);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="查看大图"
+      onPress={onPress}
+      style={[styles.imageFrame, { aspectRatio: ratio ?? 1 }]}
+    >
+      {uri ? (
+        <Image
+          source={{ uri }}
+          resizeMode="cover"
+          style={StyleSheet.absoluteFill}
+          onLoad={(e) => {
+            if (ratio != null) return;
+            const { width, height } = e.nativeEvent.source;
+            if (width > 0 && height > 0) setRatio(width / height);
+          }}
+        />
+      ) : null}
+    </Pressable>
+  );
 }
 
 function ReadyVideo({ uri }: { uri: string }) {
@@ -58,32 +84,15 @@ function DetailNav({
   showMore?: boolean;
   onMore?: () => void;
 }) {
-  const t = useTheme();
-  const styles = useMemo(() => createStyles(t), [t]);
-  const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.nav, { paddingTop: insets.top }]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="返回"
-        onPress={() => router.back()}
-        style={styles.backBtn}
-      >
-        <Icon name="chevron-left" size={t.fontInput} color={t.ink} />
-        <Text style={styles.backText}>返回</Text>
-      </Pressable>
-      <View style={styles.navGrow} />
-      {showMore ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="更多"
-          onPress={onMore}
-          style={styles.headerBtn}
-        >
-          <Icon name="ellipsis" size={t.fontInput} color={t.ink} />
-        </Pressable>
-      ) : null}
-    </View>
+    <OverlayNav
+      showTitle={false}
+      right={
+        showMore && onMore ? (
+          <CapsuleIconButton name="ellipsis" label="更多" onPress={onMore} />
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -105,6 +114,7 @@ const MomentContent = observer(function MomentContent() {
   }
 
   const [moreOpen, setMoreOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   if (!service.moment && service.$model.loadMoment.loading) {
     return (
@@ -192,13 +202,24 @@ const MomentContent = observer(function MomentContent() {
           <Text style={styles.transcribing}>转写中…</Text>
         ) : null}
         {m.content.length > 0 ? <Text style={styles.content}>{m.content}</Text> : null}
-        {visualMedia.map((media) =>
-          media.mime.startsWith('video/') ? (
-            <VideoBlock key={media.id} media={media} />
-          ) : media.mime.startsWith('image/') ? (
-            <MomentImage key={media.id} media={media} />
-          ) : null
-        )}
+        {visualMedia.map((media) => {
+          if (media.mime.startsWith('video/')) {
+            return <VideoBlock key={media.id} media={media} />;
+          }
+          if (media.mime.startsWith('image/')) {
+            const imageIndex = visualMedia
+              .filter((m) => m.mime.startsWith('image/'))
+              .findIndex((m) => m.id === media.id);
+            return (
+              <MomentImage
+                key={media.id}
+                media={media}
+                onPress={() => setLightboxIndex(imageIndex)}
+              />
+            );
+          }
+          return null;
+        })}
         {audioMedia.map((media) => <AudioBar key={media.id} media={media} />)}
         {m.tags.length > 0 ? (
           <View style={styles.tagRow}>
@@ -235,7 +256,7 @@ const MomentContent = observer(function MomentContent() {
             return (
               <Pressable key={emoji} style={[styles.reaction, active && styles.reactionActive]} onPress={() => onEmoji(emoji)}>
                 {/* 数据值走 AppIcon：白名单 emoji 渲染 svg（P3-2）；值契约不变，onEmoji 仍回传 emoji 原文 */}
-                <AppIcon value={emoji} size={t.fontLabel} />
+                <AppIcon value={emoji} size={t.fontInput} />
                 {summary && summary.count > 0 ? (
                   <Text style={[styles.reactionText, active && styles.reactionTextActive]}>{summary.count}</Text>
                 ) : null}
@@ -316,6 +337,14 @@ const MomentContent = observer(function MomentContent() {
           发送
         </Button>
       </View>
+      {lightboxIndex != null ? (
+        <MediaLightbox
+          items={visualMedia.filter((m) => m.mime.startsWith('image/'))}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onIndex={setLightboxIndex}
+        />
+      ) : null}
       <Modal
         visible={moreOpen}
         transparent
@@ -369,24 +398,6 @@ const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.space8 },
-    nav: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: t.space2,
-      paddingBottom: t.space1,
-      backgroundColor: t.bg,
-      minHeight: t.touchMin,
-    },
-    backBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      minHeight: t.touchMin,
-      paddingHorizontal: t.space1,
-      gap: t.space1,
-    },
-    backText: { fontSize: t.fontBody, color: t.ink },
-    navGrow: { flex: 1 },
-    headerBtn: { width: t.touchMin, height: t.touchMin, alignItems: 'center', justifyContent: 'center' },
     scrim: { flex: 1, backgroundColor: t.scrim, justifyContent: 'flex-end' },
     sheet: {
       backgroundColor: t.surface,
@@ -427,7 +438,7 @@ const createStyles = (t: Theme) =>
     time: { color: t.muted, fontSize: t.fontCaption },
     transcribing: { color: t.muted, fontSize: t.fontCaption },
     content: { fontSize: t.fontInput, lineHeight: 24, color: t.ink },
-    image: { width: '100%', aspectRatio: 4 / 3, borderRadius: t.radiusMd, backgroundColor: t.feedbackSkeleton },
+    imageFrame: { width: '100%', overflow: 'hidden', backgroundColor: t.feedbackSkeleton },
     video: { width: '100%', aspectRatio: 16 / 9, borderRadius: t.radiusMd, backgroundColor: t.ink },
     tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
     tag: { color: t.tag, fontSize: t.fontSupport },
@@ -438,7 +449,16 @@ const createStyles = (t: Theme) =>
     placeRow: { flexDirection: 'row', alignItems: 'center', gap: t.space1 },
     placeLine: { color: t.muted, fontSize: t.fontSupport },
     reactionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
-    reaction: { flexDirection: 'row', alignItems: 'center', gap: t.space1, paddingHorizontal: t.space3, paddingVertical: t.space2, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
+    reaction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space1,
+      minHeight: t.space8,
+      paddingHorizontal: t.space2,
+      paddingVertical: t.space1,
+      borderRadius: t.space8 / 2,
+      backgroundColor: t.fieldBg,
+    },
     reactionActive: { backgroundColor: t.select },
     reactionText: { fontSize: t.fontLabel, color: t.ink },
     reactionTextActive: { color: t.selectFg },

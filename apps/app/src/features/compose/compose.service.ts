@@ -83,6 +83,10 @@ export class ComposeService extends Service {
   placeCoords: { lat: number; lng: number } | null = null;
   /** dirty tracking（spec §6）：仅用户实际改过地点才提交 place；place:null = 显式清除 */
   placeTouched = false;
+  /** 新建面板由设备 GPS 预填（非用户手改）；照片 EXIF 在未手改时可覆盖 */
+  placeFromDevice = false;
+  placeBusy = false;
+  private placePrefillGen = 0;
   /** 用户移除 EXIF chip 后本面板会话不再自动回填（否则删不掉，P5 偏差 2） */
   exifDismissed = false;
 
@@ -135,6 +139,9 @@ export class ComposeService extends Service {
     this.placeName = '';
     this.placeCoords = null;
     this.placeTouched = false;
+    this.placeFromDevice = false;
+    this.placeBusy = false;
+    this.placePrefillGen += 1;
     this.exifDismissed = false;
     this.happenedAt = new Date();
     this.happenedAtTouched = false;
@@ -146,6 +153,7 @@ export class ComposeService extends Service {
     if (active) void this.loadManifest(active).catch(() => undefined);
     void this.loadTags().catch(() => undefined);
     void this.loadPersons().catch(() => undefined);
+    void this.prefillDevicePlace().catch(() => undefined);
   }
 
   /** 编辑预填：content/tagIds/type/isBackfill + 发生时间两次平移（spec §2）。
@@ -173,6 +181,8 @@ export class ComposeService extends Service {
     this.placeCoords =
       m.place?.lat != null && m.place?.lng != null ? { lat: m.place.lat, lng: m.place.lng } : null;
     this.placeTouched = false;
+    this.placeFromDevice = false;
+    this.placeBusy = false;
     this.exifDismissed = false;
     this.happenedAtTouched = false;
     this.personQuery = '';
@@ -295,6 +305,44 @@ export class ComposeService extends Service {
       return '没拿到定位，检查一下定位服务是不是开着';
     } finally {
       this.geoBusy = false;
+    }
+  }
+
+  /** 新建发布：前台定位 + 逆地理，预填「在哪里」。权限拒绝/失败静默（force 时返回人话）。
+   *  不置 placeTouched——与 EXIF 自动回填同口径，提交靠 placeCoords。 */
+  async prefillDevicePlace(opts?: { force?: boolean }): Promise<string | null> {
+    const force = Boolean(opts?.force);
+    if (this.edit && !force) return null;
+    if (!force && (this.placeTouched || this.exifDismissed)) return null;
+    if (!force && (this.placeCoords || this.placeName.trim() !== '')) return null;
+    const gen = ++this.placePrefillGen;
+    this.placeBusy = true;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (gen !== this.placePrefillGen) return null;
+      if (status !== 'granted') return force ? '没拿到定位权限，去系统设置里开一下' : null;
+      const pos = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10_000)),
+      ]);
+      if (gen !== this.placePrefillGen) return null;
+      if (!force && (this.placeTouched || this.exifDismissed)) return null;
+      this.placeCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      this.placeFromDevice = true;
+      try {
+        const res = await client.reverseGeocode(this.placeCoords);
+        if (gen !== this.placePrefillGen) return null;
+        if (res.name && this.placeFromDevice && !this.placeTouched) {
+          this.placeName = res.name;
+        }
+      } catch {
+        // 地名失败仍保留坐标
+      }
+      return null;
+    } catch {
+      return force ? '没拿到定位，检查一下定位服务是不是开着' : null;
+    } finally {
+      if (gen === this.placePrefillGen) this.placeBusy = false;
     }
   }
 
@@ -467,13 +515,15 @@ export class ComposeService extends Service {
 
   setPlaceName(name: string): void {
     this.placeTouched = true;
+    this.placeFromDevice = false;
     this.placeName = name;
   }
 
-  /** 移除 EXIF chip（spec §3「可点 × 移除」）：丢弃坐标且本面板会话不再自动回填（P5 偏差 2）。 */
+  /** 移除 EXIF / 设备定位 chip（spec §3「可点 × 移除」）：丢弃坐标且本面板会话不再自动回填（P5 偏差 2）。 */
   removePlaceCoords(): void {
     this.placeTouched = true;
     this.exifDismissed = true;
+    this.placeFromDevice = false;
     this.placeCoords = null;
   }
 
@@ -510,13 +560,17 @@ export class ComposeService extends Service {
         this.isBackfill = d.getTime() < Date.now() - 10 * 60_000;
       }
     }
-    if (this.exifDismissed || this.placeCoords || this.placeName.trim() !== '') return;
+    if (this.exifDismissed || this.placeTouched) return;
+    if (this.placeCoords && !this.placeFromDevice) return;
+    if (!this.placeCoords && this.placeName.trim() !== '') return;
     const coords = firstAssetGps(assets);
     if (!coords) return;
+    const replaceName = this.placeName.trim() === '' || this.placeFromDevice;
     this.placeCoords = coords;
+    this.placeFromDevice = false;
     try {
       const res = await client.reverseGeocode(coords);
-      if (res.name && !this.exifDismissed && this.placeName.trim() === '') {
+      if (res.name && !this.exifDismissed && replaceName) {
         this.placeName = res.name;
       }
     } catch {

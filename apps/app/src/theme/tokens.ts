@@ -38,6 +38,10 @@ export interface ColorTokens {
   pressedSoft: string; // ink 9%（深色 12%）
   secondaryBg: string; // Button secondary 色面：ink 7%（深色沿用 hover 8% 档）
   dangerSoft: string; // danger 7%（深色 10%）
+  overlayCapsule: string; // 顶栏胶囊（页面）：半透明白，透出页底
+  overlayCapsuleBorder: string; // 顶栏胶囊描边（页面）：淡灰
+  overlayCapsuleOnMedia: string; // 叠在封面上：半透明墨底，配 actionFg 图标
+  overlayCapsuleOnMediaBorder: string; // 顶栏胶囊描边（封面）
   // ---- 反馈 ----
   feedbackErrorBg: string; // danger 10% mix surface（实算值，见注释）
   feedbackWarningBg: string; // select 18% mix surface
@@ -73,6 +77,13 @@ export const lightColors: ColorTokens = {
   pressedSoft: 'rgba(35, 35, 35, 0.09)',
   secondaryBg: 'rgba(35, 35, 35, 0.07)',
   dangerSoft: 'rgba(232, 80, 122, 0.07)',
+  // 透出奶油底，避免实心灰块
+  overlayCapsule: 'rgba(255, 255, 255, 0.28)',
+  // ink #232323 18%
+  overlayCapsuleBorder: 'rgba(35, 35, 35, 0.18)',
+  // ink #232323 40%
+  overlayCapsuleOnMedia: 'rgba(35, 35, 35, 0.4)',
+  overlayCapsuleOnMediaBorder: 'rgba(255, 255, 255, 0.42)',
   // color-mix(in srgb, #e8507a 10%, #ffffff)
   feedbackErrorBg: '#fdeef2',
   // color-mix(in srgb, #ffc93c 18%, #ffffff)
@@ -110,6 +121,10 @@ export const darkColors: ColorTokens = {
   pressedSoft: 'rgba(255, 249, 242, 0.12)',
   secondaryBg: 'rgba(255, 249, 242, 0.08)',
   dangerSoft: 'rgba(255, 122, 154, 0.1)',
+  overlayCapsule: 'rgba(255, 249, 242, 0.12)',
+  overlayCapsuleBorder: 'rgba(255, 249, 242, 0.22)',
+  overlayCapsuleOnMedia: 'rgba(0, 0, 0, 0.4)',
+  overlayCapsuleOnMediaBorder: 'rgba(255, 249, 242, 0.36)',
   // color-mix(in srgb, #ff7a9a 10%, #3f3933)
   feedbackErrorBg: '#52403d',
   // color-mix(in srgb, #ffc93c 18%, #3f3933)

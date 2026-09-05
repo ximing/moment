@@ -1,17 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <title>感谢</title>
-  <defs>
-    <linearGradient id="rth-a" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFD666"/>
-      <stop offset="1" stop-color="#F2A93B"/>
-    </linearGradient>
-    <linearGradient id="rth-b" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#F2B544"/>
-      <stop offset="1" stop-color="#DE8F1F"/>
-    </linearGradient>
-  </defs>
-  <rect x="6.8" y="20.5" width="6" height="6" rx="2.4" fill="url(#rth-b)" transform="rotate(-16 9.8 23.5)"/>
-  <rect x="19.2" y="20.5" width="6" height="6" rx="2.4" fill="url(#rth-b)" transform="rotate(16 22.2 23.5)"/>
-  <rect x="10.2" y="5.5" width="5.6" height="16.5" rx="2.8" fill="url(#rth-a)" transform="rotate(-9 13 13.75)"/>
-  <rect x="16.2" y="5.5" width="5.6" height="16.5" rx="2.8" fill="url(#rth-a)" transform="rotate(9 19 13.75)"/>
+  <rect x="7.4" y="20.2" width="5.6" height="5.6" rx="2.4" fill="#D9A078" transform="rotate(-14 10.2 23)"/>
+  <rect x="19" y="20.2" width="5.6" height="5.6" rx="2.4" fill="#D9A078" transform="rotate(14 21.8 23)"/>
+  <rect x="10.4" y="6.4" width="5.2" height="15.6" rx="2.6" fill="#F0C39A" transform="rotate(-8 13 14.2)"/>
+  <rect x="16.4" y="6.4" width="5.2" height="15.6" rx="2.6" fill="#F0C39A" transform="rotate(8 19 14.2)"/>
 </svg>

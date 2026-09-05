@@ -1,20 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <title>鼓掌</title>
-  <defs>
-    <linearGradient id="rclap-a" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFD666"/>
-      <stop offset="1" stop-color="#F2A93B"/>
-    </linearGradient>
-    <linearGradient id="rclap-b" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#F2B544"/>
-      <stop offset="1" stop-color="#DE8F1F"/>
-    </linearGradient>
-  </defs>
-  <rect x="16.5" y="7.5" width="8.5" height="13.5" rx="4" fill="url(#rclap-b)" transform="rotate(16 20.75 14.25)"/>
-  <circle cx="16.9" cy="13.6" r="2" fill="url(#rclap-b)"/>
-  <rect x="6.5" y="9.5" width="8.5" height="13.5" rx="4" fill="url(#rclap-a)" transform="rotate(-16 10.75 16.25)"/>
-  <circle cx="15.4" cy="15.8" r="2" fill="url(#rclap-a)"/>
-  <rect x="3.2" y="6.5" width="3.6" height="1.6" rx="0.8" fill="#FFC53D" transform="rotate(-35 5 7.3)"/>
-  <rect x="6.4" y="3.4" width="3.6" height="1.6" rx="0.8" fill="#FFC53D" transform="rotate(-12 8.2 4.2)"/>
-  <rect x="11" y="2.4" width="3.6" height="1.6" rx="0.8" fill="#FFC53D" transform="rotate(12 12.8 3.2)"/>
+  <rect x="16.4" y="8.2" width="8.2" height="13.2" rx="4.1" fill="#D9A078" transform="rotate(14 20.5 14.8)"/>
+  <rect x="7.2" y="9.6" width="8.2" height="13.2" rx="4.1" fill="#F0C39A" transform="rotate(-14 11.3 16.2)"/>
+  <circle cx="16.2" cy="14.6" r="1.8" fill="#D9A078"/>
+  <circle cx="15.6" cy="16.4" r="1.8" fill="#F0C39A"/>
 </svg>

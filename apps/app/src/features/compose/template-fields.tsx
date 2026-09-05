@@ -39,6 +39,15 @@ function useChipStyles() {
         chipText: { fontSize: t.fontSupport, color: t.muted },
         chipTextActive: { color: t.bg, fontWeight: '600' as const },
         chipInner: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space1 },
+        emojiChip: {
+          width: t.space8 + t.space2,
+          height: t.space8 + t.space2,
+          borderRadius: (t.space8 + t.space2) / 2,
+          alignItems: 'center' as const,
+          justifyContent: 'center' as const,
+          backgroundColor: t.fieldBg,
+        },
+        emojiChipActive: { backgroundColor: t.select },
         label: { fontSize: t.fontLabel, color: t.ink, marginBottom: t.space1 },
         geoText: { fontSize: t.fontSupport, color: t.muted },
         section: { gap: t.space2, marginBottom: t.space3 },
@@ -65,12 +74,16 @@ const MomentFieldControl = observer(function MomentFieldControl({
         {(field.options ?? []).map((opt) => (
           <Pressable
             key={opt}
-            style={[styles.chip, value === opt && styles.chipActive]}
+            style={
+              field.type === 'emoji-picker'
+                ? [styles.emojiChip, value === opt && styles.emojiChipActive]
+                : [styles.chip, value === opt && styles.chipActive]
+            }
             onPress={() => service.setFieldValue(field.key, value === opt ? undefined : opt)}
           >
             {/* emoji-picker 的数据值走 AppIcon（P3-2）；写回草稿的仍是 emoji 原文 */}
             {field.type === 'emoji-picker' ? (
-              <AppIcon value={opt} size={t.fontSupport} />
+              <AppIcon value={opt} size={t.space5} />
             ) : (
               <Text style={[styles.chipText, value === opt && styles.chipTextActive]}>
                 {ENUM_LABELS[opt] ?? opt}

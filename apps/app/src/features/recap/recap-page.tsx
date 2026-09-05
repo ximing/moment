@@ -5,6 +5,7 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import { RecapMarkdownText } from './recap-markdown';
 import { RecapPageService } from './recap-page.service';
 import { Loading } from '../../components/Loading';
+import { OverlayNav } from '../../components/OverlayNav';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 
@@ -30,7 +31,8 @@ const RecapPageContent = observer(function RecapPageContent() {
   if (!recap && (loading || !error)) {
     return (
       <View style={styles.flex}>
-        <Stack.Screen options={{ title: '月度回顾' }} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <OverlayNav title="月度回顾" />
         <Loading />
       </View>
     );
@@ -38,7 +40,8 @@ const RecapPageContent = observer(function RecapPageContent() {
   if (!recap) {
     return (
       <View style={styles.flex}>
-        <Stack.Screen options={{ title: '月度回顾' }} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <OverlayNav title="月度回顾" />
         <View style={styles.center}>
           <Text style={styles.errorText}>加载失败</Text>
           <Pressable onPress={() => void service.load().catch(() => undefined)}>
@@ -57,7 +60,8 @@ const RecapPageContent = observer(function RecapPageContent() {
 
   return (
     <View style={styles.flex}>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen options={{ headerShown: false }} />
+      <OverlayNav title={title} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <RecapMarkdownText content={recap.content} />
         {service.highlights.length > 0 ? (

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, type TextInputProps } from 'react-native';
+import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import type { Theme } from '../theme/theme';
 import { useTheme } from '../theme/use-theme';
 
@@ -18,7 +18,7 @@ export function Field({
   const styles = useMemo(() => createStyles(t), [t]);
   const [focused, setFocused] = useState(false);
   return (
-    <>
+    <View style={styles.wrap}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
         style={[styles.input, focused && styles.inputFocused, isInvalid && styles.inputInvalid]}
@@ -34,12 +34,13 @@ export function Field({
         }}
         {...inputProps}
       />
-    </>
+    </View>
   );
 }
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
+    wrap: { gap: t.space1 },
     label: { fontSize: t.fontLabel, color: t.muted },
     input: {
       height: t.fieldH,

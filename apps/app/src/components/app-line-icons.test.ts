@@ -24,6 +24,8 @@ const REQUIRED_NAMES = [
   'mic',
   'video',
   'type',
+  'x',
+  'download',
 ] as const;
 
 const KNOWN_TAGS = new Set(['path', 'circle', 'line', 'rect']);

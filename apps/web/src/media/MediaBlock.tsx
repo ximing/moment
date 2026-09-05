@@ -46,24 +46,95 @@ export function MediaBlock({
   onOpen?: (index: number) => void;
 }) {
   if (media.length === 0) return null;
-  if (media[0]!.mime.startsWith('video/')) {
-    return <VideoOne media={media[0]!} shareToken={shareToken} />;
-  }
-  if (media.length === 1) {
+  return (
+    <>
+      <MediaSkeletonStyles />
+      {media[0]!.mime.startsWith('video/') ? (
+        <VideoOne media={media[0]!} shareToken={shareToken} />
+      ) : media.length === 1 ? (
+        <div className="w-fit max-w-full overflow-hidden">
+          <ImageOne media={media[0]!} shareToken={shareToken} single onClick={() => onOpen?.(0)} />
+        </div>
+      ) : (
+        <div
+          className={`grid ${media.length === 2 ? 'grid-cols-2' : 'grid-cols-3'} gap-1 overflow-hidden`}
+        >
+          {media.map((m, i) => (
+            <ImageOne key={m.id} media={m} shareToken={shareToken} onClick={() => onOpen?.(i)} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function ImageSkeleton({
+  single,
+  width,
+  height,
+}: {
+  single?: boolean;
+  width?: number | null;
+  height?: number | null;
+}) {
+  if (single && width && height) {
     return (
-      <div className="w-fit max-w-full overflow-hidden">
-        <ImageOne media={media[0]!} shareToken={shareToken} single onClick={() => onOpen?.(0)} />
-      </div>
+      <div
+        data-media-skeleton
+        aria-hidden
+        className={`w-full max-w-full bg-feedback-skeleton ${mediaSkeletonClass}`}
+        style={{ aspectRatio: `${width} / ${height}`, maxWidth: width }}
+      />
     );
   }
   return (
     <div
-      className={`grid ${media.length === 2 ? 'grid-cols-2' : 'grid-cols-3'} gap-1 overflow-hidden`}
-    >
-      {media.map((m, i) => (
-        <ImageOne key={m.id} media={m} shareToken={shareToken} onClick={() => onOpen?.(i)} />
-      ))}
-    </div>
+      data-media-skeleton
+      aria-hidden
+      className={`bg-feedback-skeleton ${mediaSkeletonClass} ${single ? 'aspect-video' : 'aspect-square'}`}
+    />
+  );
+}
+
+function PendingImg({
+  src,
+  single,
+  width,
+  height,
+}: {
+  src: string;
+  single?: boolean;
+  width?: number | null;
+  height?: number | null;
+}) {
+  const [ready, setReady] = useState(false);
+  return (
+    <span className={`relative block overflow-hidden ${single ? 'w-fit max-w-full' : 'aspect-square w-full'}`}>
+      {!ready ? (
+        <span className="absolute inset-0">
+          <ImageSkeleton single={single} width={width} height={height} />
+        </span>
+      ) : null}
+      {single ? (
+        <img
+          src={src}
+          alt=""
+          width={width ?? undefined}
+          height={height ?? undefined}
+          onLoad={() => setReady(true)}
+          onError={() => setReady(true)}
+          className={`block h-auto max-w-full ${ready ? '' : 'opacity-0'}`}
+        />
+      ) : (
+        <img
+          src={src}
+          alt=""
+          onLoad={() => setReady(true)}
+          onError={() => setReady(true)}
+          className={`block aspect-square w-full object-cover ${ready ? '' : 'opacity-0'}`}
+        />
+      )}
+    </span>
   );
 }
 
@@ -80,24 +151,7 @@ function ImageOne({
 }) {
   const url = cardDisplayUrl(media, shareToken);
   if (!url) {
-    // 加载占位只消费 --feedback-skeleton；单图按声明宽高占位，多图按方形格
-    return (
-      <>
-        <MediaSkeletonStyles />
-        {single && media.width && media.height ? (
-          <div
-            aria-hidden
-            className={`w-full max-w-full bg-feedback-skeleton ${mediaSkeletonClass}`}
-            style={{ aspectRatio: `${media.width} / ${media.height}`, maxWidth: media.width }}
-          />
-        ) : (
-          <div
-            aria-hidden
-            className={`bg-feedback-skeleton ${mediaSkeletonClass} ${single ? 'aspect-video' : 'aspect-square'}`}
-          />
-        )}
-      </>
-    );
+    return <ImageSkeleton single={single} width={media.width} height={media.height} />;
   }
   return (
     <button
@@ -105,18 +159,7 @@ function ImageOne({
       onClick={onClick}
       className={`block overflow-hidden border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-inset ${single ? 'max-w-full' : 'w-full'}`}
     >
-      {single ? (
-        // 固有像素宽（width/height 属性）；比内容列窄则原尺寸，否则压到列宽
-        <img
-          src={url}
-          alt=""
-          width={media.width ?? undefined}
-          height={media.height ?? undefined}
-          className="block h-auto max-w-full"
-        />
-      ) : (
-        <img src={url} alt="" className="block aspect-square w-full object-cover" />
-      )}
+      <PendingImg src={url} single={single} width={media.width} height={media.height} />
     </button>
   );
 }
@@ -128,13 +171,11 @@ function VideoOne({ media, shareToken }: { media: MomentMedia; shareToken?: stri
   const url = originalDisplayUrl(media, shareToken);
   if (!url) {
     return (
-      <>
-        <MediaSkeletonStyles />
-        <div
-          aria-hidden
-          className={`aspect-video w-full bg-feedback-skeleton ${mediaSkeletonClass}`}
-        />
-      </>
+      <div
+        data-media-skeleton
+        aria-hidden
+        className={`aspect-video w-full bg-feedback-skeleton ${mediaSkeletonClass}`}
+      />
     );
   }
 

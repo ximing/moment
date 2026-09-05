@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { observer, useService } from '@rabjs/react';
 import type { ChainDto, ChainMemberPreview } from '@moment/dto';
 import { ChainListService } from '../../services/chain-list.service';
 import { ChainMark } from '../../components/ChainMark';
 import { Loading } from '../../components/Loading';
-import { Icon } from '../../components/Icon';
+import { CapsuleIconButton } from '../../components/OverlayNav';
 import { TabHeader } from '../../components/TabHeader';
 import { UserAvatar } from '../../components/UserAvatar';
 import { EmptyState } from '../../components/feedback';
@@ -54,15 +54,7 @@ export const ChainsPage = observer(function ChainsPage() {
     <View style={styles.flex}>
       <TabHeader>
         <View style={styles.headerGrow} />
-        <Link href="/chains-new" asChild>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="开一条新的链"
-            style={styles.headerBtn}
-          >
-            <Icon name="plus" size={t.fontInput} color={t.ink} />
-          </Pressable>
-        </Link>
+        <CapsuleIconButton name="plus" label="开一条新的链" onPress={() => router.push('/chains-new')} />
       </TabHeader>
       {empty && loading ? (
         <Loading />
@@ -116,7 +108,6 @@ const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
     headerGrow: { flex: 1 },
-    headerBtn: { width: t.touchMin, height: t.touchMin, alignItems: 'center', justifyContent: 'center' },
     list: { paddingHorizontal: t.space3, paddingTop: t.space2, paddingBottom: t.space4 },
     item: {
       flexDirection: 'row',

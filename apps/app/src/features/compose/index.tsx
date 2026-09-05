@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
@@ -12,6 +12,7 @@ import { MediaGrid } from '../../components/MediaGrid';
 import { AudioBar } from '../../components/AudioBar';
 import { Button } from '../../components/Button';
 import { Icon, type AppLineIconName } from '../../components/Icon';
+import { CapsuleTextButton, OverlayNav } from '../../components/OverlayNav';
 import { toast } from '../../components/feedback';
 import { RequireAuth } from '../../components/RequireAuth';
 import type { Theme } from '../../theme/theme';
@@ -41,41 +42,15 @@ function ComposeNav({
   loading?: boolean;
   onAction?: () => void;
 }) {
-  const t = useTheme();
-  const styles = useMemo(() => createStyles(t), [t]);
-  const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.nav, { paddingTop: insets.top }]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="返回"
-        onPress={() => router.back()}
-        style={styles.backBtn}
-      >
-        <Icon name="chevron-left" size={t.fontInput} color={t.ink} />
-        <Text style={styles.backText}>返回</Text>
-      </Pressable>
-      <Text style={styles.navTitle} numberOfLines={1}>
-        {title}
-      </Text>
-      {onAction ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={actionLabel}
-          onPress={onAction}
-          disabled={loading}
-          style={[styles.actionBtn, loading && { opacity: t.disabledOpacity }]}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color={t.action} />
-          ) : (
-            <Text style={styles.actionText}>{actionLabel}</Text>
-          )}
-        </Pressable>
-      ) : (
-        <View style={styles.navSpacer} />
-      )}
-    </View>
+    <OverlayNav
+      title={title}
+      right={
+        onAction ? (
+          <CapsuleTextButton label={actionLabel ?? ''} loading={loading} onPress={onAction} />
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -353,24 +328,37 @@ const ComposeContent = observer(function ComposeContent() {
             </Text>
           </Pressable>
           <View style={styles.metaRow}>
-            <Icon name="map-pin" size={t.fontSupport} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="使用当前位置"
+              onPress={() => {
+                void service.prefillDevicePlace({ force: true }).then((msg) => {
+                  if (msg) toast.show({ key: 'compose-hint', message: msg });
+                });
+              }}
+              hitSlop={t.space2}
+            >
+              <Icon name="map-pin" size={t.fontSupport} color={service.placeBusy ? t.action : t.ink} />
+            </Pressable>
             <TextInput
               accessibilityLabel="在哪里"
               style={styles.metaInput}
               value={service.placeName}
               onChangeText={(v) => service.setPlaceName(v)}
-              placeholder="在哪里"
+              placeholder={service.placeBusy ? '定位中…' : '在哪里'}
               placeholderTextColor={t.muted}
             />
           </View>
           {service.placeCoords ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="移除照片位置"
+              accessibilityLabel="移除位置"
               style={styles.metaRow}
               onPress={() => service.removePlaceCoords()}
             >
-              <Text style={styles.metaHint}>已从照片读取位置</Text>
+              <Text style={styles.metaHint}>
+                {service.placeFromDevice ? '已定位当前位置' : '已从照片读取位置'}
+              </Text>
               <Text style={styles.removeLink}>移除</Text>
             </Pressable>
           ) : null}
@@ -502,44 +490,7 @@ export function ComposePage() {
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
-    flex: { flex: 1, backgroundColor: t.surface },
-    nav: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: t.space2,
-      paddingBottom: t.space1,
-      backgroundColor: t.surface,
-      minHeight: t.touchMin,
-    },
-    backBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      minHeight: t.touchMin,
-      paddingHorizontal: t.space1,
-      gap: t.space1,
-      zIndex: 1,
-    },
-    backText: { fontSize: t.fontBody, color: t.ink },
-    navTitle: {
-      position: 'absolute',
-      left: t.space8 + t.space8,
-      right: t.space8 + t.space8,
-      textAlign: 'center',
-      fontSize: t.fontBody,
-      fontWeight: '600',
-      color: t.ink,
-    },
-    navSpacer: { width: t.touchMin },
-    actionBtn: {
-      minHeight: t.touchMin,
-      minWidth: t.touchMin,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: t.space3,
-      zIndex: 1,
-      marginLeft: 'auto',
-    },
-    actionText: { fontSize: t.fontBody, fontWeight: '600', color: t.action },
+    flex: { flex: 1, backgroundColor: t.bg },
     scroll: { paddingHorizontal: t.space4, paddingTop: t.space2, gap: t.space3 },
     chainLine: {
       flexDirection: 'row',

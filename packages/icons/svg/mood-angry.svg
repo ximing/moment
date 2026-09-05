@@ -2,18 +2,14 @@
   <title>烦躁</title>
   <defs>
     <linearGradient id="mang-a" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFB09A"/>
-      <stop offset="1" stop-color="#EE6A4E"/>
+      <stop offset="0" stop-color="#F3B49A"/>
+      <stop offset="1" stop-color="#E07A5F"/>
     </linearGradient>
   </defs>
   <circle cx="16" cy="16" r="13" fill="url(#mang-a)"/>
-  <rect x="7.3" y="10.6" width="6.2" height="2.1" rx="1.05" fill="#6B2F26" transform="rotate(20 10.4 11.65)"/>
-  <rect x="18.5" y="10.6" width="6.2" height="2.1" rx="1.05" fill="#6B2F26" transform="rotate(-20 21.6 11.65)"/>
-  <circle cx="11" cy="15.2" r="1.35" fill="#6B2F26"/>
-  <circle cx="21" cy="15.2" r="1.35" fill="#6B2F26"/>
-  <path d="M11.8 22.6Q16 19.4 20.2 22.6Q16 20.9 11.8 22.6Z" fill="#6B2F26"/>
-  <circle cx="6.8" cy="19.8" r="2.1" fill="#FFF7F2" opacity="0.95"/>
-  <circle cx="5.4" cy="22.1" r="1.5" fill="#FFF7F2" opacity="0.95"/>
-  <circle cx="25.2" cy="19.8" r="2.1" fill="#FFF7F2" opacity="0.95"/>
-  <circle cx="26.6" cy="22.1" r="1.5" fill="#FFF7F2" opacity="0.95"/>
+  <rect x="7.2" y="10.4" width="6.6" height="1.9" rx="0.95" fill="#5A3D32" transform="rotate(18 10.5 11.35)"/>
+  <rect x="18.2" y="10.4" width="6.6" height="1.9" rx="0.95" fill="#5A3D32" transform="rotate(-18 21.5 11.35)"/>
+  <circle cx="11.2" cy="16.4" r="1.55" fill="#5A3D32"/>
+  <circle cx="20.8" cy="16.4" r="1.55" fill="#5A3D32"/>
+  <path d="M12.2 22.8C13.8 20.6 18.2 20.6 19.8 22.8C18.2 21.4 13.8 21.4 12.2 22.8Z" fill="#5A3D32"/>
 </svg>

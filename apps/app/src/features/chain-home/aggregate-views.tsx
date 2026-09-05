@@ -1,10 +1,11 @@
 import { useMemo, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { AggregateResponse, MomentResponse } from '@moment/dto';
 import { METRIC_LABELS, groupMomentsByTrips, type Trip } from '../../lib/template';
-import { formatMomentTime } from '../../lib/format';
+import { formatMomentTime, formatMomentTimeShort } from '../../lib/format';
 import { AppIcon } from '../../components/AppIcon';
+import { Icon } from '../../components/Icon';
 import { Banner, EmptyState } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -74,8 +75,14 @@ function CurveView({ aggregate }: { aggregate: Extract<AggregateResponse, { view
   );
 }
 
-/** 里程碑轴：目录 icon + label + 发生时刻 + note，按时间正序（成长向上读）。 */
-function MilestoneAxisView({ aggregate }: { aggregate: Extract<AggregateResponse, { view: 'milestone-axis' }> }) {
+/** 里程碑轴：左侧轨点连线，右侧标题 / 时间 / 备注，按时间正序（成长向上读）。 */
+function MilestoneAxisView({
+  aggregate,
+  onMomentPress,
+}: {
+  aggregate: Extract<AggregateResponse, { view: 'milestone-axis' }>;
+  onMomentPress?: (momentId: string) => void;
+}) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   if (aggregate.items.length === 0) {
@@ -88,16 +95,32 @@ function MilestoneAxisView({ aggregate }: { aggregate: Extract<AggregateResponse
       />
     );
   }
+  const last = aggregate.items.length - 1;
   return (
-    <View style={styles.section}>
-      {aggregate.items.map((item) => (
-        <View key={item.momentId} style={styles.axisRow}>
-          {/* 目录 icon 是数据值（key / 存量 emoji），走 AppIcon（P3-2）；缺省仍是 · 占位 */}
-          {item.icon ? <AppIcon value={item.icon} size={t.fontBody} /> : <Text style={styles.body}>·</Text>}
-          <Text style={styles.axisLabel}>{item.label}</Text>
-          <Text style={styles.muted}>{formatMomentTime(item.happenedAt, viewerTz)}</Text>
-          {item.note ? <Text style={styles.muted}>{item.note}</Text> : null}
-        </View>
+    <View style={styles.axis}>
+      {aggregate.items.map((item, i) => (
+        <Pressable
+          key={item.momentId}
+          accessibilityRole="button"
+          accessibilityLabel={item.label}
+          onPress={() => onMomentPress?.(item.momentId)}
+          style={({ pressed }) => [styles.axisItem, pressed && { opacity: t.disabledOpacity }]}
+        >
+          <View style={styles.axisRail}>
+            <View style={styles.axisDot} />
+            {i < last ? <View style={styles.axisLine} /> : null}
+          </View>
+          <View style={styles.axisBody}>
+            <View style={styles.axisTitleRow}>
+              {/* 目录 icon 是数据值（key / 存量 emoji），走 AppIcon（P3-2）；缺省仍是 · 占位 */}
+              {item.icon ? <AppIcon value={item.icon} size={t.fontInput} /> : <Text style={styles.body}>·</Text>}
+              <Text style={styles.axisLabel}>{item.label}</Text>
+              <Icon name="chevron-right" size={t.fontSupport} color={t.muted} />
+            </View>
+            <Text style={styles.axisTime}>{formatMomentTimeShort(item.happenedAt, viewerTz)}</Text>
+            {item.note ? <Text style={styles.axisNote}>{item.note}</Text> : null}
+          </View>
+        </Pressable>
       ))}
     </View>
   );
@@ -138,7 +161,17 @@ function MoodlineView({ aggregate }: { aggregate: Extract<AggregateResponse, { v
 
 /** 行程分章（timeline + groupBy:'trips'）：用已加载 moments 前端分组，不打聚合端点。
  *  已知限制（P4 H2）：只统计当前已加载的分页数据，视图内注明统计范围。 */
-function TripsView({ moments, chainPayload, hasMore }: { moments: MomentResponse[]; chainPayload: Record<string, unknown> | null; hasMore: boolean }) {
+function TripsView({
+  moments,
+  chainPayload,
+  hasMore,
+  onMomentPress,
+}: {
+  moments: MomentResponse[];
+  chainPayload: Record<string, unknown> | null;
+  hasMore: boolean;
+  onMomentPress?: (momentId: string) => void;
+}) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const trips = (chainPayload?.trips ?? []) as Trip[];
@@ -167,9 +200,18 @@ function TripsView({ moments, chainPayload, hasMore }: { moments: MomentResponse
             <Text style={styles.muted}>已加载的范围里还没有这段行程的时刻。</Text>
           ) : (
             s.moments.map((m) => (
-              <Text key={m.id} style={styles.tripMoment}>
-                {formatMomentTime(m.happenedAt, m.happenedTzOffset)} · {m.content.slice(0, 40) || '（图片/视频）'}
-              </Text>
+              <Pressable
+                key={m.id}
+                accessibilityRole="button"
+                accessibilityLabel={m.content.slice(0, 40) || '时刻'}
+                onPress={() => onMomentPress?.(m.id)}
+                style={({ pressed }) => [styles.tripMomentRow, pressed && { opacity: t.disabledOpacity }]}
+              >
+                <Text style={styles.tripMoment} numberOfLines={1}>
+                  {formatMomentTime(m.happenedAt, m.happenedTzOffset)} · {m.content.slice(0, 40) || '（图片/视频）'}
+                </Text>
+                <Icon name="chevron-right" size={t.fontSupport} color={t.muted} />
+              </Pressable>
             ))
           )}
         </View>
@@ -190,6 +232,7 @@ export function AggregateView({
   isLoading,
   error,
   onRetry,
+  onMomentPress,
   map,
 }: {
   view: string;
@@ -200,13 +243,21 @@ export function AggregateView({
   isLoading: boolean;
   error: string | null;
   onRetry: () => void;
+  onMomentPress?: (momentId: string) => void;
   /** map 视图组件由 Task 6 注入（避免本文件引 react-native-maps） */
   map?: (props: { aggregate: Extract<AggregateResponse, { view: 'map' }> }) => ReactNode;
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   if (view === 'trips') {
-    return <TripsView moments={moments} chainPayload={chainPayload} hasMore={hasMore} />;
+    return (
+      <TripsView
+        moments={moments}
+        chainPayload={chainPayload}
+        hasMore={hasMore}
+        onMomentPress={onMomentPress}
+      />
+    );
   }
   if (isLoading && !aggregate) {
     return <Text style={styles.empty}>加载中…</Text>;
@@ -225,7 +276,9 @@ export function AggregateView({
   }
   if (!aggregate) return null; // 防御兜底：loading/error 分支已覆盖正常路径
   if (aggregate.view === 'curve') return <CurveView aggregate={aggregate} />;
-  if (aggregate.view === 'milestone-axis') return <MilestoneAxisView aggregate={aggregate} />;
+  if (aggregate.view === 'milestone-axis') {
+    return <MilestoneAxisView aggregate={aggregate} onMomentPress={onMomentPress} />;
+  }
   if (aggregate.view === 'moodline') return <MoodlineView aggregate={aggregate} />;
   return null;
 }
@@ -240,13 +293,33 @@ const createStyles = (t: Theme) =>
     muted: { fontSize: t.fontSupport, color: t.muted },
     body: { fontSize: t.fontBody, color: t.ink },
     scaleRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    axisRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.space2, backgroundColor: t.surface, borderRadius: t.radiusMd, padding: t.space3 },
-    axisLabel: { fontSize: t.fontBody, color: t.ink, fontWeight: '600' },
+    axis: { paddingHorizontal: t.space4, paddingTop: t.space2, paddingBottom: t.space4 },
+    axisItem: { flexDirection: 'row', alignItems: 'stretch', gap: t.space3, minHeight: t.touchMin },
+    axisRail: { width: t.space8, alignItems: 'center' },
+    axisDot: {
+      width: t.space3,
+      height: t.space3,
+      borderRadius: t.space3 / 2,
+      backgroundColor: t.action,
+      marginTop: t.space1,
+    },
+    axisLine: { width: 1, flex: 1, backgroundColor: t.line, marginTop: t.space1, minHeight: t.space3 },
+    axisBody: { flex: 1, minWidth: 0, paddingBottom: t.space5 },
+    axisTitleRow: { flexDirection: 'row', alignItems: 'center', gap: t.space2 },
+    axisLabel: { flex: 1, minWidth: 0, fontSize: t.fontBody, color: t.ink, fontWeight: '600' },
+    axisTime: { fontSize: t.fontCaption, color: t.muted, marginTop: t.space1 },
+    axisNote: { fontSize: t.fontSupport, color: t.muted, marginTop: t.space1 },
     moodRow: { flexDirection: 'row', alignItems: 'center', gap: t.space3 },
     // 心情点平铺无间距（对齐原 join('') 视觉），尺寸档归 AppIcon size
     moodIcons: { flexDirection: 'row', alignItems: 'center' },
     // 日期列不定宽：MM-DD 等长格式自然对齐，避免一次性尺寸（评审 H1）
     moodDate: { flexShrink: 0, fontSize: t.fontSupport, color: t.muted },
     tripCard: { backgroundColor: t.surface, borderRadius: t.radiusMd, padding: t.space3, gap: t.space1 },
-    tripMoment: { fontSize: t.fontSupport, color: t.muted },
+    tripMomentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space2,
+      minHeight: t.touchMin,
+    },
+    tripMoment: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
   });

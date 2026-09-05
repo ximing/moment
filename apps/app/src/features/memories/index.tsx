@@ -4,6 +4,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { Button } from '../../components/Button';
 import { Icon } from '../../components/Icon';
+import { OverlayNav } from '../../components/OverlayNav';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { Banner, EmptyState } from '../../components/feedback';
@@ -63,7 +64,8 @@ const MemoriesContent = observer(function MemoriesContent() {
   if (service.years.length === 0 && loading) {
     return (
       <View style={styles.flex}>
-        <Stack.Screen options={{ title: '往年今日' }} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <OverlayNav title="往年今日" />
         <Loading />
       </View>
     );
@@ -72,7 +74,8 @@ const MemoriesContent = observer(function MemoriesContent() {
   if (service.years.length === 0 && error) {
     return (
       <View style={styles.flex}>
-        <Stack.Screen options={{ title: '往年今日' }} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <OverlayNav title="往年今日" />
         <View style={styles.center}>
           <Banner
             tone="error"
@@ -90,7 +93,8 @@ const MemoriesContent = observer(function MemoriesContent() {
 
   return (
     <View style={styles.flex}>
-      <Stack.Screen options={{ title: '往年今日' }} />
+      <Stack.Screen options={{ headerShown: false }} />
+      <OverlayNav title="往年今日" />
       {service.years.length === 0 ? (
         <EmptyState
           variant="timeline"

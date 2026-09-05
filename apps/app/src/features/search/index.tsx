@@ -6,6 +6,7 @@ import { bindServices, observer, useService } from '@rabjs/react';
 import { INTENT_MAX_QUERY_CHARS, type MomentResponse } from '@moment/dto';
 import { Field } from '../../components/Field';
 import { FilterChips } from '../../components/FilterChips';
+import { OverlayNav } from '../../components/OverlayNav';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
 import { Banner, EmptyState } from '../../components/feedback';
@@ -44,7 +45,8 @@ const Content = observer(function Content() {
 
   return (
     <View style={styles.flex}>
-      <Stack.Screen options={{ title: service.scopeName }} />
+      <Stack.Screen options={{ headerShown: false }} />
+      <OverlayNav title={service.scopeName} />
       <View style={styles.searchWrap}>
         <Field
           accessibilityLabel="搜索时刻"

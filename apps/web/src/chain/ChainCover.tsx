@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ChainImageFocus } from '@moment/dto';
 import { CENTER_FOCUS, focusObjectPosition } from '@/chain/appearance-model';
 import { isHttpUrl } from '@/lib/media-src';
+import { MediaSkeletonStyles, mediaSkeletonClass } from '@/media/MediaBlock';
 import { useMediaObjectUrl } from '@/media/useMediaObjectUrl';
 
 // 链封面（spec §7.5）：只出现在链首页与公开分享页，侧栏/时间线/那年今日不渲染。
@@ -10,7 +11,7 @@ import { useMediaObjectUrl } from '@/media/useMediaObjectUrl';
 // 视觉对齐 Notion：铺满链首页主栏，高度约 30vh（全宽 3:1 会过高），
 // 无圆角色面、无底部渐变；页眉在封面下方，不叠进图里。
 
-/** 无状态封面图：登录/公开两版共用，object-fit:cover + 保存的焦点。 */
+/** 无状态封面图：登录/公开两版共用，object-fit:cover + 保存的焦点；未 onLoad 前盖骨架。 */
 function CoverImage({
   src,
   focus,
@@ -20,16 +21,27 @@ function CoverImage({
   focus: ChainImageFocus | null;
   onError: () => void;
 }) {
+  const [ready, setReady] = useState(false);
   return (
-    <img
-      alt=""
-      src={src}
-      draggable={false}
-      onDragStart={(event) => event.preventDefault()}
-      onError={onError}
-      className="pointer-events-none h-full w-full select-none object-cover"
-      style={{ objectPosition: focusObjectPosition(focus ?? CENTER_FOCUS) }}
-    />
+    <>
+      {!ready ? (
+        <div
+          data-media-skeleton
+          aria-hidden
+          className={`pointer-events-none absolute inset-0 bg-feedback-skeleton ${mediaSkeletonClass}`}
+        />
+      ) : null}
+      <img
+        alt=""
+        src={src}
+        draggable={false}
+        onDragStart={(event) => event.preventDefault()}
+        onLoad={() => setReady(true)}
+        onError={onError}
+        className={`pointer-events-none h-full w-full select-none object-cover ${ready ? '' : 'opacity-0'}`}
+        style={{ objectPosition: focusObjectPosition(focus ?? CENTER_FOCUS) }}
+      />
+    </>
   );
 }
 
@@ -65,7 +77,8 @@ export function ChainCover({
   if (url !== null && failedUrl === url) return null;
   return (
     <div aria-hidden className={frameClassName(className)}>
-      {url !== null && (
+      <MediaSkeletonStyles />
+      {url !== null ? (
         <CoverImage
           src={url}
           focus={focus}
@@ -73,6 +86,11 @@ export function ChainCover({
             markFailed(url);
             onError?.();
           }}
+        />
+      ) : (
+        <div
+          data-media-skeleton
+          className={`absolute inset-0 bg-feedback-skeleton ${mediaSkeletonClass}`}
         />
       )}
     </div>
@@ -98,6 +116,7 @@ export function PublicChainCover({
   if (failedUrl === url) return null;
   return (
     <div aria-hidden className={frameClassName(className)}>
+      <MediaSkeletonStyles />
       <CoverImage
         src={url}
         focus={focus}
