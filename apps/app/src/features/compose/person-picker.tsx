@@ -2,23 +2,15 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { observer } from '@rabjs/react';
 import type { ChainMemberDto, PersonResponse } from '@moment/dto';
-import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
-import { Icon } from '../../components/Icon';
 import { toast } from '../../components/feedback';
 import { useTheme } from '../../theme/use-theme';
 import type { Theme } from '../../theme/theme';
 import type { ComposeService } from './compose.service';
 
-// 人物选择器 + 地点输入（spec people-place §7；UX 语义镜像 web P5 Task 4 已评审结论）：
-// chip 多选、链成员置顶（选中 = 以该用户建/复用 person，P5 偏差 7）、词典搜索（前端过滤，
-// P5 偏差 6）、自由文本回车新建（幂等 POST）；已选未入册行并入 chip 组可见可删（P5 偏差 8）；
-// AI 抽取行带「AI」轻标识 + accessibilityLabel 提示（RN 无 hover，P6 偏差 8）。
-// 地点：Field 文本输入 + EXIF chip（可移除，移除后本会话不再自动回填，P5 偏差 2）；
-// 编辑回读的坐标 chip 文案与 EXIF 相同（P5 偏差 11）。
-// 样式纪律（app design tokens spec）：全部上 token 档，chip 范式逐字镜像 template-fields.tsx
-// （hoverSoft 底 / 选中 ink 色面 + bg 文字，primary 只留给发布/保存）。
-// toggleMember/submitPersonQuery 的 POST 失败走 toast.error（对齐 compose 发布失败通道）。
+// 人物选择器（spec people-place §7；地点行在 compose 主页）：
+// chip 多选、链成员置顶、词典搜索、自由文本回车新建；已选未入册行并入 chip 组。
+// AI 抽取行带「AI」轻标识。toggleMember/submitPersonQuery 失败走 toast.error。
 
 function personPickerOnPressError(err: unknown): void {
   toast.error(err);
@@ -46,8 +38,7 @@ export const PersonPicker = observer(function PersonPicker({ service }: { servic
 
   return (
     <View style={styles.section}>
-      <Text style={styles.label}>和谁在一起</Text>
-      <View style={styles.chipRow} accessibilityLabel="人物">
+      <View style={styles.chipRow} accessibilityLabel="和谁在一起">
         {/* 链成员置顶（spec §7）：选中即建/复用 user_id 链接的 person */}
         {service.members.map((m) => (
           <Pressable
@@ -66,30 +57,13 @@ export const PersonPicker = observer(function PersonPicker({ service }: { servic
         ))}
       </View>
       <Field
-        label="搜索或新建人物"
+        accessibilityLabel="搜索或新建人物"
         value={service.personQuery}
         onChangeText={(v) => (service.personQuery = v)}
         onSubmitEditing={() => void service.submitPersonQuery().catch(personPickerOnPressError)}
-        placeholder="输入名字，回车新建"
+        placeholder="输入名字，回车添加"
         returnKeyType="done"
       />
-      <Field
-        label="在哪里"
-        value={service.placeName}
-        onChangeText={(v) => service.setPlaceName(v)}
-        placeholder="比如：外婆家"
-      />
-      {service.placeCoords ? (
-        <View style={styles.exifRow}>
-          <View style={styles.exifChip}>
-            <Icon name="map-pin" size={t.fontSupport} />
-            <Text style={styles.exifChipText}>已从照片读取位置</Text>
-          </View>
-          <Button variant="quiet" onPress={() => service.removePlaceCoords()}>
-            移除
-          </Button>
-        </View>
-      ) : null}
     </View>
   );
 });
@@ -126,22 +100,17 @@ const PersonChip = observer(function PersonChip({
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
-    section: { gap: t.space2, marginBottom: t.space3 },
-    label: { fontSize: t.fontLabel, color: t.ink },
+    section: { gap: t.space3 },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
     chip: {
       paddingHorizontal: t.space3,
       paddingVertical: t.space2,
       borderRadius: t.radiusMd,
       backgroundColor: t.hoverSoft,
-      minHeight: t.touchMin,
       justifyContent: 'center',
     },
     chipActive: { backgroundColor: t.ink },
     chipText: { fontSize: t.fontSupport, color: t.muted },
     chipTextActive: { color: t.bg, fontWeight: '600' },
     aiBadge: { color: t.muted, fontSize: t.fontCaption },
-    exifRow: { flexDirection: 'row', alignItems: 'center', gap: t.space2 },
-    exifChip: { flexDirection: 'row', alignItems: 'center', gap: t.space1, paddingHorizontal: t.space3, paddingVertical: t.space2, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
-    exifChipText: { fontSize: t.fontSupport, color: t.ink },
   });

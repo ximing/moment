@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MomentMedia } from '@moment/dto';
 import { cardDisplayUrl, isHttpUrl, posterDisplayUrl } from '../lib/media-src';
 import { cardImageVariant, posterCardVariant } from '../lib/media-variant';
@@ -46,10 +46,19 @@ function VideoCell({ m, cellStyle, styles }: { m: MomentMedia; cellStyle: object
 
 export function MediaGrid({ media, onRemove }: { media: MomentMedia[]; onRemove?: (mediaId: string) => void }) {
   const t = useTheme();
-  const styles = useMemo(() => createStyles(t), [t]);
+  const [rowWidth, setRowWidth] = useState(
+    () => Dimensions.get('window').width - t.space3 * 2 - t.space4 * 2,
+  );
+  const styles = useMemo(() => createStyles(t, rowWidth), [t, rowWidth]);
   if (media.length === 0) return null;
   return (
-    <View style={styles.grid}>
+    <View
+      style={styles.grid}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - rowWidth) >= 1) setRowWidth(w);
+      }}
+    >
       {media.map((m) => {
         const isVideo = m.mime.startsWith('video/');
         const isImage = m.mime.startsWith('image/');
@@ -86,12 +95,21 @@ export function MediaGrid({ media, onRemove }: { media: MomentMedia[]; onRemove?
   );
 }
 
-const createStyles = (t: Theme) =>
-  StyleSheet.create({
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space1, marginTop: t.space2 },
-    cell: { width: '32%', aspectRatio: 1, borderRadius: 6, backgroundColor: t.feedbackSkeleton },
-    cellWrap: { width: '32%', aspectRatio: 1 },
-    cellFill: { width: '100%', height: '100%', borderRadius: 6, backgroundColor: t.feedbackSkeleton },
+const createStyles = (t: Theme, rowWidth: number) => {
+  const columns = 3;
+  const gap = t.space1;
+  const size = Math.max(0, Math.floor((rowWidth - gap * (columns - 1)) / columns));
+  return StyleSheet.create({
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap,
+      marginTop: t.space2,
+      width: '100%',
+    },
+    cell: { width: size, height: size, borderRadius: t.buttonRadius, backgroundColor: t.feedbackSkeleton, overflow: 'hidden' },
+    cellWrap: { width: size, height: size },
+    cellFill: { width: '100%', height: '100%', borderRadius: t.buttonRadius, backgroundColor: t.feedbackSkeleton, overflow: 'hidden' },
     // 视频占位走 ink 反色档，其上文字用 bg / muted（spec §4.1）
     videoCell: { alignItems: 'center', justifyContent: 'center', backgroundColor: t.ink, overflow: 'hidden' },
     play: { color: t.bg, fontSize: 26 },
@@ -112,3 +130,4 @@ const createStyles = (t: Theme) =>
     },
     removeBtnText: { color: t.bg, fontSize: t.fontCaption },
   });
+};

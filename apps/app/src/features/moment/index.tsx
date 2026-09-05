@@ -1,15 +1,17 @@
-import { useEffect, useMemo } from 'react';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import { useLocalSearchParams, router } from 'expo-router';
+import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { REACTION_EMOJIS, type MomentMedia } from '@moment/dto';
-import { formatMomentTime, formatRelative } from '../../lib/format';
+import { formatMomentTimeShort, formatRelative } from '../../lib/format';
 import { AppIcon } from '../../components/AppIcon';
 import { Icon } from '../../components/Icon';
 import { AudioBar } from '../../components/AudioBar';
 import { Loading } from '../../components/Loading';
 import { Button } from '../../components/Button';
+import { UserAvatar } from '../../components/UserAvatar';
 import { EmptyState, confirm, toast } from '../../components/feedback';
 import { isHttpUrl, originalDisplayUrl } from '../../lib/media-src';
 import { useMediaUri } from '../../lib/use-media-uri';
@@ -49,36 +51,96 @@ function VideoBlock({ media }: { media: MomentMedia }) {
   return <ReadyVideo uri={uri} />;
 }
 
+function DetailNav({
+  showMore,
+  onMore,
+}: {
+  showMore?: boolean;
+  onMore?: () => void;
+}) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.nav, { paddingTop: insets.top }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="返回"
+        onPress={() => router.back()}
+        style={styles.backBtn}
+      >
+        <Icon name="chevron-left" size={t.fontInput} color={t.ink} />
+        <Text style={styles.backText}>返回</Text>
+      </Pressable>
+      <View style={styles.navGrow} />
+      {showMore ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="更多"
+          onPress={onMore}
+          style={styles.headerBtn}
+        >
+          <Icon name="ellipsis" size={t.fontInput} color={t.ink} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const MomentContent = observer(function MomentContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const service = useService(MomentPageService);
   const auth = useService(AuthService);
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    service.hydrate(id);
+    const momentId = Array.isArray(id) ? id[0] : id;
+    if (momentId) service.hydrate(momentId);
   }, [service, id]);
 
   function onError(err: unknown, action: string): void {
     toast.error(err, action);
   }
 
-  if (!service.moment && service.$model.loadMoment.loading) return <Loading />;
-  if (service.deleted || (!service.moment && service.$model.loadMoment.error)) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  if (!service.moment && service.$model.loadMoment.loading) {
     return (
-      <View style={styles.center}>
-        <EmptyState
-          variant="plain"
-          scope="page"
-          title="该时刻可能已被删除"
-          description="它不在这条时间线上了。"
-          action={{ label: '返回', emphasis: 'quiet', onPress: () => router.back() }}
-        />
+      <View style={styles.flex}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <DetailNav />
+        <Loading />
       </View>
     );
   }
-  if (!service.moment) return <Loading />;
+  if (service.deleted || (!service.moment && service.$model.loadMoment.error)) {
+    return (
+      <View style={styles.flex}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <DetailNav />
+        <View style={styles.center}>
+          <EmptyState
+            variant="plain"
+            scope="page"
+            title="该时刻可能已被删除"
+            description="它不在这条时间线上了。"
+            action={{ label: '返回', emphasis: 'quiet', onPress: () => router.back() }}
+          />
+        </View>
+      </View>
+    );
+  }
+  if (!service.moment) {
+    return (
+      <View style={styles.flex}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <DetailNav />
+        <Loading />
+      </View>
+    );
+  }
 
   const m = service.moment;
   const myEmoji = m.myReaction; // ReactionSummary = { emoji, count } 无 mine；我的表情在 myReaction
@@ -88,6 +150,10 @@ const MomentContent = observer(function MomentContent() {
   const visualMedia = m.media.filter((media) =>
     isVoice ? media.mime.startsWith('image/') : media.mime.startsWith('image/') || media.mime.startsWith('video/')
   );
+  const timeBits = [
+    formatMomentTimeShort(m.happenedAt, m.happenedTzOffset),
+    m.isBackfill ? '补发' : null,
+  ].filter(Boolean);
 
   function onEmoji(emoji: string): void {
     void service
@@ -112,24 +178,16 @@ const MomentContent = observer(function MomentContent() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <DetailNav showMore={isAuthor} onMore={() => setMoreOpen(true)} />
       <ScrollView contentContainerStyle={styles.body}>
-        <View style={styles.head}>
-          <Text style={styles.author}>{m.author.nickname}</Text>
-          <Text style={styles.time}>
-            {formatMomentTime(m.happenedAt, m.happenedTzOffset)}
-            {m.isBackfill ? ' · 补发' : ''} · 发布于 {formatRelative(m.createdAt)}
-          </Text>
-        </View>
-        {isAuthor ? (
-          <View style={styles.actionRow}>
-            <Pressable onPress={() => router.push({ pathname: '/compose', params: { momentId: m.id } })}>
-              <Text style={styles.actionEdit}>编辑</Text>
-            </Pressable>
-            <Pressable onPress={onDelete}>
-              <Text style={styles.actionDelete}>删除</Text>
-            </Pressable>
+        <View style={styles.authorRow}>
+          <UserAvatar url={m.author.avatarUrl} name={m.author.nickname} size={t.controlH} />
+          <View style={styles.authorText}>
+            <Text style={styles.author}>{m.author.nickname}</Text>
+            <Text style={styles.time}>{timeBits.join(' · ')}</Text>
           </View>
-        ) : null}
+        </View>
         {isVoice && m.transcriptionStatus === 'pending' ? (
           <Text style={styles.transcribing}>转写中…</Text>
         ) : null}
@@ -144,8 +202,8 @@ const MomentContent = observer(function MomentContent() {
         {audioMedia.map((media) => <AudioBar key={media.id} media={media} />)}
         {m.tags.length > 0 ? (
           <View style={styles.tagRow}>
-            {m.tags.map((t) => (
-              <Text key={t.id} style={styles.tag}>#{t.name}</Text>
+            {m.tags.map((tag) => (
+              <Text key={tag.id} style={styles.tag}>#{tag.name}</Text>
             ))}
           </View>
         ) : null}
@@ -186,31 +244,41 @@ const MomentContent = observer(function MomentContent() {
           })}
         </View>
 
-        <Text style={styles.sectionTitle}>评论（{m.commentCount}）</Text>
-        {service.comments.map((c) => (
-          <View key={c.id} style={styles.comment}>
-            <View style={styles.commentHead}>
-              <Text style={styles.commentAuthor}>{c.author.nickname}</Text>
-              <Text style={styles.commentTime}>{formatRelative(c.createdAt)}</Text>
-              <Pressable
-                onPress={() =>
-                  void confirm({
-                    title: '删除这条评论？',
-                    body: '删除后不可恢复',
-                    confirmLabel: '删除',
-                    danger: true,
-                  }).then((ok) => {
-                    if (!ok) return;
-                    void service.deleteComment(c.id).catch((err) => onError(err, '删除失败'));
-                  })
-                }
-              >
-                <Text style={styles.commentDelete}>删除</Text>
-              </Pressable>
+        <Text style={styles.sectionTitle}>评论 {m.commentCount > 0 ? m.commentCount : ''}</Text>
+        {service.comments.map((c) => {
+          const mine = auth.user?.id === c.author.id;
+          return (
+            <View key={c.id} style={styles.comment}>
+              <UserAvatar url={c.author.avatarUrl} name={c.author.nickname} size={t.space8} />
+              <View style={styles.commentBodyCol}>
+                <View style={styles.commentHead}>
+                  <Text style={styles.commentAuthor}>{c.author.nickname}</Text>
+                  <Text style={styles.commentTime}>{formatRelative(c.createdAt)}</Text>
+                  {mine ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="删除评论"
+                      onPress={() =>
+                        void confirm({
+                          title: '删除这条评论？',
+                          body: '删除后不可恢复',
+                          confirmLabel: '删除',
+                          danger: true,
+                        }).then((ok) => {
+                          if (!ok) return;
+                          void service.deleteComment(c.id).catch((err) => onError(err, '删除失败'));
+                        })
+                      }
+                    >
+                      <Text style={styles.commentDelete}>删除</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <Text style={styles.commentBody}>{c.content}</Text>
+              </View>
             </View>
-            <Text style={styles.commentBody}>{c.content}</Text>
-          </View>
-        ))}
+          );
+        })}
         {service.comments.length === 0 ? (
           <EmptyState variant="plain" scope="section" title="还没有评论" description="写下第一句回应。" />
         ) : null}
@@ -224,15 +292,19 @@ const MomentContent = observer(function MomentContent() {
             加载更多评论
           </Button>
         ) : null}
-        <View />
       </ScrollView>
 
-      <View style={styles.composer}>
+      <View
+        style={[
+          styles.composer,
+          { paddingBottom: t.space3 + (insets.bottom > 0 ? insets.bottom : t.space8) },
+        ]}
+      >
         <TextInput
           style={styles.input}
           value={service.draft}
           onChangeText={(v) => (service.draft = v)}
-          placeholder="写评论…（1000 字内）"
+          placeholder="写评论…"
           placeholderTextColor={t.muted}
           multiline
         />
@@ -244,6 +316,49 @@ const MomentContent = observer(function MomentContent() {
           发送
         </Button>
       </View>
+      <Modal
+        visible={moreOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMoreOpen(false)}
+      >
+        <View style={styles.scrim}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMoreOpen(false)} accessibilityLabel="关闭" />
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, t.space4) }]}>
+            <View style={styles.handle} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="编辑"
+              onPress={() => {
+                setMoreOpen(false);
+                router.push({ pathname: '/compose', params: { momentId: m.id } });
+              }}
+              style={styles.sheetItem}
+            >
+              <Text style={styles.sheetItemText}>编辑</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="删除"
+              onPress={() => {
+                setMoreOpen(false);
+                onDelete();
+              }}
+              style={styles.sheetItem}
+            >
+              <Text style={styles.sheetDanger}>删除</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="取消"
+              onPress={() => setMoreOpen(false)}
+              style={styles.sheetCancel}
+            >
+              <Text style={styles.sheetCancelText}>取消</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 });
@@ -254,37 +369,87 @@ const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.space8 },
+    nav: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: t.space2,
+      paddingBottom: t.space1,
+      backgroundColor: t.bg,
+      minHeight: t.touchMin,
+    },
+    backBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: t.touchMin,
+      paddingHorizontal: t.space1,
+      gap: t.space1,
+    },
+    backText: { fontSize: t.fontBody, color: t.ink },
+    navGrow: { flex: 1 },
+    headerBtn: { width: t.touchMin, height: t.touchMin, alignItems: 'center', justifyContent: 'center' },
+    scrim: { flex: 1, backgroundColor: t.scrim, justifyContent: 'flex-end' },
+    sheet: {
+      backgroundColor: t.surface,
+      borderTopLeftRadius: t.radiusLg,
+      borderTopRightRadius: t.radiusLg,
+      paddingTop: t.space3,
+      paddingHorizontal: t.space3,
+    },
+    handle: {
+      alignSelf: 'center',
+      width: t.space8,
+      height: t.space1,
+      borderRadius: t.space1,
+      backgroundColor: t.line,
+      marginBottom: t.space3,
+    },
+    sheetItem: {
+      minHeight: t.touchMin,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: t.radiusMd,
+      backgroundColor: t.fieldBg,
+      marginBottom: t.space2,
+    },
+    sheetItemText: { fontSize: t.fontBody, color: t.ink, fontWeight: '600' },
+    sheetDanger: { fontSize: t.fontBody, color: t.danger, fontWeight: '600' },
+    sheetCancel: {
+      minHeight: t.touchMin,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: t.space1,
+    },
+    sheetCancelText: { fontSize: t.fontBody, color: t.muted },
     body: { padding: t.space4, gap: t.space3 },
-    head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    authorRow: { flexDirection: 'row', alignItems: 'center', gap: t.space3 },
+    authorText: { flex: 1, minWidth: 0, gap: t.space1 },
     author: { fontWeight: '600', fontSize: t.fontInput, color: t.ink },
     time: { color: t.muted, fontSize: t.fontCaption },
-    actionRow: { flexDirection: 'row', gap: t.space4 },
-    actionEdit: { color: t.action, fontSize: t.fontLabel },
-    actionDelete: { color: t.danger, fontSize: t.fontLabel },
-    transcribing: { color: t.muted, fontSize: t.fontCaption, marginTop: t.space1 },
+    transcribing: { color: t.muted, fontSize: t.fontCaption },
     content: { fontSize: t.fontInput, lineHeight: 24, color: t.ink },
     image: { width: '100%', aspectRatio: 4 / 3, borderRadius: t.radiusMd, backgroundColor: t.feedbackSkeleton },
     video: { width: '100%', aspectRatio: 16 / 9, borderRadius: t.radiusMd, backgroundColor: t.ink },
     tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
     tag: { color: t.tag, fontSize: t.fontSupport },
-    personRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
-    personChip: { paddingHorizontal: t.space3, paddingVertical: t.space1, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
-    personChipText: { fontSize: t.fontSupport, color: t.ink },
+    personRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.space2 },
+    personChip: { paddingHorizontal: t.space2, paddingVertical: t.space1, borderRadius: t.buttonRadius, backgroundColor: t.hoverSoft },
+    personChipText: { fontSize: t.fontCaption, color: t.muted },
     personAi: { color: t.muted, fontSize: t.fontCaption },
     placeRow: { flexDirection: 'row', alignItems: 'center', gap: t.space1 },
     placeLine: { color: t.muted, fontSize: t.fontSupport },
-    reactionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    reaction: { flexDirection: 'row', alignItems: 'center', gap: t.space1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },
+    reactionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
+    reaction: { flexDirection: 'row', alignItems: 'center', gap: t.space1, paddingHorizontal: t.space3, paddingVertical: t.space2, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
     reactionActive: { backgroundColor: t.select },
     reactionText: { fontSize: t.fontLabel, color: t.ink },
     reactionTextActive: { color: t.selectFg },
     sectionTitle: { fontWeight: '600', fontSize: t.fontBody, color: t.ink, marginTop: t.space2 },
-    comment: { backgroundColor: t.surface, borderRadius: t.radiusMd, padding: t.space3 },
+    comment: { flexDirection: 'row', alignItems: 'flex-start', gap: t.space3 },
+    commentBodyCol: { flex: 1, minWidth: 0 },
     commentHead: { flexDirection: 'row', alignItems: 'center', gap: t.space2 },
     commentAuthor: { fontWeight: '600', fontSize: t.fontSupport, color: t.ink },
     commentTime: { color: t.muted, fontSize: t.fontCaption, flex: 1 },
-    commentDelete: { color: t.danger, fontSize: t.fontCaption },
+    commentDelete: { color: t.muted, fontSize: t.fontCaption },
     commentBody: { fontSize: t.fontLabel, marginTop: t.space1, lineHeight: 20, color: t.ink },
-    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: t.space2, padding: t.space3, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line },
-    input: { flex: 1, borderWidth: 1, borderColor: t.line, borderRadius: t.fieldRadius, paddingHorizontal: t.space3, paddingTop: t.space2, paddingBottom: t.space2, maxHeight: 100, color: t.ink },
+    composer: { flexDirection: 'row', alignItems: 'flex-end', gap: t.space2, paddingHorizontal: t.space3, paddingTop: t.space3, backgroundColor: t.bg },
+    input: { flex: 1, borderRadius: t.fieldRadius, paddingHorizontal: t.space3, paddingTop: t.space2, paddingBottom: t.space2, maxHeight: 100, color: t.ink, backgroundColor: t.fieldBg },
   });

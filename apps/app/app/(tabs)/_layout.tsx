@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type AppLineIconName } from '../../src/components/Icon';
 import { RequireAuth } from '../../src/components/RequireAuth';
 import { useTheme } from '../../src/theme/use-theme';
@@ -10,18 +11,19 @@ function TabIcon({ name, focused }: { name: AppLineIconName; focused: boolean })
 
 export default function TabsLayout() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const tabPad = Math.max(insets.bottom, t.space5);
   return (
     <RequireAuth>
       <Tabs
         screenOptions={{
-          headerShown: true,
-          headerStyle: { backgroundColor: t.bg },
-          headerTintColor: t.ink,
-          headerShadowVisible: false,
-          headerTitleStyle: { color: t.ink, fontWeight: '600' },
+          headerShown: false,
           tabBarStyle: {
             backgroundColor: t.surface,
             borderTopColor: t.line,
+            paddingTop: t.space1,
+            paddingBottom: tabPad,
+            height: 48 + tabPad,
           },
           tabBarActiveTintColor: t.ink,
           tabBarInactiveTintColor: t.muted,

@@ -103,11 +103,9 @@ const MemoriesContent = observer(function MemoriesContent() {
           {service.years.map((g) => (
             <View key={g.year} style={styles.group}>
               <Text style={styles.groupHead}>{yearGroupText(g.year, g.moments.length)}</Text>
-              <View style={styles.groupBody}>
-                {g.moments.map((m) => (
-                  <MomentCard key={m.id} moment={m} onPress={() => router.push(`/moments/${m.id}`)} />
-                ))}
-              </View>
+              {g.moments.map((m) => (
+                <MomentCard key={m.id} moment={m} onPress={() => router.push(`/moments/${m.id}`)} />
+              ))}
             </View>
           ))}
         </ScrollView>
@@ -128,7 +126,7 @@ const createStyles = (t: Theme) =>
       marginTop: t.space2,
       marginBottom: 2,
       paddingHorizontal: t.space3,
-      paddingVertical: t.space3,
+      paddingVertical: t.space2,
       borderRadius: t.radiusMd,
       backgroundColor: t.surface,
       borderWidth: 1,
@@ -136,8 +134,7 @@ const createStyles = (t: Theme) =>
     },
     barText: { flex: 1, fontSize: t.fontLabel, color: t.ink, marginLeft: t.space1 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.space8, gap: t.space3 },
-    list: { paddingBottom: t.space6 },
+    list: { paddingHorizontal: t.space3, paddingBottom: t.space6 },
     group: { marginTop: t.space3 },
-    groupHead: { paddingHorizontal: t.space4, paddingVertical: t.space2, fontSize: t.fontLabel, fontWeight: '600', color: t.ink },
-    groupBody: { backgroundColor: t.surface },
+    groupHead: { paddingHorizontal: t.space1, paddingVertical: t.space2, fontSize: t.fontLabel, fontWeight: '600', color: t.ink },
   });

@@ -14,7 +14,16 @@ const REQUIRED_NAMES = [
   'calendar',
   'message-circle',
   'plus',
+  'chevron-left',
   'chevron-right',
+  'chevron-down',
+  'search',
+  'check',
+  'ellipsis',
+  'image',
+  'mic',
+  'video',
+  'type',
 ] as const;
 
 const KNOWN_TAGS = new Set(['path', 'circle', 'line', 'rect']);

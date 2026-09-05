@@ -4,15 +4,13 @@ import { FlashList } from '@shopify/flash-list';
 import { Link, router } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
-import { Button } from '../../components/Button';
 import { Icon } from '../../components/Icon';
 import { FilterChips } from '../../components/FilterChips';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
-import { TimelineSearchField } from '../../components/TimelineSearchField';
+import { TabHeader } from '../../components/TabHeader';
 import { Banner, EmptyState } from '../../components/feedback';
-import { humanError } from '../../lib/errors';
-import { formatSearchParsed } from '../../lib/search-summary';
+import { ChainSelect } from './chain-select';
 import { AuthService } from '../../services/auth.service';
 import { ChainListService } from '../../services/chain-list.service';
 import type { Theme } from '../../theme/theme';
@@ -30,34 +28,40 @@ const FeedContent = observer(function FeedContent() {
   const styles = useMemo(() => createStyles(t), [t]);
   const noChains = chainList.chains.length === 0 && !chainList.$model.load.loading;
 
-  if (service.moments.length === 0 && service.$model.loadFirst.loading) return <Loading />;
+  if (
+    service.moments.length === 0 &&
+    (service.$model.loadFirst.loading || chainList.$model.load.loading)
+  ) {
+    return <Loading />;
+  }
 
   return (
     <View style={styles.flex}>
+      <TabHeader>
+        <ChainSelect
+          chains={chainList.chains}
+          chainId={service.chainId}
+          order={service.order}
+          onSelect={(id) => service.setChainFilter(id)}
+          onToggleOrder={() => service.toggleOrder()}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="搜索时刻"
+          hitSlop={t.space2}
+          onPress={() => router.push('/search')}
+          style={styles.searchBtn}
+        >
+          <Icon name="search" size={t.fontInput} color={t.ink} />
+        </Pressable>
+      </TabHeader>
       {/* 那年今日入口条（spec memories-today §5）：筛选条之上，有内容才渲染 */}
       <MemoriesEntryBar />
-      <TimelineSearchField
-        onSubmit={(q) => void service.submitSearch(q)}
-        onClear={() => {
-          if (service.searching) void service.exitSearch();
-        }}
-      />
-      <View style={styles.filters}>
-        <Chip label="全部链" active={service.chainId == null} onPress={() => service.setChainFilter(undefined)} />
-        {service.chainList.map((c) => (
-          <Chip key={c.id} label={c.name} active={service.chainId === c.id} onPress={() => service.setChainFilter(c.id)} />
-        ))}
-        <Chip
-          label={service.order === 'happened_at' ? '按发生时间' : '按添加时间'}
-          active={false}
-          onPress={() => service.toggleOrder()}
-        />
-      </View>
       {service.chainId != null && service.tags.length > 0 ? (
         <View style={styles.filters}>
           <Chip label="全部标签" active={service.tagId == null} onPress={() => service.setTagFilter(undefined)} />
-          {service.tags.map((t) => (
-            <Chip key={t.id} label={`#${t.name}`} active={service.tagId === t.id} onPress={() => service.setTagFilter(t.id)} />
+          {service.tags.map((tag) => (
+            <Chip key={tag.id} label={`#${tag.name}`} active={service.tagId === tag.id} onPress={() => service.setTagFilter(tag.id)} />
           ))}
         </View>
       ) : null}
@@ -68,19 +72,6 @@ const FeedContent = observer(function FeedContent() {
         onClearPerson={() => service.clearPersonFilter()}
         onClearPlace={() => service.clearPlaceFilter()}
       />
-      {service.searchError ? (
-        <View style={styles.searchBanner}>
-          <Banner tone="error">{humanError(service.searchError)}</Banner>
-        </View>
-      ) : null}
-      {service.searching && service.searchParsed && !service.searchError ? (
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryText}>{formatSearchParsed(service.searchParsed)}</Text>
-          <Button variant="quiet" onPress={() => void service.exitSearch()}>
-            关闭
-          </Button>
-        </View>
-      ) : null}
       {service.$model.loadFirst.error ? (
         <View style={styles.searchBanner}>
           <Banner tone="error">加载失败，下拉重试</Banner>
@@ -128,14 +119,6 @@ const FeedContent = observer(function FeedContent() {
                 emphasis: 'primary',
                 onPress: () => router.push('/chains-new'),
               }}
-            />
-          ) : service.searching ? (
-            <EmptyState
-              variant="timeline"
-              scope="section"
-              title="没有找到相关时刻"
-              description="换个说法，或关掉搜索回到时间线。"
-              action={{ label: '退出搜索', emphasis: 'quiet', onPress: () => void service.exitSearch() }}
             />
           ) : service.personId || service.place || service.tagId || service.chainId ? (
             <EmptyState
@@ -194,22 +177,15 @@ export const FeedPage = bindServices(FeedContent, [FeedService]);
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
-    filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: t.space3, paddingVertical: 6 },
+    searchBtn: { width: t.touchMin, height: t.touchMin, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    filters: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2, paddingHorizontal: t.space3, paddingVertical: t.space1 },
     // 选中态对齐 SegmentBar：ink 色面 + bg 文字（中性、不抢 FAB 唯一实心高强调）
-    chip: { paddingHorizontal: t.space3, paddingVertical: 6, borderRadius: 16, backgroundColor: t.surface, borderWidth: 1, borderColor: t.line },
+    chip: { paddingHorizontal: t.space3, paddingVertical: t.space1, borderRadius: t.controlHProminent, backgroundColor: t.surface, borderWidth: 1, borderColor: t.line, flexShrink: 0 },
     chipActive: { backgroundColor: t.ink, borderColor: t.ink },
     chipText: { fontSize: t.fontSupport, color: t.ink },
     chipTextActive: { color: t.bg },
-    list: { paddingBottom: t.space4 },
+    list: { paddingHorizontal: t.space3, paddingTop: t.space2, paddingBottom: t.space8 },
     searchBanner: { paddingHorizontal: t.space3, paddingVertical: t.space2 },
-    summaryRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: t.space2,
-      paddingHorizontal: t.space3,
-      paddingVertical: t.space2,
-    },
-    summaryText: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
     loadingMore: { textAlign: 'center', color: t.muted, padding: t.space3 },
     fab: {
       position: 'absolute',

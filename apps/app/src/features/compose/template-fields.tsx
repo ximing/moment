@@ -34,7 +34,7 @@ function useChipStyles() {
       // 选中态对齐 SegmentBar：ink 色面 + bg 文字（primary 只留给发布/保存）
       StyleSheet.create({
         chipRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space2 },
-        chip: { paddingHorizontal: t.space3, paddingVertical: t.space2, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft, minHeight: t.touchMin, justifyContent: 'center' as const },
+        chip: { paddingHorizontal: t.space3, paddingVertical: t.space2, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft, justifyContent: 'center' as const },
         chipActive: { backgroundColor: t.ink },
         chipText: { fontSize: t.fontSupport, color: t.muted },
         chipTextActive: { color: t.bg, fontWeight: '600' as const },

@@ -39,7 +39,7 @@ const Content = observer(function Content() {
     toast.error(err, action);
   }
 
-  if (!service.chain && service.$model.loadChain.loading) return <Loading />;
+  if (!service.chain && !service.$model.loadChain.error) return <Loading />;
   if (!service.chain) {
     return (
       <View style={styles.center}>

@@ -1,18 +1,19 @@
-import { useEffect, useMemo } from 'react';
-import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { ApiError } from '@moment/api-client';
 import { humanError } from '../../lib/errors';
-import { Screen } from '../../components/Screen';
-import { SegmentBar } from '../../components/SegmentBar';
-import { RequireAuth } from '../../components/RequireAuth';
+import { formatLocalDateTime } from '../../lib/format';
 import { Loading } from '../../components/Loading';
 import { MediaGrid } from '../../components/MediaGrid';
 import { AudioBar } from '../../components/AudioBar';
 import { Button } from '../../components/Button';
+import { Icon, type AppLineIconName } from '../../components/Icon';
 import { toast } from '../../components/feedback';
+import { RequireAuth } from '../../components/RequireAuth';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { ComposeService, editImageCap, editOccupied } from './compose.service';
@@ -20,14 +21,76 @@ import { TemplateFields } from './template-fields';
 import { PersonPicker } from './person-picker';
 import { VoiceRecorder } from './voice-recorder';
 
+const TYPES: { value: 'text' | 'media' | 'video' | 'voice'; label: string; icon: AppLineIconName }[] = [
+  { value: 'text', label: '文字', icon: 'type' },
+  { value: 'media', label: '照片', icon: 'image' },
+  { value: 'video', label: '视频', icon: 'video' },
+  { value: 'voice', label: '语音', icon: 'mic' },
+];
+
+type Sheet = 'chain' | 'people' | 'tags' | null;
+
+function ComposeNav({
+  title,
+  actionLabel,
+  loading,
+  onAction,
+}: {
+  title: string;
+  actionLabel?: string;
+  loading?: boolean;
+  onAction?: () => void;
+}) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.nav, { paddingTop: insets.top }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="返回"
+        onPress={() => router.back()}
+        style={styles.backBtn}
+      >
+        <Icon name="chevron-left" size={t.fontInput} color={t.ink} />
+        <Text style={styles.backText}>返回</Text>
+      </Pressable>
+      <Text style={styles.navTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      {onAction ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          onPress={onAction}
+          disabled={loading}
+          style={[styles.actionBtn, loading && { opacity: t.disabledOpacity }]}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={t.action} />
+          ) : (
+            <Text style={styles.actionText}>{actionLabel}</Text>
+          )}
+        </Pressable>
+      ) : (
+        <View style={styles.navSpacer} />
+      )}
+    </View>
+  );
+}
+
 const ComposeContent = observer(function ComposeContent() {
   const params = useLocalSearchParams<{ chainId?: string; momentId?: string }>();
   const service = useService(ComposeService);
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const insets = useSafeAreaInsets();
+  const [sheet, setSheet] = useState<Sheet>(null);
 
   useEffect(() => {
-    service.hydrate(params.chainId, params.momentId);
+    const chainId = Array.isArray(params.chainId) ? params.chainId[0] : params.chainId;
+    const momentId = Array.isArray(params.momentId) ? params.momentId[0] : params.momentId;
+    service.hydrate(chainId, momentId);
   }, [service, params.chainId, params.momentId]);
 
   useEffect(() => {
@@ -78,185 +141,352 @@ const ComposeContent = observer(function ComposeContent() {
     }
   }
 
+  const title = service.isEdit ? '编辑' : '记下此刻';
+  const actionLabel = service.progressLabel ?? (service.isEdit ? '保存' : '发布');
+  const submitting = service.$model.submit.loading;
+
   // 编辑态加载/失败单通道（$model.loadForEdit）：404/410 给「已被删除」区别文案（spec §5）
   if (params.momentId && !service.edit) {
-    if (service.$model.loadForEdit.loading) return <Loading />;
+    if (service.$model.loadForEdit.loading) {
+      return (
+        <View style={styles.flex}>
+          <Stack.Screen options={{ headerShown: false }} />
+          <ComposeNav title={title} />
+          <Loading />
+        </View>
+      );
+    }
     const err = service.$model.loadForEdit.error;
     if (err) {
       const gone = err instanceof ApiError && (err.code === 'MOMENT_NOT_FOUND' || err.code === 'MOMENT_DELETED');
       return (
-        <Screen>
+        <View style={styles.flex}>
+          <Stack.Screen options={{ headerShown: false }} />
+          <ComposeNav title={title} />
           <View style={styles.centerBox}>
             <Text style={styles.errorText}>{gone ? '该时刻可能已被删除' : humanError(err)}</Text>
             <Button variant="secondary" onPress={() => router.back()}>返回</Button>
           </View>
-        </Screen>
+        </View>
       );
     }
-    return <Loading />;
+    return (
+      <View style={styles.flex}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ComposeNav title={title} />
+        <Loading />
+      </View>
+    );
   }
 
+  const activeChain = service.editableChains.find((c) => c.id === service.activeChainId);
+  const canPickChain = !service.isEdit && service.editableChains.length > 1;
+  const imageCap = service.isEdit && service.edit ? editImageCap(service.edit) : service.type === 'voice' ? 8 : 9;
+  const occupied = service.isEdit ? editOccupied(service.keptMedia, service.images) : service.images.length;
+  const canAddImage =
+    (service.isEdit && service.edit && service.edit.type !== 'video') ||
+    (!service.isEdit && (service.type === 'media' || service.type === 'voice'));
+  const peopleSummary = service.selectedPersons.map((p) => p.name).join('、');
+  const selectedTags = service.tagNames.filter((tag) => service.tagIds.includes(tag.id));
+  const tagsSummary = selectedTags.map((tag) => `#${tag.name}`).join(' ');
+
   return (
-    <Screen scroll>
-      {service.isEdit ? null : (
-        <SegmentBar<string>
-          options={[
-            { value: 'text', label: '文字' },
-            { value: 'media', label: '图文' },
-            { value: 'video', label: '视频' },
-            { value: 'voice', label: '语音' },
-          ]}
-          value={service.type}
-          onChange={(t) => {
-            service.type = t as typeof service.type;
-            service.images = [];
-            service.clearVideo();
-            service.clearVoice();
-          }}
-        />
-      )}
-
-      {!service.isEdit && service.editableChains.length > 1 ? (
-        <View style={styles.chipRow}>
-          {service.editableChains.map((c) => (
-            <Pressable key={c.id} style={[styles.chip, service.activeChainId === c.id && styles.chipActive]} onPress={() => service.setChain(c.id)}>
-              <Text style={[styles.chipText, service.activeChainId === c.id && styles.chipTextActive]}>{c.name}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      <TextInput
-        style={styles.content}
-        value={service.content}
-        onChangeText={(v) => (service.content = v)}
-        placeholder={service.type === 'text' ? '记录这一刻…' : '配文（可选）'}
-        placeholderTextColor={t.muted}
-        multiline
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ComposeNav
+        title={title}
+        actionLabel={actionLabel}
+        loading={submitting}
+        onAction={() => void onSubmit()}
       />
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, t.space6) }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {activeChain ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`发布到 ${activeChain.name}`}
+            onPress={canPickChain ? () => setSheet('chain') : undefined}
+            disabled={!canPickChain}
+            hitSlop={t.space2}
+            style={styles.chainLine}
+          >
+            <Text style={styles.chainName} numberOfLines={1}>
+              {activeChain.name}
+            </Text>
+            {canPickChain ? <Icon name="chevron-down" size={t.fontSupport} color={t.muted} /> : null}
+          </Pressable>
+        ) : null}
 
-      {service.isEdit && service.edit?.type === 'voice' && service.keptAudio ? (
-        <AudioBar media={service.keptAudio} />
-      ) : null}
+        {service.isEdit ? null : (
+          <View style={styles.seg}>
+            {TYPES.map((item) => {
+              const active = service.type === item.value;
+              return (
+                <Pressable
+                  key={item.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                  onPress={() => {
+                    service.type = item.value;
+                    service.images = [];
+                    service.clearVideo();
+                    service.clearVoice();
+                  }}
+                  style={[styles.segItem, active && styles.segItemActive]}
+                >
+                  <Icon name={item.icon} size={t.fontSupport} color={active ? t.ink : t.muted} />
+                  <Text style={[styles.segLabel, active && styles.segLabelActive]}>{item.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
-      {service.isEdit && service.edit && service.edit.type !== 'video' ? (
-        <MediaGrid media={service.keptMedia} onRemove={(id) => service.removeKeptMedia(id)} />
-      ) : null}
+        <TextInput
+          style={styles.content}
+          value={service.content}
+          onChangeText={(v) => (service.content = v)}
+          placeholder={service.type === 'text' ? '这一刻…' : '配一句（可选）'}
+          placeholderTextColor={t.muted}
+          multiline
+        />
 
-      {service.isEdit && service.edit?.type === 'video' ? (
-        <>
+        {service.isEdit && service.edit?.type === 'voice' && service.keptAudio ? (
+          <AudioBar media={service.keptAudio} />
+        ) : null}
+
+        {service.isEdit && service.edit && service.edit.type !== 'video' ? (
+          <MediaGrid media={service.keptMedia} onRemove={(id) => service.removeKeptMedia(id)} />
+        ) : null}
+
+        {service.isEdit && service.edit?.type === 'video' ? (
           <MediaGrid media={service.edit.media} />
-          <Text style={styles.mediaHint}>视频发布后不能更换</Text>
-        </>
-      ) : null}
+        ) : null}
 
-      {service.isEdit && service.edit && service.edit.type !== 'video' && service.images.length > 0 ? (
-        <View style={styles.grid}>
-          {service.images.map((img, i) => (
-            <View key={`${img.uri}-${i}`} style={styles.cellWrap}>
-              <Image source={{ uri: img.uri }} style={styles.localCell} resizeMode="cover" />
+        {canAddImage && occupied > 0 ? (
+          <View style={styles.grid}>
+            {service.images.map((img, i) => (
+              <View key={`${img.uri}-${i}`} style={styles.cellWrap}>
+                <Image source={{ uri: img.uri }} style={styles.localCell} resizeMode="cover" />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="移除这张图片"
+                  hitSlop={t.space3}
+                  onPress={() => service.removeImage(i)}
+                  style={styles.removeBtn}
+                >
+                  <Text style={styles.removeBtnText}>×</Text>
+                </Pressable>
+              </View>
+            ))}
+            {occupied < imageCap ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="添加照片" onPress={() => void onPickImages()} style={styles.addCell}>
+                <Icon name="plus" size={t.fontInput} color={t.muted} />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {canAddImage && occupied === 0 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="添加照片" onPress={() => void onPickImages()} style={styles.addCellWide}>
+            <Icon name="image" size={t.fontLabel} color={t.muted} />
+            <Text style={styles.addCellWideText}>添加照片</Text>
+          </Pressable>
+        ) : null}
+
+        {!service.isEdit && service.type === 'video' ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={service.video ? '重选视频' : '选择视频'}
+            onPress={() => void onPickVideo()}
+            style={styles.addCellWide}
+          >
+            <Icon name="video" size={t.fontLabel} color={t.muted} />
+            <Text style={styles.addCellWideText}>
+              {service.video
+                ? `${Math.round(service.video.size / 1024 / 1024)}MB · ${Math.floor(service.video.durationSeconds / 60)}分${service.video.durationSeconds % 60}秒`
+                : '选择视频'}
+            </Text>
+            {service.video ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="移除这张图片"
-                hitSlop={t.space3}
-                onPress={() => service.removeImage(i)}
-                style={styles.removeBtn}
+                accessibilityLabel="移除视频"
+                onPress={() => service.clearVideo()}
+                hitSlop={t.space2}
               >
-                <Text style={styles.removeBtnText}>×</Text>
+                <Text style={styles.removeLink}>移除</Text>
               </Pressable>
-            </View>
-          ))}
-        </View>
-      ) : null}
+            ) : null}
+          </Pressable>
+        ) : null}
 
-      {service.isEdit && service.edit && service.edit.type !== 'video' ? (
-        <View style={styles.mediaBar}>
-          <Button
-            variant="secondary"
-            disabled={editOccupied(service.keptMedia, service.images) >= editImageCap(service.edit)}
-            onPress={() => void onPickImages()}
+        {!service.isEdit && service.type === 'voice' ? (
+          <VoiceRecorder voice={service.voice} onChange={(v) => service.setVoice(v)} />
+        ) : null}
+
+        <View style={styles.metaList}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="发生时间"
+            style={styles.metaRow}
+            onPress={() => (service.showPicker = true)}
           >
-            选图（{editOccupied(service.keptMedia, service.images)}/{editImageCap(service.edit)}）
-          </Button>
-          {service.images.length > 0 ? (
-            <Button variant="quiet" onPress={() => service.clearImages()}>清空</Button>
-          ) : null}
-        </View>
-      ) : null}
-
-      {!service.isEdit && (service.type === 'media' || service.type === 'voice') ? (
-        <View style={styles.mediaBar}>
-          <Button variant="secondary" onPress={() => void onPickImages()}>
-            选图（{service.images.length}/{service.type === 'voice' ? 8 : 9}）
-          </Button>
-          {service.images.length > 0 ? (
-            <Button variant="quiet" onPress={() => service.clearImages()}>清空</Button>
-          ) : null}
-        </View>
-      ) : null}
-      {!service.isEdit && (service.type === 'media' || service.type === 'voice') && service.images.length > 0 ? (
-        <Text style={styles.mediaHint}>已压缩 {service.images.length} 张（最长边 ≤2048px），共 {Math.round(service.images.reduce((s, i) => s + i.size, 0) / 1024)}KB</Text>
-      ) : null}
-
-      {!service.isEdit && service.type === 'video' ? (
-        <View style={styles.mediaBar}>
-          <Button variant="secondary" onPress={() => void onPickVideo()}>{service.video ? '重选视频' : '选择视频'}</Button>
-          {service.video ? (
-            <Button variant="quiet" onPress={() => service.clearVideo()}>移除</Button>
-          ) : null}
-        </View>
-      ) : null}
-      {!service.isEdit && service.type === 'video' && service.video ? (
-        <Text style={styles.mediaHint}>
-          {Math.round(service.video.size / 1024 / 1024)}MB · {Math.floor(service.video.durationSeconds / 60)}分{service.video.durationSeconds % 60}秒 · 分片上传可断点重试
-        </Text>
-      ) : null}
-
-      {!service.isEdit && service.type === 'voice' ? (
-        <VoiceRecorder voice={service.voice} onChange={(v) => service.setVoice(v)} />
-      ) : null}
-
-      <Pressable style={styles.dateBtn} onPress={() => (service.showPicker = true)}>
-        <Text style={styles.dateText}>
-          发生时间：{service.happenedAt.toLocaleString()}（{service.isBackfill ? '补发' : '当下'}）
-        </Text>
-      </Pressable>
-      {service.showPicker ? (
-        <DateTimePicker
-          value={service.happenedAt}
-          mode="datetime"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(_e, d) => {
-            service.showPicker = Platform.OS === 'ios';
-            if (d) service.onHappenedAtChange(d);
-          }}
-        />
-      ) : null}
-
-      <TemplateFields service={service} edit={service.isEdit} />
-
-      {service.tagNames.length > 0 ? (
-        <View style={styles.chipRow}>
-          {service.tagNames.map((t) => (
-            <Pressable key={t.id} style={[styles.chip, service.tagIds.includes(t.id) && styles.chipActive]} onPress={() => service.toggleTag(t.id)}>
-              <Text style={[styles.chipText, service.tagIds.includes(t.id) && styles.chipTextActive]}>#{t.name}</Text>
+            <Icon name="calendar" size={t.fontSupport} />
+            <Text style={styles.metaLabel}>时间</Text>
+            <Text style={styles.metaValue} numberOfLines={1}>
+              {formatLocalDateTime(service.happenedAt)}
+              {service.isBackfill ? ' · 补发' : ''}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="和谁在一起"
+            style={styles.metaRow}
+            onPress={() => setSheet('people')}
+          >
+            <Icon name="user" size={t.fontSupport} />
+            <Text style={styles.metaLabel}>和谁</Text>
+            <Text style={styles.metaValue} numberOfLines={1}>
+              {peopleSummary || '添加'}
+            </Text>
+          </Pressable>
+          <View style={styles.metaRow}>
+            <Icon name="map-pin" size={t.fontSupport} />
+            <TextInput
+              accessibilityLabel="在哪里"
+              style={styles.metaInput}
+              value={service.placeName}
+              onChangeText={(v) => service.setPlaceName(v)}
+              placeholder="在哪里"
+              placeholderTextColor={t.muted}
+            />
+          </View>
+          {service.placeCoords ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="移除照片位置"
+              style={styles.metaRow}
+              onPress={() => service.removePlaceCoords()}
+            >
+              <Text style={styles.metaHint}>已从照片读取位置</Text>
+              <Text style={styles.removeLink}>移除</Text>
             </Pressable>
-          ))}
+          ) : null}
+          {service.tagNames.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="标签"
+              style={styles.metaRow}
+              onPress={() => setSheet('tags')}
+            >
+              <Text style={styles.hash}>#</Text>
+              <Text style={styles.metaLabel}>标签</Text>
+              <Text style={styles.metaValue} numberOfLines={1}>
+                {tagsSummary || '添加'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
+
+        <TemplateFields service={service} edit={service.isEdit} />
+      </ScrollView>
+
+      {service.showPicker ? (
+        Platform.OS === 'ios' ? (
+          <Modal transparent animationType="slide" onRequestClose={() => (service.showPicker = false)}>
+            <View style={styles.scrim}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => (service.showPicker = false)} accessibilityLabel="关闭" />
+              <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, t.space4) }]}>
+                <View style={styles.handle} />
+                <Text style={styles.sheetTitle}>发生时间</Text>
+                <DateTimePicker
+                  value={service.happenedAt}
+                  mode="datetime"
+                  display="spinner"
+                  onChange={(_e, d) => {
+                    if (d) service.onHappenedAtChange(d);
+                  }}
+                />
+                <Button variant="quiet" onPress={() => (service.showPicker = false)}>
+                  完成
+                </Button>
+              </View>
+            </View>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={service.happenedAt}
+            mode="datetime"
+            display="default"
+            onChange={(_e, d) => {
+              service.showPicker = false;
+              if (d) service.onHappenedAtChange(d);
+            }}
+          />
+        )
       ) : null}
 
-      <PersonPicker service={service} />
-
-      {service.progressLabel ? <Text style={styles.progress}>{service.progressLabel}</Text> : null}
-      <Button
-        fullWidth
-        loading={service.$model.submit.loading}
-        loadingText="处理中…"
-        onPress={() => void onSubmit()}
-      >
-        {service.isEdit ? '保存' : '发布'}
-      </Button>
-    </Screen>
+      <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
+        <View style={styles.scrim}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSheet(null)} accessibilityLabel="关闭" />
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, t.space4) }]}>
+            <View style={styles.handle} />
+            {sheet === 'chain' ? (
+              <>
+                <Text style={styles.sheetTitle}>发布到</Text>
+                {service.editableChains.map((c) => {
+                  const active = service.activeChainId === c.id;
+                  return (
+                    <Pressable
+                      key={c.id}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        service.setChain(c.id);
+                        setSheet(null);
+                      }}
+                      style={[styles.sheetItem, active && styles.sheetItemActive]}
+                    >
+                      <Text style={[styles.sheetItemText, active && styles.sheetItemTextActive]} numberOfLines={1}>
+                        {c.name}
+                      </Text>
+                      {active ? <Icon name="check" size={t.fontInput} color={t.ink} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </>
+            ) : null}
+            {sheet === 'people' ? (
+              <>
+                <Text style={styles.sheetTitle}>和谁在一起</Text>
+                <ScrollView keyboardShouldPersistTaps="handled" style={styles.sheetScroll}>
+                  <PersonPicker service={service} />
+                </ScrollView>
+              </>
+            ) : null}
+            {sheet === 'tags' ? (
+              <>
+                <Text style={styles.sheetTitle}>标签</Text>
+                <View style={styles.chipRow}>
+                  {service.tagNames.map((tag) => (
+                    <Pressable
+                      key={tag.id}
+                      style={[styles.chip, service.tagIds.includes(tag.id) && styles.chipActive]}
+                      onPress={() => service.toggleTag(tag.id)}
+                    >
+                      <Text style={[styles.chipText, service.tagIds.includes(tag.id) && styles.chipTextActive]}>
+                        #{tag.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+    </KeyboardAvoidingView>
   );
 });
 
@@ -272,18 +502,100 @@ export function ComposePage() {
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
-    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    // 选中态对齐 SegmentBar：ink 色面 + bg 文字（primary 只留给发布/保存）
-    chip: { paddingHorizontal: t.space3, paddingVertical: 6, borderRadius: 16, backgroundColor: t.hoverSoft },
-    chipActive: { backgroundColor: t.ink },
-    chipText: { fontSize: t.fontSupport, color: t.muted },
-    chipTextActive: { color: t.bg },
-    content: { minHeight: 100, borderWidth: 1, borderColor: t.line, borderRadius: t.fieldRadius, padding: t.space3, fontSize: t.fontBody, color: t.ink, textAlignVertical: 'top', backgroundColor: t.fieldBg },
-    mediaBar: { flexDirection: 'row', gap: t.space3 },
-    mediaHint: { color: t.muted, fontSize: t.fontCaption },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space1, marginTop: t.space2 },
+    flex: { flex: 1, backgroundColor: t.surface },
+    nav: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: t.space2,
+      paddingBottom: t.space1,
+      backgroundColor: t.surface,
+      minHeight: t.touchMin,
+    },
+    backBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: t.touchMin,
+      paddingHorizontal: t.space1,
+      gap: t.space1,
+      zIndex: 1,
+    },
+    backText: { fontSize: t.fontBody, color: t.ink },
+    navTitle: {
+      position: 'absolute',
+      left: t.space8 + t.space8,
+      right: t.space8 + t.space8,
+      textAlign: 'center',
+      fontSize: t.fontBody,
+      fontWeight: '600',
+      color: t.ink,
+    },
+    navSpacer: { width: t.touchMin },
+    actionBtn: {
+      minHeight: t.touchMin,
+      minWidth: t.touchMin,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: t.space3,
+      zIndex: 1,
+      marginLeft: 'auto',
+    },
+    actionText: { fontSize: t.fontBody, fontWeight: '600', color: t.action },
+    scroll: { paddingHorizontal: t.space4, paddingTop: t.space2, gap: t.space3 },
+    chainLine: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: t.space1,
+    },
+    chainName: { fontSize: t.fontSupport, color: t.muted },
+    seg: {
+      flexDirection: 'row',
+      backgroundColor: t.fieldBg,
+      borderRadius: t.fieldRadius,
+      padding: t.space1,
+    },
+    segItem: {
+      flex: 1,
+      minHeight: t.controlH,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: t.space1,
+      borderRadius: t.buttonRadius,
+    },
+    segItemActive: { backgroundColor: t.surface },
+    segLabel: { fontSize: t.fontCaption, color: t.muted },
+    segLabelActive: { color: t.ink, fontWeight: '600' },
+    content: {
+      minHeight: t.space8 * 2,
+      fontSize: t.fontInput,
+      lineHeight: 24,
+      color: t.ink,
+      textAlignVertical: 'top',
+      padding: 0,
+    },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space1 },
     cellWrap: { width: '32%', aspectRatio: 1 },
-    localCell: { width: '100%', height: '100%', borderRadius: t.radiusMd, backgroundColor: t.feedbackSkeleton },
+    localCell: { width: '100%', height: '100%', borderRadius: t.buttonRadius, backgroundColor: t.feedbackSkeleton },
+    addCell: {
+      width: '32%',
+      aspectRatio: 1,
+      borderRadius: t.buttonRadius,
+      backgroundColor: t.fieldBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    addCellWide: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space2,
+      minHeight: t.controlH,
+      paddingHorizontal: t.space3,
+      borderRadius: t.fieldRadius,
+      backgroundColor: t.fieldBg,
+    },
+    addCellWideText: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
+    removeLink: { fontSize: t.fontSupport, color: t.muted },
     removeBtn: {
       position: 'absolute',
       top: t.space1,
@@ -296,9 +608,62 @@ const createStyles = (t: Theme) =>
       borderRadius: t.radiusMd,
     },
     removeBtnText: { color: t.bg, fontSize: t.fontCaption },
-    dateBtn: { padding: t.space3, borderRadius: t.fieldRadius, backgroundColor: t.fieldBg },
-    dateText: { fontSize: t.fontLabel, color: t.ink },
-    progress: { color: t.action, textAlign: 'center' },
+    metaList: { gap: 0 },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space2,
+      minHeight: t.touchMin,
+    },
+    metaLabel: { fontSize: t.fontSupport, color: t.muted, width: t.space8 + t.space2 },
+    metaValue: { flex: 1, minWidth: 0, textAlign: 'right', fontSize: t.fontSupport, color: t.ink },
+    metaInput: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.ink, padding: 0 },
+    metaHint: { flex: 1, minWidth: 0, fontSize: t.fontCaption, color: t.muted },
+    hash: { width: t.fontSupport, textAlign: 'center', fontSize: t.fontSupport, color: t.muted, fontWeight: '600' },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2 },
+    chip: {
+      paddingHorizontal: t.space3,
+      paddingVertical: t.space2,
+      borderRadius: t.radiusMd,
+      backgroundColor: t.fieldBg,
+      minHeight: t.touchMin,
+      justifyContent: 'center',
+    },
+    chipActive: { backgroundColor: t.ink },
+    chipText: { fontSize: t.fontSupport, color: t.muted },
+    chipTextActive: { color: t.bg, fontWeight: '600' },
     centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.space3, paddingVertical: t.space8 + t.space4 },
     errorText: { fontSize: t.fontLabel, color: t.muted },
+    scrim: { flex: 1, backgroundColor: t.scrim, justifyContent: 'flex-end' },
+    sheet: {
+      backgroundColor: t.surface,
+      borderTopLeftRadius: t.radiusLg,
+      borderTopRightRadius: t.radiusLg,
+      paddingTop: t.space3,
+      paddingHorizontal: t.space4,
+      maxHeight: '80%',
+    },
+    handle: {
+      alignSelf: 'center',
+      width: t.space8,
+      height: t.space1,
+      borderRadius: t.space1,
+      backgroundColor: t.line,
+      marginBottom: t.space3,
+    },
+    sheetTitle: { fontSize: t.fontLabel, color: t.muted, marginBottom: t.space3 },
+    sheetScroll: { maxHeight: 420 },
+    sheetItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: t.touchMin,
+      marginBottom: t.space2,
+      paddingHorizontal: t.space3,
+      borderRadius: t.radiusMd,
+      backgroundColor: t.fieldBg,
+      gap: t.space2,
+    },
+    sheetItemActive: { backgroundColor: t.secondaryBg },
+    sheetItemText: { flex: 1, minWidth: 0, fontSize: t.fontBody, color: t.ink },
+    sheetItemTextActive: { fontWeight: '600' },
   });

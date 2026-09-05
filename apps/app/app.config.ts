@@ -2,8 +2,8 @@ import type { ExpoConfig } from 'expo/config';
 import { type ConfigPlugin, withAppBuildGradle } from '@expo/config-plugins';
 
 // CI 从 release tag 派生版本（见 .github/workflows/android-release.yml）；本地缺省回退。
-const version = process.env.APP_VERSION_NAME ?? '0.2.0';
-const versionCode = Number(process.env.APP_VERSION_CODE ?? 200);
+const version = process.env.APP_VERSION_NAME ?? '0.3.0';
+const versionCode = Number(process.env.APP_VERSION_CODE ?? 300);
 
 /**
  * 向生成的 android/app/build.gradle 注入 release 签名配置。

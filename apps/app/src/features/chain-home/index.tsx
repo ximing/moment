@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActionSheetIOS, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { MomentResponse } from '@moment/dto';
 import { humanError } from '../../lib/errors';
 import { babyAgeLabel } from '../../lib/template';
 import { FilterChips } from '../../components/FilterChips';
+import { Icon } from '../../components/Icon';
 import { Loading } from '../../components/Loading';
 import { MomentCard } from '../../components/MomentCard';
-import { SegmentBar } from '../../components/SegmentBar';
 import { Button } from '../../components/Button';
-import { TimelineSearchField } from '../../components/TimelineSearchField';
-import { Banner, EmptyState, confirm, toast } from '../../components/feedback';
-import { formatSearchParsed } from '../../lib/search-summary';
+import { EmptyState, confirm, toast } from '../../components/feedback';
 import { AuthService } from '../../services/auth.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -23,6 +22,42 @@ import { AggregateView } from './aggregate-views';
 import { FootprintMap } from './map-view';
 import { ChainHomeService, type ChainSegment } from './chain-home.service';
 
+function showChainMenu({
+  views,
+  onView,
+  onSettings,
+}: {
+  views: { value: string; label: string }[];
+  onView: (v: string) => void;
+  onSettings: () => void;
+}): void {
+  const items = [{ value: 'timeline', label: '时间线' }, ...views, { value: 'tags', label: '标签' }];
+  const labels = items.map((i) => i.label);
+  if (Platform.OS === 'ios') {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: [...labels, '设置', '取消'],
+        cancelButtonIndex: labels.length + 1,
+      },
+      (index) => {
+        if (index === undefined || index === labels.length + 1) return;
+        if (index === labels.length) {
+          onSettings();
+          return;
+        }
+        const item = items[index];
+        if (item) onView(item.value);
+      },
+    );
+    return;
+  }
+  Alert.alert('这条链', undefined, [
+    ...items.map((item) => ({ text: item.label, onPress: () => onView(item.value) })),
+    { text: '设置', onPress: onSettings },
+    { text: '取消', style: 'cancel' as const },
+  ]);
+}
+
 const Content = observer(function Content() {
   const { chainId } = useLocalSearchParams<{ chainId: string }>();
   const service = useService(ChainHomeService);
@@ -31,6 +66,7 @@ const Content = observer(function Content() {
   const [segment, setSegment] = useState<ChainSegment>('timeline');
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const insets = useSafeAreaInsets();
 
   function onSegment(v: ChainSegment): void {
     setSegment(v);
@@ -41,58 +77,79 @@ const Content = observer(function Content() {
     .filter((v) => v.type !== 'timeline' || v.groupBy === 'trips')
     .map((v) => ({ value: v.type === 'timeline' ? ('trips' as const) : v.type, label: v.label }));
 
+  const currentViewLabel =
+    segment === 'timeline'
+      ? '时间线'
+      : segment === 'tags'
+        ? '标签'
+        : (viewTabs.find((v) => v.value === segment)?.label ?? segment);
+
   useEffect(() => {
-    service.hydrate(chainId);
+    const id = Array.isArray(chainId) ? chainId[0] : chainId;
+    if (id) service.hydrate(id);
   }, [service, chainId]);
 
-  if (!service.chain && service.$model.loadChain.loading) return <Loading />;
+  const header = (
+    <Stack.Screen
+      options={{
+        title: service.chain?.name ?? '链',
+        headerRight: () => (
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="搜索时刻"
+              onPress={() => router.push({ pathname: '/search', params: { chainId: service.chainId } })}
+              style={styles.headerBtn}
+            >
+              <Icon name="search" size={t.fontInput} color={t.ink} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="更多"
+              onPress={() =>
+                showChainMenu({
+                  views: viewTabs,
+                  onView: onSegment,
+                  onSettings: () => router.push(`/chains/${service.chainId}/settings`),
+                })
+              }
+              style={styles.headerBtn}
+            >
+              <Icon name="ellipsis" size={t.fontInput} color={t.ink} />
+            </Pressable>
+          </View>
+        ),
+      }}
+    />
+  );
+
+  if (!service.chain) {
+    return (
+      <View style={styles.flex}>
+        {header}
+        <Loading />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.flex}>
-      <View style={styles.head}>
-        <Text style={styles.name}>{service.chain?.name ?? ''}</Text>
-        {service.chain?.description ? <Text style={styles.desc}>{service.chain.description}</Text> : null}
-        <View style={styles.headActions}>
-          {service.canCompose ? (
-            <Button onPress={() => router.push({ pathname: '/compose', params: { chainId: service.chainId } })}>
-              记下此刻
-            </Button>
-          ) : null}
-          <Button variant="quiet" onPress={() => router.push(`/chains/${service.chainId}/settings`)}>设置</Button>
-        </View>
-      </View>
-      <RecapEntryBar chainId={service.chainId} />
-      <SegmentBar<ChainSegment>
-        options={[
-          { value: 'timeline', label: '时间线' },
-          ...viewTabs,
-          { value: 'tags', label: `标签 ${service.tags.length}` },
-        ]}
-        value={segment}
-        onChange={onSegment}
-      />
+      {header}
+      {segment !== 'timeline' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`返回时间线，当前 ${currentViewLabel}`}
+          onPress={() => onSegment('timeline')}
+          style={styles.contextBar}
+        >
+          <Text style={styles.contextText}>{currentViewLabel}</Text>
+          <Text style={styles.contextBack}>返回时间线</Text>
+        </Pressable>
+      ) : null}
 
       {segment === 'timeline' ? (
         <View style={styles.timelinePane}>
-          <TimelineSearchField
-            onSubmit={(q) => void service.submitSearch(q)}
-            onClear={() => {
-              if (service.searching) void service.exitSearch();
-            }}
-          />
-          {service.searchError ? (
-            <View style={styles.searchBanner}>
-              <Banner tone="error">{humanError(service.searchError)}</Banner>
-            </View>
-          ) : null}
-          {service.searching && service.searchParsed && !service.searchError ? (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryText}>{formatSearchParsed(service.searchParsed)}</Text>
-              <Button variant="quiet" onPress={() => void service.exitSearch()}>
-                关闭
-              </Button>
-            </View>
-          ) : null}
+          <RecapEntryBar chainId={service.chainId} />
           <FilterChips
             personId={service.personId}
             personName={service.personName}
@@ -130,15 +187,7 @@ const Content = observer(function Content() {
               />
             )}
             ListEmptyComponent={
-              service.searching ? (
-                <EmptyState
-                  variant="timeline"
-                  scope="section"
-                  title="没有找到相关时刻"
-                  description="换个说法，或关掉搜索回到时间线。"
-                  action={{ label: '退出搜索', emphasis: 'quiet', onPress: () => void service.exitSearch() }}
-                />
-              ) : service.personId || service.place ? (
+              service.personId || service.place ? (
                 <EmptyState
                   variant="timeline"
                   scope="section"
@@ -166,6 +215,16 @@ const Content = observer(function Content() {
               )
             }
           />
+          {service.canCompose ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="记下此刻"
+              style={[styles.fab, { bottom: Math.max(insets.bottom, t.space4) + t.space4 }]}
+              onPress={() => router.push({ pathname: '/compose', params: { chainId: service.chainId } })}
+            >
+              <Icon name="plus" size={t.space6} color={t.actionFg} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -231,10 +290,10 @@ const TagsSection = observer(function TagsSection({ service }: { service: ChainH
           添加
         </Button>
       </View>
-      {service.tags.map((t) => (
-        <View key={t.id} style={styles.row}>
-          <Text style={styles.rowMain}>#{t.name}（{t.momentCount} 条）</Text>
-          <Pressable onPress={() => onDelete(t.id, t.name)}>
+      {service.tags.map((tag) => (
+        <View key={tag.id} style={styles.row}>
+          <Text style={styles.rowMain}>#{tag.name}（{tag.momentCount} 条）</Text>
+          <Pressable onPress={() => onDelete(tag.id, tag.name)}>
             <Text style={styles.danger}>删除</Text>
           </Pressable>
         </View>
@@ -248,22 +307,21 @@ export const ChainHomePage = bindServices(Content, [ChainHomeService]);
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
-    head: { padding: t.space4, backgroundColor: t.surface, gap: t.space2 },
-    name: { fontSize: 20, fontWeight: '700', color: t.ink },
-    desc: { color: t.muted, fontSize: t.fontLabel },
-    headActions: { flexDirection: 'row', alignItems: 'center', gap: t.space3 },
-    list: { paddingBottom: t.space4 },
-    timelinePane: { flex: 1 },
-    timelineList: { flex: 1 },
-    searchBanner: { paddingHorizontal: t.space3, paddingVertical: t.space2 },
-    summaryRow: {
+    headerActions: { flexDirection: 'row', alignItems: 'center' },
+    headerBtn: { width: t.touchMin, height: t.touchMin, alignItems: 'center', justifyContent: 'center' },
+    contextBar: {
       flexDirection: 'row',
       alignItems: 'center',
+      minHeight: t.touchMin,
+      paddingHorizontal: t.space4,
+      backgroundColor: t.surface,
       gap: t.space2,
-      paddingHorizontal: t.space3,
-      paddingVertical: t.space2,
     },
-    summaryText: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
+    contextText: { flex: 1, minWidth: 0, fontSize: t.fontBody, color: t.ink, fontWeight: '600' },
+    contextBack: { fontSize: t.fontSupport, color: t.muted },
+    list: { paddingHorizontal: t.space3, paddingTop: t.space2, paddingBottom: t.space8 },
+    timelinePane: { flex: 1 },
+    timelineList: { flex: 1 },
     section: { padding: t.space4, gap: t.space3 },
     row: {
       flexDirection: 'row',
@@ -275,6 +333,26 @@ const createStyles = (t: Theme) =>
     },
     rowMain: { flex: 1, fontSize: t.fontBody, color: t.ink },
     tagCreate: { flexDirection: 'row', gap: t.space2, alignItems: 'center' },
-    tagInput: { flex: 1, borderWidth: 1, borderColor: t.line, borderRadius: t.fieldRadius, paddingHorizontal: t.space3, paddingVertical: t.space2, backgroundColor: t.surface, color: t.ink },
+    tagInput: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: t.line,
+      borderRadius: t.fieldRadius,
+      paddingHorizontal: t.space3,
+      paddingVertical: t.space2,
+      backgroundColor: t.surface,
+      color: t.ink,
+    },
     danger: { color: t.danger, fontSize: t.fontSupport },
+    fab: {
+      position: 'absolute',
+      right: t.space5,
+      width: t.controlHProminent + t.space3,
+      height: t.controlHProminent + t.space3,
+      borderRadius: (t.controlHProminent + t.space3) / 2,
+      backgroundColor: t.action,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: t.space1,
+    },
   });

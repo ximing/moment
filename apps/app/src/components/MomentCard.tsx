@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MomentResponse, TemplateManifest } from '@moment/dto';
-import { formatMomentTime } from '../lib/format';
+import { formatMomentTimeShort } from '../lib/format';
 import { resolveMomentSummary } from '../lib/template';
 import type { Theme } from '../theme/theme';
 import { useTheme } from '../theme/use-theme';
@@ -9,6 +9,7 @@ import { AppIcon } from './AppIcon';
 import { Icon } from './Icon';
 import { AudioBar } from './AudioBar';
 import { MediaGrid } from './MediaGrid';
+import { UserAvatar } from './UserAvatar';
 
 /** spec §4.2：onLongPress 可选（Pressable 原生支持）；权限判断在列表侧，组件不含。 */
 export function MomentCard({
@@ -36,14 +37,30 @@ export function MomentCard({
   const audioMedia = isVoice ? moment.media.find((m) => m.mime.startsWith('audio/')) : undefined;
   // voice 附图只传 image/* 行：audio/* 是内容本体进播放条，不能进宫格（spec §6）
   const gridMedia = isVoice ? moment.media.filter((m) => m.mime.startsWith('image/')) : moment.media;
+  const reactionCount = moment.reactions.reduce((sum, r) => sum + r.count, 0);
+  const timeBits = [
+    formatMomentTimeShort(moment.happenedAt, moment.happenedTzOffset),
+    moment.isBackfill ? '补发' : null,
+    ageLabel ?? null,
+  ].filter(Boolean);
+  const summary = templateManifest ? resolveMomentSummary(templateManifest, moment) : null;
+  const geoName = (moment.payload?.geo as { place_name?: string } | undefined)?.place_name;
+  const mood = moment.kind === 'standard' && typeof moment.payload?.mood === 'string' ? moment.payload.mood : null;
+
   return (
     <Pressable style={styles.card} onPress={onPress} onLongPress={onLongPress}>
       <View style={styles.head}>
-        <Text style={styles.author}>{moment.author.nickname}</Text>
-        <Text style={styles.time}>
-          {formatMomentTime(moment.happenedAt, moment.happenedTzOffset)}
-          {moment.isBackfill ? ' · 补发' : ''}
-          {ageLabel ? ` · ${ageLabel}` : ''}
+        <UserAvatar url={moment.author.avatarUrl} name={moment.author.nickname} size={t.space8} />
+        <Text style={styles.author} numberOfLines={1}>
+          {moment.author.nickname}
+        </Text>
+        {mood ? (
+          <View accessibilityLabel="心情" style={styles.mood}>
+            <AppIcon value={mood} size={t.fontInput} />
+          </View>
+        ) : null}
+        <Text style={styles.time} numberOfLines={1}>
+          {timeBits.join(' · ')}
         </Text>
       </View>
       {audioMedia ? <AudioBar media={audioMedia} /> : null}
@@ -52,85 +69,54 @@ export function MomentCard({
       ) : null}
       {moment.content.length > 0 ? <Text style={styles.content}>{moment.content}</Text> : null}
       <MediaGrid media={gridMedia} />
-      {templateManifest
-        ? (() => {
-            // 判重基准与兜底 content 逐字同源（resolveMomentSummary 内部完成），不重复显示
-            const summary = resolveMomentSummary(templateManifest, moment);
-            if (!summary) return null;
-            // 数据值 icon 走 AppIcon：词表 key / 存量 emoji 渲染 svg，其余原文兜底（P3-2）
-            return (
-              <View style={styles.tplIconRow}>
-                {summary.icon ? <AppIcon value={summary.icon} size={t.fontSupport} /> : null}
-                <Text style={[styles.tplLine, styles.flushTop]}>{summary.text}</Text>
-              </View>
-            );
-          })()
-        : null}
-      {moment.kind === 'standard' && typeof moment.payload?.mood === 'string' ? (
-        <View style={styles.tplIconRow} accessibilityLabel="心情">
-          <AppIcon value={moment.payload.mood} size={t.fontSupport} />
+      {summary ? (
+        <View style={styles.tplIconRow}>
+          {summary.icon ? <AppIcon value={summary.icon} size={t.fontSupport} /> : null}
+          <Text style={styles.tplLine}>{summary.text}</Text>
         </View>
       ) : null}
-      {(() => {
-        const geo = moment.payload?.geo as { place_name?: string } | undefined;
-        return geo?.place_name ? (
-          <View style={styles.tplIconRow}>
-            <Icon name="map-pin" size={t.fontSupport} />
-            <Text style={[styles.tplLine, styles.flushTop]}>{geo.place_name}</Text>
-          </View>
-        ) : null;
-      })()}
-      {/* 人物与地点（spec fused-retrieval §7.1）：时间线传入回调则内层 Pressable 可点过滤；
-          往年今日/不传回调保持 P6 只读 View。AI 角标保留。name 为 null 的地点仍不渲染。 */}
-      {moment.persons.length > 0 ? (
-        <View style={styles.personRow} accessibilityLabel="和谁在一起">
-          {moment.persons.map((p) => {
-            const label = p.name;
-            const inner = (
-              <Text style={styles.personChipText}>
-                {p.name}
-                {p.source === 'ai' ? <Text style={styles.personAi}> AI</Text> : null}
-              </Text>
-            );
-            return onPersonFilter ? (
-              <Pressable
-                key={p.id}
-                accessibilityRole="button"
-                accessibilityLabel={`筛选 ${label}`}
-                onPress={() => onPersonFilter({ id: p.id, name: p.name })}
-                style={styles.personChipPressable}
-              >
-                {inner}
-              </Pressable>
-            ) : (
-              <View key={p.id} style={styles.personChip}>
-                {inner}
-              </View>
-            );
-          })}
+      {geoName ? (
+        <View style={styles.tplIconRow}>
+          <Icon name="map-pin" size={t.fontSupport} />
+          <Text style={styles.tplLine}>{geoName}</Text>
         </View>
-      ) : null}
-      {moment.place?.name ? (
-        onPlaceFilter ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`筛选地点 ${moment.place.name}`}
-            onPress={() => onPlaceFilter(moment.place!.name!)}
-            style={styles.placePressable}
-          >
-            <View style={styles.tplIconRow}>
-              <Icon name="map-pin" size={t.fontSupport} />
-              <Text style={[styles.tplLine, styles.flushTop]}>{moment.place.name}</Text>
-            </View>
-          </Pressable>
-        ) : (
-          <View style={styles.tplIconRow}>
-            <Icon name="map-pin" size={t.fontSupport} />
-            <Text style={[styles.tplLine, styles.flushTop]}>{moment.place.name}</Text>
-          </View>
-        )
       ) : null}
       <View style={styles.footer}>
+        {moment.persons.map((p) => {
+          const label = (
+            <Text style={styles.metaText}>
+              {p.name}
+              {p.source === 'ai' ? ' · AI' : ''}
+            </Text>
+          );
+          return onPersonFilter ? (
+            <MetaHit
+              key={p.id}
+              accessibilityLabel={`筛选 ${p.name}`}
+              onPress={() => onPersonFilter({ id: p.id, name: p.name })}
+            >
+              {label}
+            </MetaHit>
+          ) : (
+            <View key={p.id}>{label}</View>
+          );
+        })}
+        {moment.place?.name ? (
+          onPlaceFilter ? (
+            <MetaHit
+              accessibilityLabel={`筛选地点 ${moment.place.name}`}
+              onPress={() => onPlaceFilter(moment.place!.name!)}
+            >
+              <Icon name="map-pin" size={t.fontCaption} />
+              <Text style={styles.metaText}>{moment.place.name}</Text>
+            </MetaHit>
+          ) : (
+            <View style={styles.metaItem}>
+              <Icon name="map-pin" size={t.fontCaption} />
+              <Text style={styles.metaText}>{moment.place.name}</Text>
+            </View>
+          )
+        ) : null}
         {moment.tags.map((tag) => (
           <Text key={tag.id} style={styles.tag}>
             #{tag.name}
@@ -138,44 +124,63 @@ export function MomentCard({
         ))}
         <View style={styles.counts}>
           <Icon name="message-circle" size={t.fontSupport} />
-          <Text style={styles.countsText}>
-            {moment.commentCount} · {moment.reactions.reduce((sum, r) => sum + r.count, 0)} 个表情
-          </Text>
+          <Text style={styles.countsText}>{moment.commentCount}</Text>
+          {reactionCount > 0 ? <Text style={styles.countsText}>· {reactionCount}</Text> : null}
         </View>
       </View>
     </Pressable>
   );
 }
 
+function MetaHit({
+  accessibilityLabel,
+  onPress,
+  children,
+}: {
+  accessibilityLabel: string;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={{ top: t.space2, bottom: t.space2, left: t.space1, right: t.space1 }}
+      onPress={onPress}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: t.space1 }}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
 const createStyles = (t: Theme) =>
   StyleSheet.create({
-    card: { padding: t.space4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.line, backgroundColor: t.surface },
-    head: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-    author: { fontWeight: '600', fontSize: t.fontBody, color: t.ink },
-    time: { color: t.muted, fontSize: t.fontCaption },
-    transcribing: { color: t.muted, fontSize: t.fontCaption, marginTop: t.space1 },
-    content: { fontSize: t.fontBody, lineHeight: 22, color: t.ink },
-    footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.space2, marginTop: t.space2 },
-    tplLine: { color: t.muted, fontSize: t.fontSupport, marginTop: t.space1 },
-    tplIconRow: { flexDirection: 'row', alignItems: 'center', gap: t.space1, marginTop: t.space1 },
-    flushTop: { marginTop: 0 },
-    personRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space2, marginTop: t.space1 },
-    personChip: { paddingHorizontal: t.space3, paddingVertical: t.space1, borderRadius: t.radiusMd, backgroundColor: t.hoverSoft },
-    personChipPressable: {
-      paddingHorizontal: t.space3,
-      paddingVertical: t.space1,
+    card: {
+      padding: t.space4,
+      marginBottom: t.space3,
       borderRadius: t.radiusMd,
-      backgroundColor: t.hoverSoft,
-      minHeight: t.touchMin,
-      justifyContent: 'center',
+      backgroundColor: t.surface,
     },
-    placePressable: {
-      minHeight: t.touchMin,
-      justifyContent: 'center',
+    head: { flexDirection: 'row', alignItems: 'center', gap: t.space2 },
+    author: { flexShrink: 1, minWidth: 0, fontWeight: '600', fontSize: t.fontBody, color: t.ink },
+    mood: { flexShrink: 0 },
+    time: { flex: 1, flexShrink: 0, textAlign: 'right', color: t.muted, fontSize: t.fontCaption },
+    transcribing: { color: t.muted, fontSize: t.fontCaption, marginTop: t.space2 },
+    content: { fontSize: t.fontBody, lineHeight: 22, color: t.ink, marginTop: t.space3 },
+    tplLine: { color: t.muted, fontSize: t.fontSupport },
+    tplIconRow: { flexDirection: 'row', alignItems: 'center', gap: t.space1, marginTop: t.space2 },
+    footer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: t.space2,
+      marginTop: t.space3,
     },
-    personChipText: { fontSize: t.fontSupport, color: t.ink },
-    personAi: { color: t.muted, fontSize: t.fontCaption },
-    tag: { color: t.tag, fontSize: t.fontSupport },
+    metaItem: { flexDirection: 'row', alignItems: 'center', gap: t.space1 },
+    metaText: { fontSize: t.fontCaption, color: t.muted },
+    tag: { color: t.tag, fontSize: t.fontCaption },
     counts: { flexDirection: 'row', alignItems: 'center', gap: t.space1, marginLeft: 'auto' },
-    countsText: { color: t.muted, fontSize: t.fontSupport },
+    countsText: { color: t.muted, fontSize: t.fontCaption },
   });

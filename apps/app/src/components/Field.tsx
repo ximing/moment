@@ -13,13 +13,13 @@ export function Field({
   onFocus,
   onBlur,
   ...inputProps
-}: TextInputProps & { label: string; isInvalid?: boolean }) {
+}: TextInputProps & { label?: string; isInvalid?: boolean }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const [focused, setFocused] = useState(false);
   return (
     <>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
         style={[styles.input, focused && styles.inputFocused, isInvalid && styles.inputInvalid]}
         placeholderTextColor={t.muted}

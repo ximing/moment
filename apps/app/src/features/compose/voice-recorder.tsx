@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -10,7 +10,6 @@ import {
 } from 'expo-audio';
 import { File } from 'expo-file-system';
 import { MAX_AUDIO_DURATION_SECONDS } from '@moment/dto';
-import { Button } from '../../components/Button';
 import { toast } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -28,17 +27,20 @@ function formatDuration(seconds: number): string {
 
 /** 回听：独立组件挂 useAudioPlayer（hook 不能条件调用） */
 function ReplayButton({ uri }: { uri: string }) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
   const player = useAudioPlayer(uri);
   return (
-    <Button
-      variant="secondary"
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="回听"
       onPress={() => {
         void player.seekTo(0);
         player.play();
       }}
     >
-      回听
-    </Button>
+      <Text style={styles.actionText}>回听</Text>
+    </Pressable>
   );
 }
 
@@ -142,29 +144,39 @@ export function VoiceRecorder({
     <View style={styles.box}>
       {state.isRecording ? (
         <View style={styles.row}>
-          <Button variant="secondary" loading={busy} onPress={() => void stopRecording()}>
-            停止
-          </Button>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="停止录音"
+            onPress={() => void stopRecording()}
+            disabled={busy}
+            style={styles.action}
+          >
+            <Text style={styles.actionText}>停止</Text>
+          </Pressable>
           <Text style={styles.time}>
             {formatDuration(elapsedSeconds)} / {formatDuration(MAX_AUDIO_DURATION_SECONDS)}
           </Text>
         </View>
       ) : (
         <View style={styles.row}>
-          <Button variant="secondary" loading={busy} onPress={() => void startRecording()}>
-            {voice ? '重新录音' : '录音'}
-          </Button>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={voice ? '重新录音' : '录音'}
+            onPress={() => void startRecording()}
+            disabled={busy}
+            style={styles.action}
+          >
+            <Text style={styles.actionText}>{voice ? '重录' : '录音'}</Text>
+          </Pressable>
           {voice ? <ReplayButton uri={voice.uri} /> : null}
           {voice ? (
-            <Button variant="quiet" onPress={() => onChange(null)}>
-              移除
-            </Button>
+            <Pressable accessibilityRole="button" accessibilityLabel="移除录音" onPress={() => onChange(null)}>
+              <Text style={styles.muted}>移除</Text>
+            </Pressable>
           ) : null}
+          {voice ? <Text style={styles.time}>已录 {formatDuration(voice.durationSeconds)}</Text> : null}
         </View>
       )}
-      {voice && !state.isRecording ? (
-        <Text style={styles.hint}>已录 {formatDuration(voice.durationSeconds)} · 发布后可修改转写文本</Text>
-      ) : null}
     </View>
   );
 }
@@ -172,7 +184,9 @@ export function VoiceRecorder({
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     box: { gap: t.space1 },
-    row: { flexDirection: 'row', alignItems: 'center', gap: t.space2 },
+    row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.space3, minHeight: t.touchMin },
+    action: { minHeight: t.touchMin, justifyContent: 'center' },
+    actionText: { fontSize: t.fontBody, fontWeight: '600', color: t.ink },
+    muted: { fontSize: t.fontSupport, color: t.muted },
     time: { color: t.muted, fontSize: t.fontCaption },
-    hint: { color: t.muted, fontSize: t.fontCaption },
   });
