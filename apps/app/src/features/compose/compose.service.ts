@@ -4,7 +4,7 @@ import { ApiError } from '@moment/api-client';
 import * as Location from 'expo-location';
 import { client } from '../../lib/api';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { compressImage, pickImages, pickVideo, uriToBlob, validateVideo, type PickedVideo, type ReadyImage } from '../../lib/media';
+import { compressImage, pickImages, pickVideo, uriToBlob, validateVideo, type MediaSource, type PickedVideo, type ReadyImage } from '../../lib/media';
 import { summarizePayload } from '../../lib/template';
 import { firstAssetDateTime, firstAssetGps, wallClockToLocalDate } from '../../lib/exif-gps';
 import { ChainListService } from '../../services/chain-list.service';
@@ -347,14 +347,15 @@ export class ComposeService extends Service {
   }
 
   /** 选图 + 压缩；返回 rejected 数（仅统计压缩后仍超 MAX_IMAGE_BYTES 被跳过的，名额截断不算）。
-   *  满 9 张抛 Error（中文 message，组件 Alert）；压缩中途抛错也复位进度。 */
-  async pickMoreImages(): Promise<number> {
+   *  满 9 张抛 Error（中文 message，组件 Alert）；压缩中途抛错也复位进度。
+   *  source=camera 走系统相机（一次一张）；相册仍可多选，名额由 selectionLimit 卡住。 */
+  async pickMoreImages(source: MediaSource = 'library'): Promise<number> {
     const cap = this.edit ? editImageCap(this.edit) : this.type === 'voice' ? 8 : 9;
     const occupied = this.edit ? editOccupied(this.keptMedia, this.images) : this.images.length;
     const remain = cap - occupied;
     const voiceCap = this.edit ? this.edit.type === 'voice' : this.type === 'voice';
     if (remain <= 0) throw new Error(voiceCap ? '语音时刻最多 8 张附图' : '图片最多 9 张');
-    const picked = this.edit ? await pickImages({ selectionLimit: remain }) : await pickImages();
+    const picked = await pickImages({ selectionLimit: remain, source });
     if (picked.length === 0) return 0;
     const kept = this.edit ? picked : picked.slice(0, remain);
     // EXIF 自动回填（spec §3）：读的是压缩前原始 asset（pickImages exif:true）；
@@ -380,10 +381,11 @@ export class ComposeService extends Service {
     return rejected;
   }
 
-  /** 选视频 + 校验；返回问题文案（null = 成功）。覆盖选择即丢弃上一支视频的封面草稿并重新截帧。 */
-  async chooseVideo(): Promise<string | null> {
+  /** 选视频 + 校验；返回问题文案（null = 成功）。覆盖选择即丢弃上一支视频的封面草稿并重新截帧。
+   *  source=camera 直接唤起系统相机拍摄。 */
+  async chooseVideo(source: MediaSource = 'library'): Promise<string | null> {
     if (this.edit) return null;
-    const picked = await pickVideo();
+    const picked = await pickVideo({ source });
     if (!picked) return null;
     const problem = validateVideo(picked);
     if (problem) return problem;

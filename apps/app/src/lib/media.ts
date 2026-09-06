@@ -29,13 +29,47 @@ export interface PickedVideo {
   durationSeconds: number;
 }
 
+/** 相册多选 vs 系统相机拍摄（一次一张/一支）。 */
+export type MediaSource = 'library' | 'camera';
+
+const CAMERA_DENIED = '没拿到相机权限，去系统设置里开一下';
+
 /** 仅用于压缩后的图片（百 KB 级）整读入内存；视频严禁走此路径（见 rn-put.ts 按片读盘）。 */
 export async function uriToBlob(uri: string): Promise<Blob> {
   const res = await fetch(uri);
   return await res.blob();
 }
 
-export async function pickImages(opts?: { selectionLimit?: number }): Promise<PickedImage[]> {
+function asPickedImage(a: ImagePicker.ImagePickerAsset): PickedImage {
+  return { uri: a.uri, width: a.width, height: a.height, exif: a.exif ?? null };
+}
+
+function asPickedVideo(a: ImagePicker.ImagePickerAsset): PickedVideo {
+  return {
+    uri: a.uri,
+    mime: a.mimeType ?? 'video/mp4',
+    size: a.fileSize ?? 0,
+    durationSeconds: Math.round((a.duration ?? 0) / 1000),
+  };
+}
+
+async function ensureCamera(): Promise<void> {
+  const perm = await ImagePicker.requestCameraPermissionsAsync();
+  if (!perm.granted) throw new Error(CAMERA_DENIED);
+}
+
+export async function pickImages(opts?: { selectionLimit?: number; source?: MediaSource }): Promise<PickedImage[]> {
+  const source = opts?.source ?? 'library';
+  if (source === 'camera') {
+    await ensureCamera();
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+      exif: true, // 与相册同口径：压缩前原始 asset 的 EXIF（GPS 用于地点草稿回填）
+    });
+    if (result.canceled) return [];
+    return result.assets.map(asPickedImage);
+  }
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) return [];
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -46,22 +80,28 @@ export async function pickImages(opts?: { selectionLimit?: number }): Promise<Pi
     exif: true, // spec people-place §3：读压缩前原始 asset 的 EXIF（GPS 用于地点草稿回填）
   });
   if (result.canceled) return [];
-  return result.assets.map((a) => ({ uri: a.uri, width: a.width, height: a.height, exif: a.exif ?? null }));
+  return result.assets.map(asPickedImage);
 }
 
-export async function pickVideo(): Promise<PickedVideo | null> {
+export async function pickVideo(opts?: { source?: MediaSource }): Promise<PickedVideo | null> {
+  const source = opts?.source ?? 'library';
+  if (source === 'camera') {
+    await ensureCamera();
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['videos'],
+      quality: 1,
+      videoMaxDuration: MAX_VIDEO_DURATION_SECONDS,
+    });
+    if (result.canceled) return null;
+    const a = result.assets[0];
+    return a ? asPickedVideo(a) : null;
+  }
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) return null;
   const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
   if (result.canceled) return null;
   const a = result.assets[0];
-  if (!a) return null;
-  return {
-    uri: a.uri,
-    mime: a.mimeType ?? 'video/mp4',
-    size: a.fileSize ?? 0,
-    durationSeconds: Math.round((a.duration ?? 0) / 1000),
-  };
+  return a ? asPickedVideo(a) : null;
 }
 
 /** spec §5.5：客户端压到最长边 ≤2048px、JPEG 0.85；压缩后仍超 MAX_IMAGE_BYTES 由调用方拒绝。 */

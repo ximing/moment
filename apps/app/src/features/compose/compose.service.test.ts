@@ -201,7 +201,29 @@ describe('ComposeService 编辑媒体（spec §7）', () => {
     await s.loadForEdit('m-1');
     mediaLib.pickImages.mockResolvedValue([]);
     await s.pickMoreImages();
-    expect(mediaLib.pickImages).toHaveBeenCalledWith({ selectionLimit: 2 });
+    expect(mediaLib.pickImages).toHaveBeenCalledWith({ selectionLimit: 2, source: 'library' });
+  });
+
+  it('source=camera 透传给 pickImages，不打开相册', async () => {
+    api.getMoment.mockResolvedValue(moment({ type: 'media', media: [img('keep')] }));
+    const s = svc();
+    await s.loadForEdit('m-1');
+    mediaLib.pickImages.mockResolvedValue([]);
+    await s.pickMoreImages('camera');
+    expect(mediaLib.pickImages).toHaveBeenCalledWith({ selectionLimit: 8, source: 'camera' });
+  });
+
+  it('source=camera 透传给 pickVideo 并写入草稿', async () => {
+    const s = svc();
+    s.edit = null;
+    mediaLib.pickVideo.mockResolvedValue({
+      uri: 'file://v.mp4', mime: 'video/mp4', size: 1000, durationSeconds: 5,
+    });
+    mediaLib.validateVideo.mockReturnValue(null);
+    const problem = await s.chooseVideo('camera');
+    expect(problem).toBeNull();
+    expect(mediaLib.pickVideo).toHaveBeenCalledWith({ source: 'camera' });
+    expect(s.video?.uri).toBe('file://v.mp4');
   });
 
   it('无 keptAudio → 录音不能换，不打 API', async () => {

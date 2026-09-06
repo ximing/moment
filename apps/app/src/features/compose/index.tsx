@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, InteractionManager, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
@@ -13,8 +13,10 @@ import { AudioBar } from '../../components/AudioBar';
 import { Button } from '../../components/Button';
 import { Icon, type AppLineIconName } from '../../components/Icon';
 import { CapsuleTextButton, OverlayNav } from '../../components/OverlayNav';
+import { ActionSheet, ActionSheetItem } from '../../components/ActionSheet';
 import { toast } from '../../components/feedback';
 import { RequireAuth } from '../../components/RequireAuth';
+import type { MediaSource } from '../../lib/media';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 import { ComposeService, editImageCap, editOccupied } from './compose.service';
@@ -30,6 +32,7 @@ const TYPES: { value: 'text' | 'media' | 'video' | 'voice'; label: string; icon:
 ];
 
 type Sheet = 'chain' | 'people' | 'tags' | null;
+type MediaSheet = 'photo' | 'video' | null;
 
 function ComposeNav({
   title,
@@ -61,6 +64,7 @@ const ComposeContent = observer(function ComposeContent() {
   const styles = useMemo(() => createStyles(t), [t]);
   const insets = useSafeAreaInsets();
   const [sheet, setSheet] = useState<Sheet>(null);
+  const [mediaSheet, setMediaSheet] = useState<MediaSheet>(null);
 
   useEffect(() => {
     const chainId = Array.isArray(params.chainId) ? params.chainId[0] : params.chainId;
@@ -82,9 +86,9 @@ const ComposeContent = observer(function ComposeContent() {
     if (service.activeChainId) void service.loadPersons().catch(() => undefined);
   }, [service, service.activeChainId]);
 
-  async function onPickImages(): Promise<void> {
+  async function onPickImages(source: MediaSource): Promise<void> {
     try {
-      const rejected = await service.pickMoreImages();
+      const rejected = await service.pickMoreImages(source);
       if (rejected > 0) {
         toast.show({ key: 'compose-hint', message: `${rejected} 张图片压缩后仍超限，已跳过` });
       }
@@ -97,9 +101,26 @@ const ComposeContent = observer(function ComposeContent() {
     }
   }
 
-  async function onPickVideo(): Promise<void> {
-    const problem = await service.chooseVideo().catch(() => null);
-    if (problem) toast.show({ key: 'compose-hint', message: problem });
+  async function onPickVideo(source: MediaSource): Promise<void> {
+    try {
+      const problem = await service.chooseVideo(source);
+      if (problem) toast.show({ key: 'compose-hint', message: problem });
+    } catch (err) {
+      toast.show({
+        key: 'compose-hint',
+        message: err instanceof Error ? err.message : '网络错误，请重试',
+      });
+    }
+  }
+
+  function pickFromSheet(source: MediaSource): void {
+    const kind = mediaSheet;
+    setMediaSheet(null);
+    // 先收起动作表再唤起系统相册/相机，避免 Modal 叠在系统 UI 上（华为等机型尤其明显）
+    InteractionManager.runAfterInteractions(() => {
+      if (kind === 'video') void onPickVideo(source);
+      else if (kind === 'photo') void onPickImages(source);
+    });
   }
 
   async function onSubmit(): Promise<void> {
@@ -257,7 +278,7 @@ const ComposeContent = observer(function ComposeContent() {
               </View>
             ))}
             {occupied < imageCap ? (
-              <Pressable accessibilityRole="button" accessibilityLabel="添加照片" onPress={() => void onPickImages()} style={styles.addCell}>
+              <Pressable accessibilityRole="button" accessibilityLabel="添加照片" onPress={() => setMediaSheet('photo')} style={styles.addCell}>
                 <Icon name="plus" size={t.fontInput} color={t.muted} />
               </Pressable>
             ) : null}
@@ -265,7 +286,7 @@ const ComposeContent = observer(function ComposeContent() {
         ) : null}
 
         {canAddImage && occupied === 0 ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="添加照片" onPress={() => void onPickImages()} style={styles.addCellWide}>
+          <Pressable accessibilityRole="button" accessibilityLabel="添加照片" onPress={() => setMediaSheet('photo')} style={styles.addCellWide}>
             <Icon name="image" size={t.fontLabel} color={t.muted} />
             <Text style={styles.addCellWideText}>添加照片</Text>
           </Pressable>
@@ -275,7 +296,7 @@ const ComposeContent = observer(function ComposeContent() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={service.video ? '重选视频' : '选择视频'}
-            onPress={() => void onPickVideo()}
+            onPress={() => setMediaSheet('video')}
             style={styles.addCellWide}
           >
             <Icon name="video" size={t.fontLabel} color={t.muted} />
@@ -415,6 +436,18 @@ const ComposeContent = observer(function ComposeContent() {
           />
         )
       ) : null}
+
+      <ActionSheet
+        visible={mediaSheet !== null}
+        title={mediaSheet === 'video' ? '添加视频' : '添加照片'}
+        onClose={() => setMediaSheet(null)}
+      >
+        <ActionSheetItem label="从相册选择" onPress={() => pickFromSheet('library')} />
+        <ActionSheetItem
+          label={mediaSheet === 'video' ? '拍摄' : '拍照'}
+          onPress={() => pickFromSheet('camera')}
+        />
+      </ActionSheet>
 
       <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
         <View style={styles.scrim}>

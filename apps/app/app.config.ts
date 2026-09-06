@@ -2,8 +2,8 @@ import type { ExpoConfig } from 'expo/config';
 import { type ConfigPlugin, withAppBuildGradle } from '@expo/config-plugins';
 
 // CI 从 release tag 派生版本（见 .github/workflows/android-release.yml）；本地缺省回退。
-const version = process.env.APP_VERSION_NAME ?? '0.3.4';
-const versionCode = Number(process.env.APP_VERSION_CODE ?? 304);
+const version = process.env.APP_VERSION_NAME ?? '0.3.5';
+const versionCode = Number(process.env.APP_VERSION_CODE ?? 305);
 
 /**
  * 向生成的 android/app/build.gradle 注入 release 签名配置。
@@ -78,6 +78,14 @@ const config: ExpoConfig = {
     ['expo-location', { locationWhenInUseUsageDescription: '记录时刻时附上当前位置，生成旅行足迹地图' }],
     // 语音时刻录音的麦克风权限用途文案（spec voice-moment §6；Android RECORD_AUDIO 由插件自动声明）
     ['expo-audio', { microphonePermission: '录制语音时刻，记录宝宝的声音' }],
+    [
+      'expo-image-picker',
+      {
+        photosPermission: '从相册选择照片和视频，记录此刻',
+        cameraPermission: '拍摄照片和视频，记录此刻',
+        microphonePermission: '拍摄视频时录制声音',
+      },
+    ],
     // @expo/config-types 将 plugins 标为 (string | [] | [string] | [string, any])[]，未含函数插件；
     // 运行时接受 ConfigPlugin（见 expo config-plugins/mods 文档），此 cast 仅弥合静态类型缺口。
     withEnvReleaseSigning as any,
