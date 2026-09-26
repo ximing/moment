@@ -62,6 +62,10 @@ export class S3UnifiedStorageAdapter extends BaseUnifiedStorageAdapter {
         secretAccessKey: cfg.secretAccessKey,
       };
     }
+    // SDK 默认 WHEN_SUPPORTED 会给预签名 UploadPart 签上并不对应真实分片的 CRC32。
+    // 兼容网关可能拒签。只在 API 强制要求时才带校验和。
+    clientConfig.requestChecksumCalculation = 'WHEN_REQUIRED';
+    clientConfig.responseChecksumValidation = 'WHEN_REQUIRED';
     this.client = new S3Client(clientConfig as import('@aws-sdk/client-s3').S3ClientConfig);
     logger.info(
       `S3 adapter initialized: bucket=${this.bucket} prefix=${this.prefix} endpoint=${this.endpoint ?? 'AWS'} isPublic=${this.isPublic}`

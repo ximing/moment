@@ -6,7 +6,6 @@ import { observer, useService } from '@rabjs/react';
 import { Icon } from '../../components/Icon';
 import { Button } from '../../components/Button';
 import { confirm, toast } from '../../components/feedback';
-import { apkSizeLabel } from '../../lib/app-update';
 import { AppUpdateService } from '../../services/app-update.service';
 import { AuthService } from '../../services/auth.service';
 import {
@@ -32,8 +31,16 @@ export const MePage = observer(function MePage() {
       toast.show(`当前 ${update.currentVersion}`);
       return;
     }
-    if (update.status === 'downloading' || update.status === 'installing') {
-      toast.show('正在下载新版本…');
+    if (update.status === 'downloading') {
+      toast.show('正在后台下载，完成后会提示安装');
+      return;
+    }
+    if (update.status === 'installing') {
+      toast.show('正在打开安装…');
+      return;
+    }
+    if (update.status === 'ready' && update.remote) {
+      update.installPrompt = true;
       return;
     }
     void update
@@ -43,14 +50,7 @@ export const MePage = observer(function MePage() {
           toast.show(`已是最新版本 ${update.currentVersion}`);
           return;
         }
-        const size = apkSizeLabel(remote.apkBytes);
-        return confirm({
-          title: `有新版本 ${remote.versionName}`,
-          body: size
-            ? `下载（${size}）完成后会打开系统安装。现在升级？`
-            : '下载完成后会打开系统安装。现在升级？',
-          confirmLabel: '升级',
-        }).then((ok) => (ok ? update.downloadAndInstall() : undefined));
+        if (update.status === 'downloading') toast.show('正在后台下载，完成后会提示安装');
       })
       .catch((err) => toast.error(err, '检查更新失败'));
   }
@@ -101,9 +101,11 @@ export const MePage = observer(function MePage() {
         value={
           update.status === 'downloading'
             ? '下载中…'
-            : update.status === 'available' && update.remote
-              ? `有 ${update.remote.versionName}`
-              : update.currentVersion
+            : update.status === 'installing'
+              ? '安装中…'
+              : update.status === 'ready' && update.remote
+                ? `可安装 ${update.remote.versionName}`
+                : update.currentVersion
         }
         onPress={onCheckUpdate}
       />

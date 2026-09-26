@@ -55,6 +55,18 @@ export function isNewer(remoteCode: number, localCode: number): boolean {
   return remoteCode > localCode;
 }
 
+/** 缓存里的安装包文件名。同一 versionName 复用，避免重复下载。 */
+export function updateApkFileName(versionName: string): string {
+  return `moment-${versionName}.apk`;
+}
+
+/** expectedBytes 为 0 时只要求文件非空（GitHub 没给 size）。否则必须与发布资源字节数一致。 */
+export function isApkDownloadComplete(actualBytes: number, expectedBytes: number): boolean {
+  if (actualBytes <= 0) return false;
+  if (expectedBytes <= 0) return true;
+  return actualBytes === expectedBytes;
+}
+
 export function apkSizeLabel(bytes: number): string {
   if (bytes <= 0) return '';
   const mb = bytes / (1024 * 1024);

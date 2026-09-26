@@ -3,7 +3,12 @@ import { z } from 'zod';
 /** spec §5.5：图 ≤10MB；视频 ≤500MB。所有端共享的唯一常量来源。 */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
-/** 视频 multipart 单 part 大小（spec §5.5：5–20MB，取 8MB）。 */
+/**
+ * 超过该字节数的任意媒体（图 / 视频 / 语音）走 S3 multipart；不超过走单次 PUT。
+ * 合片后仍是一个对象，访问继续用整对象的预签名 GET。
+ */
+export const MULTIPART_THRESHOLD_BYTES = 5 * 1024 * 1024;
+/** multipart 单 part 大小（spec §5.5：5–20MB，取 8MB）。非末片必须 ≥5MB，故不小于阈值。 */
 export const VIDEO_PART_SIZE = 8 * 1024 * 1024;
 /** 视频时长上限（秒，spec §5.5「≤5 分钟」）。服务端只校验客户端上报的 durationSeconds。 */
 export const MAX_VIDEO_DURATION_SECONDS = 300;

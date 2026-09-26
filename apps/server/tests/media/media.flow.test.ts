@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
 import { media } from '../../src/db/schema.js';
-import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, VIDEO_PART_SIZE } from '@moment/dto';
+import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MULTIPART_THRESHOLD_BYTES, VIDEO_PART_SIZE } from '@moment/dto';
 import { createUser } from '../helpers/auth.js';
 import { closeDb, resetDb } from '../helpers/db.js';
 import { installMockStorage, type MockStorage } from '../helpers/storage.js';
@@ -97,6 +97,27 @@ describe('POST /api/media/presign', () => {
     expect(row.status).toBe('uploading');
     expect(row.uploadId).toBe('fake-upload-id');
     expect(storage.initMultipart).toHaveBeenCalledWith(row.s3Key, { contentType: 'video/mp4' });
+  });
+
+  it('不超过 5MB 的视频走单 PUT', async () => {
+    const res = await presignVideo(alice.token, { size: MULTIPART_THRESHOLD_BYTES });
+    expect(res.status).toBe(201);
+    expect(res.body.method).toBe('put');
+    expect(res.body.uploadId).toBeNull();
+    expect(res.body.partSize).toBeNull();
+    expect(storage.initMultipart).not.toHaveBeenCalled();
+  });
+
+  it('超过 5MB 的图片走 multipart', async () => {
+    const res = await presignImage(alice.token, { size: MULTIPART_THRESHOLD_BYTES + 1 });
+    expect(res.status).toBe(201);
+    expect(res.body.method).toBe('multipart');
+    expect(res.body.url).toBeNull();
+    expect(res.body.partSize).toBe(VIDEO_PART_SIZE);
+    const [row] = await db.select().from(media).where(eq(media.id, res.body.mediaId));
+    expect(row.uploadId).toBe('fake-upload-id');
+    expect(storage.initMultipart).toHaveBeenCalledWith(row.s3Key, { contentType: 'image/jpeg' });
+    expect(storage.presignPut).not.toHaveBeenCalled();
   });
 });
 

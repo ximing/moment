@@ -8,8 +8,8 @@ export const apiUrl =
   'http://localhost:3000';
 
 /**
- * 直传 PUT 用 RN 版 rnPut：Blob（压缩后图片）直接 XHR；FilePart（视频分片）按 [start,end)
- * 从 fileUri 读盘再 PUT，整文件不进内存。
+ * 直传 PUT 用 RN 版 rnPut：已在内存的 Blob（压缩后图片）走 XHR；FilePart 按 [start,end)
+ * 读盘后用原生文件 PUT。RN 不能用 Uint8Array 构造 Blob。
  */
 export const client: MomentClient = createMomentClient({
   baseUrl: apiUrl,

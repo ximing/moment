@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { eq } from 'drizzle-orm';
-import { MAX_AUDIO_BYTES } from '@moment/dto';
+import { MAX_AUDIO_BYTES, MULTIPART_THRESHOLD_BYTES, VIDEO_PART_SIZE } from '@moment/dto';
 import { createApp } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
 import { media } from '../../src/db/schema.js';
@@ -44,6 +44,17 @@ describe('POST /api/media/presign（audio，spec voice-moment §3.1）', () => {
     expect(row).toMatchObject({ mime: 'audio/wav', status: 'uploading', duration: 12, uploadId: null });
     expect(row.s3Key).toBe(`tmp/${res.body.mediaId}.wav`);
     expect(storage.initMultipart).not.toHaveBeenCalled();
+  });
+
+  it('超过 5MB 的语音走 multipart', async () => {
+    const res = await presignAudio(alice.token, { size: MULTIPART_THRESHOLD_BYTES + 1 });
+    expect(res.status).toBe(201);
+    expect(res.body.method).toBe('multipart');
+    expect(res.body.partSize).toBe(VIDEO_PART_SIZE);
+    expect(res.body.url).toBeNull();
+    const [row] = await db.select().from(media).where(eq(media.id, res.body.mediaId));
+    expect(storage.initMultipart).toHaveBeenCalledWith(row.s3Key, { contentType: 'audio/wav' });
+    expect(storage.presignPut).not.toHaveBeenCalled();
   });
 
   it('audio 超 25MB → 413 MEDIA_TOO_LARGE，且不插行', async () => {

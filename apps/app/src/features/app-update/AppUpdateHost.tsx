@@ -8,13 +8,14 @@ import { AppUpdateService } from '../../services/app-update.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
 
-/** 启动后检查 GitHub latest；确认后后台下载并调起安装。 */
+/** 启动后检查 GitHub latest。有新版先后台下载，下完再问要不要安装。 */
 export const AppUpdateHost = observer(function AppUpdateHost() {
   const service = useService(AppUpdateService);
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const insets = useSafeAreaInsets();
-  const prompted = useRef(false);
+  const prompting = useRef(false);
+  const toastedError = useRef<string | null>(null);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -24,20 +25,29 @@ export const AppUpdateHost = observer(function AppUpdateHost() {
   }, [service]);
 
   useEffect(() => {
-    if (service.status !== 'available' || prompted.current || !service.remote) return;
-    prompted.current = true;
+    if (!service.installPrompt || service.status !== 'ready' || !service.remote || prompting.current) return;
+    prompting.current = true;
+    service.installPrompt = false;
     const remote = service.remote;
     const size = apkSizeLabel(remote.apkBytes);
     void confirm({
-      title: `有新版本 ${remote.versionName}`,
-      body: size
-        ? `下载（${size}）完成后会打开系统安装。现在升级？`
-        : '下载完成后会打开系统安装。现在升级？',
-      confirmLabel: '升级',
+      title: `新版本 ${remote.versionName} 已下载`,
+      body: size ? `安装包已准备好（${size}）。现在安装？` : '安装包已准备好。现在安装？',
+      confirmLabel: '安装',
+      cancelLabel: '稍后',
     })
-      .then((ok) => (ok ? service.downloadAndInstall() : service.skip()))
-      .catch((err) => toast.error(err, '更新失败'));
-  }, [service, service.status, service.remote]);
+      .then((ok) => (ok ? service.install() : undefined))
+      .catch((err) => toast.error(err, '更新失败'))
+      .finally(() => {
+        prompting.current = false;
+      });
+  }, [service, service.installPrompt, service.status, service.remote]);
+
+  useEffect(() => {
+    if (service.status !== 'error' || !service.error || toastedError.current === service.error) return;
+    toastedError.current = service.error;
+    toast.error(service.error, '更新失败');
+  }, [service.status, service.error]);
 
   if (service.status !== 'downloading' && service.status !== 'installing') return null;
   const label =

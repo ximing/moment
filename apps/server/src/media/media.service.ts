@@ -7,6 +7,7 @@ import {
   MAX_AUDIO_BYTES,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  MULTIPART_THRESHOLD_BYTES,
   VIDEO_PART_SIZE,
   type MediaCompleteInput,
   type MediaCompleteResponse,
@@ -79,8 +80,9 @@ export class MediaService {
       uploadId: null,
     });
 
-    // image 与 audio 同走单 PUT（audio ≤25MB，不启 multipart，避免无谓分片复杂度，spec voice-moment §3.1）
-    if (input.kind !== 'video') {
+    // 超过 5MB 的任意 kind 走 S3 multipart（非末片 8MB）；不超过走单 PUT。
+    // 合片后是一个对象，读取仍是整对象预签名 GET，与上传方式无关。
+    if (input.size <= MULTIPART_THRESHOLD_BYTES) {
       const url = await getStorage().presignPut(
         tmpKey,
         { contentType: input.mime },

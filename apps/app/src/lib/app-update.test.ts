@@ -3,6 +3,7 @@ import { describe, it } from 'vitest';
 import {
   apkSizeLabel,
   fetchGithubLatest,
+  isApkDownloadComplete,
   isNewer,
   localVersionCode,
   parseGithubRelease,
@@ -127,5 +128,14 @@ describe('isNewer', () => {
     assert.equal(isNewer(303, 302), true);
     assert.equal(isNewer(302, 302), false);
     assert.equal(isNewer(301, 302), false);
+  });
+});
+
+describe('isApkDownloadComplete', () => {
+  it('字节数与发布资源一致才算下完；没给 size 时非空即可', () => {
+    assert.equal(isApkDownloadComplete(0, 100), false);
+    assert.equal(isApkDownloadComplete(50, 100), false);
+    assert.equal(isApkDownloadComplete(100, 100), true);
+    assert.equal(isApkDownloadComplete(80, 0), true);
   });
 });

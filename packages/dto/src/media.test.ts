@@ -6,6 +6,8 @@ import {
   MAX_AUDIO_DURATION_SECONDS,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  MULTIPART_THRESHOLD_BYTES,
+  VIDEO_PART_SIZE,
   mediaCompleteInputSchema,
   mediaPartsInputSchema,
   mediaPresignInputSchema,
@@ -15,6 +17,8 @@ import {
 test('媒体大小常量符合 spec §5.5', () => {
   assert.equal(MAX_IMAGE_BYTES, 10 * 1024 * 1024);
   assert.equal(MAX_VIDEO_BYTES, 500 * 1024 * 1024);
+  assert.equal(MULTIPART_THRESHOLD_BYTES, 5 * 1024 * 1024);
+  assert.ok(VIDEO_PART_SIZE >= MULTIPART_THRESHOLD_BYTES);
 });
 
 test('mediaPresignInputSchema：kind 与 mime 白名单必须匹配', () => {
