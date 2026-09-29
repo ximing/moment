@@ -59,6 +59,14 @@ export type ComposeDraftBaseline = {
 export class ComposePanelService extends Service {
   request: ComposeRequest | null = null;
   pickedChainId = '';
+  /** 离开原链前的标签、人物和结构化草稿。点回原链时整份还原；换到同模板的链时只还原结构化内容。 */
+  private originChainDraft: {
+    tagIds: string[];
+    persons: PersonBrief[];
+    personsTouched: boolean;
+    kind: string;
+    payloadDraft: Record<string, unknown>;
+  } | null = null;
   content = '';
   images: PickedImage[] = [];
   video: PickedVideo | null = null;
@@ -122,6 +130,16 @@ export class ComposePanelService extends Service {
     return this.chainList.chains.filter(canCompose);
   }
 
+  /** 新建只有可写链。编辑额外带上时刻当前所在的链，方便从「只看」的原链点回去。 */
+  get chainChoices() {
+    const writable = this.writableChains;
+    const editing = this.edit;
+    if (!editing) return writable;
+    const current = this.chainList.chains.find((c) => c.id === editing.chainId);
+    if (current && !writable.some((c) => c.id === current.id)) return [current, ...writable];
+    return writable;
+  }
+
   get chainId(): string {
     return this.pickedChainId || this.writableChains[0]?.id || '';
   }
@@ -136,6 +154,7 @@ export class ComposePanelService extends Service {
 
   hydrate(request: ComposeRequest): void {
     this.request = request;
+    this.originChainDraft = null;
     this.pickedChainId = request.chainId ?? request.edit?.chainId ?? '';
     this.content = request.edit?.content ?? '';
     this.happenedAt = request.edit
@@ -204,6 +223,7 @@ export class ComposePanelService extends Service {
     if (this.mediaTouched) return true;
     if (this.images.length > 0 || this.video || this.voice) return true;
     if (this.personsTouched || this.placeTouched) return true;
+    if (this.edit && this.pickedChainId !== this.edit.chainId) return true;
     const base = this.baseline;
     if (!base) return false;
     if (this.content !== base.content) return true;
@@ -246,20 +266,62 @@ export class ComposePanelService extends Service {
     this.members = members.status === 'fulfilled' ? members.value : [];
   }
 
-  /** 面板内切链（评审 H4）：重置结构化状态——旧链的 kind/payload 草稿对新链模板无意义；
-   *  manifest 置 null 使 TemplateFields 在新 manifest 到达前不渲染（await 期间无旧表单可提交）。 */
+  /** 切链。新建时 kind/payload 草稿作废。编辑时标签和人物清空；模板与原链相同则保留结构化草稿，不同则收成 standard。
+   *  点回原链时还原离开前的草稿。manifest 先清空，避免旧表单在新 manifest 到达前被提交。 */
   pickChain(chainId: string): void {
     if (this.pickedChainId === chainId) return;
+    const fromId = this.pickedChainId;
+    const editing = this.edit;
+    const originId = editing?.chainId;
+    if (editing && fromId === originId) {
+      this.originChainDraft = {
+        tagIds: [...this.selectedTags],
+        persons: this.selectedPersons.map((p) => ({ ...p })),
+        personsTouched: this.personsTouched,
+        kind: this.kind,
+        payloadDraft: { ...this.payloadDraft },
+      };
+    }
     this.pickedChainId = chainId;
-    this.kind = 'standard';
-    this.payloadDraft = {};
     this.manifest = null;
     this.manifestChainId = '';
-    // 人物词典是链级作用域（spec §0）：切链丢弃旧链选择
     this.personList = [];
     this.members = [];
+    const saved = editing && chainId === originId ? this.originChainDraft : null;
+    if (saved) {
+      this.selectedTags = [...saved.tagIds];
+      this.selectedPersons = saved.persons.map((p) => ({ ...p }));
+      this.personsTouched = saved.personsTouched;
+      this.kind = saved.kind;
+      this.payloadDraft = { ...saved.payloadDraft };
+      return;
+    }
+    // 标签和人物是链级词典，换链后旧 id 无效。
+    this.selectedTags = [];
     this.selectedPersons = [];
     this.personsTouched = false;
+    this.applyKindForChain(originId, chainId);
+  }
+
+  /** 新建一律清空结构化草稿。编辑时拿原链模板和目标链比：相同则保留，不同则收成 standard。 */
+  private applyKindForChain(originId: string | undefined, destId: string): void {
+    if (!this.edit) {
+      this.kind = 'standard';
+      this.payloadDraft = {};
+      return;
+    }
+    const originTemplate = this.chainList.chains.find((c) => c.id === originId)?.template;
+    const destTemplate = this.chainList.chains.find((c) => c.id === destId)?.template;
+    if (!originTemplate || !destTemplate) return;
+    if (originTemplate === destTemplate && this.originChainDraft) {
+      this.kind = this.originChainDraft.kind;
+      this.payloadDraft = { ...this.originChainDraft.payloadDraft };
+      return;
+    }
+    if (originTemplate !== destTemplate) {
+      this.kind = 'standard';
+      this.payloadDraft = {};
+    }
   }
 
   /** 链切换时拉模板 manifest（链详情内嵌；同链幂等）。失败静默：无扩展字段可填，主流程不阻塞。 */
@@ -674,19 +736,26 @@ export class ComposePanelService extends Service {
           const imageIds = [...this.keptMedia.map((m) => m.id), ...uploaded];
           mediaIds = edit.type === 'voice' && this.keptAudio ? [this.keptAudio.id, ...imageIds] : imageIds;
         }
+        const chainChanged = chainId !== edit.chainId;
         await client.updateMoment(edit.id, {
           content: this.content,
           ...(timeEdited ? { happenedAt: happenedIso, happenedTzOffset: edit.happenedTzOffset } : {}),
           isBackfill,
           tagIds: this.selectedTags,
-          kind: edit.kind,
+          ...(chainChanged ? { chainId } : {}),
+          kind: chainChanged ? this.kind : edit.kind,
           payload: Object.keys(this.payloadDraft).length > 0 ? this.payloadDraft : null,
-          // dirty tracking（spec §6）：undefined = 不变——未动过的人物/地点绝不整包回传
-          ...(this.personsTouched ? { personIds: this.selectedPersons.map((p) => p.id) } : {}),
+          // dirty tracking（spec §6）：undefined = 不变——未动过的人物/地点绝不整包回传。
+          // 换链例外：服务端会清掉旧链的人物，所以把当前选择（含空数组）交上去。
+          ...(chainChanged || this.personsTouched ? { personIds: this.selectedPersons.map((p) => p.id) } : {}),
           ...(this.placeTouched ? { place: this.placePayload() } : {}),
           ...(this.mediaTouched ? { mediaIds } : {}),
         });
-        composeSession.emit('moment:changed', { momentId: edit.id, chainId: edit.chainId, op: 'update' }, 'global');
+        composeSession.emit(
+          'moment:changed',
+          { momentId: edit.id, chainId: chainChanged ? chainId : edit.chainId, op: 'update' },
+          'global',
+        );
       } else {
         const type = hasVoice ? 'voice' : hasVideo ? 'video' : hasImages ? 'media' : 'text';
         const mediaIds: string[] = [];

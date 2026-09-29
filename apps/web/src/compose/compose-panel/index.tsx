@@ -129,7 +129,15 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
       <Sheet
         open
         title={title}
-        context={!edit && writable.length === 1 ? `记到「${writable[0]!.name}」` : undefined}
+        context={
+          edit
+            ? service.chainChoices.length === 1
+              ? `在「${service.chainChoices[0]!.name}」`
+              : undefined
+            : writable.length === 1
+              ? `记到「${writable[0]!.name}」`
+              : undefined
+        }
         busy={busy}
         onRequestClose={requestClose}
         footer={
@@ -157,30 +165,38 @@ const ComposeBodyContent = observer(function ComposeBodyContent() {
         }
       >
         <div className="flex flex-col gap-4" onPaste={handlePaste}>
-          {!edit && writable.length > 1 && (
-            <div className="grid grid-cols-2 gap-2">
-              {writable.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => service.pickChain(c.id)}
-                  className={`flex items-center gap-2 rounded-surface-md border px-3 py-2 text-left text-sm transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus ${
-                    chainId === c.id
-                      ? 'border-action bg-bg font-semibold text-ink'
-                      : 'border-transparent bg-bg text-muted hover:text-ink'
-                  }`}
-                >
-                  <ChainMark
-                    chainId={c.id}
-                    color={c.color}
-                    icon={c.icon}
-                    avatarMediaId={c.avatarMediaId}
-                    avatarFocus={c.avatarFocus}
-                    size={16}
-                  />
-                  {c.name}
-                </button>
-              ))}
+          {service.chainChoices.length > 1 && (
+            <div className="flex flex-col gap-2">
+              {edit ? (
+                <p className="text-meta text-muted">
+                  换链后标签和人物会清空。模板不同时，结构化内容也会清掉。评论还留在这条时刻上。
+                </p>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2">
+                {service.chainChoices.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => service.pickChain(c.id)}
+                    className={`flex items-center gap-2 rounded-surface-md border px-3 py-2 text-left text-sm transition-colors duration-[var(--ease)] focus-visible:outline-none focus-visible:ring-focus ${
+                      chainId === c.id
+                        ? 'border-action bg-bg font-semibold text-ink'
+                        : 'border-transparent bg-bg text-muted hover:text-ink'
+                    }`}
+                  >
+                    <ChainMark
+                      chainId={c.id}
+                      color={c.color}
+                      icon={c.icon}
+                      avatarMediaId={c.avatarMediaId}
+                      avatarFocus={c.avatarFocus}
+                      size={16}
+                    />
+                    {c.name}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {service.needChainPick && <p className="text-meta text-muted">先选一条链</p>}

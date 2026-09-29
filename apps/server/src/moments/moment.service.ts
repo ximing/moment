@@ -38,9 +38,13 @@ export class MomentService {
 
   /** 取链模板 manifest（任意 status：archived 模板的存量链照常发布/编辑，spec §3.4）。 */
   private async manifestOf(chainId: string) {
+    return (await this.templates.getByKey(await this.templateKeyOf(chainId))).manifest;
+  }
+
+  private async templateKeyOf(chainId: string): Promise<string> {
     const [chain] = await db.select({ template: chains.template }).from(chains).where(eq(chains.id, chainId)).limit(1);
     if (!chain) throw new NotFoundError('CHAIN_NOT_FOUND'); // policy 已保证存在，防御性兜底
-    return (await this.templates.getByKey(chain.template)).manifest;
+    return chain.template;
   }
 
   /**
@@ -257,6 +261,7 @@ export class MomentService {
 
   /** 仅作者本人可改。媒体全量替换见 spec 2026-08-29-moment-edit-media §4；originalType 取 FOR UPDATE 后的行。
    * 鉴权先于软删判断（同 get）。
+   * 换链同样只有作者可以，目标链至少要 editor。与当前链相同的 chainId 不算换链。
    * 取舍声明（spec 未定义）：原作者被移出链后成员资格失效，ChainPolicy.require 抛 404，
    * 作者本人也无法再 update 自己的 moment——成员资格优先于作者身份，与读取侧一致。 */
   async update(userId: string, momentId: string, input: PatchMomentInput): Promise<MomentResponse> {
@@ -266,13 +271,26 @@ export class MomentService {
     if (m.deletedAt) throw new HttpError(410, 'MOMENT_DELETED');
     if (m.authorId !== userId) throw new ForbiddenError('NOT_MOMENT_AUTHOR');
 
+    // 同链 id 不算换：不因此清空标签/人物，也不改写 kind。
+    let targetChainId = m.chainId;
+    if (input.chainId !== undefined && input.chainId !== m.chainId) {
+      await this.policy.require(userId, input.chainId, 'editor');
+      targetChainId = input.chainId;
+    }
+    const moving = targetChainId !== m.chainId;
+    // 模板不同时结构化内容只对原模板合法。这里收成普通时刻，同包里的 kind/payload 不再生效。
+    const templatesDiffer = moving && (await this.templateKeyOf(m.chainId)) !== (await this.templateKeyOf(targetChainId));
+
     // kind/payload 合并校验（spec §3.2）：任一变更即按「合并后的有效值」整体校验——
     // 只改 payload 用既存 kind 校验，只改 kind 用既存 payload 校验。
     // 推论（评审 S4，P4/P5 继承此约束）：只改 kind 不改 payload 的 PATCH 会被拒——
     // 旧 payload 按新 kind 的 schema 校验不过；前端切 kind 时必须同时显式传 payload（新值或 null）。
+    // 换到同模板的链时，按目标链的 manifest 校验（与原链是同一份模板）。
     let kindPayloadSet: { kind?: string; payload?: Record<string, unknown> | null } = {};
-    if (input.kind !== undefined || input.payload !== undefined) {
-      const manifest = await this.manifestOf(m.chainId);
+    if (templatesDiffer) {
+      kindPayloadSet = { kind: 'standard', payload: null };
+    } else if (input.kind !== undefined || input.payload !== undefined) {
+      const manifest = await this.manifestOf(targetChainId);
       const effectiveKind = input.kind ?? m.kind;
       const effectivePayload = input.payload !== undefined ? input.payload : m.payload;
       const payload = validateMomentPayload(manifest, effectiveKind, effectivePayload);
@@ -371,7 +389,8 @@ export class MomentService {
             continue;
           }
           const ext = mime.extension(row.mime) || 'bin';
-          const finalKey = `chains/${locked.chainId}/${momentId}/${row.id}.${ext}`;
+          // 新绑的对象落到目标链的 key。已经绑上的媒体留在原 s3Key，读路径用行上的 key。
+          const finalKey = `chains/${targetChainId}/${momentId}/${row.id}.${ext}`;
           await storage.copyObject(row.s3Key, finalKey, row.storageMeta);
           copiedTmp.push({ key: row.s3Key, metadata: row.storageMeta });
           await tx
@@ -391,7 +410,7 @@ export class MomentService {
           await tx.update(moments).set({ type: 'media' }).where(eq(moments.id, momentId));
         }
         for (const mediaId of compressIds) {
-          await emitOutbox(tx, OUTBOX_MOMENT_COMPRESS, { momentId, chainId: locked.chainId, mediaId });
+          await emitOutbox(tx, OUTBOX_MOMENT_COMPRESS, { momentId, chainId: targetChainId, mediaId });
         }
       }
 
@@ -403,6 +422,8 @@ export class MomentService {
       await tx
         .update(moments)
         .set({
+          // embed hash 不含 chainId。只改链时指纹不变，嵌入任务会跳过，向量仍挂在旧链上。先清 hash 迫使重嵌。
+          ...(moving ? { chainId: targetChainId, embedHash: null } : {}),
           ...(input.content !== undefined ? { content: input.content } : {}),
           ...(input.happenedAt !== undefined ? { happenedAt: nextHappenedAt } : {}),
           ...(input.happenedTzOffset !== undefined ? { happenedTzOffset: input.happenedTzOffset } : {}),
@@ -415,12 +436,18 @@ export class MomentService {
         .where(eq(moments.id, momentId));
       const [row] = await tx.select().from(moments).where(eq(moments.id, momentId)).limit(1);
       if (!row) throw new NotFoundError('MOMENT_NOT_FOUND');
-      if (input.tagIds !== undefined) {
-        await replaceMomentTags(tx, row.id, row.chainId, input.tagIds);
-      }
-      if (input.personIds !== undefined) {
-        // 全量替换（spec §6）：提交集合写 manual、集合外 manual/ai 一并删；空数组 = 清空
-        await replaceMomentPersons(tx, row.id, row.chainId, input.personIds);
+      if (moving) {
+        // 旧链的标签/人物 id 在新链无效。缺省按清空；显式数组按新链校验。
+        await replaceMomentTags(tx, row.id, row.chainId, input.tagIds ?? []);
+        await replaceMomentPersons(tx, row.id, row.chainId, input.personIds ?? []);
+      } else {
+        if (input.tagIds !== undefined) {
+          await replaceMomentTags(tx, row.id, row.chainId, input.tagIds);
+        }
+        if (input.personIds !== undefined) {
+          // 全量替换（spec §6）：提交集合写 manual、集合外 manual/ai 一并删；空数组 = 清空
+          await replaceMomentPersons(tx, row.id, row.chainId, input.personIds);
+        }
       }
       // 显式提交 place 且落在 exif 分支（仅坐标、无名字）→ 同事务写 geocode outbox（spec §4）
       if (placeSet && isGeocodePending(placeSet)) {

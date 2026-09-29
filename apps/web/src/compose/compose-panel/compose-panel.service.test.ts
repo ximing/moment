@@ -48,9 +48,8 @@ register(ChainListService);
 register(ComposeSessionService);
 register(ComposePanelService);
 
-function chain(id: string): ChainDto {
+function chain(id: string, partial: Partial<ChainDto> = {}): ChainDto {
   return {
-    id,
     name: `链${id}`,
     description: null,
     avatarMediaId: null,
@@ -70,6 +69,8 @@ function chain(id: string): ChainDto {
     membersPreview: [],
     memberCount: 1,
     myRole: 'owner',
+    ...partial,
+    id,
   };
 }
 
@@ -173,6 +174,7 @@ describe('编辑模式 dirty tracking（spec §6：undefined = 不变）', () =>
     const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
     expect(body).not.toHaveProperty('personIds');
     expect(body).not.toHaveProperty('place');
+    expect(body).not.toHaveProperty('chainId');
     expect(body.content).toBe('只改正文');
   });
 
@@ -392,6 +394,86 @@ describe('人物词典与链成员（spec §6/§7）', () => {
     await s.loadPersons();
     expect(s.personList).toEqual([]);
     expect(s.members.map((m) => m.nickname)).toEqual(['林晓满']);
+  });
+});
+
+describe('编辑换链', () => {
+  it('换到同模板的链：清空标签和人物，保留结构化内容，提交带 chainId 和空 personIds', async () => {
+    resolve(ChainListService).chains = [chain('chain-1', { template: 'baby' }), chain('chain-2', { template: 'baby' })];
+    const s = svc();
+    s.hydrate({
+      edit: editMoment({
+        kind: 'milestone',
+        payload: { custom_label: '走' },
+        tags: [{ id: 't-1', name: '家' }],
+        persons: [{ id: 'p-1', name: '外婆', userId: null, source: 'manual' }],
+      }),
+    });
+    s.pickChain('chain-2');
+    expect(s.chainId).toBe('chain-2');
+    expect(s.selectedTags).toEqual([]);
+    expect(s.selectedPersons).toEqual([]);
+    expect(s.kind).toBe('milestone');
+    expect(s.payloadDraft).toEqual({ custom_label: '走' });
+    expect(s.isDirty()).toBe(true);
+    s.content = '在外婆家吃饭';
+    await s.submit();
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body.chainId).toBe('chain-2');
+    expect(body.tagIds).toEqual([]);
+    expect(body.personIds).toEqual([]);
+    expect(body.kind).toBe('milestone');
+    expect(body.payload).toEqual({ custom_label: '走' });
+  });
+
+  it('模板不同就收成 standard；再换到同模板的第三条链时结构化内容回来', () => {
+    resolve(ChainListService).chains = [
+      chain('chain-1', { template: 'daily' }),
+      chain('chain-2', { template: 'baby' }),
+      chain('chain-3', { template: 'daily' }),
+    ];
+    const s = svc();
+    s.hydrate({ edit: editMoment({ payload: { mood: '😄' }, tags: [{ id: 't-1', name: '家' }] }) });
+    s.pickChain('chain-2');
+    expect(s.kind).toBe('standard');
+    expect(s.payloadDraft).toEqual({});
+    expect(s.selectedTags).toEqual([]);
+    s.pickChain('chain-3');
+    expect(s.payloadDraft).toEqual({ mood: '😄' });
+    expect(s.selectedTags).toEqual([]);
+    expect(s.isDirty()).toBe(true);
+  });
+
+  it('点回原链还原离开前的选择，保存不再带 chainId，也不算脏', async () => {
+    resolve(ChainListService).chains = [chain('chain-1'), chain('chain-2')];
+    const s = svc();
+    s.hydrate({
+      edit: editMoment({
+        tags: [{ id: 't-1', name: '家' }],
+        persons: [{ id: 'p-1', name: '外婆', userId: null, source: 'ai' }],
+      }),
+    });
+    s.pickChain('chain-2');
+    s.pickChain('chain-1');
+    expect(s.selectedTags).toEqual(['t-1']);
+    expect(s.selectedPersons.map((p) => p.id)).toEqual(['p-1']);
+    expect(s.personsTouched).toBe(false);
+    expect(s.isDirty()).toBe(false);
+    await s.submit();
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('chainId');
+    expect(body).not.toHaveProperty('personIds');
+    expect(body.tagIds).toEqual(['t-1']);
+  });
+
+  it('原链只是「只看」时仍出现在选项里', () => {
+    resolve(ChainListService).chains = [
+      chain('chain-1', { myRole: 'viewer' }),
+      chain('chain-2', { myRole: 'editor' }),
+    ];
+    const s = svc();
+    s.hydrate({ edit: editMoment() });
+    expect(s.chainChoices.map((c) => c.id)).toEqual(['chain-1', 'chain-2']);
   });
 });
 

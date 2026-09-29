@@ -16,6 +16,7 @@ import { CapsuleTextButton, OverlayNav } from '../../components/OverlayNav';
 import { ActionSheet, ActionSheetItem } from '../../components/ActionSheet';
 import { toast } from '../../components/feedback';
 import { RequireAuth } from '../../components/RequireAuth';
+import { UploadAngleMask } from '../../components/UploadAngleMask';
 import type { MediaSource } from '../../lib/media';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -175,8 +176,9 @@ const ComposeContent = observer(function ComposeContent() {
     );
   }
 
-  const activeChain = service.editableChains.find((c) => c.id === service.activeChainId);
-  const canPickChain = !service.isEdit && service.editableChains.length > 1;
+  const chainChoices = service.chainChoices;
+  const activeChain = chainChoices.find((c) => c.id === service.activeChainId);
+  const canPickChain = chainChoices.length > 1;
   const imageCap = service.isEdit && service.edit ? editImageCap(service.edit) : service.type === 'voice' ? 8 : 9;
   const occupied = service.isEdit ? editOccupied(service.keptMedia, service.images) : service.images.length;
   const canAddImage =
@@ -202,9 +204,9 @@ const ComposeContent = observer(function ComposeContent() {
         {activeChain ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`发布到 ${activeChain.name}`}
-            onPress={canPickChain ? () => setSheet('chain') : undefined}
-            disabled={!canPickChain}
+            accessibilityLabel={`${service.isEdit ? '换到' : '发布到'} ${activeChain.name}`}
+            onPress={canPickChain && !service.mediaUploadActive ? () => setSheet('chain') : undefined}
+            disabled={!canPickChain || service.mediaUploadActive}
             hitSlop={t.space2}
             style={styles.chainLine}
           >
@@ -224,7 +226,9 @@ const ComposeContent = observer(function ComposeContent() {
                   key={item.value}
                   accessibilityRole="button"
                   accessibilityLabel={item.label}
+                  disabled={service.mediaUploadActive}
                   onPress={() => {
+                    if (service.mediaUploadActive) return;
                     service.type = item.value;
                     service.images = [];
                     service.clearVideo();
@@ -263,22 +267,38 @@ const ComposeContent = observer(function ComposeContent() {
 
         {canAddImage && occupied > 0 ? (
           <View style={styles.grid}>
-            {service.images.map((img, i) => (
-              <View key={`${img.uri}-${i}`} style={styles.cellWrap}>
-                <Image source={{ uri: img.uri }} style={styles.localCell} resizeMode="cover" />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="移除这张图片"
-                  hitSlop={t.space3}
-                  onPress={() => service.removeImage(i)}
-                  style={styles.removeBtn}
-                >
-                  <Text style={styles.removeBtnText}>×</Text>
-                </Pressable>
-              </View>
-            ))}
+            {service.images.map((img, i) => {
+              const ratio = service.imageProgress[i];
+              return (
+                <View key={`${img.uri}-${i}`} style={styles.cellWrap}>
+                  <View style={styles.localFrame}>
+                    <Image source={{ uri: img.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                    {ratio != null && ratio < 1 ? <UploadAngleMask progress={ratio} /> : null}
+                  </View>
+                  {service.mediaUploadActive ? null : (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="移除这张图片"
+                      hitSlop={t.space3}
+                      onPress={() => service.removeImage(i)}
+                      style={styles.removeBtn}
+                    >
+                      <Text style={styles.removeBtnText}>×</Text>
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })}
             {occupied < imageCap ? (
-              <Pressable accessibilityRole="button" accessibilityLabel="添加照片" onPress={() => setMediaSheet('photo')} style={styles.addCell}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="添加照片"
+                disabled={service.mediaUploadActive}
+                onPress={() => {
+                  if (!service.mediaUploadActive) setMediaSheet('photo');
+                }}
+                style={[styles.addCell, service.mediaUploadActive && styles.dimmed]}
+              >
                 <Icon name="plus" size={t.fontInput} color={t.muted} />
               </Pressable>
             ) : null}
@@ -286,40 +306,73 @@ const ComposeContent = observer(function ComposeContent() {
         ) : null}
 
         {canAddImage && occupied === 0 ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="添加照片" onPress={() => setMediaSheet('photo')} style={styles.addCellWide}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="添加照片"
+            disabled={service.mediaUploadActive}
+            onPress={() => {
+              if (!service.mediaUploadActive) setMediaSheet('photo');
+            }}
+            style={[styles.addCellWide, service.mediaUploadActive && styles.dimmed]}
+          >
             <Icon name="image" size={t.fontLabel} color={t.muted} />
             <Text style={styles.addCellWideText}>添加照片</Text>
           </Pressable>
         ) : null}
 
         {!service.isEdit && service.type === 'video' ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={service.video ? '重选视频' : '选择视频'}
-            onPress={() => setMediaSheet('video')}
-            style={styles.addCellWide}
-          >
-            <Icon name="video" size={t.fontLabel} color={t.muted} />
-            <Text style={styles.addCellWideText}>
-              {service.video
-                ? `${Math.round(service.video.size / 1024 / 1024)}MB · ${Math.floor(service.video.durationSeconds / 60)}分${service.video.durationSeconds % 60}秒`
-                : '选择视频'}
-            </Text>
-            {service.video ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="移除视频"
-                onPress={() => service.clearVideo()}
-                hitSlop={t.space2}
-              >
-                <Text style={styles.removeLink}>移除</Text>
-              </Pressable>
+          <View style={styles.videoItem}>
+            {service.videoProgress != null && service.videoProgress > 0 ? (
+              <View
+                pointerEvents="none"
+                style={[styles.videoFill, { width: `${Math.min(100, Math.round(service.videoProgress * 100))}%` }]}
+              />
             ) : null}
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={service.video ? '重选视频' : '选择视频'}
+              disabled={service.mediaUploadActive}
+              onPress={() => {
+                if (!service.mediaUploadActive) setMediaSheet('video');
+              }}
+              style={styles.videoRow}
+            >
+              <Icon name="video" size={t.fontLabel} color={service.videoProgress != null ? t.ink : t.muted} />
+              <Text style={[styles.addCellWideText, service.videoProgress != null && styles.videoTextActive]}>
+                {service.video
+                  ? `${Math.round(service.video.size / 1024 / 1024)}MB · ${Math.floor(service.video.durationSeconds / 60)}分${service.video.durationSeconds % 60}秒`
+                  : '选择视频'}
+              </Text>
+              {service.videoProgress != null ? (
+                <Text
+                  style={styles.videoPct}
+                  accessibilityRole="progressbar"
+                  accessibilityLabel="视频上传进度"
+                  accessibilityValue={{ min: 0, max: 100, now: Math.round(service.videoProgress * 100) }}
+                >
+                  {Math.round(service.videoProgress * 100)}%
+                </Text>
+              ) : null}
+              {service.video && !service.mediaUploadActive ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="移除视频"
+                  onPress={() => service.clearVideo()}
+                  hitSlop={t.space2}
+                >
+                  <Text style={styles.removeLink}>移除</Text>
+                </Pressable>
+              ) : null}
+            </Pressable>
+          </View>
         ) : null}
 
         {!service.isEdit && service.type === 'voice' ? (
-          <VoiceRecorder voice={service.voice} onChange={(v) => service.setVoice(v)} />
+          <VoiceRecorder
+            voice={service.voice}
+            uploadProgress={service.audioProgress}
+            onChange={(v) => service.setVoice(v)}
+          />
         ) : null}
 
         <View style={styles.metaList}>
@@ -456,8 +509,13 @@ const ComposeContent = observer(function ComposeContent() {
             <View style={styles.handle} />
             {sheet === 'chain' ? (
               <>
-                <Text style={styles.sheetTitle}>发布到</Text>
-                {service.editableChains.map((c) => {
+                <Text style={styles.sheetTitle}>{service.isEdit ? '换一条链' : '发布到'}</Text>
+                {service.isEdit ? (
+                  <Text style={styles.sheetHint}>
+                    换链后标签和人物会清空。模板不同时，结构化内容也会清掉。评论还留在这条时刻上。
+                  </Text>
+                ) : null}
+                {chainChoices.map((c) => {
                   const active = service.activeChainId === c.id;
                   return (
                     <Pressable
@@ -560,7 +618,13 @@ const createStyles = (t: Theme) =>
     },
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space1 },
     cellWrap: { width: '32%', aspectRatio: 1 },
-    localCell: { width: '100%', height: '100%', borderRadius: t.buttonRadius, backgroundColor: t.feedbackSkeleton },
+    localFrame: {
+      width: '100%',
+      height: '100%',
+      borderRadius: t.buttonRadius,
+      overflow: 'hidden',
+      backgroundColor: t.feedbackSkeleton,
+    },
     addCell: {
       width: '32%',
       aspectRatio: 1,
@@ -579,6 +643,29 @@ const createStyles = (t: Theme) =>
       backgroundColor: t.fieldBg,
     },
     addCellWideText: { flex: 1, minWidth: 0, fontSize: t.fontSupport, color: t.muted },
+    dimmed: { opacity: t.disabledOpacity },
+    videoItem: {
+      position: 'relative',
+      overflow: 'hidden',
+      borderRadius: t.fieldRadius,
+      backgroundColor: t.fieldBg,
+    },
+    videoFill: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      backgroundColor: t.select,
+    },
+    videoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space2,
+      minHeight: t.controlH,
+      paddingHorizontal: t.space3,
+    },
+    videoTextActive: { color: t.ink },
+    videoPct: { fontSize: t.fontCaption, fontWeight: '600', color: t.ink, fontVariant: ['tabular-nums'] },
     removeLink: { fontSize: t.fontSupport, color: t.muted },
     removeBtn: {
       position: 'absolute',
@@ -636,6 +723,7 @@ const createStyles = (t: Theme) =>
       marginBottom: t.space3,
     },
     sheetTitle: { fontSize: t.fontLabel, color: t.muted, marginBottom: t.space3 },
+    sheetHint: { fontSize: t.fontSupport, color: t.muted, marginBottom: t.space3 },
     sheetScroll: { maxHeight: 420 },
     sheetItem: {
       flexDirection: 'row',

@@ -10,6 +10,7 @@ import {
 } from 'expo-audio';
 import { File } from 'expo-file-system';
 import { MAX_AUDIO_DURATION_SECONDS } from '@moment/dto';
+import { UploadAngleMask } from '../../components/UploadAngleMask';
 import { toast } from '../../components/feedback';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -46,9 +47,12 @@ function ReplayButton({ uri }: { uri: string }) {
 
 export function VoiceRecorder({
   voice,
+  uploadProgress,
   onChange,
 }: {
   voice: VoiceDraft | null;
+  /** null = 没在传；0..1 = 这条录音的字节进度。传到 1 遮罩收起，但控件仍锁到发布结束。 */
+  uploadProgress: number | null;
   onChange: (draft: VoiceDraft | null) => void;
 }) {
   const t = useTheme();
@@ -140,8 +144,10 @@ export function VoiceRecorder({
     }
   };
 
+  const locked = uploadProgress != null;
+
   return (
-    <View style={styles.box}>
+    <View style={styles.box} pointerEvents={locked ? 'none' : 'auto'}>
       {state.isRecording ? (
         <View style={styles.row}>
           <Pressable
@@ -177,13 +183,14 @@ export function VoiceRecorder({
           {voice ? <Text style={styles.time}>已录 {formatDuration(voice.durationSeconds)}</Text> : null}
         </View>
       )}
+      {uploadProgress != null && uploadProgress < 1 ? <UploadAngleMask progress={uploadProgress} /> : null}
     </View>
   );
 }
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
-    box: { gap: t.space1 },
+    box: { position: 'relative', overflow: 'hidden', borderRadius: t.fieldRadius, gap: t.space1 },
     row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.space3, minHeight: t.touchMin },
     action: { minHeight: t.touchMin, justifyContent: 'center' },
     actionText: { fontSize: t.fontBody, fontWeight: '600', color: t.ink },

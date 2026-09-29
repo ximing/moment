@@ -13,6 +13,23 @@ import { ChainListService } from '../../services/chain-list.service';
  *  服务端 complete 幂等，重试会重新 presign 拿新 mediaId，旧 mediaId 残留由 sweeper 清理。 */
 const UPLOAD_ATTEMPTS = 3;
 
+type UploadSlot = { kind: 'image'; index: number } | { kind: 'video' } | { kind: 'audio' };
+
+function clamp01(n: number): number {
+  if (!(n > 0)) return 0;
+  if (n >= 1) return 1;
+  return n;
+}
+
+function sameUploadPercent(a: number, b: number): boolean {
+  return Math.round(a * 100) === Math.round(b * 100);
+}
+
+function overallUploadPercent(doneBytes: number, loaded: number, totalBytes: number): number {
+  if (!(totalBytes > 0)) return 100;
+  return Math.min(100, Math.floor(((doneBytes + Math.max(0, loaded)) / totalBytes) * 100));
+}
+
 async function uploadWithRetry(
   input: Parameters<typeof client.uploadMedia>[0]
 ): Promise<MediaCompleteResponse> {
@@ -63,6 +80,12 @@ export class ComposeService extends Service {
   isBackfill = false;
   tagIds: string[] = [];
   progressLabel: string | null = null;
+  /** 与 images 下标对齐，0..1。空数组 = 这批没有在传图片。 */
+  imageProgress: number[] = [];
+  /** 视频字节进度。null = 当前没有在传视频。 */
+  videoProgress: number | null = null;
+  /** 录音字节进度。null = 当前没有在传录音。 */
+  audioProgress: number | null = null;
   showPicker = false; // 日期时间选择器展开态（iOS spinner 需要显式收起）
 
   tagNames: { id: string; name: string }[] = [];
@@ -99,7 +122,7 @@ export class ComposeService extends Service {
   geoBusy = false;
   private manifestChainId = '';
 
-  /** 编辑态：被编辑的 moment（spec §2）。非 null 时类型/链/媒体锁定，提交走 PATCH。 */
+  /** 编辑态：被编辑的 moment（spec §2）。非 null 时类型与已发布的视频锁定，提交走 PATCH。链可以换。 */
   edit: MomentResponse | null = null;
   /** 记录时区墙钟毫秒 = Date.parse(edit.happenedAt) − happenedTzOffset·60_000。
    *  只作数值参与换算，绝不当设备本地时间用（spec §2 review C1）。 */
@@ -113,9 +136,22 @@ export class ComposeService extends Service {
   /** 动作级 dirty：叉/加过媒体才把 mediaIds 放进 PATCH */
   mediaTouched = false;
   baselineMediaIds: string[] = [];
+  /** 离开原链前的标签、人物和结构化草稿。点回原链时整份还原；换到同模板的链时只还原结构化内容。 */
+  private originChainDraft: {
+    tagIds: string[];
+    persons: PersonBrief[];
+    personsTouched: boolean;
+    kind: string;
+    payloadDraft: Record<string, unknown>;
+  } | null = null;
 
   get isEdit(): boolean {
     return this.edit !== null;
+  }
+
+  /** 有素材正在上传（含已传完、时刻还在创建的窗口）。0 与 null 不同：0 是刚开始。 */
+  get mediaUploadActive(): boolean {
+    return this.imageProgress.length > 0 || this.videoProgress != null || this.audioProgress != null;
   }
 
   /** 路由 param 进来（?chainId= / ?momentId=）；compose 是 modal 路由，bindServices 实例随页面生灭，不挡幂等。 */
@@ -125,6 +161,7 @@ export class ComposeService extends Service {
       void this.loadForEdit(momentId).catch(() => undefined);
       return;
     }
+    this.originChainDraft = null;
     this.chainId = chainId;
     this.kind = 'standard';
     this.payloadDraft = {};
@@ -157,8 +194,9 @@ export class ComposeService extends Service {
   }
 
   /** 编辑预填：content/tagIds/type/isBackfill + 发生时间两次平移（spec §2）。
-   *  链固定为 edit.chainId（见 activeChainId），不回退可编辑链，防标签载错链 → TAG_NOT_IN_CHAIN。 */
+   *  进入时链是 edit.chainId。换链由 setChain 改 chainId，并按目标链重拉标签和人物。 */
   async loadForEdit(momentId: string): Promise<void> {
+    this.originChainDraft = null;
     const m = await client.getMoment(momentId);
     this.images = [];
     this.clearVideo();
@@ -219,30 +257,87 @@ export class ComposeService extends Service {
       .map((c) => ({ id: c.id, name: c.name }));
   }
 
-  /** 编辑态链恒为 edit.chainId（spec §2：不回退可编辑链，防 TAG_NOT_IN_CHAIN）；
-   *  新建态：路由参数的链若是 viewer 链（不在 editable 集合），回退到第一条可编辑链。 */
+  /** 选链列表。新建只有可编辑的链。编辑额外带上时刻当前所在的链，方便从「只看」的原链点回去。 */
+  get chainChoices(): { id: string; name: string; template: string }[] {
+    const all = this.resolve(ChainListService).chains;
+    const slim = (c: (typeof all)[number]) => ({ id: c.id, name: c.name, template: c.template });
+    const writable = all.filter((c) => c.myRole === 'owner' || c.myRole === 'editor');
+    if (!this.edit) return writable.map(slim);
+    const current = all.find((c) => c.id === this.edit!.chainId);
+    if (current && !writable.some((c) => c.id === current.id)) return [slim(current), ...writable.map(slim)];
+    return writable.map(slim);
+  }
+
+  /** 编辑态用当前选中的链（进入时等于原链）。新建态：路由参数若是 viewer 链，回退到第一条可编辑链。 */
   get activeChainId(): string | undefined {
-    if (this.edit) return this.edit.chainId;
+    if (this.edit) return this.chainId ?? this.edit.chainId;
     if (this.chainId && this.editableChains.some((c) => c.id === this.chainId)) return this.chainId;
     return this.editableChains[0]?.id;
   }
 
   setChain(id: string): void {
-    if (this.chainId === id) return;
+    if (this.mediaUploadActive) return;
+    const current = this.edit ? (this.chainId ?? this.edit.chainId) : this.chainId;
+    if (current === id) return;
+    const originId = this.edit?.chainId;
+    if (this.edit && current === originId) {
+      this.originChainDraft = {
+        tagIds: [...this.tagIds],
+        persons: this.selectedPersons.map((p) => ({ ...p })),
+        personsTouched: this.personsTouched,
+        kind: this.kind,
+        payloadDraft: { ...this.payloadDraft },
+      };
+    }
     this.chainId = id;
-    this.tagIds = [];
-    this.kind = 'standard';
-    this.payloadDraft = {};
+    const saved = this.edit && id === originId ? this.originChainDraft : null;
+    if (saved) {
+      this.tagIds = [...saved.tagIds];
+      this.selectedPersons = saved.persons.map((p) => ({ ...p }));
+      this.personsTouched = saved.personsTouched;
+      this.kind = saved.kind;
+      this.payloadDraft = { ...saved.payloadDraft };
+    } else {
+      // 标签和人物是链级词典，换链后旧 id 无效。
+      this.tagIds = [];
+      this.selectedPersons = [];
+      this.personsTouched = false;
+      this.applyKindForChain(originId, id);
+    }
     this.manifest = null;
     this.manifestChainId = '';
     // 人物词典是链级作用域（spec §0）：切链丢弃旧链选择；place 草稿保留（镜像 images 切链行为）
     this.personList = [];
     this.members = [];
-    this.selectedPersons = [];
-    this.personsTouched = false;
     void this.loadTags().catch(() => undefined);
     void this.loadManifest(id).catch(() => undefined);
     void this.loadPersons().catch(() => undefined);
+  }
+
+  /** 新建一律清空结构化草稿。编辑时拿原链模板和目标链比：相同则保留，不同则收成 standard。 */
+  private applyKindForChain(originId: string | undefined, destId: string): void {
+    if (!this.edit) {
+      this.kind = 'standard';
+      this.payloadDraft = {};
+      return;
+    }
+    const originTemplate = this.templateOf(originId);
+    const destTemplate = this.templateOf(destId);
+    if (!originTemplate || !destTemplate) return;
+    if (originTemplate === destTemplate && this.originChainDraft) {
+      this.kind = this.originChainDraft.kind;
+      this.payloadDraft = { ...this.originChainDraft.payloadDraft };
+      return;
+    }
+    if (originTemplate !== destTemplate) {
+      this.kind = 'standard';
+      this.payloadDraft = {};
+    }
+  }
+
+  private templateOf(chainId: string | undefined): string | undefined {
+    if (!chainId) return undefined;
+    return this.resolve(ChainListService).chains.find((c) => c.id === chainId)?.template;
   }
 
   /** 只拉当前活跃链的标签（链集合本身由 ChainListService 实时持有）。 */
@@ -350,6 +445,7 @@ export class ComposeService extends Service {
    *  满 9 张抛 Error（中文 message，组件 Alert）；压缩中途抛错也复位进度。
    *  source=camera 走系统相机（一次一张）；相册仍可多选，名额由 selectionLimit 卡住。 */
   async pickMoreImages(source: MediaSource = 'library'): Promise<number> {
+    if (this.mediaUploadActive) return 0;
     const cap = this.edit ? editImageCap(this.edit) : this.type === 'voice' ? 8 : 9;
     const occupied = this.edit ? editOccupied(this.keptMedia, this.images) : this.images.length;
     const remain = cap - occupied;
@@ -384,7 +480,7 @@ export class ComposeService extends Service {
   /** 选视频 + 校验；返回问题文案（null = 成功）。覆盖选择即丢弃上一支视频的封面草稿并重新截帧。
    *  source=camera 直接唤起系统相机拍摄。 */
   async chooseVideo(source: MediaSource = 'library'): Promise<string | null> {
-    if (this.edit) return null;
+    if (this.edit || this.mediaUploadActive) return null;
     const picked = await pickVideo({ source });
     if (!picked) return null;
     const problem = validateVideo(picked);
@@ -419,7 +515,7 @@ export class ComposeService extends Service {
 
   /** 录音组件回调；draft 为 null = 移除重录 */
   setVoice(draft: VoiceDraft | null): void {
-    if (this.edit) return;
+    if (this.edit || this.mediaUploadActive) return;
     this.voice = draft;
   }
 
@@ -429,6 +525,7 @@ export class ComposeService extends Service {
   }
 
   removeImage(index: number): void {
+    if (this.mediaUploadActive) return;
     this.images = this.images.filter((_, i) => i !== index);
     if (this.edit) this.mediaTouched = true;
   }
@@ -592,7 +689,7 @@ export class ComposeService extends Service {
       : { name };
   }
 
-  /** 提交：编辑态走 PATCH（submitEdit）；新建态串行上传（进度聚合）→ createMoment → emit。
+  /** 提交：编辑态走 PATCH（submitEdit）；新建态串行上传（每条素材记进度）→ createMoment → emit。
    *  前置校验失败抛 Error（中文 message）。 */
   async submit(): Promise<void> {
     if (this.selectedPersons.length > 20) throw new Error('最多关联 20 位人物');
@@ -615,35 +712,81 @@ export class ComposeService extends Service {
     // 图片走 file: Blob（压缩后百 KB 级，已在内存）；视频/语音走 fileUri 形态——rnPut 按 part
     // 从文件 uri 读盘 PUT，大文件整体不进内存（见 src/lib/rn-put.ts）。
     const mediaIds: string[] = [];
-    type UploadFile =
-      | { file: Blob; mime: string; size: number; kind: 'image'; sortOrder: number }
-      | { fileUri: string; mime: string; size: number; kind: 'video'; durationSeconds: number; sortOrder: number }
-      | { fileUri: string; mime: string; size: number; kind: 'audio'; durationSeconds: number; sortOrder: number };
+    type UploadFile = {
+      file?: Blob;
+      fileUri?: string;
+      mime: string;
+      size: number;
+      kind: 'image' | 'video' | 'audio';
+      durationSeconds?: number;
+      sortOrder: number;
+      slot: UploadSlot;
+    };
     let files: UploadFile[] = [];
     if (this.type === 'media') {
-      files = this.images.map((img, i) => ({ file: img.blob, mime: img.mime, size: img.size, kind: 'image' as const, sortOrder: i }));
+      files = this.images.map((img, i) => ({
+        file: img.blob,
+        mime: img.mime,
+        size: img.size,
+        kind: 'image' as const,
+        sortOrder: i,
+        slot: { kind: 'image' as const, index: i },
+      }));
     } else if (this.type === 'video' && this.video) {
-      files = [{ fileUri: this.video.uri, mime: this.video.mime, size: this.video.size, kind: 'video' as const, durationSeconds: this.video.durationSeconds, sortOrder: 0 }];
+      files = [{
+        fileUri: this.video.uri,
+        mime: this.video.mime,
+        size: this.video.size,
+        kind: 'video' as const,
+        durationSeconds: this.video.durationSeconds,
+        sortOrder: 0,
+        slot: { kind: 'video' },
+      }];
     } else if (this.type === 'voice' && this.voice) {
       // 语音在前（mediaIds[0] = audio），附图随后；fileUri 形态按 FilePart 读盘，整文件不进内存
       files = [
-        { fileUri: this.voice.uri, mime: this.voice.mime, size: this.voice.size, kind: 'audio' as const, durationSeconds: this.voice.durationSeconds, sortOrder: 0 },
-        ...this.images.map((img, i) => ({ file: img.blob, mime: img.mime, size: img.size, kind: 'image' as const, sortOrder: i + 1 })),
+        {
+          fileUri: this.voice.uri,
+          mime: this.voice.mime,
+          size: this.voice.size,
+          kind: 'audio' as const,
+          durationSeconds: this.voice.durationSeconds,
+          sortOrder: 0,
+          slot: { kind: 'audio' },
+        },
+        ...this.images.map((img, i) => ({
+          file: img.blob,
+          mime: img.mime,
+          size: img.size,
+          kind: 'image' as const,
+          sortOrder: i + 1,
+          slot: { kind: 'image' as const, index: i },
+        })),
       ];
     }
     const totalBytes = files.reduce((s, f) => s + f.size, 0);
     let doneBytes = 0;
     try {
+      if (files.length > 0) {
+        this.armUploadProgress({
+          image: files.some((f) => f.kind === 'image'),
+          video: files.some((f) => f.kind === 'video'),
+          audio: files.some((f) => f.kind === 'audio'),
+        });
+      }
       for (const f of files) {
+        const { slot, ...body } = f;
         const res = await uploadWithRetry({
-          ...f,
-          onProgress: (loaded) => {
-            const overall = totalBytes > 0 ? Math.floor(((doneBytes + loaded) / totalBytes) * 100) : 100;
-            this.progressLabel = `上传中 ${overall}%`;
+          ...body,
+          onProgress: (loaded, total) => {
+            this.noteUpload(slot, loaded, total, f.size, doneBytes, totalBytes);
           },
         });
+        this.setSlotRatio(slot, 1);
         mediaIds.push(res.mediaId);
         doneBytes += f.size;
+        const doneLabel = `上传中 ${overallUploadPercent(doneBytes, 0, totalBytes)}%`;
+        if (this.progressLabel !== doneLabel) this.progressLabel = doneLabel;
       }
 
       if (this.type === 'video' && this.poster && !this.posterMediaId) {
@@ -680,6 +823,7 @@ export class ComposeService extends Service {
       this.emit('moment:changed', { momentId: created.id, chainId: activeChainId, op: 'create' }, 'global');
     } finally {
       this.progressLabel = null; // 失败路径也复位，避免「上传中 N%」「发布中…」永久停留
+      this.clearUploadProgress();
     }
   }
 
@@ -699,14 +843,17 @@ export class ComposeService extends Service {
     if (edit.type === 'voice' && !this.keptAudio) throw new Error('录音不能换');
     if (this.content.length > 5000) throw new Error('正文最多 5000 字');
 
+    const chainChanged = this.chainId !== undefined && this.chainId !== edit.chainId;
     const patch: PatchMomentInput = {
       content: this.content,
       tagIds: this.tagIds,
-      kind: edit.kind,
+      ...(chainChanged ? { chainId: this.chainId } : {}),
+      kind: chainChanged ? this.kind : edit.kind,
       payload: Object.keys(this.payloadDraft).length > 0 ? this.payloadDraft : null,
       // dirty tracking（spec §6，P5 偏差 3/4 同款）：undefined = 不变——未动过的人物/地点
-      // 绝不整包回传（否则 ai 行被静默升级 manual、exif place 误升级 manual，spec §6 警告）
-      ...(this.personsTouched ? { personIds: this.selectedPersons.map((p) => p.id) } : {}),
+      // 绝不整包回传（否则 ai 行被静默升级 manual、exif place 误升级 manual，spec §6 警告）。
+      // 换链例外：服务端会清掉旧链的人物，所以把当前选择（含空数组）交上去。
+      ...(chainChanged || this.personsTouched ? { personIds: this.selectedPersons.map((p) => p.id) } : {}),
       ...(this.placeTouched ? { place: this.placePayload() } : {}),
     };
     if (this.timeEdited) {
@@ -721,24 +868,87 @@ export class ComposeService extends Service {
     try {
       if (this.mediaTouched) {
         const uploaded: string[] = [];
-        for (const img of this.images) {
-          this.progressLabel = '上传中…';
+        if (this.images.length > 0) {
+          this.armUploadProgress({ image: true, video: false, audio: false });
+        }
+        const totalBytes = this.images.reduce((sum, img) => sum + img.size, 0);
+        let doneBytes = 0;
+        for (let i = 0; i < this.images.length; i++) {
+          const img = this.images[i]!;
           const res = await uploadWithRetry({
             file: img.blob,
             mime: img.mime,
             size: img.size,
             kind: 'image',
+            onProgress: (loaded, total) => {
+              this.noteUpload({ kind: 'image', index: i }, loaded, total, img.size, doneBytes, totalBytes);
+            },
           });
+          this.setSlotRatio({ kind: 'image', index: i }, 1);
+          doneBytes += img.size;
           uploaded.push(res.mediaId);
+          const doneLabel = `上传中 ${overallUploadPercent(doneBytes, 0, totalBytes)}%`;
+          if (this.progressLabel !== doneLabel) this.progressLabel = doneLabel;
         }
         const rest = [...this.keptMedia.map((m) => m.id), ...uploaded];
         patch.mediaIds = edit.type === 'voice' && this.keptAudio ? [this.keptAudio.id, ...rest] : rest;
       }
       this.progressLabel = '保存中…';
       await client.updateMoment(edit.id, patch);
-      this.emit('moment:changed', { momentId: edit.id, chainId: edit.chainId, op: 'update' }, 'global');
+      this.emit(
+        'moment:changed',
+        { momentId: edit.id, chainId: this.chainId ?? edit.chainId, op: 'update' },
+        'global',
+      );
     } finally {
       this.progressLabel = null;
+      this.clearUploadProgress();
     }
+  }
+
+  private armUploadProgress(slots: { image: boolean; video: boolean; audio: boolean }): void {
+    this.imageProgress = slots.image ? this.images.map(() => 0) : [];
+    this.videoProgress = slots.video ? 0 : null;
+    this.audioProgress = slots.audio ? 0 : null;
+    this.progressLabel = '上传中 0%';
+  }
+
+  private clearUploadProgress(): void {
+    this.imageProgress = [];
+    this.videoProgress = null;
+    this.audioProgress = null;
+  }
+
+  private noteUpload(
+    slot: UploadSlot,
+    loaded: number,
+    total: number,
+    size: number,
+    doneBytes: number,
+    totalBytes: number,
+  ): void {
+    const denom = total > 0 ? total : size;
+    this.setSlotRatio(slot, denom > 0 ? loaded / denom : 1);
+    const label = `上传中 ${overallUploadPercent(doneBytes, loaded, totalBytes)}%`;
+    if (this.progressLabel !== label) this.progressLabel = label;
+  }
+
+  /** 百分比没变就跳过，避免进度事件把整表刷穿。传到 1 一定落，重试掉回 0 也会落。 */
+  private setSlotRatio(slot: UploadSlot, ratio: number): void {
+    const next = clamp01(ratio);
+    if (slot.kind === 'image') {
+      const prev = this.imageProgress[slot.index];
+      if (prev == null || prev === next) return;
+      if (sameUploadPercent(prev, next) && next !== 1) return;
+      const copy = this.imageProgress.slice();
+      copy[slot.index] = next;
+      this.imageProgress = copy;
+      return;
+    }
+    const prev = slot.kind === 'video' ? this.videoProgress : this.audioProgress;
+    if (prev == null || prev === next) return;
+    if (sameUploadPercent(prev, next) && next !== 1) return;
+    if (slot.kind === 'video') this.videoProgress = next;
+    else this.audioProgress = next;
   }
 }

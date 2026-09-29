@@ -127,6 +127,13 @@ test('patchMomentInputSchema：kind/payload 可选，strict 仍拒未知键', ()
   assert.throws(() => patchMomentInputSchema.parse({ kind: 'milestone', hacker: 1 }));
 });
 
+test('patchMomentInputSchema：chainId 可选 uuid；非 uuid 失败；单独 chainId 不是 EMPTY_PATCH', () => {
+  const id = '123e4567-e89b-12d3-a456-426614174000';
+  assert.equal(patchMomentInputSchema.parse({ chainId: id }).chainId, id);
+  assert.ok(!patchMomentInputSchema.safeParse({ chainId: 'chain-1' }).success);
+  assert.ok(!patchMomentInputSchema.safeParse({ chainId: '' }).success);
+});
+
 test('createMomentInputSchema：type=video 带/不带 posterMediaId 均通过', () => {
   const video = { ...base, type: 'video' as const, content: '', mediaIds: ['m-1'] };
   assert.ok(createMomentInputSchema.safeParse(video).success);

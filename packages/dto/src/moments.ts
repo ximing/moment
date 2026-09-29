@@ -69,6 +69,13 @@ export type CreateMomentInput = z.infer<typeof createMomentInputSchema>;
 
 export const patchMomentInputSchema = z
   .object({
+    /**
+     * 把时刻挪到另一条链。缺省 = 不挪。与当前链相同 = 不挪，因此也不清空标签和人物。
+     * 真正换链：仅作者，且在目标链至少是 editor。
+     * tagIds / personIds 缺省则清空（旧链 id 在新链无效）；显式数组按新链校验。
+     * 两条链的模板不同时，服务端把 kind 收成 standard、payload 收成 null，盖过同一次请求里的 kind / payload。
+     */
+    chainId: z.string().uuid().optional(),
     content: z.string().max(5000).optional(),
     happenedAt: isoTimestampSchema.optional(),
     happenedTzOffset: z.number().int().min(-840).max(840).optional(),

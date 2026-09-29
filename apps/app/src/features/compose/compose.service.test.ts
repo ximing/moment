@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { register, resolve } from '@rabjs/react';
-import type { MomentMedia, MomentResponse } from '@moment/dto';
+import type { ChainDto, MomentMedia, MomentResponse } from '@moment/dto';
+import type { ReadyImage } from '../../lib/media';
 import * as Location from 'expo-location';
 import { ComposeService } from './compose.service';
 import { ChainListService } from '../../services/chain-list.service';
@@ -10,6 +11,7 @@ const api = vi.hoisted(() => ({
   getMoment: vi.fn(),
   updateMoment: vi.fn(),
   uploadMedia: vi.fn(),
+  createMoment: vi.fn(),
   listTags: vi.fn(),
   getChain: vi.fn(),
   listPersons: vi.fn(),
@@ -95,6 +97,7 @@ beforeEach(() => {
   api.me.mockResolvedValue({ id: 'u-1', nickname: '妈妈' });
   api.updateMoment.mockResolvedValue(moment());
   api.uploadMedia.mockResolvedValue({ mediaId: 'up-1', status: 'ready', mime: 'image/jpeg', size: 1 });
+  api.createMoment.mockResolvedValue({ id: 'm-new' });
   api.reverseGeocode.mockResolvedValue({ name: null });
   vi.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ status: 'denied' } as never);
   mediaLib.compressImage.mockImplementation(async (x: { uri: string }) => ({
@@ -111,6 +114,10 @@ beforeEach(() => {
   s.voice = null;
   s.content = '';
   s.progressLabel = null;
+  s.imageProgress = [];
+  s.videoProgress = null;
+  s.audioProgress = null;
+  resolve(ChainListService).chains = [];
   s.keptMedia = [];
   s.keptAudio = null;
   s.mediaTouched = false;
@@ -127,6 +134,7 @@ describe('ComposeService 编辑媒体（spec §7）', () => {
     const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
     expect(body).not.toHaveProperty('mediaIds');
     expect(body).not.toHaveProperty('type');
+    expect(body).not.toHaveProperty('chainId');
     expect(api.uploadMedia).not.toHaveBeenCalled();
   });
 
@@ -282,5 +290,295 @@ describe('设备定位预填地点', () => {
     s.edit = moment();
     await s.prefillDevicePlace();
     expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+  });
+});
+
+function ready(uri: string, size: number): ReadyImage {
+  return { uri: `file://${uri}`, width: 8, height: 8, blob: new Blob(['x']), size, mime: 'image/jpeg' };
+}
+
+function attachChain(s: ComposeService): void {
+  s.edit = null;
+  s.chainId = 'chain-1';
+  s.kind = 'standard';
+  s.content = '';
+  resolve(ChainListService).chains = [{ id: 'chain-1', name: '家', myRole: 'owner' } as ChainDto];
+}
+
+describe('发布上传进度', () => {
+  it('多张图按各自字节推进，下一条开始前上一张记满，结束后清空', async () => {
+    const s = svc();
+    attachChain(s);
+    s.type = 'media';
+    s.images = [ready('a', 100), ready('b', 100)];
+    api.uploadMedia.mockImplementation(async (input: {
+      sortOrder?: number;
+      size: number;
+      onProgress?: (loaded: number, total: number) => void;
+    }) => {
+      if (input.sortOrder === 1) {
+        expect(s.imageProgress[0]).toBe(1);
+        expect(s.imageProgress[1]).toBe(0);
+      }
+      input.onProgress?.(input.size / 2, input.size);
+      if (input.sortOrder === 0) {
+        expect(s.imageProgress[0]).toBeCloseTo(0.5);
+        expect(s.imageProgress[1]).toBe(0);
+        expect(s.progressLabel).toBe('上传中 25%');
+      }
+      if (input.sortOrder === 1) {
+        expect(s.imageProgress[1]).toBeCloseTo(0.5);
+        expect(s.progressLabel).toBe('上传中 75%');
+      }
+      return { mediaId: `up-${input.sortOrder}`, status: 'ready', mime: 'image/jpeg', size: input.size };
+    });
+    api.createMoment.mockImplementation(async () => {
+      expect(s.imageProgress).toEqual([1, 1]);
+      expect(s.progressLabel).toBe('发布中…');
+      return { id: 'm-new' };
+    });
+    await s.submit();
+    expect(s.imageProgress).toEqual([]);
+    expect(s.videoProgress).toBeNull();
+    expect(s.audioProgress).toBeNull();
+    expect(s.progressLabel).toBeNull();
+    expect(s.mediaUploadActive).toBe(false);
+  });
+
+  it('视频只推进 videoProgress', async () => {
+    const s = svc();
+    attachChain(s);
+    s.type = 'video';
+    s.video = { uri: 'file://v.mp4', mime: 'video/mp4', size: 1000, durationSeconds: 4 };
+    api.uploadMedia.mockImplementation(async (input: {
+      kind: string;
+      size: number;
+      onProgress?: (loaded: number, total: number) => void;
+    }) => {
+      expect(input.kind).toBe('video');
+      input.onProgress?.(250, 1000);
+      expect(s.videoProgress).toBeCloseTo(0.25);
+      expect(s.progressLabel).toBe('上传中 25%');
+      expect(s.imageProgress).toEqual([]);
+      expect(s.audioProgress).toBeNull();
+      return { mediaId: 'vid', status: 'ready', mime: 'video/mp4', size: input.size };
+    });
+    api.createMoment.mockImplementation(async () => {
+      expect(s.videoProgress).toBe(1);
+      return { id: 'm-new' };
+    });
+    await s.submit();
+    expect(s.videoProgress).toBeNull();
+    expect(s.mediaUploadActive).toBe(false);
+  });
+
+  it('录音先传，附图进度保持 0，直到轮到它', async () => {
+    const s = svc();
+    attachChain(s);
+    s.type = 'voice';
+    s.voice = { uri: 'file://a.m4a', mime: 'audio/mp4', size: 200, durationSeconds: 3 };
+    s.images = [ready('p', 100)];
+    api.uploadMedia.mockImplementation(async (input: {
+      kind: string;
+      size: number;
+      mime: string;
+      onProgress?: (loaded: number, total: number) => void;
+    }) => {
+      if (input.kind === 'audio') {
+        input.onProgress?.(100, 200);
+        expect(s.audioProgress).toBeCloseTo(0.5);
+        expect(s.imageProgress).toEqual([0]);
+        expect(s.progressLabel).toBe('上传中 33%');
+      } else {
+        expect(s.audioProgress).toBe(1);
+        input.onProgress?.(50, 100);
+        expect(s.imageProgress[0]).toBeCloseTo(0.5);
+        expect(s.progressLabel).toBe('上传中 83%');
+      }
+      return { mediaId: input.kind, status: 'ready', mime: input.mime, size: input.size };
+    });
+    api.createMoment.mockImplementation(async () => {
+      expect(s.audioProgress).toBe(1);
+      expect(s.imageProgress).toEqual([1]);
+      return { id: 'm-new' };
+    });
+    await s.submit();
+    expect(s.audioProgress).toBeNull();
+    expect(s.imageProgress).toEqual([]);
+  });
+
+  it('上传失败后清掉每条进度', async () => {
+    const s = svc();
+    attachChain(s);
+    s.type = 'media';
+    s.images = [ready('a', 100)];
+    let mid = 0;
+    api.uploadMedia.mockImplementation(async (input: { onProgress?: (loaded: number, total: number) => void }) => {
+      input.onProgress?.(40, 100);
+      mid = s.imageProgress[0] ?? -1;
+      throw new Error('offline');
+    });
+    await expect(s.submit()).rejects.toThrow('offline');
+    expect(mid).toBeCloseTo(0.4);
+    expect(s.imageProgress).toEqual([]);
+    expect(s.progressLabel).toBeNull();
+    expect(s.mediaUploadActive).toBe(false);
+    expect(api.createMoment).not.toHaveBeenCalled();
+  });
+
+  it('编辑新图按图片下标记进度，保存前记满', async () => {
+    api.getMoment.mockResolvedValue(moment({ type: 'media', media: [img('keep')] }));
+    const s = svc();
+    await s.loadForEdit('m-1');
+    s.images = [ready('n', 80)];
+    s.mediaTouched = true;
+    api.uploadMedia.mockImplementation(async (input: { onProgress?: (loaded: number, total: number) => void; size: number }) => {
+      input.onProgress?.(40, 80);
+      expect(s.imageProgress).toEqual([0.5]);
+      expect(s.progressLabel).toBe('上传中 50%');
+      return { mediaId: 'new-1', status: 'ready', mime: 'image/jpeg', size: input.size };
+    });
+    api.updateMoment.mockImplementation(async () => {
+      expect(s.imageProgress).toEqual([1]);
+      expect(s.progressLabel).toBe('保存中…');
+      return moment();
+    });
+    await s.submit();
+    expect(s.imageProgress).toEqual([]);
+    expect((api.updateMoment.mock.calls[0]![1] as { mediaIds: string[] }).mediaIds).toEqual(['keep', 'new-1']);
+  });
+
+  it('上传中忽略删图和再选', async () => {
+    const s = svc();
+    s.images = [ready('a', 10)];
+    s.imageProgress = [0.2];
+    s.removeImage(0);
+    expect(s.images).toHaveLength(1);
+    await expect(s.pickMoreImages()).resolves.toBe(0);
+    expect(mediaLib.pickImages).not.toHaveBeenCalled();
+    expect(await s.chooseVideo()).toBeNull();
+    expect(mediaLib.pickVideo).not.toHaveBeenCalled();
+  });
+});
+
+function chainDto(id: string, template: string, role: 'owner' | 'editor' | 'viewer' = 'owner'): ChainDto {
+  return {
+    id,
+    name: id,
+    description: null,
+    avatarMediaId: null,
+    avatarUrl: null,
+    avatarFocus: null,
+    coverMediaId: null,
+    coverUrl: null,
+    coverFocus: null,
+    color: null,
+    icon: null,
+    visibility: 'private',
+    template,
+    payload: null,
+    ownerId: 'u-1',
+    myRole: role,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    membersPreview: [],
+    memberCount: 1,
+  };
+}
+
+describe('编辑换链', () => {
+  it('换到同模板的链：清空标签和人物，保留结构化内容，提交带 chainId 和空 personIds', async () => {
+    api.getMoment.mockResolvedValue(moment({
+      kind: 'milestone',
+      payload: { custom_label: '走' },
+      tags: [{ id: 't-1', name: '家' }],
+      persons: [{ id: 'p-1', name: '外婆', userId: null, source: 'manual' }],
+    }));
+    resolve(ChainListService).chains = [chainDto('chain-1', 'baby'), chainDto('chain-2', 'baby')];
+    const s = svc();
+    await s.loadForEdit('m-1');
+    s.setChain('chain-2');
+    expect(s.activeChainId).toBe('chain-2');
+    expect(s.tagIds).toEqual([]);
+    expect(s.selectedPersons).toEqual([]);
+    expect(s.kind).toBe('milestone');
+    expect(s.payloadDraft).toEqual({ custom_label: '走' });
+    await s.submit();
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body.chainId).toBe('chain-2');
+    expect(body.tagIds).toEqual([]);
+    expect(body.personIds).toEqual([]);
+    expect(body.kind).toBe('milestone');
+    expect(body.payload).toEqual({ custom_label: '走' });
+  });
+
+  it('模板不同就收成 standard；再换到同模板的第三条链时结构化内容回来', async () => {
+    api.getMoment.mockResolvedValue(moment({
+      kind: 'standard',
+      payload: { mood: '😄' },
+      tags: [{ id: 't-1', name: '家' }],
+    }));
+    resolve(ChainListService).chains = [
+      chainDto('chain-1', 'daily'),
+      chainDto('chain-2', 'baby'),
+      chainDto('chain-3', 'daily'),
+    ];
+    const s = svc();
+    await s.loadForEdit('m-1');
+    s.setChain('chain-2');
+    expect(s.kind).toBe('standard');
+    expect(s.payloadDraft).toEqual({});
+    expect(s.tagIds).toEqual([]);
+    s.setChain('chain-3');
+    expect(s.kind).toBe('standard');
+    expect(s.payloadDraft).toEqual({ mood: '😄' });
+    expect(s.tagIds).toEqual([]);
+    await s.submit();
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body.chainId).toBe('chain-3');
+    expect(body.payload).toEqual({ mood: '😄' });
+    expect(body.personIds).toEqual([]);
+  });
+
+  it('点回原链还原离开前的选择，保存不再带 chainId', async () => {
+    api.getMoment.mockResolvedValue(moment({
+      tags: [{ id: 't-1', name: '家' }],
+      persons: [{ id: 'p-1', name: '外婆', userId: null, source: 'ai' }],
+    }));
+    resolve(ChainListService).chains = [chainDto('chain-1', 'daily'), chainDto('chain-2', 'daily')];
+    const s = svc();
+    await s.loadForEdit('m-1');
+    s.setChain('chain-2');
+    s.setChain('chain-1');
+    expect(s.tagIds).toEqual(['t-1']);
+    expect(s.selectedPersons.map((p) => p.id)).toEqual(['p-1']);
+    expect(s.personsTouched).toBe(false);
+    await s.submit();
+    const body = api.updateMoment.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('chainId');
+    expect(body).not.toHaveProperty('personIds');
+    expect(body.tagIds).toEqual(['t-1']);
+  });
+
+  it('原链只是「只看」时仍出现在选项里，旁边是可编辑的链', async () => {
+    api.getMoment.mockResolvedValue(moment());
+    resolve(ChainListService).chains = [
+      chainDto('chain-1', 'daily', 'viewer'),
+      chainDto('chain-2', 'daily', 'editor'),
+    ];
+    const s = svc();
+    await s.loadForEdit('m-1');
+    expect(s.chainChoices.map((c) => c.id)).toEqual(['chain-1', 'chain-2']);
+  });
+
+  it('上传中不换链', async () => {
+    api.getMoment.mockResolvedValue(moment());
+    resolve(ChainListService).chains = [chainDto('chain-1', 'daily'), chainDto('chain-2', 'daily')];
+    const s = svc();
+    await s.loadForEdit('m-1');
+    s.imageProgress = [0.2];
+    s.setChain('chain-2');
+    expect(s.activeChainId).toBe('chain-1');
+    expect(s.tagIds).toEqual([]);
   });
 });

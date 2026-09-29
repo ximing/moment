@@ -129,6 +129,13 @@ test('updateMoment PATCH JSON 体能带 mediaIds', async () => {
   assert.deepEqual(calls[0]!.body, { mediaIds: [mediaId] });
 });
 
+test('updateMoment PATCH JSON 体能带 chainId', async () => {
+  const { client, calls } = harness();
+  const chainId = '123e4567-e89b-12d3-a456-426614174000';
+  await client.updateMoment('m1', { chainId });
+  assert.deepEqual(calls[0]!.body, { chainId });
+});
+
 test('media/comments/reactions/notifications/devices 路径', async () => {
   const { client, calls } = harness();
   await client.presignMedia({ mime: 'image/jpeg', size: 1024, kind: 'image', sortOrder: 0 });
