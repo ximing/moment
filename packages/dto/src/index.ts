@@ -15,4 +15,5 @@ export * from './geocode.js';
 export * from './search.js';
 export * from './jobs.js';
 export * from './icons.js';
+export * from './agent.js';
 

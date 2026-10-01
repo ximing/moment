@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, test } from 'node:test';
 import { createMomentClient } from './client.js';
+import { ApiError } from './types.js';
 
 /** 记录全部 fetch 调用并按需应答的 harness。 */
 function harness() {
@@ -433,6 +434,204 @@ test('mediaUrl / fetchMediaBlob：variant + st 拼接（已有 ? 则 &st=）', a
       'GET http://x/api/media/md1?variant=derived',
     ],
   );
+});
+
+test('agent threads：JSON 路径与空创建体', async () => {
+  const { client, calls } = harness();
+  await client.createAgentThread();
+  await client.listAgentThreads();
+  await client.getAgentThread('t1');
+  await client.deleteAgentThread('t1');
+  assert.deepEqual(
+    calls.map((c) => `${c.method} ${c.url}`),
+    [
+      'POST http://x/api/agent/threads',
+      'GET http://x/api/agent/threads',
+      'GET http://x/api/agent/threads/t1',
+      'DELETE http://x/api/agent/threads/t1',
+    ],
+  );
+  assert.deepEqual(calls[0]!.body, {});
+});
+
+test('streamAgentTurn：JSON 错误体抛 ApiError，流里把 token 交给回调', async () => {
+  const store = {
+    tokens: { accessToken: 'a1', refreshToken: 'r1', expiresIn: 900 },
+    getAccessToken() {
+      return store.tokens.accessToken;
+    },
+    getRefreshToken() {
+      return store.tokens.refreshToken;
+    },
+    setTokens() {},
+    clear() {},
+  };
+  const events: { event: string; data: unknown }[] = [];
+  let mode: 'error' | 'stream' = 'error';
+  const client = createMomentClient({
+    baseUrl: 'http://x',
+    tokenStore: store,
+    fetchImpl: async () => {
+      if (mode === 'error') {
+        return new Response(JSON.stringify({ error: { code: 'AGENT_UNAVAILABLE', message: 'AGENT_UNAVAILABLE' } }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const encoder = new TextEncoder();
+      const parts = ['event: token\ndata: {"te', 'xt":"你"}\n\n'];
+      let i = 0;
+      const body = new ReadableStream({
+        pull(controller) {
+          if (i >= parts.length) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(encoder.encode(parts[i]!));
+          i += 1;
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream; charset=utf-8' } });
+    },
+  });
+  await assert.rejects(
+    () => client.streamAgentTurn('t1', { content: '你好' }, { onEvent: (event) => events.push(event) }),
+    (err: unknown) => {
+      assert.ok(err instanceof ApiError);
+      assert.equal(err.status, 503);
+      assert.equal(err.code, 'AGENT_UNAVAILABLE');
+      return true;
+    },
+  );
+  mode = 'stream';
+  await client.streamAgentTurn('t1', { content: '你好' }, { onEvent: (event) => events.push(event) });
+  assert.deepEqual(events, [{ event: 'token', data: { text: '你' } }]);
+});
+
+test('streamAgentTurn：401 在读 body 之前刷新并重放', async () => {
+  const store = {
+    access: 'expired',
+    getAccessToken() {
+      return store.access;
+    },
+    getRefreshToken() {
+      return 'r1';
+    },
+    setTokens(tokens: { accessToken: string }) {
+      store.access = tokens.accessToken;
+    },
+    clear() {},
+  };
+  let unauthorizedBodyReads = 0;
+  const auths: string[] = [];
+  const client = createMomentClient({
+    baseUrl: 'http://x',
+    tokenStore: store,
+    fetchImpl: async (url, init) => {
+      const u = String(url);
+      const auth = new Headers(init?.headers).get('authorization') ?? '';
+      if (u.endsWith('/api/auth/refresh')) {
+        return new Response(
+          JSON.stringify({
+            user: { id: 'u' },
+            tokens: { accessToken: 'new', refreshToken: 'r2', expiresIn: 900 },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      auths.push(auth);
+      if (auth === 'Bearer expired') {
+        // Node 26 在流构造后的 microtask 里会 pull 一次，bodyUsed 仍是 false。
+        // 第一片不完整，真正读 body（json/text）才会再 pull。刷新前只允许这一次。
+        const body = new ReadableStream({
+          pull(controller) {
+            unauthorizedBodyReads += 1;
+            if (unauthorizedBodyReads === 1) {
+              controller.enqueue(new TextEncoder().encode('{"error":{"code":"UNAU'));
+              return;
+            }
+            controller.enqueue(new TextEncoder().encode('THORIZED","message":"UNAUTHORIZED"}}'));
+            controller.close();
+          },
+        });
+        return new Response(body, { status: 401, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response('event: token\ndata: {"text":"你"}\n\n', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    },
+  });
+  const events: { event: string }[] = [];
+  await client.streamAgentTurn('t1', { content: '你好' }, { onEvent: (event) => events.push(event) });
+  assert.equal(unauthorizedBodyReads, 1);
+  assert.deepEqual(auths, ['Bearer expired', 'Bearer new']);
+  assert.equal(events[0]?.event, 'token');
+});
+
+test('streamAgentTurn xhr：onprogress 增量 responseText 交给回调', async () => {
+  const previous = globalThis.XMLHttpRequest;
+  class FakeXHR {
+    static HEADERS_RECEIVED = 2;
+    static DONE = 4;
+    status = 200;
+    readyState = 0;
+    responseText = '';
+    onprogress: (() => void) | null = null;
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    onabort: (() => void) | null = null;
+    onreadystatechange: (() => void) | null = null;
+    private headers = new Map<string, string>();
+    open(): void {}
+    setRequestHeader(name: string, value: string): void {
+      this.headers.set(name.toLowerCase(), value);
+    }
+    getResponseHeader(name: string): string | null {
+      return name.toLowerCase() === 'content-type' ? 'text/event-stream; charset=utf-8' : null;
+    }
+    abort(): void {
+      this.onabort?.();
+    }
+    send(): void {
+      this.readyState = FakeXHR.HEADERS_RECEIVED;
+      this.onreadystatechange?.();
+      setTimeout(() => {
+        this.responseText = 'event: token\ndata: {"text":"甲"}\n\n';
+        this.onprogress?.();
+        this.responseText += 'event: token\ndata: {"text":"乙"}\n\n';
+        this.onprogress?.();
+        this.readyState = FakeXHR.DONE;
+        this.onload?.();
+      }, 0);
+    }
+  }
+  globalThis.XMLHttpRequest = FakeXHR as unknown as typeof XMLHttpRequest;
+  try {
+    const client = createMomentClient({
+      baseUrl: 'http://x',
+      streamTransport: 'xhr',
+      tokenStore: {
+        getAccessToken: () => 'a1',
+        getRefreshToken: () => null,
+        setTokens: () => {},
+        clear: () => {},
+      },
+      fetchImpl: async () => {
+        throw new Error('xhr transport must not fetch');
+      },
+    });
+    const texts: string[] = [];
+    await client.streamAgentTurn('t1', { content: '你好' }, {
+      onEvent: (event) => {
+        if (event.event === 'token') texts.push(event.data.text);
+      },
+    });
+    assert.deepEqual(texts, ['甲', '乙']);
+  } finally {
+    if (previous) globalThis.XMLHttpRequest = previous;
+    else delete (globalThis as { XMLHttpRequest?: unknown }).XMLHttpRequest;
+  }
 });
 
 test('reverseGeocode：POST /api/geocode/reverse', async () => {

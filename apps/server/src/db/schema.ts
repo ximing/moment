@@ -16,3 +16,4 @@ export * from './schema/templates.js';
 export * from './schema/recaps.js';
 export * from './schema/persons.js';
 export * from './schema/moment-persons.js';
+export * from './schema/agent.js';

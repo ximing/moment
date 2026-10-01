@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+import nock from 'nock';
 import {
   OpenAICompatProvider,
   RetryableLLMError,
@@ -242,5 +244,84 @@ describe('OpenAICompatProvider.chat — 错误分类', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe('OpenAICompatProvider.agentChat', () => {
+  const host = 'https://llm.test';
+
+  afterEach(() => {
+    nock.cleanAll();
+    nock.enableNetConnect();
+  });
+
+  async function collect(provider: OpenAICompatProvider, signal?: AbortSignal) {
+    const events: Array<{ type: string; text?: string; id?: string; name?: string; arguments?: string }> = [];
+    for await (const event of provider.agentChat({
+      messages: [{ role: 'user', content: '你好' }],
+      tools: [{ name: 'list_chains', description: '列出链', parameters: { type: 'object', properties: {} } }],
+      maxTokens: 800,
+      temperature: 0.3,
+      signal,
+    })) {
+      events.push(event);
+    }
+    return events;
+  }
+
+  it('nock 流：两段文本 + 被拆开的 tool call，请求体带 stream 与 function tool', async () => {
+    nock.disableNetConnect();
+    let captured: Record<string, unknown> | undefined;
+    const chunks = [
+      'data: {"choices":[{"delta":{"content":"你"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"好"}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"list_chains","arguments":""}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"x\\":1}"}}]}}]}\n\n',
+      'data: [DONE]\n\n',
+    ];
+    const scope = nock(host)
+      .post('/v1/chat/completions', (body: Record<string, unknown>) => {
+        captured = body;
+        return true;
+      })
+      .reply(200, () => Readable.from(chunks), { 'Content-Type': 'text/event-stream' });
+
+    const provider = new OpenAICompatProvider({
+      baseUrl: `${host}/v1`,
+      apiKey: 'sk-test',
+      model: 'm',
+      timeoutMs: 5000,
+    });
+    const events = await collect(provider);
+    expect(scope.isDone()).toBe(true);
+    expect(captured?.['stream']).toBe(true);
+    expect(captured?.['max_tokens']).toBe(800);
+    expect(captured?.['temperature']).toBe(0.3);
+    expect(captured?.['tools']).toEqual([
+      {
+        type: 'function',
+        function: { name: 'list_chains', description: '列出链', parameters: { type: 'object', properties: {} } },
+      },
+    ]);
+    expect(events).toEqual([
+      { type: 'text', text: '你' },
+      { type: 'text', text: '好' },
+      { type: 'tool_call', id: 'call_1', name: 'list_chains', arguments: '{"x":1}' },
+      { type: 'done' },
+    ]);
+  });
+
+  it('429 → RetryableLLMError；400 → NonRetryableLLMError', async () => {
+    nock.disableNetConnect();
+    const provider = new OpenAICompatProvider({
+      baseUrl: `${host}/v1`,
+      apiKey: 'sk-test',
+      model: 'm',
+      timeoutMs: 1000,
+    });
+    nock(host).post('/v1/chat/completions').reply(429, { error: { message: 'rate' } });
+    await expect(collect(provider)).rejects.toBeInstanceOf(RetryableLLMError);
+    nock(host).post('/v1/chat/completions').reply(400, { error: { message: 'bad' } });
+    await expect(collect(provider)).rejects.toBeInstanceOf(NonRetryableLLMError);
   });
 });

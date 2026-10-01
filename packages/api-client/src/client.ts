@@ -38,6 +38,10 @@ import type {
   RegisterInput,
   ReorderChainsInput,
   RegisterPushTokenInput,
+  AgentMessage,
+  AgentSseEvent,
+  AgentThread,
+  PostAgentTurnInput,
   TemplateDto,
   TemplateScope,
   UpdateMeInput,
@@ -52,6 +56,7 @@ import type {
 } from '@moment/dto';
 import { createMomentInputSchema } from '@moment/dto';
 import type { ZodInput } from './zod-input.js';
+import { readAgentTurn } from './agent-stream.js';
 import { Http } from './http.js';
 import type { MomentClientOptions } from './types.js';
 import { uploadMediaImpl, type UploadMediaInput } from './upload.js';
@@ -175,6 +180,16 @@ export interface MomentClient {
   markNotificationsRead(ids: string[]): Promise<void>;
   registerPushToken(input: RegisterPushTokenInput): Promise<void>;
   uploadMedia(input: UploadMediaInput): Promise<MediaCompleteResponse>;
+
+  createAgentThread(): Promise<{ thread: AgentThread }>;
+  listAgentThreads(): Promise<{ threads: AgentThread[] }>;
+  getAgentThread(id: string): Promise<{ thread: AgentThread; messages: AgentMessage[] }>;
+  deleteAgentThread(id: string): Promise<void>;
+  streamAgentTurn(
+    threadId: string,
+    input: PostAgentTurnInput,
+    options: { signal?: AbortSignal; onEvent: (event: AgentSseEvent) => void },
+  ): Promise<void>;
 }
 
 export function createMomentClient(options: MomentClientOptions): MomentClient {
@@ -335,6 +350,22 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
     listChainJobs: (chainId, query) =>
       http.request(`/api/chains/${chainId}/jobs`, {
         query: { status: query?.status, limit: query?.limit },
+      }),
+
+    createAgentThread: () => http.request('/api/agent/threads', { method: 'POST', body: {} }),
+    listAgentThreads: () => http.request('/api/agent/threads'),
+    getAgentThread: (id) => http.request(`/api/agent/threads/${id}`),
+    deleteAgentThread: (id) => http.request(`/api/agent/threads/${id}`, { method: 'DELETE' }),
+    streamAgentTurn: (threadId, input, stream) =>
+      readAgentTurn({
+        http,
+        fetchImpl: options.fetchImpl ?? fetch.bind(globalThis),
+        baseUrl,
+        threadId,
+        input,
+        signal: stream.signal,
+        transport: options.streamTransport === 'xhr' ? 'xhr' : 'fetch',
+        onEvent: stream.onEvent,
       }),
   };
 }

@@ -73,6 +73,24 @@ export const searchRateLimiter = rateLimit({
   message,
 });
 
+/** 只挂在 POST /api/agent/threads/:id/turns。60s/10，测试环境 1000。key = 归一化 IP + userId。 */
+export const AGENT_TURN_RATE_WINDOW_MS = 60_000;
+export const AGENT_TURN_RATE_LIMIT = 10;
+
+export function agentTurnKeyGenerator(req: Request): string {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id ?? 'anonymous';
+  return `${ipKey(req)}:${userId}`;
+}
+
+export const agentTurnRateLimiter = rateLimit({
+  windowMs: AGENT_TURN_RATE_WINDOW_MS,
+  limit: isTest ? 1000 : AGENT_TURN_RATE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: agentTurnKeyGenerator,
+  message,
+});
+
 /** 匿名公开端点：IP 维度 60s/60 次（公开页一次浏览 = 1 次 API + N 次 media 302，媒体不走本 limiter）。 */
 export const publicShareRateLimiter = rateLimit({
   windowMs: 60_000,

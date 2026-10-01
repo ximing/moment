@@ -5,6 +5,7 @@ import { setAudioModeAsync } from 'expo-audio';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RSRoot } from '@rabjs/react';
+import { AgentDockHost } from '../src/agent/AgentDockHost';
 import { FeedbackHost } from '../src/components/feedback';
 import { AppUpdateHost } from '../src/features/app-update/AppUpdateHost';
 import { registerGlobals } from '../src/services/register';
@@ -40,6 +41,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
         <AppUpdateHost />
+        <AgentDockHost />
         <FeedbackHost />
       </View>
       </SafeAreaProvider>

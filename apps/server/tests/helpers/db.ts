@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { db, pool } from '../../src/db/index.js';
 import {
+  agentMessages,
+  agentThreads,
   chainInvites,
   chainMembers,
   chains,
@@ -50,6 +52,8 @@ async function withConnRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> 
 export async function resetDb(): Promise<void> {
   // 清表语句幂等，整体重试安全：连接重置后重跑全序列即可。
   await withConnRetry(async () => {
+    await db.delete(agentMessages);
+    await db.delete(agentThreads);
     await db.delete(pushTokens);
     await db.delete(notifications);
     await db.delete(reactions);

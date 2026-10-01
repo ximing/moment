@@ -49,4 +49,9 @@ export interface MomentClientOptions {
   tokenStore: TokenStore;
   fetchImpl?: typeof fetch;
   putWithProgress?: PutFn;
+  /**
+   * 对话流的传输。缺省 fetch getReader。
+   * 'xhr' 用 XMLHttpRequest onprogress 的增量 responseText（React Native 上逐段渲染）。
+   */
+  streamTransport?: 'fetch' | 'xhr';
 }

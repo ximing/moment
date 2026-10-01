@@ -7,6 +7,7 @@ import type { ChainDto, UserProfile } from '@moment/dto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComposeFab } from '@/compose/compose-fab';
 import { ComposerEntry } from '@/compose/composer-entry';
+import { AgentDockService } from '@/services/agent-dock.service';
 import { AuthService } from '@/services/auth.service';
 import { ChainListService } from '@/services/chain-list.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
@@ -57,6 +58,7 @@ vi.mock('@/api/client', () => ({
 }));
 
 register(AuthService);
+register(AgentDockService);
 register(ThemeService);
 register(ComposeSessionService);
 register(ChainListService);
@@ -117,6 +119,21 @@ beforeEach(() => {
   resolve(ChainListService).chains = [CHAIN];
   resolve(ComposeSessionService).request = null;
   resolve(ComposeSessionService).lastCreatedId = null;
+  // 面板打开才会 listAgentThreads。未知方法的桩永不 settle，这里保持收起。
+  window.localStorage?.removeItem('moment.agent.dock');
+  const dock = resolve(AgentDockService);
+  dock.open = false;
+  dock.threadId = null;
+  dock.threads = [];
+  dock.messages = [];
+  dock.draft = '';
+  dock.streaming = false;
+  dock.statusText = null;
+  dock.error = null;
+  dock.unavailable = false;
+  dock.pendingNav = null;
+  dock.liveContent = '';
+  dock.liveMoments = [];
 });
 
 /** 测试探针：回显当前地址，用于断言导航目的地（与 app-toast.test.tsx 同手法）。 */
@@ -345,5 +362,51 @@ describe('composer 入口 compose-session 交接', () => {
     const fab = await screen.findByRole('button', { name: '记下此刻' });
     await user.click(fab);
     expect(resolve(ComposeSessionService).request).toEqual({ chainId: 'chain-1' });
+  });
+});
+
+describe('问问时刻', () => {
+  it('侧栏和窄屏顶栏都能找到「问问时刻」', () => {
+    const page = renderShell('/');
+    const buttons = screen.getAllByRole('button', { name: '问问时刻' });
+    expect(buttons).toHaveLength(2);
+    const aside = page.container.querySelector('aside');
+    const header = page.container.querySelector('header');
+    expect(buttons.filter((button) => aside?.contains(button))).toHaveLength(1);
+    expect(buttons.filter((button) => header?.contains(button))).toHaveLength(1);
+  });
+
+  it('窄屏面板全屏，宽屏面板用浮层 class', async () => {
+    const user = userEvent.setup();
+    const narrow = renderShell('/');
+    const narrowEntry = screen.getAllByRole('button', { name: '问问时刻' })[0];
+    if (!narrowEntry) throw new Error('缺少问问时刻');
+    await user.click(narrowEntry);
+    // 测试环境 observer 不一定重渲（与开链用例同一手法）
+    narrow.rerender(shellTree('/'));
+    expect(screen.getByRole('region', { name: '问问时刻' }).className).toBe(
+      'fixed inset-0 z-floating flex flex-col bg-surface p-4',
+    );
+    narrow.unmount();
+    resolve(AgentDockService).close();
+
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(min-width: 768px)' || query === '(min-width: 900px)',
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    }));
+    const wide = renderShell('/');
+    const wideEntry = screen.getAllByRole('button', { name: '问问时刻' })[0];
+    if (!wideEntry) throw new Error('缺少问问时刻');
+    await user.click(wideEntry);
+    wide.rerender(shellTree('/'));
+    expect(screen.getByRole('region', { name: '问问时刻' }).className).toBe(
+      'fixed top-6 right-6 bottom-6 z-floating flex w-full max-w-sheet flex-col rounded-surface-lg bg-surface shadow-fab',
+    );
   });
 });

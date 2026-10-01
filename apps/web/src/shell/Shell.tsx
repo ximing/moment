@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router';
 import { observer, useService } from '@rabjs/react';
 import { Plus } from 'lucide-react';
+import { AgentDockEntry, AgentDockNav, AgentDockPanel } from '@/agent/agent-dock';
 import { ComposeFab } from '@/compose/compose-fab';
 import { ComposePanel } from '@/compose/compose-panel';
+import { AgentDockService } from '@/services/agent-dock.service';
 import { ComposeSessionService } from '@/services/compose-session.service';
 import { ChainListService } from '@/services/chain-list.service';
 import { NotificationService } from '@/services/notification.service';
@@ -34,6 +36,7 @@ export const Shell = observer(function Shell() {
 
   const chainList = useService(ChainListService);
   const notification = useService(NotificationService);
+  const agentDock = useService(AgentDockService);
   const chains = chainList.chains;
   const unread = notification.unreadCount;
   const currentChain = chains.find((c) => c.id === chainId);
@@ -70,7 +73,8 @@ export const Shell = observer(function Shell() {
           </button>
         </nav>
         {/* 底部用户区与导航之间不留分割横线（不要重分割感），用留白分隔 */}
-        <div className="shrink-0 py-4">
+        <div className="flex shrink-0 flex-col gap-2 py-4">
+          <AgentDockEntry block />
           <UserMenu unread={unread} />
         </div>
       </aside>
@@ -99,6 +103,7 @@ export const Shell = observer(function Shell() {
               <Icon icon={Plus} />
             </button>
           </div>
+          <AgentDockEntry />
           <UserMenu unread={unread} compact />
         </header>
         <main
@@ -116,6 +121,8 @@ export const Shell = observer(function Shell() {
 
       <ComposePanel />
       {showCompose && <ComposeFab chainId={chainId} />}
+      {agentDock.open ? <AgentDockPanel /> : null}
+      <AgentDockNav />
       {creating && <CreateChainDialog onClose={() => setCreating(false)} />}
     </div>
   );

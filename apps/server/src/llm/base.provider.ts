@@ -15,8 +15,34 @@ export interface LLMChatResponse {
   usage: { prompt: number; completion: number; total: number };
 }
 
+export interface LLMToolDef {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+export type LLMAgentMessage =
+  | { role: 'system' | 'user'; content: string }
+  | { role: 'assistant'; content: string; toolCalls?: { id: string; name: string; arguments: string }[] }
+  | { role: 'tool'; toolCallId: string; content: string };
+
+export type LLMAgentEvent =
+  | { type: 'text'; text: string }
+  | { type: 'tool_call'; id: string; name: string; arguments: string }
+  | { type: 'done' };
+
+export interface LLMAgentChatRequest {
+  messages: LLMAgentMessage[];
+  tools?: LLMToolDef[];
+  maxTokens?: number;
+  temperature?: number;
+  signal?: AbortSignal;
+}
+
 export interface LLMProvider {
   chat(req: LLMChatRequest): Promise<LLMChatResponse>;
+  /** 可选。没有此方法的测试替身不受影响；Agent 发送因此走 503。 */
+  agentChat?(req: LLMAgentChatRequest): AsyncGenerator<LLMAgentEvent>;
 }
 
 /**

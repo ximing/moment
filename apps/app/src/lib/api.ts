@@ -15,6 +15,8 @@ export const client: MomentClient = createMomentClient({
   baseUrl: apiUrl,
   tokenStore: secureTokenStore,
   putWithProgress: rnPut,
+  // RN 的 fetch 会把 SSE 攒到结束；xhr onprogress 才能逐段交出正文。
+  streamTransport: 'xhr',
 });
 
 /** 分享链接落 Web 端（/share/:token，web 已有匿名公开页）——长辈用浏览器打开。 */

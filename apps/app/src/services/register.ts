@@ -1,4 +1,5 @@
 import { register } from '@rabjs/react';
+import { AgentDockService } from './agent-dock.service';
 import { AppUpdateService } from './app-update.service';
 import { AuthService } from './auth.service';
 import { ChainListService } from './chain-list.service';
@@ -12,6 +13,7 @@ export function registerGlobals(): void {
   if (registered) return;
   registered = true;
   register(AuthService);
+  register(AgentDockService);
   register(ChainListService);
   register(NotificationService);
   register(AppUpdateService);

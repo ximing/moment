@@ -30,6 +30,8 @@ import { InternalEmbeddingsController } from './embeddings/internal.controller.j
 import { SearchController } from './search/search.controller.js';
 import { JobsController } from './jobs/jobs.controller.js';
 import { GeocodeController } from './geocode/geocode.controller.js';
+import { AgentController } from './agent/agent.controller.js';
+import { registerAgentTurnRoute } from './agent/turn.route.js';
 
 export function createApp(): express.Express {
   useContainer(Container);
@@ -53,10 +55,12 @@ export function createApp(): express.Express {
   // 命中后 next() 落入 routing-controllers 的同名 POST 路由，不影响其注册。
   app.post('/api/invites/:token/accept', inviteAcceptRateLimiter);
   app.post('/api/search', searchRateLimiter);
+  // SSE 发送：populateUser 之后、useExpressServer 之前。不要用 app.use('/api/agent')，那会罩住 GET。
+  registerAgentTurnRoute(app);
 
   useExpressServer(app, {
     routePrefix: '/api',
-    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, PersonController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController, InternalEmbeddingsController, SearchController, JobsController, GeocodeController],
+    controllers: [HealthController, AuthController, ChainsController, InvitesController, MediaController, MomentController, MomentItemController, PersonController, TagController, FeedController, MemoriesController, CommentsController, ReactionsController, NotificationsController, DevicesController, ShareLinksController, ShareLinkItemController, PublicShareController, TemplatesController, AggregateController, RecapController, InternalEmbeddingsController, SearchController, JobsController, GeocodeController, AgentController],
     middlewares: [ErrorHandlerMiddleware],
     defaultErrorHandler: false,
     authorizationChecker,

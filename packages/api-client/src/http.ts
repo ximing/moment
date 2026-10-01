@@ -13,6 +13,7 @@ export interface RequestOptions {
   skipAuth?: boolean;
   /** true = 收到 401 也不触发 refresh（auth 端点自身，防循环） */
   skipAuthRefresh?: boolean;
+  signal?: AbortSignal;
 }
 
 function buildUrl(baseUrl: string, path: string, query?: RequestOptions['query']): string {
@@ -26,7 +27,7 @@ function buildUrl(baseUrl: string, path: string, query?: RequestOptions['query']
   return qs ? `${url}?${qs}` : url;
 }
 
-async function toApiError(res: Response): Promise<ApiError> {
+export async function responseError(res: Response): Promise<ApiError> {
   let code = `HTTP_${res.status}`;
   let message = `请求失败（${res.status}）`;
   let details: unknown;
@@ -67,17 +68,17 @@ export class Http {
       // 只有「本次可能附带过 token」的请求才值得 refresh：store 里连 refreshToken 都没有
       // （即本来就没登录）时直接透传 401，不 refresh、不 clear——避免误清未登录态以外的状态。
       const refreshToken = await this.tokenStore.getRefreshToken();
-      if (!refreshToken) throw await toApiError(first);
+      if (!refreshToken) throw await responseError(first);
       const accessToken = await this.refresh(); // 单飞；失败抛 ApiError 并已 clear
       const second = await this.doFetch(path, options, accessToken);
       if (!second.ok) {
         // 只有重放仍 401 才意味着登录态真失效；403/404/410 等业务错误直接透传，不误清 token（不强制登出）。
         if (second.status === 401) await Promise.resolve(this.tokenStore.clear()).catch(() => undefined);
-        throw await toApiError(second);
+        throw await responseError(second);
       }
       return parseBody<T>(second);
     }
-    if (!first.ok) throw await toApiError(first);
+    if (!first.ok) throw await responseError(first);
     return parseBody<T>(first);
   }
 
@@ -87,16 +88,16 @@ export class Http {
     const first = await this.doFetch(path, options);
     if (first.status === 401) {
       const refreshToken = await this.tokenStore.getRefreshToken();
-      if (!refreshToken) throw await toApiError(first);
+      if (!refreshToken) throw await responseError(first);
       const accessToken = await this.refresh();
       const second = await this.doFetch(path, options, accessToken);
       if (!second.ok) {
         if (second.status === 401) await Promise.resolve(this.tokenStore.clear()).catch(() => undefined);
-        throw await toApiError(second);
+        throw await responseError(second);
       }
       return second.blob();
     }
-    if (!first.ok) throw await toApiError(first);
+    if (!first.ok) throw await responseError(first);
     return first.blob();
   }
 
@@ -109,16 +110,37 @@ export class Http {
     if (token) headers.Authorization = `Bearer ${token}`;
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     const url = buildUrl(this.baseUrl, path, options.query);
+    const init: RequestInit = {
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    };
+    if (options.signal) init.signal = options.signal;
     try {
-      return await this.fetchImpl(url, {
-        method: options.method ?? 'GET',
-        headers,
-        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-      });
+      return await this.fetchImpl(url, init);
     } catch (err) {
       if (err instanceof ApiError) throw err;
       throw new ApiError(err instanceof Error ? err.message : '网络错误', 0, 'NETWORK_ERROR');
     }
+  }
+
+  async accessToken(): Promise<string | undefined> {
+    const token = await this.tokenStore.getAccessToken();
+    return token ?? undefined;
+  }
+
+  /**
+   * 401 且调用方还没读 body 时刷新一次。
+   * 没有 refresh token 返回 null，不 clear。refresh 失败则 clear 并抛 ApiError。
+   */
+  async recoverFrom401(): Promise<string | null> {
+    const refreshToken = await this.tokenStore.getRefreshToken();
+    if (!refreshToken) return null;
+    return this.refresh();
+  }
+
+  async clearTokens(): Promise<void> {
+    await Promise.resolve(this.tokenStore.clear()).catch(() => undefined);
   }
 
   /** 单飞 refresh：并发调用共享同一 promise；成功返回新 accessToken，失败 clear 并抛 ApiError。 */
@@ -145,7 +167,7 @@ export class Http {
     });
     if (!res.ok) {
       await Promise.resolve(this.tokenStore.clear()).catch(() => undefined);
-      throw await toApiError(res);
+      throw await responseError(res);
     }
     const data = (await res.json()) as AuthResponse;
     await this.tokenStore.setTokens(data.tokens);
