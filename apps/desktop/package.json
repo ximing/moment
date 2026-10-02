@@ -1,0 +1,12 @@
+{
+  "name": "@moment/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "tauri dev",
+    "bundle": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

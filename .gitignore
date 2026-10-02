@@ -22,3 +22,6 @@ apps/web/e2e/artifacts/**
 # LanceDB 本地目录（spec fused-retrieval §2.6）；默认相对 cwd
 apps/server/lancedb_data/
 lancedb_data/
+
+# 线上发布步骤含主机地址，只留本机
+docs/deploy.md

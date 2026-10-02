@@ -1,0 +1,130 @@
+name: Build Desktop Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach installers to, for example v0.1.0
+        required: true
+        type: string
+
+concurrency:
+  group: desktop-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: --target aarch64-apple-darwin --config src-tauri/release-version.json
+          - os: macos-latest
+            args: --target x86_64-apple-darwin --config src-tauri/release-version.json
+          - os: ubuntu-22.04
+            args: --config src-tauri/release-version.json
+          - os: ubuntu-22.04-arm
+            args: --config src-tauri/release-version.json
+          - os: windows-latest
+            args: --config src-tauri/release-version.json
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+
+      - name: Resolve release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_ID: ${{ github.event.release.id }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            tag="$INPUT_TAG"
+            if ! id="$(gh release view "$tag" --json databaseId --jq .databaseId)"; then
+              echo "::error::Release $tag does not exist. Publish the release first."
+              exit 1
+            fi
+          else
+            tag="$RELEASE_TAG"
+            id="$RELEASE_ID"
+          fi
+          if [[ "$tag" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          else
+            echo "::error::Release tag '$tag' must look like v1.2.3"
+            exit 1
+          fi
+          printf '{"version":"%s"}\n' "$version" > apps/desktop/src-tauri/release-version.json
+          {
+            echo "id=$id"
+            echo "tag=$tag"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add macOS Rust targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            pkg-config \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            rpm
+
+      - name: Build and upload installers
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_BUNDLER_DMG_IGNORE_CI: "false"
+        with:
+          projectPath: apps/desktop
+          releaseId: ${{ steps.release.outputs.id }}
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
+          retryAttempts: 3
+          args: ${{ matrix.args }}
