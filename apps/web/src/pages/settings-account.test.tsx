@@ -14,6 +14,7 @@ import type {
   ShareLinkDto,
   UserProfile,
 } from "@moment/dto";
+import type { ReactElement } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { appearanceDraftFromChain } from "@/chain/appearance-model";
 import { AuthService } from "@/services/auth.service";
@@ -21,8 +22,11 @@ import { NotificationService } from "@/services/notification.service";
 import { ThemeService } from "@/services/theme.service";
 import { ChainSettingsPageContent } from "./chain-settings/index";
 import { ChainSettingsService } from "./chain-settings/chain-settings.service";
-import { MePageContent } from "./me/index";
 import { MeService } from "./me/me.service";
+import { SettingsAppearanceContent } from "./settings/appearance";
+import { SettingsPasswordContent } from "./settings/password";
+import { SettingsProfileContent } from "./settings/profile";
+import { SettingsTokensContent } from "./settings/tokens";
 import { NotificationsHome } from "./notifications/index";
 
 // 链设置 / 我 / 通知契约（plan Task 12）：
@@ -31,14 +35,14 @@ import { NotificationsHome } from "./notifications/index";
 //   service.revokeShareLink；危险操作不重复弹 Toast；
 // - 资料保存成功调用 useToast().show({ key: 'settings-saved', message: '设置已保存' })，
 //   ToastProvider/Region 挂载归 Task 8，这里只断言 show 调用；
-// - 「我」页主题保留跟随系统 / 浅 / 深三态；
+// - 外观页主题保留跟随系统 / 浅 / 深三态；
 // - 通知未读点用行动色，行不堆卡片阴影。
 //
 // 最小桩与 chain-home.test.tsx 同一约定：@/api/client 全模块桩（未列方法永不
 // settle），全局 Service 与 main.tsx 同序注册，认证态经 resolve(AuthService) 播种。
 // jsdom 下 RAB Service 属性变更不触发 observer 重渲：ChainSettingsService /
 // NotificationService 在渲染前播种（hydrate 幂等守卫命中后不再发请求）。
-// ChainSettingsPageContent / MePageContent 具名导出是测试 seam（同
+// ChainSettingsPageContent / 设置页 Content 具名导出是测试 seam（同
 // MomentPageContent 先例）：bindServices 的私有容器实例在渲染前无法播种。
 // matchMedia 钉死桌面（≥768px）：ResponsiveMenu 走锚定 Menu 分支。
 
@@ -50,6 +54,8 @@ const api = vi.hoisted(() => ({
   listAccessTokens: vi.fn(),
   createAccessToken: vi.fn(),
   revokeAccessToken: vi.fn(),
+  updateMe: vi.fn(),
+  changePassword: vi.fn(),
 }));
 
 vi.mock("@/api/client", () => ({
@@ -215,12 +221,10 @@ function renderChainSettings() {
   );
 }
 
-function renderMe() {
+function renderSettings(node: ReactElement) {
   return render(
     <MemoryRouter>
-      <RSRoot>
-        <MePageContent />
-      </RSRoot>
+      <RSRoot>{node}</RSRoot>
     </MemoryRouter>,
   );
 }
@@ -258,6 +262,12 @@ beforeEach(() => {
   me.pendingRevoke = null;
   me.copied = false;
   me.copyError = "";
+  me.nickname = "";
+  me.nicknameReady = false;
+  me.oldPassword = "";
+  me.newPassword = "";
+  me.confirmPassword = "";
+  me.passwordDone = false;
   api.listAccessTokens.mockResolvedValue({ tokens: [] });
 });
 
@@ -353,10 +363,38 @@ describe("外观草稿生命周期", () => {
   });
 });
 
-describe("「我」页主题三态", () => {
+describe("设置分节", () => {
+  it("每一项是独立页面，退出留在设置里", () => {
+    resolve(AuthService).user = USER;
+    renderSettings(<SettingsProfileContent />);
+
+    expect(screen.getByRole("heading", { name: "设置" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "个人资料" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /个人资料/ })).toHaveAttribute(
+      "href",
+      "/settings/profile",
+    );
+    expect(screen.getByRole("link", { name: /外观/ })).toHaveAttribute(
+      "href",
+      "/settings/appearance",
+    );
+    expect(screen.getByRole("link", { name: /修改密码/ })).toHaveAttribute(
+      "href",
+      "/settings/password",
+    );
+    expect(screen.getByRole("link", { name: /接口令牌/ })).toHaveAttribute(
+      "href",
+      "/settings/tokens",
+    );
+    expect(screen.getByRole("button", { name: "退出" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "生成令牌" })).toBeNull();
+  });
+});
+
+describe("外观页", () => {
   it("主题暴露跟随系统 / 浅 / 深三个既有选项", () => {
     resolve(AuthService).user = USER;
-    renderMe();
+    renderSettings(<SettingsAppearanceContent />);
 
     const group = screen.getByRole("radiogroup", { name: "主题" });
     expect(
@@ -371,7 +409,7 @@ describe("「我」页主题三态", () => {
   });
 });
 
-describe("「我」页接口令牌", () => {
+describe("接口令牌页", () => {
   const created = {
     id: "11111111-1111-4111-8111-111111111111",
     name: "本地脚本",
@@ -382,7 +420,7 @@ describe("「我」页接口令牌", () => {
 
   it("没有令牌时说明用途，并显示空状态", () => {
     resolve(AuthService).user = USER;
-    renderMe();
+    renderSettings(<SettingsTokensContent />);
     expect(
       screen.getByRole("heading", { name: "接口令牌" }),
     ).toBeInTheDocument();
@@ -417,7 +455,7 @@ describe("「我」页接口令牌", () => {
     // jsdom 下渲染前播种才会进首屏。名称是受控字段，生成按钮据此启用。
     const me = resolve(MeService);
     me.tokenName = "本地脚本";
-    const first = renderMe();
+    const first = renderSettings(<SettingsTokensContent />);
 
     await user.click(screen.getByRole("button", { name: "生成令牌" }));
     await waitFor(() =>
@@ -432,7 +470,7 @@ describe("「我」页接口令牌", () => {
     await waitFor(() => expect(me.tokens).toEqual([publicToken]));
 
     // 异步 action 结束后 jsdom 不一定重渲。用已经写好的 service 状态再挂一次，看对话框。
-    const shown = renderMe();
+    const shown = renderSettings(<SettingsTokensContent />);
     const dialog = screen.getByRole("dialog", { name: "令牌已生成" });
     expect(within(dialog).getByRole("textbox", { name: "令牌" })).toHaveValue(
       created.token,
@@ -448,7 +486,7 @@ describe("「我」页接口令牌", () => {
     await waitFor(() => expect(me.issued).toBeNull());
     shown.unmount();
 
-    const listed = renderMe();
+    const listed = renderSettings(<SettingsTokensContent />);
     await screen.findByRole("button", { name: "吊销 本地脚本" });
     await waitFor(() => expect(me.tokens).toEqual([publicToken]));
     // 这次挂载的列表已经落地。后面的 loadTokens 挂起，免得吊销后又被刷回来。
@@ -459,7 +497,7 @@ describe("「我」页接口令牌", () => {
     await waitFor(() => expect(me.pendingRevoke?.id).toBe(created.id));
     // 同步改 service 后 jsdom 不一定重渲。卸掉再挂，确认框按已有状态出现。
     listed.unmount();
-    renderMe();
+    renderSettings(<SettingsTokensContent />);
 
     const confirm = screen.getByRole("alertdialog");
     expect(
@@ -470,6 +508,65 @@ describe("「我」页接口令牌", () => {
       expect(api.revokeAccessToken).toHaveBeenCalledWith(created.id),
     );
     await waitFor(() => expect(me.tokens).toEqual([]));
+  });
+});
+
+describe("个人资料页", () => {
+  it("可以改名字，邮箱只展示", async () => {
+    const user = userEvent.setup();
+    resolve(AuthService).user = USER;
+    api.updateMe.mockResolvedValue({ ...USER, nickname: "小林" });
+    const me = resolve(MeService);
+    me.nickname = "小林";
+    me.nicknameReady = true;
+    renderSettings(<SettingsProfileContent />);
+
+    expect(screen.getByRole("textbox", { name: "邮箱" })).toHaveValue(
+      USER.email,
+    );
+    expect(screen.getByRole("button", { name: "上传头像" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "保存名字" }));
+    await waitFor(() =>
+      expect(api.updateMe).toHaveBeenCalledWith({ nickname: "小林" }),
+    );
+  });
+});
+
+describe("修改密码页", () => {
+  it("两次不一致时不提交；成功后说明需要重新登录", async () => {
+    const user = userEvent.setup();
+    resolve(AuthService).user = USER;
+    api.changePassword.mockResolvedValue(undefined);
+    const me = resolve(MeService);
+    me.oldPassword = "old-secret";
+    me.newPassword = "new-secret-1";
+    me.confirmPassword = "new-secret-2";
+    const first = renderSettings(<SettingsPasswordContent />);
+
+    await user.click(screen.getByRole("button", { name: "确认修改" }));
+    await waitFor(() =>
+      expect(me.$model.changePassword.error).toBeInstanceOf(Error),
+    );
+    expect(api.changePassword).not.toHaveBeenCalled();
+    first.unmount();
+
+    me.confirmPassword = "new-secret-1";
+    me.$model.changePassword.error = null;
+    const second = renderSettings(<SettingsPasswordContent />);
+    await user.click(screen.getByRole("button", { name: "确认修改" }));
+    await waitFor(() =>
+      expect(api.changePassword).toHaveBeenCalledWith({
+        oldPassword: "old-secret",
+        newPassword: "new-secret-1",
+      }),
+    );
+    await waitFor(() => expect(me.passwordDone).toBe(true));
+    second.unmount();
+    renderSettings(<SettingsPasswordContent />);
+    expect(
+      screen.getByRole("dialog", { name: "密码已修改" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/接口令牌也失效了/)).toBeInTheDocument();
   });
 });
 

@@ -6,7 +6,7 @@ import { Avatar } from '@/ui/Avatar';
 import { MenuItem, ResponsiveMenu } from '@/ui/menu/index';
 
 /**
- * 头像菜单：我的资料 / 通知 / 退出登录（Menu 规范 §14/§16 文案）。
+ * 头像菜单：设置 / 通知 / 退出登录。设置页再进入个人资料、外观、密码和接口令牌。
  * 宽栏与窄栏共用 ResponsiveMenu（≥768px 锚定 Menu，<768px ActionSheet），
  * 侧栏 Trigger 允许等宽（Menu 规范 §5.2）；原侧栏私有浮层（手写层级、
  * window 级 Escape、透明全屏关闭层）已全部退出。
@@ -41,15 +41,15 @@ export const UserMenu = observer(function UserMenu({ unread, compact }: { unread
       sheetTitle={user.nickname}
       trigger={trigger}
       onAction={(key) => {
-        if (key === 'profile') navigate('/me');
+        if (key === 'settings') navigate('/settings');
         else if (key === 'notifications') navigate('/notifications');
         // 退出走 AuthService.logout 既有单路径：tokenStore.clear 派发
         // moment:auth-cleared 收敛内存态（Toast 清空由 Feedback 的监听承担）
         else if (key === 'logout') void auth.logout().then(() => navigate('/login'));
       }}
     >
-      <MenuItem id="profile" textValue="我的资料">
-        我的资料
+      <MenuItem id="settings" textValue="设置">
+        设置
       </MenuItem>
       <MenuItem
         id="notifications"

@@ -8,9 +8,17 @@ import { client } from "@/api/client";
 import { compressImage } from "@/lib/compress";
 import { AuthService } from "@/services/auth.service";
 
-/** 资料页（spec §4.5）：头像上传/清除 + 接口令牌。上传成功走 auth.refreshUser。 */
+/** 帐户设置：头像、名字、修改密码、接口令牌。资料更新走 auth.refreshUser。 */
 export class MeService extends Service {
   preview: string | null = null;
+  nickname = "";
+  /** 进个人资料页时从当前用户写入一次，避免覆盖正在输入的名字。 */
+  nicknameReady = false;
+  oldPassword = "";
+  newPassword = "";
+  confirmPassword = "";
+  /** 改密成功后弹出说明，确认再退出当前会话。 */
+  passwordDone = false;
   tokenName = "";
   tokens: AccessToken[] = [];
   /** 刚生成的完整令牌。关掉之后只剩 preview。 */
@@ -45,6 +53,37 @@ export class MeService extends Service {
 
   setPreview(url: string): void {
     this.preview = url;
+  }
+
+  hydrateNickname(): void {
+    if (this.nicknameReady) return;
+    this.nickname = this.auth.user?.nickname ?? "";
+    this.nicknameReady = true;
+  }
+
+  async saveNickname(): Promise<void> {
+    const nickname = this.nickname.trim();
+    if (!nickname || nickname.length > 50) throw new Error("名字需 1–50 字");
+    const next = await client.updateMe({ nickname });
+    this.nickname = next.nickname;
+    this.auth.refreshUser(next);
+  }
+
+  async changePassword(): Promise<void> {
+    const oldPassword = this.oldPassword;
+    const newPassword = this.newPassword;
+    if (!oldPassword) throw new Error("请输入旧密码");
+    if (newPassword.length < 8 || newPassword.length > 72) {
+      throw new Error("新密码需 8–72 位");
+    }
+    if (newPassword !== this.confirmPassword) {
+      throw new Error("两次输入的新密码不一致");
+    }
+    await client.changePassword({ oldPassword, newPassword });
+    this.oldPassword = "";
+    this.newPassword = "";
+    this.confirmPassword = "";
+    this.passwordDone = true;
   }
 
   async loadTokens(): Promise<void> {

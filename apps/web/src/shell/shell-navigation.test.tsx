@@ -19,7 +19,7 @@ import { UserMenu } from './user-menu';
 
 // Shell / 导航 / composer 入口契约（plan Task 9）：
 // - 认证导航目的地：汇总入口 → /，链入口 → /chains/:chainId，右键「链设置」→ 链设置页；
-// - 头像菜单动作：「我的资料」→ /me（主题三态入口所在页，C 端总规范 §10.2）、
+// - 头像菜单动作：「设置」→ /settings，
 //   「通知」→ /notifications 并携带未读计数、「退出登录」走 AuthService.logout
 //   既有 service 路径（tokenStore.clear → moment:auth-cleared）后跳 /login；
 // - create-chain：canSubmit 保存闸（chain-appearance §7.1）——名字为空或外观未就绪
@@ -154,6 +154,7 @@ function shellTree(initialPath: string): ReactElement {
               <Route path="/chains/:chainId" element={<Probe />} />
               <Route path="/chains/:chainId/settings" element={<Probe />} />
               <Route path="/moments/:momentId" element={<Probe />} />
+              <Route path="/settings" element={<Probe />} />
               <Route path="/me" element={<Probe />} />
               <Route path="/notifications" element={<Probe />} />
             </Route>
@@ -250,14 +251,14 @@ describe('Shell 认证导航', () => {
 });
 
 describe('头像菜单动作（退出 / 主题入口）', () => {
-  it('「我的资料」导航到 /me（主题三态入口所在页）', async () => {
+  it('「设置」导航到 /settings', async () => {
     const user = userEvent.setup();
     renderWithProviders(<UserMenu unread={0} />);
 
     await user.click(screen.getByRole('button', { name: /林晓满/ }));
-    await user.click(await screen.findByRole('menuitem', { name: '我的资料' }));
+    await user.click(await screen.findByRole('menuitem', { name: '设置' }));
     await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/me'),
+      expect(screen.getByTestId('location')).toHaveTextContent('/settings'),
     );
   });
 

@@ -7,7 +7,10 @@ import { ChainHome } from '@/pages/chain-home';
 import { ChainSettingsPage } from '@/pages/chain-settings';
 import { FeedHome } from '@/pages/feed-home';
 import { InvitePage } from '@/pages/invite';
-import { MePage } from '@/pages/me';
+import { SettingsAppearancePage } from '@/pages/settings/appearance';
+import { SettingsPasswordPage } from '@/pages/settings/password';
+import { SettingsProfilePage } from '@/pages/settings/profile';
+import { SettingsTokensPage } from '@/pages/settings/tokens';
 import { MomentPage } from '@/pages/moment';
 import { NotFound } from '@/pages/not-found';
 import { NotificationsHome } from '@/pages/notifications';
@@ -56,7 +59,12 @@ export function App() {
           <Route path="/chains/:chainId/settings" element={<ChainSettingsPage />} />
           <Route path="/moments/:momentId" element={<MomentPage />} />
           <Route path="/notifications" element={<NotificationsHome />} />
-          <Route path="/me" element={<MePage />} />
+          <Route path="/settings" element={<Navigate to="/settings/profile" replace />} />
+          <Route path="/settings/profile" element={<SettingsProfilePage />} />
+          <Route path="/settings/appearance" element={<SettingsAppearancePage />} />
+          <Route path="/settings/password" element={<SettingsPasswordPage />} />
+          <Route path="/settings/tokens" element={<SettingsTokensPage />} />
+          <Route path="/me" element={<Navigate to="/settings" replace />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

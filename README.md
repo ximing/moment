@@ -69,7 +69,7 @@ pnpm --filter @moment/web test
 
 ## 给外部 Agent
 
-[`skills/moment/SKILL.md`](skills/moment/SKILL.md) 让其他 Agent 用 HTTP 操作当前用户的 Moment。在网页「我」页创建接口令牌，再 `export MOMENT_TOKEN='mmt_…'`。不要把令牌写进仓库。
+[`skills/moment/SKILL.md`](skills/moment/SKILL.md) 让其他 Agent 用 HTTP 操作当前用户的 Moment。在网页「设置」→「接口令牌」创建接口令牌，再 `export MOMENT_TOKEN='mmt_…'`。不要把令牌写进仓库。
 
 接口目录是生成物。改了 controller 或 `packages/dto` 的请求 schema 之后运行：
 
