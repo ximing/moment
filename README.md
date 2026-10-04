@@ -79,6 +79,17 @@ pnpm gen:moment-skill
 
 `skills/moment/references/` 会被覆盖。操作约定写在 `SKILL.md`。抽取规则的检查是 `pnpm test:skill-api`。
 
+### Grok Build CLI
+
+从 [ximing/grok-plugins](https://github.com/ximing/grok-plugins) 安装。`skills/**` 或插件清单有变更时，GitHub Actions 会把这份 skill 同步过去：
+
+```bash
+grok plugin marketplace add ximing/grok-plugins
+grok plugin install moment --trust
+```
+
+或手动：`cp -r skills/moment ~/.grok/skills/`。
+
 ## 自托管
 
 一台机器跑完整栈：`web`（nginx，静态页 + `/api` 反代）· `server` · `worker` · `mysql` · `backup`。镜像从 GitHub Container Registry 拉 `stable`（`main` 每次推送由 CI 构建并打标），部署机不必编译。
