@@ -141,6 +141,13 @@
       "when": 1790876235720,
       "tag": "0019_agent_dock",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1791102194384,
+      "tag": "0020_access_tokens",
+      "breakpoints": true
     }
   ]
 }

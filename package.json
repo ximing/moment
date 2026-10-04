@@ -7,7 +7,9 @@
     "build": "turbo build",
     "test": "turbo test",
     "lint": "turbo lint",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "gen:moment-skill": "node scripts/generate-moment-skill-api.mjs",
+    "test:skill-api": "node --test scripts/generate-moment-skill-api.test.mjs"
   },
   "devDependencies": {
     "prettier": "^3.5.1",

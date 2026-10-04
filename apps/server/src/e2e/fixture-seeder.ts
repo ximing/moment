@@ -3,9 +3,10 @@
  * 只接受已解析凭据，绝不读 process.env；守卫在 fixture-cli 层先行通过。
  * 不创建 HTTP endpoint/controller/route、不建第二个 adapter、不调 resetDb()。
  */
-import { hashPassword } from '../auth/password.js';
-import { db, pool } from '../db/index.js';
+import { hashPassword } from "../auth/password.js";
+import { db, pool } from "../db/index.js";
 import {
+  accessTokens,
   chainInvites,
   chainMembers,
   chains,
@@ -23,10 +24,13 @@ import {
   shareLinks,
   tags,
   users,
-} from '../db/schema.js';
-import { currentStorageMeta, getStorage } from '../storage/factory.js';
-import { FIXTURE_IMAGE_PNG, FIXTURE_IMAGE_STORAGE_KEY } from './fixture-asset.js';
-import type { E2eFixtureCredentials } from './fixture-cli-contract.js';
+} from "../db/schema.js";
+import { currentStorageMeta, getStorage } from "../storage/factory.js";
+import {
+  FIXTURE_IMAGE_PNG,
+  FIXTURE_IMAGE_STORAGE_KEY,
+} from "./fixture-asset.js";
+import type { E2eFixtureCredentials } from "./fixture-cli-contract.js";
 import {
   buildFixtureRows,
   chainId,
@@ -46,7 +50,7 @@ import {
   shareLinkId,
   tagId,
   viewerId,
-} from './fixture-rows.js';
+} from "./fixture-rows.js";
 
 /** seed 结果（不含口令）：Web 侧 runner 据此驱动可见登录与截图矩阵。 */
 export type DesignSystemFixture = {
@@ -78,7 +82,7 @@ export async function resetFixture(): Promise<{ ok: true }> {
     await storage.deleteFile(FIXTURE_IMAGE_STORAGE_KEY, storageMeta);
   }
   // 外键逆序：pushTokens, notifications, reactions, comments, momentTags, momentPersons, tags, persons,
-  // outbox, media, moments, chainInvites, chainMembers, shareLinks, chains, refreshTokens, users
+  // outbox, media, moments, chainInvites, chainMembers, shareLinks, chains, refreshTokens, accessTokens, users
   // chains→media 与 media→moments→chains 构成引用环：delete(media) 前先显式断开链的图片引用
   await db.delete(pushTokens);
   await db.delete(notifications);
@@ -97,6 +101,7 @@ export async function resetFixture(): Promise<{ ok: true }> {
   await db.delete(shareLinks);
   await db.delete(chains);
   await db.delete(refreshTokens);
+  await db.delete(accessTokens);
   await db.delete(users);
   return { ok: true };
 }
@@ -107,13 +112,18 @@ export async function resetFixture(): Promise<{ ok: true }> {
  * invite 故意指向已是成员的 viewer：现行幂等 accept 语义返回该链，
  * 精确的未来到期时间 2036 年前持续有效且可重复。
  */
-export async function seedFixture(credentials: E2eFixtureCredentials): Promise<DesignSystemFixture> {
+export async function seedFixture(
+  credentials: E2eFixtureCredentials,
+): Promise<DesignSystemFixture> {
   await resetFixture();
   const storage = getStorage();
   const storageMeta = currentStorageMeta();
   await storage.uploadFile(FIXTURE_IMAGE_STORAGE_KEY, FIXTURE_IMAGE_PNG);
   try {
-    const rows = await buildFixtureRows(credentials, { hashPassword, storageMeta });
+    const rows = await buildFixtureRows(credentials, {
+      hashPassword,
+      storageMeta,
+    });
     await db.transaction(async (tx) => {
       await tx.insert(users).values(rows.users);
       await tx.insert(chains).values(rows.chains);
@@ -128,12 +138,22 @@ export async function seedFixture(credentials: E2eFixtureCredentials): Promise<D
       await tx.insert(chainInvites).values(rows.chainInvites);
     });
   } catch (error) {
-    await storage.deleteFile(FIXTURE_IMAGE_STORAGE_KEY, storageMeta).catch(() => undefined);
+    await storage
+      .deleteFile(FIXTURE_IMAGE_STORAGE_KEY, storageMeta)
+      .catch(() => undefined);
     throw error;
   }
   return {
-    owner: { id: ownerId, email: credentials.owner.email, nickname: FIXTURE_OWNER_NICKNAME },
-    viewer: { id: viewerId, email: credentials.viewer.email, nickname: FIXTURE_VIEWER_NICKNAME },
+    owner: {
+      id: ownerId,
+      email: credentials.owner.email,
+      nickname: FIXTURE_OWNER_NICKNAME,
+    },
+    viewer: {
+      id: viewerId,
+      email: credentials.viewer.email,
+      nickname: FIXTURE_VIEWER_NICKNAME,
+    },
     tagId,
     personId,
     chainId,

@@ -67,6 +67,18 @@ pnpm --filter @moment/web test
 
 可另建 `apps/server/.env.test`（已 gitignore），优先级高于 `.env`。
 
+## 给外部 Agent
+
+[`skills/moment/SKILL.md`](skills/moment/SKILL.md) 让其他 Agent 用 HTTP 操作当前用户的 Moment。在网页「我」页创建接口令牌，再 `export MOMENT_TOKEN='mmt_…'`。不要把令牌写进仓库。
+
+接口目录是生成物。改了 controller 或 `packages/dto` 的请求 schema 之后运行：
+
+```bash
+pnpm gen:moment-skill
+```
+
+`skills/moment/references/` 会被覆盖。操作约定写在 `SKILL.md`。抽取规则的检查是 `pnpm test:skill-api`。
+
 ## 自托管
 
 一台机器跑完整栈：`web`（nginx，静态页 + `/api` 反代）· `server` · `worker` · `mysql` · `backup`。镜像从 GitHub Container Registry 拉 `stable`（`main` 每次推送由 CI 构建并打标），部署机不必编译。

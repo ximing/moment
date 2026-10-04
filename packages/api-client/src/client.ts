@@ -2,7 +2,10 @@ import type {
   AcceptInviteResponse,
   AggregateQuery,
   AggregateResponse,
+  AccessTokenList,
   AuthResponse,
+  CreateAccessTokenInput,
+  CreatedAccessToken,
   ChainDetailDto,
   ChainJobListResponse,
   ChainDto,
@@ -53,20 +56,20 @@ import type {
   TagResponse,
   UpdateChainInput,
   UserProfile,
-} from '@moment/dto';
-import { createMomentInputSchema } from '@moment/dto';
-import type { ZodInput } from './zod-input.js';
-import { readAgentTurn } from './agent-stream.js';
-import { Http } from './http.js';
-import type { MomentClientOptions } from './types.js';
-import { uploadMediaImpl, type UploadMediaInput } from './upload.js';
+} from "@moment/dto";
+import { createMomentInputSchema } from "@moment/dto";
+import type { ZodInput } from "./zod-input.js";
+import { readAgentTurn } from "./agent-stream.js";
+import { Http } from "./http.js";
+import type { MomentClientOptions } from "./types.js";
+import { uploadMediaImpl, type UploadMediaInput } from "./upload.js";
 
 /** feed 查询（web 端 camelCase，序列化时转 snake_case 查询参数，Phase 4 dto 约定） */
 export interface FeedQuery {
   cursor?: string;
   chainIds?: string[];
   tagId?: string;
-  order?: 'happened_at' | 'created_at';
+  order?: "happened_at" | "created_at";
   limit?: number;
   /** 日期锚定（spec §4.2）：ISO datetime，服务端按 happened_at < before 严格小于过滤 */
   before?: string;
@@ -85,8 +88,13 @@ export interface MomentClient {
   logout(refreshToken: string): Promise<void>;
   me(): Promise<UserProfile>;
   updateMe(input: UpdateMeInput): Promise<UserProfile>;
-  /** 204；改密即全端下线（含当前会话），调用方成功后应本地清会话并跳登录 */
+  /** 204；改密即全端下线（含当前会话），并吊销全部接口令牌。调用方成功后应本地清会话并跳登录 */
   changePassword(input: ChangePasswordInput): Promise<void>;
+  /** 设置里的接口令牌。创建响应带完整 token，列表只有 preview。 */
+  listAccessTokens(): Promise<AccessTokenList>;
+  createAccessToken(input: CreateAccessTokenInput): Promise<CreatedAccessToken>;
+  /** 204；只能吊销自己的令牌 */
+  revokeAccessToken(id: string): Promise<void>;
 
   listChains(): Promise<ChainDto[]>;
   /** P3 起链详情内嵌 templateManifest（ChainDetailDto ⊃ ChainDto，向后兼容） */
@@ -94,12 +102,19 @@ export interface MomentClient {
   /** 模板列表（scope=official 取官方模板；不传 = official 全部 + 我的 user 模板） */
   listTemplates(scope?: TemplateScope): Promise<TemplateDto[]>;
   /** 聚合视图投影（spec §3.2）；timeline 不走端点（前端分章），请求会得 INVALID_AGGREGATE_VIEW */
-  getAggregate(chainId: string, query: AggregateQuery): Promise<AggregateResponse>;
+  getAggregate(
+    chainId: string,
+    query: AggregateQuery,
+  ): Promise<AggregateResponse>;
   createChain(input: CreateChainInput): Promise<ChainDto>;
   updateChain(chainId: string, input: UpdateChainInput): Promise<ChainDto>;
   deleteChain(chainId: string): Promise<void>;
   listMembers(chainId: string): Promise<ChainMemberDto[]>;
-  updateMemberRole(chainId: string, userId: string, role: InviteRole): Promise<ChainMemberDto>;
+  updateMemberRole(
+    chainId: string,
+    userId: string,
+    role: InviteRole,
+  ): Promise<ChainMemberDto>;
   removeMember(chainId: string, userId: string): Promise<void>;
   transferChain(chainId: string, userId: string): Promise<ChainDto>;
   /** 全量提交「我 × 链」展示顺序（spec chain-ordering §5）：204 空 body；成功/失败都由调用方重新 listChains 收敛 */
@@ -109,24 +124,37 @@ export interface MomentClient {
   revokeInvite(inviteId: string): Promise<void>;
   acceptInvite(token: string): Promise<AcceptInviteResponse>;
 
-  createMoment(chainId: string, input: CreateMomentInput): Promise<MomentResponse>;
+  createMoment(
+    chainId: string,
+    input: CreateMomentInput,
+  ): Promise<MomentResponse>;
   /** Phase 5 后 service 返回 {moments, nextCursor}，但 dto 的 MomentListResponse 仍是 Phase 3 的 items 键——统一用 Pick<FeedResponse>（见依赖契约段） */
-  listChainMoments(chainId: string, query?: {
-    cursor?: string;
-    limit?: number;
-    before?: string;
-    personId?: string;
-    place?: string;
-    happenedFrom?: string;
-    happenedTo?: string;
-  }): Promise<Pick<FeedResponse, 'moments' | 'nextCursor'>>;
+  listChainMoments(
+    chainId: string,
+    query?: {
+      cursor?: string;
+      limit?: number;
+      before?: string;
+      personId?: string;
+      place?: string;
+      happenedFrom?: string;
+      happenedTo?: string;
+    },
+  ): Promise<Pick<FeedResponse, "moments" | "nextCursor">>;
   getMoment(momentId: string): Promise<MomentResponse>;
-  updateMoment(momentId: string, input: PatchMomentInput): Promise<MomentResponse>;
+  updateMoment(
+    momentId: string,
+    input: PatchMomentInput,
+  ): Promise<MomentResponse>;
   deleteMoment(momentId: string): Promise<void>;
   getFeed(query?: FeedQuery): Promise<FeedResponse>;
   /** POST /api/search（spec fused-retrieval §6.2）；JSON body，不走 query string */
   searchMoments(input: SearchInput): Promise<SearchResponse>;
-  getMonthIndex(query: { chainIds?: string[]; tagId?: string; tzOffset: number }): Promise<MonthIndexResponse>;
+  getMonthIndex(query: {
+    chainIds?: string[];
+    tagId?: string;
+    tzOffset: number;
+  }): Promise<MonthIndexResponse>;
   /** 那年今日：date = 查看者本地日期 YYYY-MM-DD（两套时钟语义见 dto memories schema 注释） */
   getMemoriesToday(date: string): Promise<MemoriesTodayResponse>;
 
@@ -137,24 +165,46 @@ export interface MomentClient {
   /** 链 person 词典（编辑器选择器数据源，spec people-place §6；词典行无 source 概念） */
   listPersons(chainId: string): Promise<PersonListResponse>;
   /** 幂等创建（spec people-place §6）：新建 201 / 名归一化撞 uk 返回已存在行 200，两者 body 同形——返回值不区分，调用方按需重拉词典 */
-  createPerson(chainId: string, input: PersonCreateInput): Promise<PersonResponse>;
-  renamePerson(chainId: string, personId: string, input: PersonPatchInput): Promise<PersonResponse>;
+  createPerson(
+    chainId: string,
+    input: PersonCreateInput,
+  ): Promise<PersonResponse>;
+  renamePerson(
+    chainId: string,
+    personId: string,
+    input: PersonPatchInput,
+  ): Promise<PersonResponse>;
   removePerson(chainId: string, personId: string): Promise<void>;
   /** 登录预览 EXIF 坐标对应地名；失败 `{name:null}`，不挡选图 */
   reverseGeocode(input: ReverseGeocodeInput): Promise<ReverseGeocodeResponse>;
 
   presignMedia(input: MediaPresignInput): Promise<MediaPresignResponse>;
-  presignMediaParts(mediaId: string, partNumbers: number[]): Promise<MediaPartsResponse>;
-  completeMedia(mediaId: string, parts: { partNumber: number; etag: string }[]): Promise<MediaCompleteResponse>;
+  presignMediaParts(
+    mediaId: string,
+    partNumbers: number[],
+  ): Promise<MediaPartsResponse>;
+  completeMedia(
+    mediaId: string,
+    parts: { partNumber: number; etag: string }[],
+  ): Promise<MediaCompleteResponse>;
   abortMedia(mediaId: string): Promise<void>;
   /** 204；回收 presign 后未完成/未引用的孤儿媒体（上传失败或用户放弃时由调用方触发） */
   discardMedia(mediaId: string): Promise<void>;
-  mediaUrl(mediaId: string, opts?: { variant?: 'original' | 'derived'; st?: string }): string;
+  mediaUrl(
+    mediaId: string,
+    opts?: { variant?: "original" | "derived"; st?: string },
+  ): string;
   /** Web `<img>/<video>` 渲染的唯一来源：Blob → URL.createObjectURL。variant 缺省 original（无 query） */
-  fetchMediaBlob(mediaId: string, opts?: { variant?: 'original' | 'derived' }): Promise<Blob>;
+  fetchMediaBlob(
+    mediaId: string,
+    opts?: { variant?: "original" | "derived" },
+  ): Promise<Blob>;
 
   // share links & public
-  createShareLink(chainId: string, input: CreateShareLinkInput): Promise<ShareLinkDto>;
+  createShareLink(
+    chainId: string,
+    input: CreateShareLinkInput,
+  ): Promise<ShareLinkDto>;
   listShareLinks(chainId: string): Promise<ShareLinkListResponse>;
   revokeShareLink(shareLinkId: string): Promise<void>;
   getPublicShare(token: string, cursor?: string): Promise<PublicShareResponse>;
@@ -165,9 +215,15 @@ export interface MomentClient {
   /** 单条回顾详情（spec §6） */
   getRecap(chainId: string, period: string): Promise<RecapDto>;
   /** GET /api/chains/:chainId/jobs（spec §6.4，仅 owner；query 省略则服务端默认 pending,failed） */
-  listChainJobs(chainId: string, query?: { status?: string; limit?: number }): Promise<ChainJobListResponse>;
+  listChainJobs(
+    chainId: string,
+    query?: { status?: string; limit?: number },
+  ): Promise<ChainJobListResponse>;
 
-  listComments(momentId: string, query?: { cursor?: string; limit?: number }): Promise<CommentListResponse>;
+  listComments(
+    momentId: string,
+    query?: { cursor?: string; limit?: number },
+  ): Promise<CommentListResponse>;
   createComment(momentId: string, content: string): Promise<CommentDto>;
   deleteComment(commentId: string): Promise<void>;
   /** Phase 5：PUT/DELETE 均 204 空 body——调用方成功后 invalidate moment/feed 重新 GET */
@@ -175,7 +231,10 @@ export interface MomentClient {
   removeReaction(momentId: string): Promise<void>;
 
   /** 分页参数：页面消费一律 limit: 50（服务端默认每页仅 20，见依赖契约段）；cursor 供「全部已读」循环翻页收集全部未读 */
-  listNotifications(unread?: boolean, query?: { cursor?: string; limit?: number }): Promise<NotificationListResponse>;
+  listNotifications(
+    unread?: boolean,
+    query?: { cursor?: string; limit?: number },
+  ): Promise<NotificationListResponse>;
   /** Phase 5 schema：ids 必填 1–100 个 uuid（无「空=全部」语义，分批由调用方负责） */
   markNotificationsRead(ids: string[]): Promise<void>;
   registerPushToken(input: RegisterPushTokenInput): Promise<void>;
@@ -183,7 +242,9 @@ export interface MomentClient {
 
   createAgentThread(): Promise<{ thread: AgentThread }>;
   listAgentThreads(): Promise<{ threads: AgentThread[] }>;
-  getAgentThread(id: string): Promise<{ thread: AgentThread; messages: AgentMessage[] }>;
+  getAgentThread(
+    id: string,
+  ): Promise<{ thread: AgentThread; messages: AgentMessage[] }>;
   deleteAgentThread(id: string): Promise<void>;
   streamAgentTurn(
     threadId: string,
@@ -194,50 +255,98 @@ export interface MomentClient {
 
 export function createMomentClient(options: MomentClientOptions): MomentClient {
   const http = new Http(options);
-  const baseUrl = options.baseUrl.replace(/\/$/, '');
+  const baseUrl = options.baseUrl.replace(/\/$/, "");
   /** 入参先过 dto schema 补默认值（isBackfill:false、mediaIds:[]、tagIds 不传时 strip），保证请求体与测试断言一致 */
-  const parseMomentInput = (input: CreateMomentInput): Record<string, unknown> =>
+  const parseMomentInput = (
+    input: CreateMomentInput,
+  ): Record<string, unknown> =>
     createMomentInputSchema.parse(input) as unknown as Record<string, unknown>;
 
   return {
-    register: (input) => http.request('/api/auth/register', { method: 'POST', body: input, skipAuthRefresh: true }),
-    login: (input) => http.request('/api/auth/login', { method: 'POST', body: input, skipAuthRefresh: true }),
+    register: (input) =>
+      http.request("/api/auth/register", {
+        method: "POST",
+        body: input,
+        skipAuthRefresh: true,
+      }),
+    login: (input) =>
+      http.request("/api/auth/login", {
+        method: "POST",
+        body: input,
+        skipAuthRefresh: true,
+      }),
     logout: (refreshToken) =>
-      http.request('/api/auth/logout', { method: 'POST', body: { refreshToken }, skipAuthRefresh: true }),
-    me: () => http.request('/api/auth/me'),
-    updateMe: (input) => http.request('/api/auth/me', { method: 'PATCH', body: input }),
-    changePassword: (input) => http.request('/api/auth/change-password', { method: 'POST', body: input }),
+      http.request("/api/auth/logout", {
+        method: "POST",
+        body: { refreshToken },
+        skipAuthRefresh: true,
+      }),
+    me: () => http.request("/api/auth/me"),
+    updateMe: (input) =>
+      http.request("/api/auth/me", { method: "PATCH", body: input }),
+    changePassword: (input) =>
+      http.request("/api/auth/change-password", {
+        method: "POST",
+        body: input,
+      }),
+    listAccessTokens: () => http.request("/api/auth/tokens"),
+    createAccessToken: (input) =>
+      http.request("/api/auth/tokens", { method: "POST", body: input }),
+    revokeAccessToken: (id) =>
+      http.request(`/api/auth/tokens/${id}`, { method: "DELETE" }),
 
-    listChains: () => http.request('/api/chains'),
+    listChains: () => http.request("/api/chains"),
     getChain: (chainId) => http.request(`/api/chains/${chainId}`),
-    listTemplates: (scope) => http.request('/api/templates', { query: { scope } }),
+    listTemplates: (scope) =>
+      http.request("/api/templates", { query: { scope } }),
     getAggregate: (chainId, query) =>
       http.request(`/api/chains/${chainId}/aggregate`, {
         query: { view: query.view, kind: query.kind, field: query.field },
       }),
-    createChain: (input) => http.request('/api/chains', { method: 'POST', body: input }),
-    updateChain: (chainId, input) => http.request(`/api/chains/${chainId}`, { method: 'PATCH', body: input }),
-    deleteChain: (chainId) => http.request(`/api/chains/${chainId}`, { method: 'DELETE' }),
+    createChain: (input) =>
+      http.request("/api/chains", { method: "POST", body: input }),
+    updateChain: (chainId, input) =>
+      http.request(`/api/chains/${chainId}`, { method: "PATCH", body: input }),
+    deleteChain: (chainId) =>
+      http.request(`/api/chains/${chainId}`, { method: "DELETE" }),
     listMembers: (chainId) => http.request(`/api/chains/${chainId}/members`),
     updateMemberRole: (chainId, userId, role) =>
-      http.request(`/api/chains/${chainId}/members/${userId}`, { method: 'PATCH', body: { role } }),
+      http.request(`/api/chains/${chainId}/members/${userId}`, {
+        method: "PATCH",
+        body: { role },
+      }),
     removeMember: (chainId, userId) =>
-      http.request(`/api/chains/${chainId}/members/${userId}`, { method: 'DELETE' }),
+      http.request(`/api/chains/${chainId}/members/${userId}`, {
+        method: "DELETE",
+      }),
     transferChain: (chainId, userId) =>
-      http.request(`/api/chains/${chainId}/transfer`, { method: 'POST', body: { userId } }),
-    reorderChains: (input) => http.request('/api/chains/order', { method: 'PUT', body: input }),
-    createInvite: (chainId, input) => http.request(`/api/chains/${chainId}/invites`, { method: 'POST', body: input }),
+      http.request(`/api/chains/${chainId}/transfer`, {
+        method: "POST",
+        body: { userId },
+      }),
+    reorderChains: (input) =>
+      http.request("/api/chains/order", { method: "PUT", body: input }),
+    createInvite: (chainId, input) =>
+      http.request(`/api/chains/${chainId}/invites`, {
+        method: "POST",
+        body: input,
+      }),
     listInvites: (chainId) => http.request(`/api/chains/${chainId}/invites`),
-    revokeInvite: (inviteId) => http.request(`/api/invites/${inviteId}`, { method: 'DELETE' }),
-    acceptInvite: (token) => http.request(`/api/invites/${token}/accept`, { method: 'POST' }),
+    revokeInvite: (inviteId) =>
+      http.request(`/api/invites/${inviteId}`, { method: "DELETE" }),
+    acceptInvite: (token) =>
+      http.request(`/api/invites/${token}/accept`, { method: "POST" }),
 
     createMoment: (chainId, input) =>
-      http.request(`/api/chains/${chainId}/moments`, { method: 'POST', body: parseMomentInput(input) }),
+      http.request(`/api/chains/${chainId}/moments`, {
+        method: "POST",
+        body: parseMomentInput(input),
+      }),
     // 等价映射 dto MomentListResponse.items → FeedResponse.moments，禁止改 server
     listChainMoments: async (chainId, query) => {
       const res = await http.request<{
-        items?: import('@moment/dto').MomentResponse[];
-        moments?: import('@moment/dto').MomentResponse[];
+        items?: import("@moment/dto").MomentResponse[];
+        moments?: import("@moment/dto").MomentResponse[];
         nextCursor: string | null;
       }>(`/api/chains/${chainId}/moments`, {
         query: {
@@ -250,16 +359,24 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
           happened_to: query?.happenedTo,
         },
       });
-      return { moments: res.moments ?? res.items ?? [], nextCursor: res.nextCursor ?? null };
+      return {
+        moments: res.moments ?? res.items ?? [],
+        nextCursor: res.nextCursor ?? null,
+      };
     },
     getMoment: (momentId) => http.request(`/api/moments/${momentId}`),
-    updateMoment: (momentId, input) => http.request(`/api/moments/${momentId}`, { method: 'PATCH', body: input }),
-    deleteMoment: (momentId) => http.request(`/api/moments/${momentId}`, { method: 'DELETE' }),
+    updateMoment: (momentId, input) =>
+      http.request(`/api/moments/${momentId}`, {
+        method: "PATCH",
+        body: input,
+      }),
+    deleteMoment: (momentId) =>
+      http.request(`/api/moments/${momentId}`, { method: "DELETE" }),
     getFeed: (query) =>
-      http.request('/api/feed', {
+      http.request("/api/feed", {
         query: {
           cursor: query?.cursor,
-          chain_ids: query?.chainIds?.join(','),
+          chain_ids: query?.chainIds?.join(","),
           tag_id: query?.tagId,
           order: query?.order,
           limit: query?.limit,
@@ -270,75 +387,121 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
           happened_to: query?.happenedTo,
         },
       }),
-    searchMoments: (input) => http.request('/api/search', { method: 'POST', body: input }),
+    searchMoments: (input) =>
+      http.request("/api/search", { method: "POST", body: input }),
     getMonthIndex: (query) =>
-      http.request('/api/feed/month-index', {
+      http.request("/api/feed/month-index", {
         query: {
-          chain_ids: query.chainIds?.join(','),
+          chain_ids: query.chainIds?.join(","),
           tag_id: query.tagId,
           tz_offset: query.tzOffset,
         },
       }),
     getMemoriesToday: (date) =>
-      http.request('/api/memories/today', { query: { date } }),
+      http.request("/api/memories/today", { query: { date } }),
 
     listTags: (chainId) => http.request(`/api/chains/${chainId}/tags`),
-    createTag: (chainId, name) => http.request(`/api/chains/${chainId}/tags`, { method: 'POST', body: { name } }),
-    deleteTag: (tagId) => http.request(`/api/tags/${tagId}`, { method: 'DELETE' }),
+    createTag: (chainId, name) =>
+      http.request(`/api/chains/${chainId}/tags`, {
+        method: "POST",
+        body: { name },
+      }),
+    deleteTag: (tagId) =>
+      http.request(`/api/tags/${tagId}`, { method: "DELETE" }),
 
     listPersons: (chainId) => http.request(`/api/chains/${chainId}/persons`),
     createPerson: (chainId, input) =>
-      http.request(`/api/chains/${chainId}/persons`, { method: 'POST', body: input }),
+      http.request(`/api/chains/${chainId}/persons`, {
+        method: "POST",
+        body: input,
+      }),
     renamePerson: (chainId, personId, input) =>
-      http.request(`/api/chains/${chainId}/persons/${personId}`, { method: 'PATCH', body: input }),
+      http.request(`/api/chains/${chainId}/persons/${personId}`, {
+        method: "PATCH",
+        body: input,
+      }),
     removePerson: (chainId, personId) =>
-      http.request(`/api/chains/${chainId}/persons/${personId}`, { method: 'DELETE' }),
-    reverseGeocode: (input) => http.request('/api/geocode/reverse', { method: 'POST', body: input }),
+      http.request(`/api/chains/${chainId}/persons/${personId}`, {
+        method: "DELETE",
+      }),
+    reverseGeocode: (input) =>
+      http.request("/api/geocode/reverse", { method: "POST", body: input }),
 
-    presignMedia: (input) => http.request('/api/media/presign', { method: 'POST', body: input }),
+    presignMedia: (input) =>
+      http.request("/api/media/presign", { method: "POST", body: input }),
     presignMediaParts: (mediaId, partNumbers) =>
-      http.request(`/api/media/${mediaId}/parts`, { method: 'POST', body: { partNumbers } }),
+      http.request(`/api/media/${mediaId}/parts`, {
+        method: "POST",
+        body: { partNumbers },
+      }),
     completeMedia: (mediaId, parts) =>
-      http.request(`/api/media/${mediaId}/complete`, { method: 'POST', body: { parts } }),
-    abortMedia: (mediaId) => http.request(`/api/media/${mediaId}/abort`, { method: 'POST' }),
-    discardMedia: (mediaId) => http.request(`/api/media/${mediaId}`, { method: 'DELETE' }),
+      http.request(`/api/media/${mediaId}/complete`, {
+        method: "POST",
+        body: { parts },
+      }),
+    abortMedia: (mediaId) =>
+      http.request(`/api/media/${mediaId}/abort`, { method: "POST" }),
+    discardMedia: (mediaId) =>
+      http.request(`/api/media/${mediaId}`, { method: "DELETE" }),
     mediaUrl: (mediaId, opts) => {
       let url = `${baseUrl}/api/media/${mediaId}`;
-      if (opts?.variant === 'derived') url += '?variant=derived';
-      if (opts?.st) url += `${url.includes('?') ? '&' : '?'}st=${encodeURIComponent(opts.st)}`;
+      if (opts?.variant === "derived") url += "?variant=derived";
+      if (opts?.st)
+        url += `${url.includes("?") ? "&" : "?"}st=${encodeURIComponent(opts.st)}`;
       return url;
     },
     fetchMediaBlob: (mediaId, opts) =>
       http.requestBlob(
         `/api/media/${mediaId}`,
-        opts?.variant === 'derived' ? { query: { variant: 'derived' } } : {},
+        opts?.variant === "derived" ? { query: { variant: "derived" } } : {},
       ),
 
     listComments: (momentId, query) =>
-      http.request(`/api/moments/${momentId}/comments`, { query: { cursor: query?.cursor, limit: query?.limit } }),
+      http.request(`/api/moments/${momentId}/comments`, {
+        query: { cursor: query?.cursor, limit: query?.limit },
+      }),
     createComment: (momentId, content) =>
-      http.request(`/api/moments/${momentId}/comments`, { method: 'POST', body: { content } }),
-    deleteComment: (commentId) => http.request(`/api/comments/${commentId}`, { method: 'DELETE' }),
+      http.request(`/api/moments/${momentId}/comments`, {
+        method: "POST",
+        body: { content },
+      }),
+    deleteComment: (commentId) =>
+      http.request(`/api/comments/${commentId}`, { method: "DELETE" }),
     setReaction: (momentId, emoji) =>
-      http.request(`/api/moments/${momentId}/reaction`, { method: 'PUT', body: { emoji } }),
-    removeReaction: (momentId) => http.request(`/api/moments/${momentId}/reaction`, { method: 'DELETE' }),
+      http.request(`/api/moments/${momentId}/reaction`, {
+        method: "PUT",
+        body: { emoji },
+      }),
+    removeReaction: (momentId) =>
+      http.request(`/api/moments/${momentId}/reaction`, { method: "DELETE" }),
 
     listNotifications: (unread, query) =>
-      http.request('/api/notifications', {
+      http.request("/api/notifications", {
         query: {
-          unread: unread === undefined ? undefined : unread ? 'true' : 'false',
+          unread: unread === undefined ? undefined : unread ? "true" : "false",
           cursor: query?.cursor,
           limit: query?.limit,
         },
       }),
-    markNotificationsRead: (ids) => http.request('/api/notifications/read', { method: 'POST', body: { ids } }),
-    registerPushToken: (input) => http.request('/api/devices/push-token', { method: 'POST', body: input }),
+    markNotificationsRead: (ids) =>
+      http.request("/api/notifications/read", {
+        method: "POST",
+        body: { ids },
+      }),
+    registerPushToken: (input) =>
+      http.request("/api/devices/push-token", { method: "POST", body: input }),
     uploadMedia: (input) => uploadMediaImpl(http, options, input),
     createShareLink: (chainId, input) =>
-      http.request<ShareLinkDto>(`/api/chains/${chainId}/share-links`, { method: 'POST', body: input }),
-    listShareLinks: (chainId) => http.request<ShareLinkListResponse>(`/api/chains/${chainId}/share-links`),
+      http.request<ShareLinkDto>(`/api/chains/${chainId}/share-links`, {
+        method: "POST",
+        body: input,
+      }),
+    listShareLinks: (chainId) =>
+      http.request<ShareLinkListResponse>(`/api/chains/${chainId}/share-links`),
     revokeShareLink: (shareLinkId) =>
-      http.request<void>(`/api/share-links/${shareLinkId}`, { method: 'DELETE' }),
+      http.request<void>(`/api/share-links/${shareLinkId}`, {
+        method: "DELETE",
+      }),
     getPublicShare: (token, cursor) =>
       http.request<PublicShareResponse>(`/api/public/share/${token}`, {
         query: { cursor },
@@ -346,16 +509,19 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
       }),
 
     listRecaps: (chainId) => http.request(`/api/chains/${chainId}/recaps`),
-    getRecap: (chainId, period) => http.request(`/api/chains/${chainId}/recaps/${period}`),
+    getRecap: (chainId, period) =>
+      http.request(`/api/chains/${chainId}/recaps/${period}`),
     listChainJobs: (chainId, query) =>
       http.request(`/api/chains/${chainId}/jobs`, {
         query: { status: query?.status, limit: query?.limit },
       }),
 
-    createAgentThread: () => http.request('/api/agent/threads', { method: 'POST', body: {} }),
-    listAgentThreads: () => http.request('/api/agent/threads'),
+    createAgentThread: () =>
+      http.request("/api/agent/threads", { method: "POST", body: {} }),
+    listAgentThreads: () => http.request("/api/agent/threads"),
     getAgentThread: (id) => http.request(`/api/agent/threads/${id}`),
-    deleteAgentThread: (id) => http.request(`/api/agent/threads/${id}`, { method: 'DELETE' }),
+    deleteAgentThread: (id) =>
+      http.request(`/api/agent/threads/${id}`, { method: "DELETE" }),
     streamAgentTurn: (threadId, input, stream) =>
       readAgentTurn({
         http,
@@ -364,7 +530,7 @@ export function createMomentClient(options: MomentClientOptions): MomentClient {
         threadId,
         input,
         signal: stream.signal,
-        transport: options.streamTransport === 'xhr' ? 'xhr' : 'fetch',
+        transport: options.streamTransport === "xhr" ? "xhr" : "fetch",
         onEvent: stream.onEvent,
       }),
   };

@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import mime from 'mime-types';
+import { randomUUID } from "node:crypto";
+import mime from "mime-types";
 import {
   CHAIN_COLORS,
   CHAIN_ICONS,
@@ -12,18 +12,24 @@ import {
   type RegisterInput,
   type UpdateMeInput,
   type UserProfile,
-} from '@moment/dto';
-import { eq, or } from 'drizzle-orm';
-import { BadRequestError, HttpError, NotFoundError, UnauthorizedError } from 'routing-controllers';
-import { Service } from 'typedi';
-import { config } from '../config.js';
-import { db } from '../db/index.js';
-import { chains, media, users, type User } from '../db/schema.js';
-import { getStorage } from '../storage/factory.js';
-import { logger } from '../utils/logger.js';
-import { avatarExpiresAt, signAvatarGetUrl } from './avatar.js';
-import { hashPassword, verifyPassword } from './password.js';
-import { TokenService } from './token.service.js';
+} from "@moment/dto";
+import { eq, or } from "drizzle-orm";
+import {
+  BadRequestError,
+  HttpError,
+  NotFoundError,
+  UnauthorizedError,
+} from "routing-controllers";
+import { Service } from "typedi";
+import { config } from "../config.js";
+import { db } from "../db/index.js";
+import { chains, media, users, type User } from "../db/schema.js";
+import { getStorage } from "../storage/factory.js";
+import { logger } from "../utils/logger.js";
+import { AccessTokenService } from "./access-token.service.js";
+import { avatarExpiresAt, signAvatarGetUrl } from "./avatar.js";
+import { hashPassword, verifyPassword } from "./password.js";
+import { TokenService } from "./token.service.js";
 
 function isChainColor(v: string | null): v is ChainColor {
   return v !== null && (CHAIN_COLORS as readonly string[]).includes(v);
@@ -35,11 +41,18 @@ function isChainIcon(v: string | null): v is ChainIcon {
 
 @Service()
 export class AuthService {
-  constructor(private tokens: TokenService) {}
+  constructor(
+    private tokens: TokenService,
+    private accessTokens: AccessTokenService,
+  ) {}
 
   async register(input: RegisterInput): Promise<AuthResponse> {
-    const [existing] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
-    if (existing) throw new HttpError(409, 'EMAIL_ALREADY_REGISTERED');
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, input.email))
+      .limit(1);
+    if (existing) throw new HttpError(409, "EMAIL_ALREADY_REGISTERED");
 
     const user: User = {
       id: randomUUID(),
@@ -57,9 +70,13 @@ export class AuthService {
   }
 
   async login(input: LoginInput): Promise<AuthResponse> {
-    const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, input.email))
+      .limit(1);
     if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
-      throw new UnauthorizedError('INVALID_CREDENTIALS');
+      throw new UnauthorizedError("INVALID_CREDENTIALS");
     }
     return this.buildAuthResponse(user);
   }
@@ -86,21 +103,32 @@ export class AuthService {
    * 见 authorization.ts）→ 吊销全部 refresh token。改密即全端下线（含当前会话），客户端需重新登录。
    * 旧密码错误返回 400 而非 401：401 会触发 api-client 的 refresh+重放，误清登录态。
    */
-  async changePassword(userId: string, input: ChangePasswordInput): Promise<void> {
+  async changePassword(
+    userId: string,
+    input: ChangePasswordInput,
+  ): Promise<void> {
     const user = await this.getUserEntity(userId);
     if (!(await verifyPassword(input.oldPassword, user.passwordHash))) {
-      throw new BadRequestError('INVALID_OLD_PASSWORD');
+      throw new BadRequestError("INVALID_OLD_PASSWORD");
     }
     await db
       .update(users)
-      .set({ passwordHash: await hashPassword(input.newPassword), passwordChangedAt: new Date() })
+      .set({
+        passwordHash: await hashPassword(input.newPassword),
+        passwordChangedAt: new Date(),
+      })
       .where(eq(users.id, user.id));
     await this.tokens.revokeAllForUser(userId);
+    await this.accessTokens.revokeAll(userId);
   }
 
   async getUserEntity(userId: string): Promise<User> {
-    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    if (!user) throw new NotFoundError('USER_NOT_FOUND');
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("USER_NOT_FOUND");
     return user;
   }
 
@@ -115,8 +143,12 @@ export class AuthService {
     }
     const patch = {
       ...(input.nickname !== undefined ? { nickname: input.nickname } : {}),
-      ...(input.avatarColor !== undefined ? { avatarColor: input.avatarColor } : {}),
-      ...(input.avatarIcon !== undefined ? { avatarIcon: input.avatarIcon } : {}),
+      ...(input.avatarColor !== undefined
+        ? { avatarColor: input.avatarColor }
+        : {}),
+      ...(input.avatarIcon !== undefined
+        ? { avatarIcon: input.avatarIcon }
+        : {}),
     };
     if (Object.keys(patch).length > 0) {
       await db.update(users).set(patch).where(eq(users.id, user.id));
@@ -142,10 +174,18 @@ export class AuthService {
   async toProfile(user: User): Promise<UserProfile> {
     const base = this.toAuthPrincipal(user);
     if (!user.avatarMediaId) return base;
-    const [row] = await db.select().from(media).where(eq(media.id, user.avatarMediaId)).limit(1);
-    if (!row || row.status !== 'ready') return base;
+    const [row] = await db
+      .select()
+      .from(media)
+      .where(eq(media.id, user.avatarMediaId))
+      .limit(1);
+    if (!row || row.status !== "ready") return base;
     const url = await signAvatarGetUrl(row.s3Key, row.storageMeta);
-    return { ...base, avatarUrl: url, avatarExpiresAt: avatarExpiresAt().toISOString() };
+    return {
+      ...base,
+      avatarUrl: url,
+      avatarExpiresAt: avatarExpiresAt().toISOString(),
+    };
   }
 
   /**
@@ -154,32 +194,48 @@ export class AuthService {
    * - momentId 非空或被任一链 avatar/cover 活引用 → 400 MEDIA_ALREADY_BOUND
    *   （链头像被重绑成用户头像会搬走并删除链的活对象，且越权可读性见 spec §4.4）。
    */
-  private async bindAvatar(user: User, avatarMediaId: string | null): Promise<void> {
+  private async bindAvatar(
+    user: User,
+    avatarMediaId: string | null,
+  ): Promise<void> {
     if (avatarMediaId === null) {
-      await db.update(users).set({ avatarMediaId: null }).where(eq(users.id, user.id));
+      await db
+        .update(users)
+        .set({ avatarMediaId: null })
+        .where(eq(users.id, user.id));
       return;
     }
     await db.transaction(async (tx) => {
-      const [row] = await tx.select().from(media).where(eq(media.id, avatarMediaId)).limit(1).for('update');
-      if (!row || row.uploaderId !== user.id || row.status !== 'ready') {
-        throw new NotFoundError('MEDIA_NOT_FOUND');
+      const [row] = await tx
+        .select()
+        .from(media)
+        .where(eq(media.id, avatarMediaId))
+        .limit(1)
+        .for("update");
+      if (!row || row.uploaderId !== user.id || row.status !== "ready") {
+        throw new NotFoundError("MEDIA_NOT_FOUND");
       }
       if (!(IMAGE_MIME_TYPES as readonly string[]).includes(row.mime)) {
-        throw new BadRequestError('MEDIA_INVALID');
+        throw new BadRequestError("MEDIA_INVALID");
       }
-      if (row.momentId) throw new BadRequestError('MEDIA_ALREADY_BOUND');
+      if (row.momentId) throw new BadRequestError("MEDIA_ALREADY_BOUND");
       const [boundChain] = await tx
         .select({ id: chains.id })
         .from(chains)
-        .where(or(eq(chains.avatarMediaId, row.id), eq(chains.coverMediaId, row.id)))
+        .where(
+          or(eq(chains.avatarMediaId, row.id), eq(chains.coverMediaId, row.id)),
+        )
         .limit(1);
-      if (boundChain) throw new BadRequestError('MEDIA_ALREADY_BOUND');
+      if (boundChain) throw new BadRequestError("MEDIA_ALREADY_BOUND");
 
-      const ext = mime.extension(row.mime) || 'bin';
+      const ext = mime.extension(row.mime) || "bin";
       const finalKey = `users/${user.id}/avatar/${row.id}.${ext}`;
       if (row.s3Key !== finalKey) {
         await getStorage().copyObject(row.s3Key, finalKey, row.storageMeta);
-        await tx.update(media).set({ s3Key: finalKey }).where(eq(media.id, row.id));
+        await tx
+          .update(media)
+          .set({ s3Key: finalKey })
+          .where(eq(media.id, row.id));
         await getStorage()
           .deleteFile(row.s3Key, row.storageMeta)
           .catch((err: unknown) => {
@@ -188,9 +244,15 @@ export class AuthService {
       }
 
       const prev = user.avatarMediaId;
-      await tx.update(users).set({ avatarMediaId: row.id }).where(eq(users.id, user.id));
+      await tx
+        .update(users)
+        .set({ avatarMediaId: row.id })
+        .where(eq(users.id, user.id));
       if (prev && prev !== row.id) {
-        await tx.update(media).set({ status: 'orphaned', orphanedAt: new Date() }).where(eq(media.id, prev));
+        await tx
+          .update(media)
+          .set({ status: "orphaned", orphanedAt: new Date() })
+          .where(eq(media.id, prev));
       }
     });
   }
