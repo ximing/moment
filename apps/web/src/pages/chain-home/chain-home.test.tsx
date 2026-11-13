@@ -81,6 +81,9 @@ const mediaBlockCalls = vi.hoisted(() => ({
 }));
 
 vi.mock('@/media/MediaBlock', () => ({
+  mediaSkeletonClass:
+    'animate-[moment-media-skeleton_var(--skeleton-cycle)_ease-in-out_infinite]',
+  MediaSkeletonStyles: () => null,
   MediaBlock(props: { media: MomentMedia[]; onOpen?: (index: number) => void }) {
     mediaBlockCalls.list.push(props);
     return (
