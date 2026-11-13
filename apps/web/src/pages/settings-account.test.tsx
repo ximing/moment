@@ -530,6 +530,27 @@ describe("个人资料页", () => {
       expect(api.updateMe).toHaveBeenCalledWith({ nickname: "小林" }),
     );
   });
+
+  it("空白或超长名字不提交，首尾空白按 schema 去掉再提交", async () => {
+    resolve(AuthService).user = USER;
+    const me = resolve(MeService);
+    me.nicknameReady = true;
+
+    for (const nickname of ["", "   ", "名".repeat(51)]) {
+      me.nickname = nickname;
+      me.$model.saveNickname.error = null;
+      await expect(me.saveNickname()).rejects.toThrow("名字需 1–50 字");
+      expect((me.$model.saveNickname.error as Error).message).toBe(
+        "名字需 1–50 字",
+      );
+    }
+    expect(api.updateMe).not.toHaveBeenCalled();
+
+    api.updateMe.mockResolvedValue({ ...USER, nickname: "小林" });
+    me.nickname = "  小林  ";
+    await me.saveNickname();
+    expect(api.updateMe).toHaveBeenCalledWith({ nickname: "小林" });
+  });
 });
 
 describe("修改密码页", () => {
@@ -546,6 +567,9 @@ describe("修改密码页", () => {
     await user.click(screen.getByRole("button", { name: "确认修改" }));
     await waitFor(() =>
       expect(me.$model.changePassword.error).toBeInstanceOf(Error),
+    );
+    expect((me.$model.changePassword.error as Error).message).toBe(
+      "两次输入的新密码不一致",
     );
     expect(api.changePassword).not.toHaveBeenCalled();
     first.unmount();
@@ -567,6 +591,56 @@ describe("修改密码页", () => {
       screen.getByRole("dialog", { name: "密码已修改" }),
     ).toBeInTheDocument();
     expect(screen.getByText(/接口令牌也失效了/)).toBeInTheDocument();
+  });
+
+  it("新密码 7 位或 73 位时不提交；超长旧密码仍提交", async () => {
+    const user = userEvent.setup();
+    resolve(AuthService).user = USER;
+    const me = resolve(MeService);
+    me.oldPassword = "old-secret";
+    me.newPassword = "1234567";
+    me.confirmPassword = "1234567";
+    const short = renderSettings(<SettingsPasswordContent />);
+    await user.click(screen.getByRole("button", { name: "确认修改" }));
+    await waitFor(() =>
+      expect((me.$model.changePassword.error as Error).message).toBe(
+        "新密码需 8–72 位",
+      ),
+    );
+    expect(api.changePassword).not.toHaveBeenCalled();
+    short.unmount();
+
+    me.newPassword = "a".repeat(73);
+    me.confirmPassword = "a".repeat(73);
+    me.$model.changePassword.error = null;
+    const long = renderSettings(<SettingsPasswordContent />);
+    await user.click(screen.getByRole("button", { name: "确认修改" }));
+    await waitFor(() =>
+      expect((me.$model.changePassword.error as Error).message).toBe(
+        "新密码需 8–72 位",
+      ),
+    );
+    expect(api.changePassword).not.toHaveBeenCalled();
+    long.unmount();
+
+    me.oldPassword = "";
+    me.newPassword = "1234567";
+    me.confirmPassword = "1234567";
+    me.$model.changePassword.error = null;
+    await expect(me.changePassword()).rejects.toThrow("请输入旧密码");
+    expect(api.changePassword).not.toHaveBeenCalled();
+
+    const oldPassword = "o".repeat(73);
+    me.oldPassword = oldPassword;
+    me.newPassword = "new-secret-1";
+    me.confirmPassword = "new-secret-1";
+    me.$model.changePassword.error = null;
+    api.changePassword.mockResolvedValue(undefined);
+    await me.changePassword();
+    expect(api.changePassword).toHaveBeenCalledWith({
+      oldPassword,
+      newPassword: "new-secret-1",
+    });
   });
 });
 

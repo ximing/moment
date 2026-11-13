@@ -1,5 +1,5 @@
 import { Service } from '@rabjs/react';
-import { MAX_IMAGE_BYTES } from '@moment/dto';
+import { MAX_IMAGE_BYTES, changePasswordInputSchema, updateMeInputSchema } from '@moment/dto';
 import { client } from '../../lib/api';
 import { compressImage, pickImages } from '../../lib/media';
 import { AuthService } from '../../services/auth.service';
@@ -21,7 +21,9 @@ export class MeService extends Service {
   }
 
   async saveNickname(): Promise<void> {
-    const nickname = this.nicknameDraft.trim();
+    // refine 之后没有 shape；nickname 字段自己会 trim。
+    const parsed = updateMeInputSchema.innerType().shape.nickname.safeParse(this.nicknameDraft);
+    const nickname = parsed.success ? parsed.data : undefined;
     if (!nickname) throw new Error('昵称需 1–50 字');
     const next = await client.updateMe({ nickname });
     this.auth.refreshUser(next);
@@ -57,9 +59,11 @@ export class MeService extends Service {
     const oldPassword = this.oldPasswordDraft;
     const newPassword = this.newPasswordDraft;
     if (!oldPassword) throw new Error('请输入旧密码');
-    if (newPassword.length < 8 || newPassword.length > 72) throw new Error('新密码需 8–72 位');
+    // 只看 newPassword。整份 schema 会把超长旧密码说成新密码长度不对。
+    const parsed = changePasswordInputSchema.shape.newPassword.safeParse(newPassword);
+    if (!parsed.success) throw new Error('新密码需 8–72 位');
     if (newPassword !== this.confirmPasswordDraft) throw new Error('两次输入的新密码不一致');
-    await client.changePassword({ oldPassword, newPassword });
+    await client.changePassword({ oldPassword, newPassword: parsed.data });
     this.oldPasswordDraft = '';
     this.newPasswordDraft = '';
     this.confirmPasswordDraft = '';
