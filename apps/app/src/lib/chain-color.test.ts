@@ -7,6 +7,12 @@ describe('fallbackChainColor', () => {
     expect(fallbackChainColor('abc')).toBe(fallbackChainColor('abc'));
     expect(typeof fallbackChainColor('abc')).toBe('string');
   });
+
+  it('与服务端 FNV 黄金向量一致', () => {
+    expect(fallbackChainColor('00000000-0000-4000-8000-000000000014')).toBe('coral');
+    expect(fallbackChainColor('11111111-1111-4111-8111-111111111111')).toBe('mint');
+    expect(fallbackChainColor('abcdefab-1234-4567-89ab-cdef01234567')).toBe('orange');
+  });
 });
 
 describe('resolveChainAppearanceColor', () => {
