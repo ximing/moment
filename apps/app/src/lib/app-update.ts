@@ -21,6 +21,8 @@ export type GithubReleaseAsset = {
 
 export type GithubRelease = {
   tag_name: string;
+  draft?: boolean;
+  prerelease?: boolean;
   body?: string | null;
   assets?: GithubReleaseAsset[];
 };
@@ -40,6 +42,7 @@ export function pickApkAsset(assets: GithubReleaseAsset[] | undefined): GithubRe
 }
 
 export function parseGithubRelease(json: GithubRelease): RemoteRelease | null {
+  if (json.draft === true || json.prerelease === true) return null;
   const ver = parseReleaseTag(json.tag_name ?? '');
   const apk = pickApkAsset(json.assets);
   if (!ver || !apk) return null;
@@ -74,6 +77,13 @@ export function apkSizeLabel(bytes: number): string {
   return `约 ${rounded} MB`;
 }
 
+/** 下载进度。总量未知时返回空串。 */
+export function downloadProgressLabel(downloaded: number, total: number): string {
+  if (!(total > 0) || !Number.isFinite(downloaded)) return '';
+  const pct = Math.max(0, Math.min(100, Math.round((downloaded / total) * 100)));
+  return `${pct}%`;
+}
+
 export function localVersionCode(expoConfig: {
   version?: string;
   android?: { versionCode?: number };
@@ -87,21 +97,59 @@ export function localVersionName(expoConfig: { version?: string } | null | undef
   return expoConfig?.version ?? '0.0.0';
 }
 
+const GITHUB_HEADERS = {
+  Accept: 'application/vnd.github+json',
+  'User-Agent': 'moment-app',
+  'X-GitHub-Api-Version': '2022-11-28',
+};
+
+async function readGithubJson(res: Response): Promise<unknown> {
+  const text = await res.text();
+  if (text === '') return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function releaseFromUnknown(body: unknown): RemoteRelease | null {
+  if (!body || typeof body !== 'object') return null;
+  return parseGithubRelease(body as GithubRelease);
+}
+
+/**
+ * 直接读 GitHub Releases。latest 没有正式 APK（例如只有桌面安装包、或是草稿）时，
+ * 沿最近 10 条发布找第一份 app-release.apk。安装包地址用资源的 browser_download_url。
+ */
 export async function fetchGithubLatest(
   repo: string,
   fetchFn: typeof fetch = fetch,
 ): Promise<RemoteRelease | null> {
-  const res = await fetchFn(`https://api.github.com/repos/${repo}/releases/latest`, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'moment-app',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
+  const latestRes = await fetchFn(`https://api.github.com/repos/${repo}/releases/latest`, {
+    headers: GITHUB_HEADERS,
   });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`GitHub ${res.status}`);
-  const json = (await res.json()) as GithubRelease;
-  return parseGithubRelease(json);
+  const latestBody = latestRes.ok ? await readGithubJson(latestRes) : null;
+  const latest = releaseFromUnknown(latestBody);
+  if (latest) return latest;
+
+  const listRes = await fetchFn(`https://api.github.com/repos/${repo}/releases?per_page=10`, {
+    headers: GITHUB_HEADERS,
+  });
+  if (listRes.ok) {
+    const listBody = await readGithubJson(listRes);
+    if (Array.isArray(listBody)) {
+      for (const item of listBody) {
+        const release = releaseFromUnknown(item);
+        if (release) return release;
+      }
+    }
+  }
+
+  if (latestRes.status === 404 || listRes.status === 404) return null;
+  const status = latestRes.ok ? listRes.status : latestRes.status;
+  if (status >= 400) throw new Error(`GitHub ${status}`);
+  return null;
 }
 
 export function shouldOfferUpdate(opts: {

@@ -16,6 +16,7 @@
     "clean": "rm -rf dist-check"
   },
   "dependencies": {
+    "apk-updater": "file:./modules/apk-updater",
     "@moment/api-client": "workspace:*",
     "@moment/dto": "workspace:*",
     "@moment/icons": "workspace:*",

@@ -38,6 +38,9 @@ importers:
       '@shopify/flash-list':
         specifier: 2.0.2
         version: 2.0.2(@babel/runtime@7.29.7)(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      apk-updater:
+        specifier: file:./modules/apk-updater
+        version: file:apps/app/modules/apk-updater
       expo:
         specifier: ~54.0.0
         version: 54.0.36(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
@@ -3333,6 +3336,9 @@ packages:
   apache-arrow@18.1.0:
     resolution: {integrity: sha512-v/ShMp57iBnBp4lDgV8Jx3d3Q5/Hac25FWmQ98eMahUiHPXcvwIMKJD0hBIgclm/FCG+LwPkAKtkRO1O/W0YGg==}
     hasBin: true
+
+  apk-updater@file:apps/app/modules/apk-updater:
+    resolution: {directory: apps/app/modules/apk-updater, type: directory}
 
   append-field@1.0.0:
     resolution: {integrity: sha512-klpgFSWLW1ZEs8svjfb7g4qWY0YS5imI82dTg+QahUvJ8YqAY0P10Uk8tTyh9ZGuYEZEMaeJYCF5BFuX552hsw==}
@@ -10402,6 +10408,8 @@ snapshots:
       flatbuffers: 24.12.23
       json-bignum: 0.0.3
       tslib: 2.8.1
+
+  apk-updater@file:apps/app/modules/apk-updater: {}
 
   append-field@1.0.0:
     optional: true

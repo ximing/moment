@@ -25,3 +25,7 @@ lancedb_data/
 
 # 线上发布步骤含主机地址，只留本机
 docs/deploy.md
+
+# Python 字节码（例如 apps/web/scripts）
+__pycache__/
+*.pyc

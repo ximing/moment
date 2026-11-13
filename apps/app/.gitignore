@@ -10,5 +10,6 @@ dist-check/
 *.mobileprovision
 .env
 .env.*
-android/
-ios/
+# 只忽略 Expo prebuild 产物。本地模块的 android/ 需要入库。
+/android/
+/ios/

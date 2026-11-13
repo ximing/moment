@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { observer, useService } from '@rabjs/react';
 import { Banner, confirm, toast } from '../../components/feedback';
-import { apkSizeLabel } from '../../lib/app-update';
+import { apkSizeLabel, downloadProgressLabel } from '../../lib/app-update';
 import { AppUpdateService } from '../../services/app-update.service';
 import type { Theme } from '../../theme/theme';
 import { useTheme } from '../../theme/use-theme';
@@ -18,10 +18,11 @@ export const AppUpdateHost = observer(function AppUpdateHost() {
   const toastedError = useRef<string | null>(null);
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      void service.check().catch(() => undefined);
-    }, 800);
-    return () => clearTimeout(id);
+    const id = setTimeout(() => service.start(), 800);
+    return () => {
+      clearTimeout(id);
+      service.stop();
+    };
   }, [service]);
 
   useEffect(() => {
@@ -50,10 +51,11 @@ export const AppUpdateHost = observer(function AppUpdateHost() {
   }, [service.status, service.error]);
 
   if (service.status !== 'downloading' && service.status !== 'installing') return null;
+  const progress = downloadProgressLabel(service.bytesDownloaded, service.totalBytes);
   const label =
     service.status === 'installing'
       ? '正在打开安装…'
-      : `正在后台下载 ${service.remote?.versionName ?? '新版本'}…`;
+      : `正在后台下载 ${service.remote?.versionName ?? '新版本'}${progress ? ` ${progress}` : '…'}`;
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + t.space6 }]}>

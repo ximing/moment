@@ -6,6 +6,7 @@ import { observer, useService } from '@rabjs/react';
 import { Icon } from '../../components/Icon';
 import { Button } from '../../components/Button';
 import { confirm, toast } from '../../components/feedback';
+import { downloadProgressLabel } from '../../lib/app-update';
 import { AppUpdateService } from '../../services/app-update.service';
 import { AuthService } from '../../services/auth.service';
 import {
@@ -71,6 +72,7 @@ export const MePage = observer(function MePage() {
   if (!user) return <View style={styles.flex} />;
 
   const themeLabel = THEME_CHOICE_OPTIONS.find((o) => o.value === themeChoice)?.label ?? '跟随系统';
+  const downloadProgress = downloadProgressLabel(update.bytesDownloaded, update.totalBytes);
 
   return (
     <View style={[styles.body, { paddingTop: insets.top + t.space2 }]}>
@@ -100,7 +102,9 @@ export const MePage = observer(function MePage() {
         label="检查更新"
         value={
           update.status === 'downloading'
-            ? '下载中…'
+            ? downloadProgress
+              ? `下载中 ${downloadProgress}`
+              : '下载中…'
             : update.status === 'installing'
               ? '安装中…'
               : update.status === 'ready' && update.remote

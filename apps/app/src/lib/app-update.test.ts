@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import {
   apkSizeLabel,
+  downloadProgressLabel,
   fetchGithubLatest,
   isApkDownloadComplete,
   isNewer,
@@ -105,6 +106,34 @@ describe('localVersionCode', () => {
 });
 
 describe('fetchGithubLatest', () => {
+  it('忽略草稿和预发布', () => {
+    assert.equal(
+      parseGithubRelease({
+        tag_name: 'v0.4.0',
+        draft: true,
+        assets: [{ name: 'app-release.apk', browser_download_url: 'https://example/app.apk', size: 1 }],
+      }),
+      null,
+    );
+    assert.equal(
+      parseGithubRelease({
+        tag_name: 'v0.4.0',
+        prerelease: true,
+        assets: [{ name: 'app-release.apk', browser_download_url: 'https://example/app.apk', size: 1 }],
+      }),
+      null,
+    );
+  });
+});
+
+describe('downloadProgressLabel', () => {
+  it('总量未知时不显示百分比', () => {
+    assert.equal(downloadProgressLabel(10, 0), '');
+    assert.equal(downloadProgressLabel(25, 100), '25%');
+  });
+});
+
+describe('fetchGithubLatest', () => {
   it('解析 latest release；404 当没有可更新', async () => {
     const remote = await fetchGithubLatest('ximing/moment', (async () =>
       new Response(
@@ -120,6 +149,39 @@ describe('fetchGithubLatest', () => {
     const missing = await fetchGithubLatest('ximing/moment', (async () =>
       new Response('', { status: 404 })) as typeof fetch);
     assert.equal(missing, null);
+  });
+
+  it('latest 没有 APK 时沿发布列表找最近的正式安装包', async () => {
+    const fetchFn = (async (url: string) => {
+      if (url.endsWith('/releases/latest')) {
+        return new Response(
+          JSON.stringify({
+            tag_name: 'v0.3.9',
+            assets: [{ name: 'Moment_0.3.9_x64.dmg', browser_download_url: 'https://gh/d.dmg' }],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
+        JSON.stringify([
+          { tag_name: 'v0.3.9', assets: [] },
+          {
+            tag_name: 'v0.3.8',
+            prerelease: true,
+            assets: [{ name: 'app-release.apk', browser_download_url: 'https://gh/pre.apk', size: 3 }],
+          },
+          {
+            tag_name: 'v0.3.7',
+            assets: [{ name: 'app-release.apk', browser_download_url: 'https://gh/a.apk', size: 4 }],
+          },
+        ]),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    const remote = await fetchGithubLatest('ximing/moment', fetchFn);
+    assert.equal(remote?.versionName, '0.3.7');
+    assert.equal(remote?.apkUrl, 'https://gh/a.apk');
+    assert.equal(remote?.versionCode, 307);
   });
 });
 
