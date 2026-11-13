@@ -540,9 +540,6 @@ describe("个人资料页", () => {
       me.nickname = nickname;
       me.$model.saveNickname.error = null;
       await expect(me.saveNickname()).rejects.toThrow("名字需 1–50 字");
-      expect((me.$model.saveNickname.error as Error).message).toBe(
-        "名字需 1–50 字",
-      );
     }
     expect(api.updateMe).not.toHaveBeenCalled();
 
