@@ -1,6 +1,7 @@
 import { reverseGeocodeInputSchema, type ReverseGeocodeResponse } from '@moment/dto';
 import { Authorized, Body, JsonController, Post } from 'routing-controllers';
 import { Service } from 'typedi';
+import { logger } from '../utils/logger.js';
 import { getGeocodeProvider } from './factory.js';
 
 @JsonController()
@@ -16,7 +17,8 @@ export class GeocodeController {
       const name = await provider.reverse(input.lat, input.lng);
       if (!name) return { name: null };
       return { name: name.length > 255 ? name.slice(0, 255) : name };
-    } catch {
+    } catch (err) {
+      logger.warn('geocode reverse failed', err);
       return { name: null };
     }
   }
